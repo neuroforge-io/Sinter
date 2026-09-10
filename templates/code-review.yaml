@@ -1,0 +1,29 @@
+name: Code Review
+description: Multi-pass code review — identify issues, suggest fixes, summarize.
+variables:
+  - code
+  - language
+steps:
+  - name: Identify Issues
+    prompt: |
+      Review this {{language}} code. List specific issues
+      with line references. Group as: BUGS, SECURITY,
+      ERROR HANDLING, STYLE.
+
+      ```{{language}}
+      {{code}}
+      ```
+    max_tokens: 512
+  - name: Suggest Fixes
+    prompt: |
+      For each issue above, provide a concrete fix:
+      show the corrected code snippet.
+      If minor, say 'skip' and explain why.
+    max_tokens: 512
+    stream: true
+  - name: Summary
+    prompt: |
+      Write a 1-paragraph executive summary:
+      how many issues, severity distribution,
+      and the single most important thing to fix first.
+    max_tokens: 256

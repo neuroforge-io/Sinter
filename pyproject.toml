@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sinter"
+version = "0.1.0"
+description = "Sinter — a polished toolkit for the NeuroForge Fracture API. Chat, code review, research, and custom workflows with a web GUI."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Lloyd Handyside" }]
+keywords = ["neuroforge", "fracture", "erais", "ai", "code-review", "research", "chat"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Environment :: Web Environment",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[project.scripts]
+sinter = "sinter.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/neuroforge/sinter"
+Documentation = "https://neuroforge.io"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sinter"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]

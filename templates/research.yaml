@@ -1,0 +1,30 @@
+name: Research
+description: Research a topic — outline, expand, action items.
+variables:
+  - topic
+steps:
+  - name: Outline
+    prompt: |
+      Outline 5 key points about {{topic}}.
+      For each: a title, one-sentence description,
+      and a concrete example or data point.
+    max_tokens: 512
+  - name: Expand
+    prompt: |
+      For each of these points:
+
+      {{previous}}
+
+      Expand into a short paragraph (2-3 sentences)
+      explaining when and why this matters in practice.
+    max_tokens: 512
+    stream: true
+  - name: Action Items
+    prompt: |
+      Based on the above:
+
+      {{previous}}
+
+      Give 3 concrete action items: what to try first,
+      what to adopt next, and what to plan long-term.
+    max_tokens: 256
