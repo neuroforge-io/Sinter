@@ -1,19 +1,19 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [project]
 name = "sinter"
-version = "0.1.0"
+version = "0.2.0"
 description = "Sinter — a polished toolkit for the NeuroForge Fracture API. Chat, code review, research, and custom workflows with a web GUI."
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [{ name = "Lloyd Handyside" }]
 keywords = ["neuroforge", "fracture", "erais", "ai", "code-review", "research", "chat"]
 classifiers = [
     "Development Status :: 4 - Beta",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
     "Environment :: Web Environment",
@@ -22,13 +22,15 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff"]
+dev = ["pytest>=8,<9", "build>=1,<2"]
+browser = ["playwright>=1.50,<2"]
+speech = ["faster-whisper>=1.1,<2"]
 
 [project.scripts]
-sinter = "sinter.cli:main"
+sinter = "sinter.cli:launch"
 
 [project.urls]
-Homepage = "https://github.com/neuroforge/sinter"
+Homepage = "https://github.com/neuroforge-io/Sinter"
 Documentation = "https://neuroforge.io"
 
 [tool.hatch.build.targets.wheel]
@@ -40,3 +42,7 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

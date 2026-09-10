@@ -1,280 +1,161 @@
-"""CLI entry point — `sinter` command."""
-
+"""Portable command line, modified for Sinter 0.2 to share workflow services."""
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
-from . import __version__
+from . import __version__, client
+
+
+def _write(path: str, content: str) -> None:
+    Path(path).write_text(content, encoding="utf-8")
+    print(f"Saved: {path}")
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(
-        prog="sinter",
-        description="Sinter — chat, code review, research, and custom workflows via the NeuroForge Fracture API.",
-    )
-    parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}"
-    )
-
-    sub = parser.add_subparsers(dest="command", help="Available commands")
-
-    # serve
-    srv = sub.add_parser("serve", help="Launch web GUI")
-    srv.add_argument("-p", "--port", type=int, default=8420)
-    srv.add_argument("--host", default="127.0.0.1")
-    srv.add_argument("--no-browser", action="store_true")
-
-    # chat
-    ch = sub.add_parser("chat", help="Interactive chat")
-    ch.add_argument("-m", "--message", help="Single message (non-interactive)")
-    ch.add_argument("-s", "--system", default="", help="System prompt")
-    ch.add_argument("--max-tokens", type=int, default=512)
-
-    # review
-    rv = sub.add_parser("review", help="Multi-pass code review")
-    rv.add_argument("file", help="Source file to review")
-    rv.add_argument("-l", "--language", default="Python")
-    rv.add_argument("-o", "--output")
-    rv.add_argument("--no-stream", action="store_true")
-
-    # research
-    rs = sub.add_parser("research", help="Research a topic")
-    rs.add_argument("topic")
-    rs.add_argument("-o", "--output")
-    rs.add_argument("--no-stream", action="store_true")
-
-    # template
-    tp = sub.add_parser("template", help="Run a template")
-    tp.add_argument("name", help="Template name")
-    tp.add_argument(
-        "-v", "--var", action="append", default=[], metavar="KEY=VALUE"
-    )
-    tp.add_argument("-o", "--output")
-    tp.add_argument("--no-stream", action="store_true")
-
-    # templates
-    sub.add_parser("templates", help="List available templates")
-
-    # health
-    sub.add_parser("health", help="Check API connectivity")
-
+    parser = argparse.ArgumentParser(prog="sinter", description="Sinter - source-linked community work and the Fracture API")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    sub = parser.add_subparsers(dest="command")
+    server = sub.add_parser("serve", help="Open the local web workbench")
+    server.add_argument("-p", "--port", type=int, default=8420)
+    server.add_argument("--host", default="127.0.0.1")
+    server.add_argument("--no-browser", action="store_true")
+    chat = sub.add_parser("chat", help="Generative chat (not verified)")
+    chat.add_argument("-m", "--message")
+    chat.add_argument("-s", "--system", default="")
+    chat.add_argument("--max-tokens", type=int, default=512)
+    review = sub.add_parser("review", help="Shared-context code review")
+    review.add_argument("file")
+    review.add_argument("-l", "--language", default="Python")
+    review.add_argument("-o", "--output")
+    review.add_argument("--no-stream", action="store_true")
+    research = sub.add_parser("research", help="Build a search-backed evidence report")
+    research.add_argument("topic")
+    research.add_argument("-o", "--output", default="research_output.md")
+    research.add_argument("--no-stream", action="store_true", help="Compatibility flag; reports are validated before display")
+    template = sub.add_parser("template", help="Run a built-in or user:NAME template")
+    template.add_argument("name")
+    template.add_argument("-v", "--var", action="append", default=[], metavar="KEY=VALUE")
+    template.add_argument("-o", "--output")
+    template.add_argument("--no-stream", action="store_true")
+    workbench = sub.add_parser("workbench", help="Run a workflow from a JSON input file")
+    workbench.add_argument("file")
+    workbench.add_argument("-o", "--output", default="sinter_report.md")
+    watches = sub.add_parser("watches", help="List watches or check due queries once")
+    watches.add_argument("--run-due", action="store_true")
+    speech = sub.add_parser("transcribe", help="Optional local speech recognition; no identity claims")
+    speech.add_argument("file")
+    speech.add_argument("--consent", action="store_true", help="Confirm permission to process this recording")
+    speech.add_argument("--allow-download", action="store_true", help="Allow the separately licensed speech model download")
+    speech.add_argument("--model", default="base")
+    speech.add_argument("-o", "--output", default="transcript.json")
+    sub.add_parser("templates", help="List templates")
+    sub.add_parser("health", help="Check the live API")
     args = parser.parse_args(argv)
-
-    if args.command is None:
+    if not args.command:
         parser.print_help()
         return
-
-    dispatch = {
-        "health": _cmd_health,
-        "chat": _cmd_chat,
-        "review": _cmd_review,
-        "research": _cmd_research,
-        "templates": _cmd_templates,
-        "template": _cmd_template,
-        "serve": _cmd_serve,
-    }
-    dispatch[args.command](args)
+    try:
+        _dispatch(args)
+    except (client.APIError, ValueError, OSError, KeyError) as exc:
+        print(f"Sinter: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+    except KeyboardInterrupt:
+        print("\nStopped.", file=sys.stderr)
+        raise SystemExit(130)
 
 
-def _cmd_health(args=None) -> None:
-    from .client import health_check
-    ok, msg = health_check()
-    print(f"{'OK' if ok else 'FAIL'}: {msg}")
-    sys.exit(0 if ok else 1)
-
-
-def _cmd_chat(args) -> None:
-    from .client import Message, chat, chat_stream
-
-    messages: list[Message] = []
-    if args.system:
-        messages.append(Message(role="system", content=args.system))
-
-    if args.message:
-        # Single-message mode: send one message, print response, exit.
-        messages.append(Message(role="user", content=args.message))
-        for token in chat_stream(messages, max_tokens=args.max_tokens):
-            print(token, end="", flush=True)
-        print()
-        return
-
-    # Interactive mode
-    print("Sinter Chat (type 'quit' to exit, 'clear' to reset)")
-    print("-" * 50)
-    while True:
-        try:
-            user_input = input("You: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            break
-        if user_input.lower() in ("quit", "exit", "q"):
-            break
-        if user_input.lower() == "clear":
-            messages = [m for m in messages if m.role == "system"]
-            print("[conversation cleared]")
-            continue
-        if not user_input:
-            continue
-
-        messages.append(Message(role="user", content=user_input))
-        print("AI: ", end="", flush=True)
-        full = []
-        for token in chat_stream(messages, max_tokens=args.max_tokens):
-            print(token, end="", flush=True)
-            full.append(token)
-        print()
-        messages.append(Message(role="assistant", content="".join(full)))
-
-
-def _cmd_review(args) -> None:
-    from .templates import get_builtin_template, render_prompt
-    from .client import Message, chat, chat_stream
-
-    source = Path(args.file).read_text(errors="replace")
-    filename = Path(args.file).name
-    print(f"Reviewing: {filename} ({len(source)} bytes)")
-    print("=" * 60)
-
-    template = get_builtin_template("code-review")
-    variables = {"code": source, "language": args.language}
-    results: list[str] = []
-
-    for i, step in enumerate(template.steps):
-        print(f"\n[{i+1}/{len(template.steps)}] {step.name}...")
-        prompt = render_prompt(step.prompt, variables)
-        messages = [Message(role="user", content=prompt)]
-
-        if step.stream and not args.no_stream:
-            full = []
-            for token in chat_stream(messages, max_tokens=step.max_tokens):
+def _dispatch(args) -> None:
+    from .templates import available_templates, resolve_template, template_events
+    if args.command == "serve":
+        from .server import serve
+        serve(args.host, args.port, not args.no_browser)
+    elif args.command == "health":
+        ok, message = client.health_check()
+        print(("OK: " if ok else "FAIL: ") + message)
+        raise SystemExit(0 if ok else 1)
+    elif args.command == "templates":
+        for key, template in available_templates().items():
+            print(f"{key}: {template.description}\n  Variables: {', '.join(template.variables)}")
+    elif args.command == "chat":
+        history = [client.Message("system", args.system)] if args.system else []
+        while True:
+            try:
+                value = args.message if args.message is not None else input("You (quit or clear): ")
+            except EOFError:
+                return
+            if args.message is None and value.strip().lower() in {"quit", "exit", "q"}:
+                return
+            if args.message is None and value.strip().lower() == "clear":
+                history = [message for message in history if message.role == "system"]
+                print("Conversation cleared.")
+                continue
+            if not value.strip():
+                if args.message is not None:
+                    raise ValueError("Enter a message.")
+                continue
+            messages = history + [client.Message("user", value)]
+            parts = []
+            for token in client.chat_stream(messages, args.max_tokens):
                 print(token, end="", flush=True)
-                full.append(token)
+                parts.append(token)
             print()
-            content = "".join(full)
+            history = messages + [client.Message("assistant", "".join(parts))]
+            if args.message is not None:
+                return
+    elif args.command in {"review", "template"}:
+        if args.command == "review":
+            template = resolve_template("code-review")
+            variables = {"code": Path(args.file).read_text(encoding="utf-8"), "language": args.language}
+            output = args.output or str(Path(args.file).with_suffix(".review.md"))
         else:
-            result = chat(messages, max_tokens=step.max_tokens)
-            content = result.content
-            print(content)
-
-        results.append(content)
-        variables["previous"] = "\n\n".join(results)
-
-    out = args.output or str(Path(args.file).with_suffix(".review.md"))
-    report = f"# Code Review: {filename}\n\n"
-    for i, step in enumerate(template.steps):
-        report += f"## Pass {i+1} — {step.name}\n\n{results[i]}\n\n"
-
-    Path(out).write_text(report)
-    print(f"\n{'=' * 60}")
-    print(f"Report saved: {out}")
-
-
-def _cmd_research(args) -> None:
-    from .templates import get_builtin_template, render_prompt
-    from .client import Message, chat, chat_stream
-
-    template = get_builtin_template("research")
-    variables = {"topic": args.topic}
-    results: list[str] = []
-
-    print(f"Research: {args.topic}")
-    print("=" * 60)
-
-    for i, step in enumerate(template.steps):
-        print(f"\n[{i+1}/{len(template.steps)}] {step.name}...")
-        prompt = render_prompt(step.prompt, variables)
-        messages = [Message(role="user", content=prompt)]
-
-        if step.stream and not args.no_stream:
-            full = []
-            for token in chat_stream(messages, max_tokens=step.max_tokens):
-                print(token, end="", flush=True)
-                full.append(token)
-            print()
-            content = "".join(full)
-        else:
-            result = chat(messages, max_tokens=step.max_tokens)
-            content = result.content
-            print(content)
-
-        results.append(content)
-        variables["previous"] = "\n\n".join(results)
-
-    out = args.output or "research_output.md"
-    report = f"# Research: {args.topic}\n\n"
-    for i, step in enumerate(template.steps):
-        report += f"## {step.name}\n\n{results[i]}\n\n"
-
-    Path(out).write_text(report)
-    print(f"\nReport saved: {out}")
+            template, variables, output = resolve_template(args.name), {}, args.output
+            for pair in args.var:
+                key, sep, value = pair.partition("=")
+                if not sep:
+                    raise ValueError("Template arguments use KEY=VALUE.")
+                variables[key] = value
+        results, references, streamed = [], [], False
+        for event in template_events(template, variables, stream=not args.no_stream):
+            if event["type"] == "step":
+                streamed = False
+                print(f"\n{event['index'] + 1}/{event['total']}: {event['name']}")
+            elif event["type"] == "token":
+                streamed = True
+                print(event["t"], end="", flush=True)
+            elif event["type"] == "sources":
+                for item in event["sources"]:
+                    print("Source: " + item["url"])
+                    references.append(item["url"])
+            elif event["type"] == "step_done":
+                print("" if streamed else event["content"])
+                results.append("## " + event["step"] + "\n\n" + event["content"])
+        if references:
+            results.append("## Source register\n\n" + "\n".join(dict.fromkeys(references)))
+        if output:
+            _write(output, "# Model-generated draft - review required\n\n" + "\n\n".join(results))
+    elif args.command in {"research", "workbench"}:
+        from .workbench import run
+        payload = ({"workflow": "brief", "title": args.topic, "query": args.topic, "use_search": True}
+                   if args.command == "research" else json.loads(Path(args.file).read_text(encoding="utf-8")))
+        result = run(payload, progress=lambda message: print(message, file=sys.stderr))
+        _write(args.output, json.dumps(result, indent=2, ensure_ascii=False) if args.output.endswith(".json") else result["markdown"])
+    elif args.command == "watches":
+        from .store import Store
+        store = Store()
+        if args.run_due:
+            print(f"Checked {store.run_due()} due watches.")
+        print(json.dumps(store.watches(), indent=2, ensure_ascii=False))
+    elif args.command == "transcribe":
+        from .speech import transcribe
+        result = transcribe(Path(args.file), args.model, args.consent, args.allow_download)
+        _write(args.output, json.dumps(result, indent=2, ensure_ascii=False))
 
 
-def _cmd_templates(args=None) -> None:
-    from .templates import get_builtin_template, list_builtin_templates
-
-    print("Available templates:")
-    print("-" * 50)
-    for name in list_builtin_templates():
-        t = get_builtin_template(name)
-        vars_str = ", ".join(t.variables) if t.variables else "(none)"
-        print(f"  {name:15s}  {t.description}")
-        print(f"  {'':15s}  Variables: {vars_str}")
-        print()
-
-
-def _cmd_template(args) -> None:
-    from .templates import get_builtin_template, render_prompt
-    from .client import Message, chat_stream, chat as api_chat
-
-    template = get_builtin_template(args.name)
-    variables = {}
-    for v in args.var:
-        k, _, val = v.partition("=")
-        variables[k] = val
-
-    missing = [v for v in template.variables if v not in variables and v != "previous"]
-    if missing:
-        print(f"Missing variables: {', '.join(missing)}")
-        print(
-            f"Usage: sinter template {args.name} "
-            + " ".join(f"-v {v}=VALUE" for v in template.variables if v != "previous")
-        )
-        sys.exit(1)
-
-    results: list[str] = []
-    print(f"Running: {template.name}")
-    print("=" * 60)
-
-    for i, step in enumerate(template.steps):
-        print(f"\n[{i+1}/{len(template.steps)}] {step.name}...")
-        prompt = render_prompt(step.prompt, variables)
-        messages = [Message(role="user", content=prompt)]
-
-        if step.stream and not args.no_stream:
-            full = []
-            for token in chat_stream(messages, max_tokens=step.max_tokens):
-                print(token, end="", flush=True)
-                full.append(token)
-            print()
-            content = "".join(full)
-        else:
-            result = api_chat(messages, max_tokens=step.max_tokens)
-            content = result.content
-            print(content)
-
-        results.append(content)
-        variables["previous"] = "\n\n".join(results)
-
-    if args.output:
-        Path(args.output).write_text("\n\n---\n\n".join(results))
-        print(f"\nSaved: {args.output}")
-
-
-def _cmd_serve(args) -> None:
-    from .server import serve
-    serve(host=args.host, port=args.port, open_browser=not args.no_browser)
+def launch() -> None:
+    main(sys.argv[1:] or ["serve"])
 
 
 if __name__ == "__main__":

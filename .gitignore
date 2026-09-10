@@ -16,3 +16,10 @@ build/
 Thumbs.db
 .env
 *.log
+
+.venv/
+browser-artifacts/
+test-results/
+*.pyz
+*.zip
+*.sqlite3*
