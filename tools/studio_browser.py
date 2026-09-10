@@ -71,7 +71,10 @@ def main():
                 expect(page.get_by_label('Project name', exact=True)).to_have_value('Real unsaved project')
                 expect(page.get_by_label('Your notes and context', exact=True)).to_have_value('No spending has been approved.')
                 page.get_by_role('link', name='Meeting minutes', exact=True).click()
+                # A label shared by two routes can otherwise match the outgoing page.
+                expect(page.get_by_role('heading', name='A clearer record. Not a different story.', exact=True)).to_be_visible()
                 page.get_by_label('Project name', exact=True).fill('Review test')
+                expect(page.get_by_label('Project name', exact=True)).to_have_value('Review test')
                 page.get_by_text('Start with an audio recording (optional)', exact=True).click()
                 page.get_by_label('Meeting recording', exact=True).set_input_files(str(recording))
                 page.get_by_role('button', name='Transcribe on this computer').click()
@@ -94,6 +97,10 @@ def main():
                 archive = json.loads(Path(pending.value.path()).read_text(encoding='utf-8'))
                 assert archive['segments'][0]['original_speaker'] == 'Unidentified'
                 assert archive['segments'][0]['words'][0]['probability'] == .4
+                expect(page.get_by_label('Project name', exact=True)).to_have_value('Review test')
+                page.get_by_role('button', name=re.compile('Listen 0:00')).click()
+                page.wait_for_function('document.querySelector("audio").currentTime > 0', timeout=5000)
+                page.wait_for_function('document.querySelector("audio").paused', timeout=5000)
                 page.screenshot(path=str(artifacts / 'transcription-review.png'), full_page=True)
                 page.get_by_role('button', name='Prepare my draft').click()
                 expect(page.get_by_role('region', name='Your draft report')).to_contain_text('Passages requiring an audio check', timeout=10000)
