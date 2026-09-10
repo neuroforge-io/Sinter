@@ -99,8 +99,9 @@ def main():
                 assert archive['segments'][0]['words'][0]['probability'] == .4
                 expect(page.get_by_label('Project name', exact=True)).to_have_value('Review test')
                 page.get_by_role('button', name=re.compile('Listen 0:00')).click()
-                page.wait_for_function('document.querySelector("audio").currentTime > 0', timeout=5000)
-                page.wait_for_function('document.querySelector("audio").paused', timeout=5000)
+                expect(page.locator('audio')).not_to_have_js_property('currentTime', 0, timeout=5000)
+                expect(page.locator('audio')).to_have_js_property('paused', True, timeout=5000)
+                expect(page.locator('audio')).to_have_js_property('error', None)
                 page.screenshot(path=str(artifacts / 'transcription-review.png'), full_page=True)
                 page.get_by_role('button', name='Prepare my draft').click()
                 expect(page.get_by_role('region', name='Your draft report')).to_contain_text('Passages requiring an audio check', timeout=10000)
