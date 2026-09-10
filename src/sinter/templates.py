@@ -41,7 +41,7 @@ def render_prompt(template_str: str, variables: dict[str, str]) -> str:
 
 
 def _builtins() -> dict[str, Template]:
-    return {
+    templates = {
         "chat": Template("Chat", "Freeform chat; answers are not verified.",
                          [Step("Chat", "{{message}}", stream=True)], ["message", "system"], "builtin"),
         "code-review": Template("Code Review", "Three-pass review with shared code context.", [
@@ -65,6 +65,9 @@ def _builtins() -> dict[str, Template]:
         "custom": Template("Custom", "Your own generative prompt; not a verified workflow.",
                            [Step("Custom", "{{prompt}}", stream=True)], ["prompt"], "builtin"),
     }
+    from .recipes import community_recipes
+    templates.update({name: _from_data(data, "builtin") for name, data in community_recipes().items()})
+    return templates
 
 
 def list_builtin_templates() -> list[str]:

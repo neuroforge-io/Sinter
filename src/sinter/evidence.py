@@ -60,7 +60,7 @@ class Excerpt:
 def source(title: str, content: str, url: str = "", kind: str = "user_note",
            retrieved_at: str = "") -> Source:
     text(title, "Source title", 500, True)
-    text(content, "Source text", MAX_CONTEXT, True)
+    text(content, "Source text", 1000000 if kind == "transcript" else MAX_CONTEXT, True)
     text(url, "Source URL", 4000)
     text(kind, "Source kind", 40)
     text(retrieved_at, "Retrieval time", 100)

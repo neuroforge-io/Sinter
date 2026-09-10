@@ -1,3 +1,4 @@
+import {home} from './home.js';
 import {h, button, notice, announce, safeLink} from './ui.js';
 import {session, request} from './api.js';
 import {workbench} from './workbench.js';
@@ -15,30 +16,8 @@ function setBusy(value) {
   busy = value;
   for (const link of navigation.querySelectorAll('a')) link.setAttribute('aria-disabled', String(value));
 }
-function remember(kind, value) { drafts.set(kind, value); }
+function remember(kind, value) { if (!value.demo) drafts.set(kind, value); }
 function go(route) { if (!busy) location.hash = route; }
-
-function home() {
-  const cards = [
-    ['grants', '01', 'FUNDING RADAR', 'Good ideas deserve a chance.', 'Find funding, check real requirements and keep track of what changes.', 'Find funding'],
-    ['brief', '02', 'EVIDENCE STUDIO', 'Turn a pile of notes into a plan.', 'Bring context and sources together. Prepare a useful brief and an enquiry worth sending.', 'Build a brief'],
-    ['meeting', '03', 'MEETING DESK', 'Keep the meaning. Lose the mess.', 'Prepare traceable draft minutes, confirm speaker names and review corrections.', 'Prepare minutes']
-  ];
-  return h('div', {}, h('section', {class: 'hero'}, h('span', {class: 'eyebrow'}, 'FOR THE PEOPLE WHO MAKE THINGS HAPPEN'),
-    h('h2', {}, 'Less busywork.', h('br'), h('span', {}, 'More community.')),
-    h('p', {}, 'A little help for the work that matters. Bring your notes, references and next steps together - so volunteers can spend more time making a difference.'),
-    h('div', {class: 'button-row'}, button('Try an example', () => go('brief?example=1'), 'primary'), button('How it works', () => go('help'))),
-    h('div', {class: 'hero-meta'}, h('span', {}, 'NO ACCOUNT TO GET STARTED'), h('span', {}, 'YOUR SOURCES, VISIBLE'), h('span', {}, 'APACHE 2.0'))),
-    h('div', {class: 'section-heading'}, h('h2', {}, 'What would you like to get done?'), h('span', {class: 'muted'}, 'Start small. Make it useful.')),
-    h('div', {class: 'card-grid'}, cards.map(([id, index, category, title, description, label]) =>
-      h('article', {class: 'card workflow-card'}, h('span', {class: 'card-index', 'aria-hidden': 'true'}, index),
-        h('span', {class: 'eyebrow'}, category), h('h3', {}, title), h('p', {}, description),
-        h('div', {class: 'button-row'}, button(label, () => { drafts.delete(id); go(id); }, 'primary'), button('See example', () => go(`${id}?example=1`), 'quiet'))))),
-    h('section', {class: 'steps-strip'},
-      h('div', {}, h('strong', {}, '01 / Bring your context'), h('p', {}, 'Notes, questions and source text. No clever prompting needed.')),
-      h('div', {}, h('strong', {}, '02 / Follow the evidence'), h('p', {}, 'Exact excerpts, visible sources and clear unknowns.')),
-      h('div', {}, h('strong', {}, '03 / Review, then use'), h('p', {}, 'Download, print or save locally. You stay in control.'))));
-}
 
 function help() {
   const connection = h('div', {'aria-live': 'polite'});
@@ -50,14 +29,14 @@ function help() {
       h('p', {}, '3. Prepare the draft, check sources and unknowns, then download or save it. Nothing is sent automatically.'),
       button('Open a local example', () => go('brief?example=1'), 'primary')),
     h('div', {class: 'card'}, h('h3', {}, 'Privacy and trust'),
-      h('p', {}, 'The interface runs on your computer. Unsaved inputs live in this browser session; saved reports and watches live in your Sinter folder. Only the theme preference is stored in browser storage.'),
+      h('p', {}, 'The interface runs on your computer. Unsaved inputs live in this browser session; saved reports and watches live in ~/.sinter (or the configured data directory). Only the theme preference is stored in browser storage.'),
       h('p', {}, 'Search sends the exact query. Optional model ranking sends up to six excerpts and the project question. Explore Fracture sends conversation or template inputs. Avoid private information in external requests.'),
       h('p', {}, 'Quotes, hashes and links establish traceability, not truth. Selection can miss material. Review official guidance, deadlines, eligibility, names, voting and decisions.'),
       h('p', {}, 'Keep the launcher window open. Closing it stops the app and watch checks. Unfinished jobs are not saved automatically.')),
     h('div', {class: 'card'}, h('h3', {}, 'Meeting audio: optional, local, honest'),
       h('p', {}, 'Import a transcript without extra installation. Audio transcription needs the optional speech package and an explicitly authorised model download. From the Sinter source folder run:'),
-      h('pre', {class: 'help-code'}, 'python -m pip install ".[speech]"'),
-      h('p', {}, 'Audio is processed locally. Automatic speaker separation and voice identity are not included. Import a diarized transcript and confirm names manually.'),
+      h('pre', {class: 'help-code'}, 'python3 setup_speech.py\n# Windows: py setup_speech.py'),
+      h('p', {}, 'Audio is processed locally. Separate isolated microphone channels, listen back to individual passages and keep word timings in JSON. Mixed-room speaker diarization and voice identity are not inferred. Confirm names manually.'),
       h('p', {}, 'Speech recognition can omit or invent words. Listen again to unclear passages, names, amounts and negation before correcting anything.')),
     h('div', {class: 'card'}, h('h3', {}, 'Connection and help'),
       button('Check public API connection', async () => {
@@ -80,6 +59,7 @@ async function route() {
     if (link.hash === '#' + id) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
   }
   const sequence = ++routeSequence;
+  view.firstElementChild?.dispose?.();
   view.replaceChildren(notice('Opening your workspace...'));
   try {
     const options = {setBusy, remember, seed: drafts.get(id) || {}, example: new URLSearchParams(query || '').get('example') === '1'};
@@ -89,7 +69,7 @@ async function route() {
     else if (id === 'watches') content = await watches(options);
     else if (id === 'explore') content = await playground(options);
     else if (id === 'help') content = help();
-    else content = home();
+    else content = home(go, drafts);
     if (sequence !== routeSequence) return;
     view.replaceChildren(content); document.getElementById('content').focus({preventScroll: true}); window.scrollTo(0, 0);
   } catch (error) { if (sequence === routeSequence) view.replaceChildren(notice(error.message, 'error'), button('Try again', route)); }
