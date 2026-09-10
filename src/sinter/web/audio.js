@@ -62,8 +62,8 @@ export function audioForm(onTranscript, setBusy, isBusy) {
       if (!transcript.segments.length) {
         message.replaceChildren(notice('No speech detected. Check the recording and microphone level. Your existing transcript was not replaced.')); return;
       }
-      await onTranscript(transcript);
       reviewUI?.dispose(); reviewUI = reviewTranscript(transcript, player, onTranscript); review.replaceChildren(reviewUI);
+      await onTranscript(transcript);
       message.replaceChildren(notice('Transcript ready for review. Listen back below; no names, decisions or missing words have been inferred.', 'success'));
     } catch (error) { message.replaceChildren(notice(error.message, 'error')); }
     finally { setBusy(false); controls.disabled = false; cancel.hidden = true; jobId = null; }

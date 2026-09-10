@@ -50,7 +50,10 @@ def main(argv: list[str] | None = None) -> None:
     speech.add_argument("--consent", action="store_true", help="Confirm permission to process this recording")
     speech.add_argument("--allow-download", action="store_true", help="Allow the separately licensed speech model download")
     speech.add_argument("--model", default="base")
-    speech.add_argument("-o", "--output", default="transcript.json")
+    speech.add_argument("--language", default="auto", help="auto or a language code such as en")
+    speech.add_argument("--split-channels", action="store_true", help="Two isolated recording tracks; not voice identification")
+    speech.add_argument("--format", choices=["json", "txt", "srt", "vtt"], default="json")
+    speech.add_argument("-o", "--output", help="Output file; default transcript.FORMAT")
     sub.add_parser("templates", help="List templates")
     sub.add_parser("health", help="Check the live API")
     args = parser.parse_args(argv)
@@ -150,8 +153,11 @@ def _dispatch(args) -> None:
         print(json.dumps(store.watches(), indent=2, ensure_ascii=False))
     elif args.command == "transcribe":
         from .speech import transcribe
-        result = transcribe(Path(args.file), args.model, args.consent, args.allow_download)
-        _write(args.output, json.dumps(result, indent=2, ensure_ascii=False))
+        from .transcript_export import export_transcript
+        result = transcribe(Path(args.file), args.model, args.consent, args.allow_download,
+                            progress=lambda message: print(message, file=sys.stderr),
+                            language=args.language, split_channels=args.split_channels)
+        _write(args.output or f"transcript.{args.format}", export_transcript(result, args.format))
 
 
 def launch() -> None:

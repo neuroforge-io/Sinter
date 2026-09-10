@@ -16,7 +16,7 @@ function setBusy(value) {
   busy = value;
   for (const link of navigation.querySelectorAll('a')) link.setAttribute('aria-disabled', String(value));
 }
-function remember(kind, value) { drafts.set(kind, value); }
+function remember(kind, value) { if (!value.demo) drafts.set(kind, value); }
 function go(route) { if (!busy) location.hash = route; }
 
 function help() {
@@ -29,7 +29,7 @@ function help() {
       h('p', {}, '3. Prepare the draft, check sources and unknowns, then download or save it. Nothing is sent automatically.'),
       button('Open a local example', () => go('brief?example=1'), 'primary')),
     h('div', {class: 'card'}, h('h3', {}, 'Privacy and trust'),
-      h('p', {}, 'The interface runs on your computer. Unsaved inputs live in this browser session; saved reports and watches live in your Sinter folder. Only the theme preference is stored in browser storage.'),
+      h('p', {}, 'The interface runs on your computer. Unsaved inputs live in this browser session; saved reports and watches live in ~/.sinter (or the configured data directory). Only the theme preference is stored in browser storage.'),
       h('p', {}, 'Search sends the exact query. Optional model ranking sends up to six excerpts and the project question. Explore Fracture sends conversation or template inputs. Avoid private information in external requests.'),
       h('p', {}, 'Quotes, hashes and links establish traceability, not truth. Selection can miss material. Review official guidance, deadlines, eligibility, names, voting and decisions.'),
       h('p', {}, 'Keep the launcher window open. Closing it stops the app and watch checks. Unfinished jobs are not saved automatically.')),

@@ -127,13 +127,16 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     notes.input.addEventListener('input', () => { speakerMap = {}; corrections = []; speakerFields.replaceChildren(); });
     fields.append(h('details', {}, h('summary', {}, 'Confirm who is speaking'),
       notice('Names are never inferred from voice. Imported labels still need verification against the recording.'), identify, speakerFields));
+    let audioInputSnapshot = notes.input.value;
     if (!demo) fields.append(audioForm(async transcript => {
+      if (notes.input.value !== audioInputSnapshot) throw new Error('The transcript was edited while audio review was open. Download the recognised transcript before replacing those edits.');
       const compact = {...transcript, segments: transcript.segments.map(({words, ...segment}) => segment)};
       const serialized = JSON.stringify(compact);
       if (serialized.length > 1000000) throw new Error('This transcript is too large for one report. Export the JSON and split it into sessions.');
-      notes.input.value = serialized; speakerMap = {}; corrections = []; speakerFields.replaceChildren();
+      notes.input.value = serialized; audioInputSnapshot = serialized;
+      speakerMap = {}; corrections = []; speakerFields.replaceChildren();
       remember(kind, state()); feedback.replaceChildren(notice('Transcript inserted. Check names, numbers, negation and unclear words against the recording.', 'success'));
-    }, value => { running = value; setBusy(value); }, () => running));
+    }, value => { if (value) audioInputSnapshot = notes.input.value; running = value; setBusy(value); }, () => running));
   }
   fields.append(h('h3', {class: 'form-section-title'}, 'Review and prepare'), h('div', {class: 'button-row'}, h('button', {type: 'submit', class: 'button primary'}, 'Prepare my draft')));
   form.append(fields, status, h('div', {class: 'button-row'}, cancel), feedback);

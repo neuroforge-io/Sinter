@@ -32,11 +32,12 @@ export function reviewTranscript(transcript, player, onChange) {
       const apply = button('Keep this speaker label', async () => {
         const value = label.input.value.trim();
         if (!value) { feedback.replaceChildren(notice('Enter a label or use Unidentified.', 'error')); return; }
+        const original = {...segment};
         segment.original_speaker ??= segment.speaker;
         segment.speaker = value;
         segment.label_origin = 'human review against recording';
         try { await onChange(edited); feedback.replaceChildren(notice('Speaker label recorded. Original label preserved in the JSON transcript.', 'success')); }
-        catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
+        catch (error) { edited.segments[index] = original; feedback.replaceChildren(notice(error.message, 'error')); render(); }
       }, 'quiet');
       const play = button(`Listen ${timestamp(segment.start)} to ${timestamp(segment.end)}`, async () => {
         try { player.currentTime = segment.start; stopAt = segment.end; await player.play(); }
@@ -58,8 +59,13 @@ export function reviewTranscript(transcript, player, onChange) {
   const exports = h('div', {class: 'button-row'});
   for (const format of ['json', 'srt', 'vtt', 'txt']) exports.append(button(`Download transcript ${format.toUpperCase()}`, async () => {
     try {
-      const {content} = await request('/api/transcript/export', {data: {transcript: edited, format}});
-      download(`sinter-transcript-DRAFT.${format}`, content);
+      if (format === 'json') {
+        download('sinter-transcript-DRAFT.json', JSON.stringify(edited, null, 2), 'application/json');
+      } else {
+        const compact = {segments: edited.segments.map(({start, end, speaker, text}) => ({start, end, speaker, text}))};
+        const {content} = await request('/api/transcript/export', {data: {transcript: compact, format}});
+        download(`sinter-transcript-DRAFT.${format}`, content);
+      }
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
   }, 'quiet'));
   root.append(exports); render(); return root;

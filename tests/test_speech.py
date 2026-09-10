@@ -26,7 +26,7 @@ def test_invalid_uploads(payload):
 
 
 def test_upload_uses_sanitized_temporary_path():
-    def engine(path, *args):
+    def engine(path, *args, **kwargs):
         assert path.name == 'recording.wav' and path.read_bytes() == b'fixture'
         return {'segments': []}
     with patch.object(speech, 'transcribe', side_effect=engine):
