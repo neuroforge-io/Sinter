@@ -1,4 +1,4 @@
-"""Sinter 0.2 local-only web application with bounded resources and same-origin protection.
+"""Sinter 0.3 local-only web application with bounded resources and same-origin protection.
 
 Modified from the original development server. Not an Internet-facing or multi-user server.
 """
@@ -103,7 +103,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; "
-                         "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+                         "img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
                          "frame-ancestors 'none'; form-action 'self'")
 
     def _send(self, body: bytes, content_type: str, status: int = 200):
@@ -232,7 +232,10 @@ class Handler(BaseHTTPRequestHandler):
         self._trusted(write=True)
         path = urlsplit(self.path).path
         body = self._body(path)
-        if path in {"/api/chat", "/api/chat/stream"}:
+        if path == "/api/transcript/export":
+            from .transcript_export import export_transcript
+            self._json({"content": export_transcript(body.get("transcript", {}), body.get("format", "json"))})
+        elif path in {"/api/chat", "/api/chat/stream"}:
             rows = body.get("messages")
             if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
                 raise ValueError("Provide a list of messages.")
