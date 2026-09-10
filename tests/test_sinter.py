@@ -20,7 +20,7 @@ from sinter.templates import (
 # ── Version ──────────────────────────────────────────────
 
 def test_version():
-    assert __version__ == "0.1.0"
+    assert __version__ == "0.2.0"
 
 
 # ── Message / Data classes ───────────────────────────────

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import math
-from datetime import date
+from datetime import date, timedelta
 
 from .evidence import Source, literal, text
 
@@ -33,7 +33,9 @@ def screen(profile: dict, criteria: list[dict], sources: list[Source]) -> dict:
             reason = "Notes, examples and transcripts cannot establish official grant requirements."
         elif rule.get("confirmed") is not True:
             reason = "A person must confirm the source is current, official and correctly interpreted."
-        elif actual is None or actual == "" or expected is None or expected == "":
+        elif (actual is None or expected is None
+              or (isinstance(actual, str) and not actual.strip())
+              or (isinstance(expected, str) and not expected.strip())):
             reason = "The profile or required value is missing."
         else:
             try:
@@ -72,4 +74,8 @@ def confirmed_deadline(value: str) -> str:
         raise ValueError("Use a confirmed deadline in YYYY-MM-DD format.") from exc
     if parsed.isoformat() != value:
         raise ValueError("Use YYYY-MM-DD for a deadline.")
+    try:
+        parsed + timedelta(days=1)
+    except OverflowError as exc:
+        raise ValueError("The deadline has no representable calendar end date.") from exc
     return value
