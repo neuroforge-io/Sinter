@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 
 from .client import Message, chat, chat_stream, search, ChatResult
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -246,7 +249,10 @@ def _parse_yaml(text: str, name: str) -> Template:
             if k == "use_search":
                 current_step[k] = v.lower() in ("true", "yes", "1")
             elif k == "max_tokens":
-                current_step[k] = int(v)
+                try:
+                    current_step[k] = int(v)
+                except ValueError:
+                    current_step[k] = 512
             elif k == "stream":
                 current_step[k] = v.lower() in ("true", "yes", "1")
             else:
@@ -304,8 +310,8 @@ def run_template(
                             for j, r in enumerate(sr.results[:3])
                         )
                         prompt += f"\n\nWeb search results:\n{snippets}"
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.warning("Search failed for %r: %s", query, exc)
 
         step_messages = list(history) + [Message(role=step.role, content=prompt)]
 

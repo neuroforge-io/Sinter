@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -18,6 +19,8 @@ from .client import (
     BASE_URL,
     _headers,
 )
+
+log = logging.getLogger(__name__)
 
 _WEB_DIR = Path(__file__).parent / "web"
 _MIME = {
@@ -36,6 +39,7 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
     def _cors(self) -> None:
+        # CORS: wildcard is intentional — this is a local-only dev server.
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
@@ -210,8 +214,8 @@ class _Handler(BaseHTTPRequestHandler):
                                 for j, r in enumerate(sr.results[:3])
                             )
                             prompt += f"\n\nWeb search results:\n{snippets}"
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log.warning("Search failed for %r: %s", query, exc)
 
             step_messages = list(history) + [Message(role="user", content=prompt)]
             result = chat(step_messages, max_tokens=step.max_tokens)

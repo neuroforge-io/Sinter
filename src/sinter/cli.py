@@ -93,36 +93,39 @@ def _cmd_chat(args) -> None:
         messages.append(Message(role="system", content=args.system))
 
     if args.message:
+        # Single-message mode: send one message, print response, exit.
         messages.append(Message(role="user", content=args.message))
         for token in chat_stream(messages, max_tokens=args.max_tokens):
             print(token, end="", flush=True)
         print()
-    else:
-        print("Sinter Chat (type 'quit' to exit, 'clear' to reset)")
-        print("-" * 50)
-        while True:
-            try:
-                user_input = input("You: ").strip()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                break
-            if user_input.lower() in ("quit", "exit", "q"):
-                break
-            if user_input.lower() == "clear":
-                messages = [m for m in messages if m.role == "system"]
-                print("[conversation cleared]")
-                continue
-            if not user_input:
-                continue
+        return
 
-            messages.append(Message(role="user", content=user_input))
-            print("AI: ", end="", flush=True)
-            full = []
-            for token in chat_stream(messages, max_tokens=args.max_tokens):
-                print(token, end="", flush=True)
-                full.append(token)
+    # Interactive mode
+    print("Sinter Chat (type 'quit' to exit, 'clear' to reset)")
+    print("-" * 50)
+    while True:
+        try:
+            user_input = input("You: ").strip()
+        except (EOFError, KeyboardInterrupt):
             print()
-            messages.append(Message(role="assistant", content="".join(full)))
+            break
+        if user_input.lower() in ("quit", "exit", "q"):
+            break
+        if user_input.lower() == "clear":
+            messages = [m for m in messages if m.role == "system"]
+            print("[conversation cleared]")
+            continue
+        if not user_input:
+            continue
+
+        messages.append(Message(role="user", content=user_input))
+        print("AI: ", end="", flush=True)
+        full = []
+        for token in chat_stream(messages, max_tokens=args.max_tokens):
+            print(token, end="", flush=True)
+            full.append(token)
+        print()
+        messages.append(Message(role="assistant", content="".join(full)))
 
 
 def _cmd_review(args) -> None:

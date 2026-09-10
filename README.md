@@ -101,9 +101,9 @@ Place it in `~/.sinter/templates/` and it appears in the GUI automatically.
 
 ## API Key
 
-Sinter works **keyless** — no API key needed for chat and models. Web search requires a key from [neuroforge.io/contact](https://neuroforge.io/contact/).
+Sinter works **fully keyless** — no API key needed for chat, models, or search.
 
-To use a key:
+To use a private key (optional):
 
 ```bash
 export NEUROFORGE_API_KEY="your-key"
