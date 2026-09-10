@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sinter"
-version = "0.2.0"
-description = "Sinter — a polished toolkit for the NeuroForge Fracture API. Chat, code review, research, and custom workflows with a web GUI."
+version = "0.3.0"
+description = "A local-first community workbench: source-linked briefs, funding research and reviewable meeting transcription."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 from .evidence import literal, text
 
@@ -16,6 +16,7 @@ class Segment:
     text: str
     start: float | None = None
     end: float | None = None
+    review_flags: list[str] = field(default_factory=list)
 
 
 def _seconds(value: str) -> float:
@@ -29,7 +30,7 @@ def _seconds(value: str) -> float:
 
 
 def parse_transcript(value: str) -> list[Segment]:
-    text(value, "Transcript", 200000, True)
+    text(value, "Transcript", 1000000, True)
     rows = []
     if value.strip().startswith(("[", "{")):
         data = json.loads(value)
@@ -70,7 +71,12 @@ def parse_transcript(value: str) -> list[Segment]:
                 raise ValueError("Segment times must be finite numbers in seconds.")
             if not 0 <= start <= end:
                 raise ValueError("A segment must end at or after its start.")
-        result.append(Segment(f"T{index + 1:04d}", speaker, content, start, end))
+        flags = row.get("review_flags", [])
+        if not isinstance(flags, list) or len(flags) > 10 or any(not isinstance(flag, str) or len(flag) > 500 for flag in flags):
+            raise ValueError("Segment review flags must be short text messages.")
+        result.append(Segment(f"T{index + 1:04d}", speaker, content, start, end, flags))
+    if sum(len(row.text) for row in result) > 200000:
+        raise ValueError("Transcript text exceeds 200,000 characters. Split the meeting into parts.")
     return result
 
 
@@ -116,6 +122,11 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
             lines.append(f"- [{segment.id}] {literal(content)} (candidate only; confirm the outcome)")
     if not candidates:
         lines.append("No explicit action/decision keywords were found. Review the transcript; this is not proof none occurred.")
+    flagged = [segment for segment in segments if segment.review_flags]
+    if flagged:
+        lines.append("## Passages requiring an audio check")
+        for segment in flagged:
+            lines.append(f"- [{segment.id}] " + "; ".join(literal(flag) for flag in segment.review_flags))
     lines.append("## Transcript record")
     for segment in segments:
         name = speaker_map.get(segment.speaker, segment.speaker + " (identity unconfirmed)")

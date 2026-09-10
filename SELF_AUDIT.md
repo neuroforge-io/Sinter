@@ -1,28 +1,25 @@
-# Sinter 0.2 verification and limits
+# Sinter 0.3 verification scope
 
-This document replaces the old model-generated self-audit. Claims below describe implemented boundaries, not a guarantee of correctness.
+This is a public API client and local community workbench, not the proprietary ERAIS/Fracture implementation.
 
-## Corrected integration gaps
+## Executable checks
 
-The first upgrade branch retained the old inline-script HTML entry point, obsolete MIT/version metadata, unsupported YAML examples and a compile-only workflow. The finishing revision connects the modular UI, aligns the Apache-2.0 package metadata, supplies source launchers and a portable zipapp builder, and runs actual regression/browser checks.
+The regression suite covers transport and interrupted streams, source hashes and exact excerpts, unknown grant requirements, transcript correction integrity, uncertainty flags, document formats, question navigation, template history, subtitle escaping, speech settings, cancellation, persistence and local HTTP boundaries. CI runs core checks and packaging on Windows/macOS/Linux with Python 3.10/3.13.
 
-Blank grant/profile values now remain unknown. The maximum calendar date is rejected when an exclusive end date cannot be represented. Job retention is measured from completion, not submission.
+Chromium integration exercises the real local HTTP server with offline fixtures: responsive dark/light layouts, keyboard skip navigation, all three workflows, exports, saves, watches, document format selection and a mocked transcription/review/export journey. The mocked browser journey does not measure recognition accuracy.
 
-## Reproducible checks
+A separate speech-engine smoke test processes short pinned upstream audio fixtures and silence with the optional recogniser. It checks word timings, metadata, channel labels, an expected speech fragment, no-speech handling and exports. Receipts and screenshots are Actions artifacts. A run counts as verified only when its jobs actually pass against the relevant commit.
 
-Run `python -m pytest -q`, `python tools/check_public_boundary.py`, `python tools/build_zipapp.py`, and `python tools/browser_smoke.py` as documented in README. See the GitHub Actions results for the exact tested commit. Tests cover fictional workflows, source offsets, invalid model IDs, retained URLs, grant uncertainty, transcript formats/corrections, template history, real-loopback HTTP guards, incomplete streams, SQLite persistence, watch leases/retries, job cancellation/retention and zipapp assets.
+## Deliberate limits
 
-The browser script exercises keyboard navigation, dark/light/mobile layouts, all offline workflows, report/evidence downloads, local saves, corrected transcripts, watch controls, calendar export, safe DOM rendering and SSE framing. It blocks unexpected external browser requests. The verification matrix is Linux/macOS/Windows with Python 3.10/3.13; the browser job is Chromium on Linux.
+- Exact quotes establish provenance, not truth, authority, currency, semantic entailment or completeness. Question matches are keyword navigation, not answers.
+- Generative templates and their self-checks are unverified; the evidence workbench does not admit model-written factual prose.
+- Speech recognition can omit or invent words. No benchmark of long, noisy meetings, overlapping voices or identity accuracy is claimed.
+- Channel separation handles two isolated recording tracks. It is not automatic mixed-room speaker diarization, and names require human confirmation.
+- Cancellation is cooperative; model loading and native processing may finish their current operation first. Long compressed audio may require substantial memory; split it before use.
+- Core portability checks do not establish every optional dependency's compatibility on every OS/CPU. No native signed installer is supplied.
+- Reports, exported files and SQLite storage are unencrypted. Raw audio is not saved by Sinter. Search watches require a running app.
+- No PDF/DOCX ingestion, automatic official submissions or independent accessibility certification is included. Browser printing is available.
+- The public-boundary scanner is not a forensic history audit or a comprehensive secret/licence scanner.
 
-Live public API interoperability, real-audio accuracy and novice installation usability require separate real-world testing. Browser automation and tests do not constitute an accessibility certification or a formal security audit.
-
-## Deliberate boundaries
-
-- Source hashes and matching quotes establish provenance, not source truth, current authority or complete semantic coverage. Optional model ranking only reorders existing excerpt IDs.
-- Grant checks compare human-entered requirements. Overall eligibility is never automatically approved. Closing dates need human confirmation.
-- Transcription is optional and local; automatic speaker separation and voice identity are not implemented. Human-labelled transcript turns and corrections remain reviewable.
-- Draft letters/minutes are not sent or approved automatically. There is no unrestricted scraping, PDF/DOCX ingestion, rich-text editor or automated email alert service.
-- Searches run only while the application is running. Restart-safe does not mean an always-on service.
-- Local storage and exported files are unencrypted. Protect the computer and avoid sending sensitive notes through optional remote services.
-- The HTTP server is loopback-only, not a production Internet-facing or multi-user service. Host/Origin/token checks are defense in depth, not a defense against another trusted local process.
-- The core runtime has no third-party dependencies. Optional speech and development dependencies have their own licenses. The unchanged Apache LICENSE applies to Sinter, not to proprietary API implementations or independently downloaded model weights.
+See [README](README.md), [workflow guide](docs/WORKFLOWS.md) and [transcription guide](docs/TRANSCRIPTION.md) for operational boundaries. Claims should follow test evidence, not precede it.

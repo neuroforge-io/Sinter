@@ -1,134 +1,107 @@
-# Sinter
+<div align="center">
+  <img src="src/sinter/web/icon.svg" width="64" height="64" alt="Sinter">
+  <h1>Sinter</h1>
+  <p><strong>Less busywork. More community.</strong></p>
+  <p>A local-first workbench for funding research, source-linked writing<br>and meeting records you can actually review.</p>
 
-**Less busywork. More community.** A local workbench for the public NeuroForge Fracture and search APIs, with guided funding discovery, source-linked briefs and letters, and transcript-preserving meeting records.
+  [![Quality checks](https://github.com/neuroforge-io/Sinter/actions/workflows/ci.yml/badge.svg)](https://github.com/neuroforge-io/Sinter/actions/workflows/ci.yml)
+  [![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue)](LICENSE)
+  [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB)](https://www.python.org/downloads/)
 
-Apache 2.0. Python 3.10+. No third-party runtime dependencies in the core. No account, API key, Node.js or model download is required to try the fictional offline examples.
+  <p><a href="#get-started">Get started</a> &nbsp; / &nbsp; <a href="docs/WORKFLOWS.md">Workflow guide</a> &nbsp; / &nbsp; <a href="docs/TRANSCRIPTION.md">Local transcription</a> &nbsp; / &nbsp; <a href="docs/DEVELOPMENT.md">For developers</a></p>
+</div>
 
-## Open it on your computer
+---
 
-Download and extract this repository, then open the launcher:
+## Useful work, not another blank chat box
 
-| System | Launcher |
-| --- | --- |
-| Windows | Double-click `Start-Sinter.bat` |
-| macOS | Open `Start-Sinter.command` |
-| Linux | Run `sh start-sinter.sh` |
+Sinter is for the people who organise the meeting, chase the grant, collect the references and write the follow-up. Choose a task, bring the context, and prepare something useful without learning prompt engineering.
 
-Python 3.10 or newer must already be installed. Install it from [python.org](https://www.python.org/downloads/) when needed; on Windows, enable **Add Python to PATH**. These are source launchers, not signed native installers. On macOS, an extracted ZIP may not retain executable permissions: run `sh Start-Sinter.command` from Terminal. Do not disable operating-system security protections.
+| Your task | What Sinter helps you prepare |
+| :--- | :--- |
+| **Find funding** | Search-backed leads, exact requirement checks, unanswered eligibility questions and recurring search watches. |
+| **Write with context** | An enquiry letter, briefing note or agenda item, with a question-to-source guide and complete evidence pack. |
+| **Keep meeting records** | Local transcription, passage playback, speaker-label review, traceable corrections and draft minutes. |
 
-The launcher opens your browser at `http://127.0.0.1:8420`. Keep its terminal window open while using Sinter. A free port is selected when the default port is busy. Press Ctrl+C to stop. Select **Try an example** for your first run.
+**You keep the final say.** Sinter does not send letters, submit applications or approve minutes. Its evidence workflows use checked source excerpts, not unbounded model-generated factual prose. Free-form AI drafting is available separately, and labelled as unverified.
 
-From a terminal on Linux/macOS:
+## Get started
+
+**You need Python 3.10+ and a web browser.** The core needs no third-party runtime packages, Node.js, Docker, API key or model download to try the fictional examples.
+
+### Download and open
+
+[Download the source ZIP](https://github.com/neuroforge-io/Sinter/archive/refs/heads/main.zip), extract it, and use your launcher:
+
+| Windows | macOS | Linux |
+| :--- | :--- | :--- |
+| Double-click `Start-Sinter.bat` | Open `Start-Sinter.command` | Run `sh start-sinter.sh` |
+
+Sinter opens a local browser window, normally at `http://127.0.0.1:8420`. **Keep the launcher window open.** Choose **Try an example** to see a complete workflow without sending anything to an external service. Press **Ctrl+C** in the launcher to stop.
+
+Python missing? Install it from [python.org](https://www.python.org/downloads/). On Windows, enable **Add Python to PATH**. On macOS, an extracted ZIP may need `sh Start-Sinter.command` from Terminal. Do not disable your operating system's security protections. These are source launchers, not signed native installers.
+
+### Or clone the project
 
 ```sh
-cd ~
-git clone https://github.com/neuroforge-io/Sinter.git sinter
+git clone https://github.com/neuroforge-io/Sinter.git ~/sinter
 cd ~/sinter
 python3 start.py
 ```
 
-From an existing Python environment:
+Already installed? Stop Sinter, run `git pull --ff-only` in its folder, then restart. Source launchers automatically prefer the project's `.venv` when one exists.
+
+## A better path from context to output
+
+**1. Bring the material.** Paste notes, add text files and reference excerpts, or import a meeting transcript. A URL alone is not source evidence. Recordings can be transcribed with the optional local speech package.
+
+**2. Make the unknowns visible.** Exact excerpts keep their source IDs, hashes and character offsets. Questions link to related wording without pretending that a keyword match is an answer. Grant checks remain unknown until the source and interpretation are confirmed by a person.
+
+**3. Review, then use.** Copy the draft, download Markdown and JSON evidence, print through the browser or explicitly save to your local workspace. Meeting corrections preserve the original wording and a reason for the change.
+
+[Read the workflow guide](docs/WORKFLOWS.md) for grants, letters, agenda items, meeting review and recurring searches.
+
+## Transcribe on your computer
+
+From the extracted or cloned Sinter folder:
 
 ```sh
-python -m pip install .
-sinter
-# Other entry points:
-python -m sinter serve
-sinter serve --no-browser --port 9000
+python3 setup_speech.py
+# Windows: py setup_speech.py
 ```
 
-All source launchers prefer this folder's `.venv` when one exists. `start.py` runs directly from source without installing anything.
+The helper asks permission, installs the optional speech packages into `.venv`, and checks that the speech engine loads. **It does not download a model or upload a recording.** Restart Sinter, open **Meeting minutes**, and expand **Start with an audio recording**. The initial model download is a separate, explicit choice.
 
-## Three useful workflows
+Choose a model and recording language, then transcribe and listen back to individual passages. Word timings, uncertainty flags and the audio hash are retained in the downloadable JSON. Export TXT, SRT or VTT for other tools. For two genuinely isolated microphone tracks, enable channel separation; track labels are not proof of a person's identity.
 
-**Find funding.** Describe the project, add reference text, and optionally search for opportunities. The report retains URLs, excerpts and retrieval times. Copy exact guideline wording into the requirement checker and confirm its currency and interpretation. Checks return `met`, `not_met` or `unknown`; overall eligibility always remains `review_required`. Missing information, fictional examples and unconfirmed requirements cannot establish eligibility.
+**Mixed-room speaker diarization and voice identification are not implemented.** Review the recording and confirm names manually. See the [transcription guide](docs/TRANSCRIPTION.md) for formats, limits, larger files, model choices and troubleshooting.
 
-**Briefs and letters.** Gather notes, text files, questions and references into a structured briefing, enquiry-letter scaffold and evidence register. Download Markdown, copy the draft text, export the complete JSON evidence pack, or print/save through your browser. This is source-constrained compilation, not unrestricted narrative synthesis or a rich-text editor.
+## Local-first, with clear boundaries
 
-**Meeting records.** Import TXT, Markdown, JSON segments, SRT or VTT. Confirm speaker labels manually. Candidate action/decision passages are highlighted without inferring attendance, votes, resolutions or deadlines. Reviewed corrections preserve original text and reasons. Minutes remain drafts until reviewed and approved outside Sinter.
+| Operation | Where it happens |
+| :--- | :--- |
+| Examples, source compilation, transcript review and exports | On your computer. |
+| Optional speech recognition | On your computer; first model download needs permission and internet access. |
+| Web search and search watches | Your exact query is sent to the configured public API. |
+| Optional Fracture excerpt ranking | Up to six excerpts and the project question are sent to the configured API. |
+| Explore Fracture chat and templates | The submitted conversation or template context is sent to the configured API. |
 
-The examples are explicitly fictional. They are not actual grant recommendations, meetings or eligibility advice.
+Saved reports and watches live in `~/.sinter/workspace.sqlite3`, or `SINTER_DATA_DIR` when configured. **Storage and exports are not encrypted.** Unsaved browser inputs disappear on reload. Watches run only while Sinter is open; there is no installed background service or email alert system.
 
-## Grounding and review
+Provenance is not truth. A source can be wrong, old or incomplete. A recogniser can omit or invent a word. Review full official guidance, amounts, dates, names, negation and decisions before relying on an output.
 
-The evidence workbench snapshots source text with identifiers, SHA-256 hashes, exact quotes and character offsets. Optional Fracture ranking can reorder existing excerpt IDs only: generated prose and invented IDs are not admitted into these reports. Invalid ranking falls back to deterministic selection.
+## Built with NeuroForge
 
-This establishes **provenance, not truth, authority, currency or completeness**. Review full official guidance and surrounding context. No application can guarantee hallucination-free output. Free-form chat and custom templates remain available under **Explore Fracture** and are explicitly unverified.
+Sinter demonstrates the public [NeuroForge](https://neuroforge.io) Fracture and search APIs. It is a client and workflow harness: **no proprietary ERAIS/Fracture implementation or model weights are included**. The core remains dependency-free; optional engines, packages and downloaded models retain their own licences.
 
-Nothing sends official letters, applies for grants or approves minutes automatically.
+Keyless access is the default. Advanced settings, CLI commands, custom templates and architecture are documented in [Development & configuration](docs/DEVELOPMENT.md). Public API availability and service terms are separate from this application.
 
-## Saved work and recurring searches
+## Quality you can inspect
 
-Saving is explicit. Reports and watches live in `~/.sinter/workspace.sqlite3`; set `SINTER_DATA_DIR` to use another directory. Store important backups somewhere safe. SQLite and exports are not encrypted.
+The [quality workflow](https://github.com/neuroforge-io/Sinter/actions/workflows/ci.yml) runs the regression suite on Windows, macOS and Linux with Python 3.10/3.13, exercises the interface in Chromium, and builds installable and portable packages. It also runs the optional speech engine on bounded public audio fixtures and silence. Test reports and screenshots are attached to Actions runs.
 
-Search watches support hourly/daily/weekly checks, restart-safe leases, bounded retries and new/changed/not-returned result comparisons. They run only while Sinter is running. Closing the app stops checks; overdue work resumes after restart. There is no installed background service or email notification system. A missing search result is never treated as proof an opportunity has closed.
+These are executable integration checks, **not** a benchmark of long, noisy community meetings or a guarantee of accessibility, transcription accuracy or factual correctness. See [SELF_AUDIT.md](SELF_AUDIT.md) for scope and limitations, and the [developer guide](docs/DEVELOPMENT.md) to run the checks yourself.
 
-Calendar export creates review reminders and optional human-confirmed closing-date entries. Confirm the closing time and time zone separately. Importing a calendar does not run Sinter or automatically update an earlier import.
+---
 
-## Optional local audio transcription
-
-Install the optional speech extra into a virtual environment:
-
-```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install '.[speech]'
-python start.py
-```
-
-On Windows, activate with `.venv\Scripts\activate` instead. Recording permission and permission for the initial speech-model download are separate choices. The browser upload limit is 25 MB; the CLI accepts recordings up to 500 MB:
-
-```sh
-sinter transcribe meeting.wav --consent --allow-download -o transcript.json
-```
-
-The optional faster-whisper adapter processes audio locally on CPU. Its dependencies and model weights have separate licenses. **Automatic diarization and voice identity are not implemented.** Unidentified turns remain unidentified; do not assign an entire multi-speaker recording to one person. Check recognition against the recording, especially names, numbers and negation. Recognition accuracy has not been benchmarked by this release.
-
-## Public API configuration
-
-Keyless access is the default. Optional settings are read by the Python process, never stored in browser storage:
-
-- `NEUROFORGE_API_KEY` (or `NEUROFORGE_API_KEY=...` in `~/.sinter_key`).
-- `NEUROFORGE_BASE_URL` (default `https://neuroforge.io/v1`). Remote endpoints require HTTPS; loopback HTTP is allowed for local integrations.
-- `NEUROFORGE_MODEL` (default `erais-fracture-gemma`).
-
-Search sends the exact query. Optional ranking sends up to six excerpts and the project question. Explore Fracture sends chat/template inputs. Leave external options off for sensitive material. Upstream availability, model capability and service terms are independent of this client.
-
-## Templates and command line
-
-```sh
-sinter health
-sinter chat -m "Explain rainbows in two sentences"
-sinter review example.py --no-stream
-sinter research "community garden grants"
-sinter templates
-sinter template summarize -v text="Your text" -v format="paragraph"
-sinter workbench project.json -o report.json
-sinter watches --run-due
-```
-
-Templates in `~/.sinter/templates/` appear as `user:NAME`. Use JSON for complex templates. The dependency-free YAML subset accepts indented variables/steps and quoted one-line scalar prompts; anchors, tags, inline collections and block scalars are deliberately rejected. The shipped examples use supported syntax. Template execution retains prior step context and search references, and reports interrupted streams rather than treating them as success.
-
-## Development and verification
-
-```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install '.[dev,browser]'
-python -m pytest -q
-python tools/check_public_boundary.py
-python tools/build_zipapp.py
-python dist/sinter.pyz --version
-python -m playwright install chromium
-python tools/browser_smoke.py
-```
-
-CI runs regression tests and packaging on Windows, macOS and Linux with Python 3.10/3.13, plus a separate Chromium integration job. Browser tests use a temporary local workspace and fictional fixtures, not live model services. Screenshots and source/build archives are attached to Actions runs. A green compilation check alone is not release verification.
-
-`dist/sinter.pyz` is a portable core app with web assets and Apache notices. Run it with `python sinter.pyz`. A suitable Python interpreter is still required. Optional speech dependencies are not bundled.
-
-## Structure and public boundary
-
-`client.py` handles validated public API transport; `templates.py` shares generative workflow execution; `evidence.py`, `grants.py`, `meetings.py` and `workbench.py` implement source-constrained reports; `store.py` manages local persistence and watch leases; `jobs.py` handles bounded jobs and cancellation; `speech.py` is the optional adapter; `server.py` exposes loopback HTTP. Native frontend modules are under `src/sinter/web/`.
-
-The repository contains client/harness code, not the proprietary ERAIS/Fracture implementation or model weights. The narrow automated public-boundary check is not a forensic audit of repository history or a legal license audit. See [LICENSE](LICENSE), [NOTICE](NOTICE) and [SELF_AUDIT.md](SELF_AUDIT.md).
+**[Apache License 2.0](LICENSE)** &nbsp; / &nbsp; [Notices](NOTICE) &nbsp; / &nbsp; [Report an issue](https://github.com/neuroforge-io/Sinter/issues)

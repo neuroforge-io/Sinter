@@ -22,7 +22,7 @@ def run(payload: dict, progress=lambda message: None) -> dict:
     if not isinstance(kind, str) or kind not in WORKFLOWS:
         raise ValueError("Choose a funding, briefing or meeting workflow.")
     title = text(payload.get("title", ""), "Project title", 200, True)
-    notes = text(payload.get("notes", ""), "Notes")
+    notes = text(payload.get("notes", ""), "Notes", 1000000 if kind == "meeting" else MAX_CONTEXT)
     query = text(payload.get("query", ""), "Search query", 1024)
     questions = text(payload.get("questions", ""), "Questions", 12000)
     for flag in ("use_search", "use_model", "demo"):
@@ -87,15 +87,11 @@ def run(payload: dict, progress=lambda message: None) -> dict:
         if result["screening"]["checks"]:
             lines.append(result["screening"]["markdown"])
     else:
-        lines.extend(["## Purpose", "Bring the supplied material together and identify what needs an authoritative response.",
-                      "## Questions for clarification", literal(questions) if questions.strip() else "No questions supplied. Add the specific information or decisions you need.",
-                      "## Draft enquiry letter", "Dear [recipient],", f"Re: {literal(title)}",
-                      "We are seeking clarification on the questions below. The accompanying evidence pack reproduces "
-                      "material for checking; we have not treated unverified notes or search excerpts as settled facts.",
-                      literal(questions) if questions.strip() else "[Insert the questions requiring a response.]",
-                      "Please identify the current policy, guideline or other source supporting your response, "
-                      "and clarify any point where our information is incomplete or out of date.",
-                      "Thank you for your assistance.\n\n[Name]\n[Organisation]\n[Contact details]"])
+        from .briefs import sections
+        document, question_map = sections(payload, sources)
+        lines.extend(document)
+        result["document_type"] = payload.get("document_type", "enquiry")
+        result["question_index"] = question_map
     progress("Checking every excerpt against its original source")
     lines.append(render_evidence(selected, sources))
     lines.extend(["## Limitations and review", "\n".join("- " + literal(warning) for warning in warnings)])
