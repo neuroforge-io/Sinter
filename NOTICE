@@ -1,0 +1,14 @@
+Sinter
+Copyright 2026 Lloyd Handyside and Sinter contributors.
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+The Sinter 0.2 community-workbench changes refactor the public API client,
+template runner, CLI and local server and add independent workflow services.
+
+Sinter is a public API client, not the proprietary NeuroForge ERAIS or Fracture
+implementation. No model weights, internal routing or training code,
+checkpoints, API keys or private recordings are bundled in the core package.
+
+Optional speech packages and downloaded speech models are separate components
+with their own licences and notices. They are not bundled into the core package.
+API service access and NeuroForge trademarks are not licensed by this notice.
