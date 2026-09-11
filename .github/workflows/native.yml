@@ -34,7 +34,7 @@ jobs:
         with:
           python-version: '3.13'
           architecture: ${{ matrix.python_arch }}
-      - run: python -m pip install pyinstaller==6.22.2
+      - run: python -m pip install pyinstaller==6.22.2 certifi
       - name: Ensure Windows installer compiler
         if: runner.os == 'Windows'
         shell: pwsh
@@ -77,7 +77,7 @@ jobs:
           docker run --rm --platform "$TARGET_PLATFORM" -e GITHUB_SHA -e TARGET_ARCH -e EXECUTION_MODE \
             -v "$PWD:/work" -w /work python:3.11-slim-bookworm sh -ec '
               apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev zlib1g-dev binutils
-              python -m pip install pyinstaller==6.22.2
+              python -m pip install pyinstaller==6.22.2 certifi
               python tools/package_native.py --arch "$TARGET_ARCH" --execution "$EXECUTION_MODE"
             '
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

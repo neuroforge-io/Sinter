@@ -67,7 +67,8 @@ def main():
     build.mkdir(exist_ok=True); release.mkdir(exist_ok=True)
     ico, icns = icon(build)
     cmd = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir', '--name', 'Sinter',
-           '--paths', str(ROOT/'src'), '--collect-submodules', 'sinter', '--collect-data', 'sinter',
+           '--paths', str(ROOT/'src'), '--collect-submodules', 'sinter', '--collect-data', 'certifi', '--hidden-import', 'certifi',
+           '--add-data', str(ROOT/'src'/'sinter'/'web') + os.pathsep + 'sinter/web',
            '--exclude-module', 'tkinter', '--exclude-module', 'faster_whisper',
            '--add-data', str(ROOT/'LICENSE')+os.pathsep+'.', '--add-data', str(ROOT/'NOTICE')+os.pathsep+'.']
     if sys.platform == 'win32':
@@ -100,11 +101,26 @@ def main():
         for path in candidates:
             if path.is_file():
                 shutil.copy2(path, notices/'PyInstaller-COPYING.txt')
+    for entry in importlib.metadata.files('pyinstaller') or []:
+        if entry.name.startswith('COPYING'):
+            path = importlib.metadata.distribution('pyinstaller').locate_file(entry)
+            if path.is_file():
+                shutil.copy2(path, notices/'PyInstaller-COPYING.txt')
+    if not (notices/'PyInstaller-COPYING.txt').exists():
+        raise RuntimeError('PyInstaller distribution licence could not be collected')
+    for entry in importlib.metadata.files('certifi') or []:
+        if entry.name in {'LICENSE', 'LICENSE.txt'}:
+            shutil.copy2(importlib.metadata.distribution('certifi').locate_file(entry), notices/'certifi-LICENSE.txt')
     if sys.platform == 'darwin':
         run('codesign', '--force', '--deep', '--sign', '-', str(app))
     prefix = f'Sinter-{__version__}-{platform.system().lower()}-{args.arch}'
     receipt_path = release/(prefix+'-test.json')
-    run(binary, '--self-test', receipt_path, timeout=60)
+    try:
+        run(binary, '--self-test', receipt_path, timeout=60)
+    except subprocess.CalledProcessError:
+        if receipt_path.exists():
+            print(receipt_path.read_text(encoding='utf-8'))
+        raise
     receipt = json.loads(receipt_path.read_text())
     assert receipt['passed'] and receipt['frozen'] and receipt['pointer_bits'] == bits
     receipt.update({'execution': args.execution, 'target_arch': args.arch, 'signed_by_publisher': False,
