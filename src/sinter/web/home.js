@@ -15,7 +15,7 @@ export function home(go, drafts) {
     h('div', {class: 'preview-row'}, h('span', {class: 'preview-number'}, '02'), h('div', {}, h('strong', {}, 'Questions, made visible'), h('small', {}, 'What is supported? What still needs an answer?'))),
     h('div', {class: 'preview-row'}, h('span', {class: 'preview-number'}, '03'), h('div', {}, h('strong', {}, 'A draft you control'), h('small', {}, 'Review, export or save. Never sent automatically.'))),
     button('Open this example', () => go('brief?example=1'), 'quiet'));
-  const pending = [...drafts.entries()].filter(([, data]) => !data.demo && (data.title || data.notes));
+  const pending = [...drafts.entries()].filter(([, data]) => !data.demo && (data.title || data.notes || data.book?.title));
   return h('div', {},
     h('section', {class: 'hero hero-grid'}, h('div', {class: 'hero-copy'},
       h('span', {class: 'eyebrow'}, 'THE COMMUNITY WORKBENCH'),
@@ -25,13 +25,16 @@ export function home(go, drafts) {
       h('div', {class: 'hero-meta'}, h('span', {}, 'Local-first'), h('span', {}, 'No account for examples'), h('span', {}, 'Apache 2.0'))), preview),
     pending.length ? h('section', {class: 'resume-strip', 'aria-label': 'Continue an unsaved project'},
       h('span', {class: 'muted'}, 'Still in this session'),
-      ...pending.map(([kind, data]) => button(`Continue: ${data.title || kind}`, () => go(kind), 'quiet'))) : null,
+      ...pending.map(([kind, data]) => button(`Continue: ${data.title || data.book?.title || kind}`, () => go(kind), 'quiet'))) : null,
     h('div', {class: 'section-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, 'START WITH A REAL TASK'),
       h('h2', {}, 'What would you like to get done?')), h('span', {class: 'muted'}, 'No clever prompting needed.')),
     h('div', {class: 'card-grid'}, cards.map(([id, index, category, title, description, label, outcome]) =>
       h('article', {class: 'card workflow-card'}, h('span', {class: 'card-index', 'aria-hidden': 'true'}, index),
         h('span', {class: 'eyebrow'}, category), h('h3', {}, title), h('p', {}, description), h('small', {class: 'outcome'}, outcome),
         h('div', {class: 'button-row'}, button(label, () => go(id), 'primary'), button('See example', () => go(`${id}?example=1`), 'quiet'))))),
+    h('section', {class: 'card secondary-tools'}, h('span', {class: 'eyebrow'}, 'NEW / COMMUNITY CASEBOOKS'), h('h3', {}, 'Scattered information. Connected work.'),
+      h('p', {}, 'Bring notes, replies, policies and handovers together. Save a project, ask your questions, and prepare a source-only briefing with the gaps still visible.'),
+      button('Open community casebooks', () => go('casebooks'), 'primary')),
     h('div', {class: 'card-grid secondary-tools'},
       h('article', {class: 'card'}, h('span', {class: 'eyebrow'}, 'KNOWLEDGE'), h('h3', {}, 'Put past work to work.'),
         h('p', {}, 'Find cited material in RKC atlases. Optional Fracture assistance helps draft from a bounded source pack.'), button('Explore knowledge atlases', () => go('atlas'), 'quiet')),

@@ -1,4 +1,4 @@
-# Sinter 0.4 verification scope
+# Sinter 0.5 verification scope
 
 This is a public API client and local community workbench, not the proprietary ERAIS/Fracture implementation. A check counts as verified only when its actual run passes against the relevant source revision.
 
@@ -6,7 +6,7 @@ This is a public API client and local community workbench, not the proprietary E
 
 Core regression tests cover transport, interrupted streams, source hashes and exact excerpts, unknown grant requirements, transcript correction integrity, document formats, template history, speech settings, cancellation, persistence and local HTTP boundaries. New checks cover settings validation and secret isolation, request-scoped configuration, atlas citations, transfer consent, selected-file path validation, CSV formula handling, calendar dates, native entry points and release-manifest rejection cases. CI runs on Windows/macOS/Linux with Python 3.10 and 3.13.
 
-Four browser scripts exercise the actual local HTTP servers with offline fixtures: responsive themes, keyboard navigation, workflows, exports, saves, watches, document formats, transcription/review, local playback, settings persistence, community plans, RKC import/consent and the public download chooser. Mocked recognition and release metadata in browser tests are not speech accuracy or deployment evidence.
+Five browser scripts exercise the actual local HTTP servers with offline fixtures: responsive themes, keyboard navigation, workflows, exports, saves, watches, document formats, transcription/review, local playback, settings persistence, community plans, RKC import/consent and the public download chooser. Mocked recognition and release metadata in browser tests are not speech accuracy or deployment evidence.
 
 Separate integration jobs run a real optional speech engine on short pinned audio fixtures and compile a fictional collection with a pinned real RKC executable. They test interoperability rather than long noisy meetings or arbitrary atlas versions. Receipts and screenshots are retained as Actions artifacts.
 
@@ -26,3 +26,20 @@ Nine native targets build interpreter-bundled installers and execute installed a
 - The public-boundary scanner is narrow, not a forensic history, complete secret or dependency-licensing audit.
 
 See the [README](README.md), [installation](docs/INSTALLATION.md), [workflow](docs/WORKFLOWS.md), [atlas](docs/ATLAS.md) and [transcription](docs/TRANSCRIPTION.md) guides.
+
+
+## 0.5 resilience and community collections
+
+Run `python tools/self_audit.py` for a deterministic dogfood check over Sinter source
+plus fictional community workflows. The receipt names admitted inputs, source hash,
+retrieval coverage and zero model requests. It is not an independent bug audit.
+
+Casebook tests cover exact spans, missing evidence, provisional and negative wording,
+limits, malformed imports, revision conflicts, source-only defaults and withheld
+invalid model citations. Review tests cover checkpoints, source/provider binding,
+partial coverage and a no-replay failure. A real local HTTP drip-feed test checks
+that data arriving slowly cannot extend the response budget indefinitely.
+
+The casebook browser journey tests backups, saved-project reopening, one deliberately
+failed status read with no duplicate submission, task recovery and mobile layout.
+Browser results are verified only from actual passing runs, not local test availability.

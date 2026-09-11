@@ -5,7 +5,7 @@
 
 **A free, open-source workbench for the people doing the work.**
 
-Funding research. Clear correspondence. Reviewable meeting records.<br>
+Fragmented knowledge. Funding research. Clear correspondence. Reviewable meeting records.<br>
 Action plans and shared knowledge, with the evidence still in view.
 
 [Download Sinter](https://github.com/neuroforge-io/Sinter/releases) · [Getting started](docs/INSTALLATION.md) · [What you can do](docs/WORKFLOWS.md) · [Help & feedback](https://github.com/neuroforge-io/Sinter/issues)
@@ -15,6 +15,20 @@ Action plans and shared knowledge, with the evidence still in view.
 </div>
 
 ---
+
+## New in 0.5: put the fragments together
+
+**Community casebooks** bring notes, replies, policies and past work into one local,
+revisioned project. Ask your questions, keep the original wording, and prepare a
+briefing, enquiry, agenda item or volunteer handover with explicit coverage and gaps.
+Optional AI drafting uses a previewed excerpt pack, never a silent upload of the collection.
+
+**Recent activity** recovers results after a lost browser connection. **Bounded reviews**
+process large text collections in small batches with checkpoints and an honest coverage
+ledger. Completed work is retained when a later batch fails; generation is never
+automatically replayed.
+
+[Casebook guide](docs/CASEBOOKS.md) · [Large reviews and recovery](docs/LARGE_REVIEWS.md)
 
 ## Start with something useful
 

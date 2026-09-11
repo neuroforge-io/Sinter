@@ -1,3 +1,5 @@
+import {casebooksPage} from './casebooks.js';
+import {activityPage} from './activity.js';
 import {settingsPage, applyAppearance} from './settings.js';
 import {atlasPage} from './atlas.js';
 import {communityPage} from './community.js';
@@ -11,7 +13,7 @@ import {playground} from './playground.js';
 const view = document.getElementById('view');
 const drafts = new Map();
 let busy = false, current = '#home', routeSequence = 0;
-const routes = [['home', 'Overview'], ['grants', 'Find funding'], ['brief', 'Briefs & letters'], ['meeting', 'Meeting minutes'],
+const routes = [['home', 'Overview'], ['casebooks', 'Community casebooks'], ['activity', 'Recent activity'], ['grants', 'Find funding'], ['brief', 'Briefs & letters'], ['meeting', 'Meeting minutes'],
   ['watches', 'Search watches'], ['library', 'My workspace'], ['explore', 'Explore Fracture'], ['atlas', 'Knowledge atlases'], ['tools', 'Community tools'], ['settings', 'Settings'], ['help', 'Getting started']];
 const navigation = document.getElementById('navigation');
 for (const [id, label] of routes) navigation.append(h('a', {href: '#' + id, class: 'nav-button'}, label));
@@ -68,6 +70,8 @@ async function route() {
     const options = {setBusy, remember, seed: drafts.get(id) || {}, example: new URLSearchParams(query || '').get('example') === '1'};
     let content;
     if (['grants', 'brief', 'meeting'].includes(id)) content = await workbench(id, options);
+    else if (id === 'casebooks') content = await casebooksPage(options);
+    else if (id === 'activity') content = await activityPage();
     else if (id === 'library') content = await library();
     else if (id === 'watches') content = await watches(options);
     else if (id === 'explore') content = await playground(options);

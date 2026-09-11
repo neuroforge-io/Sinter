@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import __version__, atlas, client, community, speech, workbench
+from . import __version__, atlas, casebooks, client, community, speech, workbench
 from .preferences import Preferences
 from .evidence import collect, text
 from .grants import screen
@@ -33,6 +33,7 @@ class Application:
     def __init__(self, directory=None):
         self.store = Store(directory)
         self.preferences = Preferences(self.store.directory)
+        self.casebooks = casebooks.Casebooks(self.store)
         self.desktop_shutdown = None
         self.jobs = Jobs()
         self.token = secrets.token_urlsafe(32)
@@ -147,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
             length = int(lengths[0])
         except ValueError as exc:
             raise ValueError("Invalid Content-Length.") from exc
-        limit = (36 if path == "/api/transcribe" else 5 if path.startswith("/api/atlas/") else 2) * 1024 * 1024
+        limit = (36 if path == "/api/transcribe" else 10 if path.startswith("/api/casebooks/") else 5 if path.startswith("/api/atlas/") else 2) * 1024 * 1024
         if not 0 < length <= limit:
             raise ValueError("The request is empty or too large. Split it into smaller inputs.")
         raw = self.rfile.read(length)
@@ -216,6 +217,12 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/example":
             query = parse_qs(parsed.query, max_num_fields=8)
             self._json(workbench.example(query.get("workflow", ["brief"])[0]))
+        elif path == "/api/jobs":
+            self._json({"jobs": self.app.jobs.list()})
+        elif path == "/api/casebooks":
+            self._json({"casebooks": self.app.casebooks.list()})
+        elif path.startswith("/api/casebooks/"):
+            self._json(self.app.casebooks.get(path.removeprefix("/api/casebooks/")))
         elif path.startswith("/api/jobs/"):
             self._json(self.app.jobs.get(path.removeprefix("/api/jobs/")))
         elif path == "/api/reports":
@@ -245,6 +252,47 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Stop the source launcher with Ctrl+C.")
             self._json({"ok": True})
             threading.Thread(target=self.app.desktop_shutdown, daemon=True).start()
+        elif path == "/api/casebooks/validate":
+            self._json({"document": casebooks.validate(body.get("document"))})
+        elif path == "/api/casebooks/save":
+            self._json(self.app.casebooks.save(body.get("document"), body.get("id"), body.get("revision")))
+        elif path == "/api/casebooks/delete":
+            self.app.casebooks.delete(body.get("id"), body.get("revision"))
+            self._json({"ok": True})
+        elif path in {"/api/casebooks/build", "/api/casebooks/draft"}:
+            saved = self.app.casebooks.get(body.get("id"))
+            if saved["revision"] != body.get("revision"):
+                raise ValueError("The project changed. Reopen or save it before preparing a report.")
+            if path.endswith("/draft") and (body.get("consent") is not True or body.get("fingerprint") != saved["document"]["fingerprint"]):
+                raise ValueError("Preview the current source-only report and approve transfer before asking for a draft.")
+            def operation(progress):
+                report = casebooks.build(saved["document"], body.get("document_type", "brief"), progress)
+                return casebooks.draft(report, True, progress) if path.endswith("/draft") else report
+            self._json({"id": self.app.jobs.submit(operation, label="Casebook: " + saved["document"]["title"][:180], timeout=300)}, 202)
+        elif path in {"/api/chat/job", "/api/template/job"}:
+            if path == "/api/chat/job":
+                rows = body.get("messages")
+                if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                    raise ValueError("Provide a list of messages.")
+                messages = [client.Message(row.get("role"), row.get("content")) for row in rows]
+                maximum = body.get("max_tokens", 512)
+                client._chat_body(messages, maximum)
+                def operation(progress):
+                    progress("Waiting for the configured model; no automatic replay")
+                    return asdict(client.chat(messages, maximum))
+            else:
+                template = resolve_template(body.get("template", "custom"))
+                values = body.get("variables", {})
+                if not isinstance(values, dict):
+                    raise ValueError("Template variables must be an object.")
+                def operation(progress):
+                    results, sources = [], []
+                    for event in template_events(template, values, stream=False):
+                        if event["type"] == "step": progress(event["name"])
+                        elif event["type"] == "step_done": results.append(event)
+                        elif event["type"] == "sources": sources.append(event)
+                    return {"results": results, "sources": sources}
+            self._json({"id": self.app.jobs.submit(operation, label="Model task", timeout=900)}, 202)
         elif path == "/api/atlas/inspect":
             self._json(atlas.inspect(body.get("document")))
         elif path == "/api/atlas/context":
@@ -290,7 +338,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"results": [event for event in collected if event["type"] == "step_done"],
                             "sources": [event for event in collected if event["type"] == "sources"]})
         elif path == "/api/workbench":
-            self._json({"id": self.app.jobs.submit(lambda progress: workbench.run(body, progress))}, 202)
+            self._json({"id": self.app.jobs.submit(lambda progress: workbench.run(body, progress), label="Community report")}, 202)
         elif path == "/api/jobs/cancel":
             self.app.jobs.cancel(text(body.get("id", ""), "Job ID", 100, True))
             self._json({"ok": True})

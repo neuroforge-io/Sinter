@@ -30,3 +30,7 @@ speech-artifacts/
 rkc-artifacts/
 release/
 Sinter.spec
+
+self-audit-artifacts/
+*.review.md
+*.review.md.checkpoint.json
