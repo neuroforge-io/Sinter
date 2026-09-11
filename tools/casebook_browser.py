@@ -29,14 +29,16 @@ def main():
                 assert 'No wording match' in page.locator('.document').inner_text()
                 assert 'No one agreed' in page.locator('.document').inner_text()
                 page.screenshot(path=str(out / 'casebook-desktop.png'), full_page=True)
-                page.get_by_role('button', name='Light theme', exact=True).click()
+                page.locator('#theme-toggle').click()
+                expect(page.locator('html')).to_have_attribute('data-theme', 'light')
                 page.screenshot(path=str(out / 'casebook-light.png'), full_page=True)
-                page.get_by_role('button', name='Dark theme', exact=True).click()
+                page.locator('#theme-toggle').click()
+                expect(page.locator('html')).to_have_attribute('data-theme', 'dark')
                 with page.expect_download() as download:
                     page.get_by_role('button', name='Export project backup', exact=True).click()
                 contents = json.loads(Path(download.value.path()).read_text())
                 assert len(contents['documents']) == 3
-                # Lose one poll response; the harness must recover the same id, without another submission.
+                # Lose one poll response; recover the same id without another submission.
                 counts = {'polls': 0, 'posts': 0}
                 def route_job(route):
                     counts['polls'] += 1
@@ -46,7 +48,7 @@ def main():
                 page.on('request', lambda req: counts.__setitem__('posts', counts['posts'] + 1) if req.url.endswith('/api/casebooks/build') else None)
                 page.get_by_role('button', name='Prepare source-only report', exact=True).click()
                 page.get_by_role('button', name='Prepare source-only report', exact=True).wait_for(state='visible')
-                expect(page.get_by_role("button", name="Prepare source-only report", exact=True)).to_be_enabled(timeout=15000)
+                expect(page.get_by_role('button', name='Prepare source-only report', exact=True)).to_be_enabled(timeout=15000)
                 assert counts['polls'] >= 2 and counts['posts'] == 1
                 page.get_by_role('link', name='Recent activity', exact=True).click()
                 page.get_by_role('button', name='Open result', exact=True).first.click()
