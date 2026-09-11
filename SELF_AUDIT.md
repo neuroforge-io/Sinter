@@ -1,25 +1,28 @@
-# Sinter 0.3 verification scope
+# Sinter 0.4 verification scope
 
-This is a public API client and local community workbench, not the proprietary ERAIS/Fracture implementation.
+This is a public API client and local community workbench, not the proprietary ERAIS/Fracture implementation. A check counts as verified only when its actual run passes against the relevant source revision.
 
 ## Executable checks
 
-The regression suite covers transport and interrupted streams, source hashes and exact excerpts, unknown grant requirements, transcript correction integrity, uncertainty flags, document formats, question navigation, template history, subtitle escaping, speech settings, cancellation, persistence and local HTTP boundaries. CI runs core checks and packaging on Windows/macOS/Linux with Python 3.10/3.13.
+Core regression tests cover transport, interrupted streams, source hashes and exact excerpts, unknown grant requirements, transcript correction integrity, document formats, template history, speech settings, cancellation, persistence and local HTTP boundaries. New checks cover settings validation and secret isolation, request-scoped configuration, atlas citations, transfer consent, selected-file path validation, CSV formula handling, calendar dates, native entry points and release-manifest rejection cases. CI runs on Windows/macOS/Linux with Python 3.10 and 3.13.
 
-Chromium integration exercises the real local HTTP server with offline fixtures: responsive dark/light layouts, keyboard skip navigation, all three workflows, exports, saves, watches, document format selection and a mocked transcription/review/export journey. The mocked browser journey does not measure recognition accuracy.
+Four browser scripts exercise the actual local HTTP servers with offline fixtures: responsive themes, keyboard navigation, workflows, exports, saves, watches, document formats, transcription/review, local playback, settings persistence, community plans, RKC import/consent and the public download chooser. Mocked recognition and release metadata in browser tests are not speech accuracy or deployment evidence.
 
-A separate speech-engine smoke test processes short pinned upstream audio fixtures and silence with the optional recogniser. It checks word timings, metadata, channel labels, an expected speech fragment, no-speech handling and exports. Receipts and screenshots are Actions artifacts. A run counts as verified only when its jobs actually pass against the relevant commit.
+Separate integration jobs run a real optional speech engine on short pinned audio fixtures and compile a fictional collection with a pinned real RKC executable. They test interoperability rather than long noisy meetings or arbitrary atlas versions. Receipts and screenshots are retained as Actions artifacts.
+
+Nine native targets build interpreter-bundled installers and execute installed applications. x86 execution uses compatibility environments; ARMv7 uses emulation. Windows/Linux checks include uninstall. The release publisher verifies all receipts, hashes and source identity before attaching assets. Windows/macOS binaries are not publisher-signed or notarised; installation policies may still block them.
 
 ## Deliberate limits
 
-- Exact quotes establish provenance, not truth, authority, currency, semantic entailment or completeness. Question matches are keyword navigation, not answers.
-- Generative templates and their self-checks are unverified; the evidence workbench does not admit model-written factual prose.
-- Speech recognition can omit or invent words. No benchmark of long, noisy meetings, overlapping voices or identity accuracy is claimed.
-- Channel separation handles two isolated recording tracks. It is not automatic mixed-room speaker diarization, and names require human confirmation.
-- Cancellation is cooperative; model loading and native processing may finish their current operation first. Long compressed audio may require substantial memory; split it before use.
-- Core portability checks do not establish every optional dependency's compatibility on every OS/CPU. No native signed installer is supplied.
-- Reports, exported files and SQLite storage are unencrypted. Raw audio is not saved by Sinter. Search watches require a running app.
-- No PDF/DOCX ingestion, automatic official submissions or independent accessibility certification is included. Browser printing is available.
-- The public-boundary scanner is not a forensic history audit or a comprehensive secret/licence scanner.
+- Provenance is not truth, authority, freshness, entailment or completeness. Keyword matches are navigation aids.
+- Generative templates, self-checks and Fracture-assisted atlas drafts remain unverified. Valid citation numbers do not prove factual support.
+- RKC producer integrity/digest labels are not independently verified. Sinter's sidecar does not qualify a model provider inside RKC or rewrite canonical atlas evidence.
+- Speech recognition can omit or invent words. Isolated-channel separation is not mixed-room diarization or voice identification.
+- Speech engines, RKC executables and model assets are not bundled in core native installers. Optional speech currently uses a source installation.
+- Cancellation is cooperative. RKC retains its own resource controls; no Linux cgroup policy is disabled by the adapter.
+- Storage and exports are unencrypted. Watches run only while the application is open. Browser drafts are not persistent backups.
+- No PDF/DOCX ingestion, automatic official submissions, universal old-OS compatibility or independent accessibility certification is claimed.
+- GitHub Pages requires one-time repository administrator enablement; a checked-in site is not proof of a live deployment.
+- The public-boundary scanner is narrow, not a forensic history, complete secret or dependency-licensing audit.
 
-See [README](README.md), [workflow guide](docs/WORKFLOWS.md) and [transcription guide](docs/TRANSCRIPTION.md) for operational boundaries. Claims should follow test evidence, not precede it.
+See the [README](README.md), [installation](docs/INSTALLATION.md), [workflow](docs/WORKFLOWS.md), [atlas](docs/ATLAS.md) and [transcription](docs/TRANSCRIPTION.md) guides.

@@ -1,6 +1,6 @@
-"""Sinter 0.3 local-only web application with bounded resources and same-origin protection.
+"""Local-only community application. Not an Internet-facing or multi-user server.
 
-Modified from the original development server. Not an Internet-facing or multi-user server.
+Modified in 0.4 to integrate local preferences, community tools and RKC adapters.
 """
 from __future__ import annotations
 
@@ -16,7 +16,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import __version__, client, speech, workbench
+from . import __version__, atlas, client, community, speech, workbench
+from .preferences import Preferences
 from .evidence import collect, text
 from .grants import screen
 from .jobs import Jobs
@@ -31,6 +32,8 @@ MIME = {".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".sv
 class Application:
     def __init__(self, directory=None):
         self.store = Store(directory)
+        self.preferences = Preferences(self.store.directory)
+        self.desktop_shutdown = None
         self.jobs = Jobs()
         self.token = secrets.token_urlsafe(32)
         self.stop = threading.Event()
@@ -38,7 +41,8 @@ class Application:
     def scheduler(self):
         while not self.stop.wait(5):
             try:
-                self.store.run_due()
+                with client.connection_settings(self.preferences.connection()):
+                    self.store.run_due()
             except Exception:
                 log.exception("Watch scheduler could not complete a check")
 
@@ -92,7 +96,6 @@ class Handler(BaseHTTPRequestHandler):
         return self.server.app
 
     def log_message(self, format, *args):
-        # Avoid logging private paths, queries, prompts or recording filenames.
         pass
 
     def _security_headers(self):
@@ -144,7 +147,7 @@ class Handler(BaseHTTPRequestHandler):
             length = int(lengths[0])
         except ValueError as exc:
             raise ValueError("Invalid Content-Length.") from exc
-        limit = 36 * 1024 * 1024 if path == "/api/transcribe" else 2 * 1024 * 1024
+        limit = (36 if path == "/api/transcribe" else 5 if path.startswith("/api/atlas/") else 2) * 1024 * 1024
         if not 0 < length <= limit:
             raise ValueError("The request is empty or too large. Split it into smaller inputs.")
         raw = self.rfile.read(length)
@@ -159,7 +162,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _guard(self, operation):
         try:
-            operation()
+            with client.connection_settings(self.app.preferences.connection()):
+                operation()
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             pass
         except PermissionError as exc:
@@ -199,7 +203,9 @@ class Handler(BaseHTTPRequestHandler):
                 raise KeyError("Unknown asset")
             self._send(asset.read_bytes(), MIME[suffix])
         elif path == "/api/session":
-            self._json({"token": self.app.token, "version": __version__, "workflows": workbench.WORKFLOWS})
+            self._json({"token": self.app.token, "version": __version__, "workflows": workbench.WORKFLOWS, "desktop": self.app.desktop_shutdown is not None})
+        elif path == "/api/settings":
+            self._json(self.app.preferences.public())
         elif path == "/api/health":
             ok, message = client.health_check()
             self._json({"ok": ok, "message": message}, 200 if ok else 503)
@@ -232,7 +238,29 @@ class Handler(BaseHTTPRequestHandler):
         self._trusted(write=True)
         path = urlsplit(self.path).path
         body = self._body(path)
-        if path == "/api/transcript/export":
+        if path == "/api/settings":
+            self._json(self.app.preferences.update(body.get("settings"), confirm_endpoint=body.get("confirm_endpoint") is True, api_key=body.get("api_key")))
+        elif path == "/api/desktop/quit":
+            if self.app.desktop_shutdown is None:
+                raise ValueError("Stop the source launcher with Ctrl+C.")
+            self._json({"ok": True})
+            threading.Thread(target=self.app.desktop_shutdown, daemon=True).start()
+        elif path == "/api/atlas/inspect":
+            self._json(atlas.inspect(body.get("document")))
+        elif path == "/api/atlas/context":
+            self._json(atlas.context(body.get("document"), body.get("question")))
+        elif path == "/api/atlas/retrieve":
+            self._json({"document": atlas.retrieve(self.app.preferences.snapshot()["rkc_port"], body.get("question"))})
+        elif path == "/api/atlas/answer":
+            self._json({"id": self.app.jobs.submit(lambda progress: atlas.answer(body.get("document"), body.get("question"), body.get("consent"), progress))}, 202)
+        elif path == "/api/atlas/compile":
+            executable = self.app.preferences.snapshot()["rkc_executable"]
+            self._json({"id": self.app.jobs.submit(lambda progress: atlas.compile_collection(body.get("files"), executable, body.get("consent"), progress))}, 202)
+        elif path == "/api/community/compare":
+            self._json(community.compare(body.get("before", ""), body.get("after", "")))
+        elif path == "/api/community/plan":
+            self._json(community.plan(body.get("title", ""), body.get("actions")))
+        elif path == "/api/transcript/export":
             from .transcript_export import export_transcript
             self._json({"content": export_transcript(body.get("transcript", {}), body.get("format", "json"))})
         elif path in {"/api/chat", "/api/chat/stream"}:

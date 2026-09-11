@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from sinter import client
+from sinter import __version__, client
 from sinter.jobs import Job, Jobs
 from sinter.server import make_server
 from sinter.store import Store, calendar
@@ -220,7 +220,7 @@ def test_zipapp_includes_assets_and_runs(tmp_path):
         assert {'LICENSE', 'NOTICE', 'sinter/web/index.html', 'sinter/web/app.js'} <= set(archive.namelist())
         assert not any('__pycache__' in name for name in archive.namelist())
     result = subprocess.run([sys.executable, str(output), '--version'], capture_output=True, text=True, check=True)
-    assert '0.3.0' in result.stdout
+    assert __version__ in result.stdout
     code = 'from importlib.resources import files; print(files("sinter").joinpath("web").joinpath("index.html").read_text(encoding="utf-8"))'
     env = __import__('os').environ.copy(); env['PYTHONPATH'] = str(output)
     page = subprocess.run([sys.executable, '-c', code], cwd=tmp_path, env=env, capture_output=True, text=True, check=True)

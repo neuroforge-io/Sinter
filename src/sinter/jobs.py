@@ -6,6 +6,7 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from dataclasses import dataclass, field
 
 from .client import APIError
@@ -83,7 +84,7 @@ class Jobs:
             finally:
                 self._slots.release()
         try:
-            self._pool.submit(execute)
+            self._pool.submit(copy_context().run, execute)
         except RuntimeError as exc:
             self._slots.release()
             with self._lock:
