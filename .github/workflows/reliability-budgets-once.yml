@@ -1,0 +1,151 @@
+name: Validate Sinter reliability budgets
+on:
+  push:
+    branches: [fix/reliability-budgets-20260911]
+    paths: [.github/workflows/reliability-budgets-once.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[dev]'
+      - name: Separate control, buffered generation, idle and overall stream budgets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p=Path('src/sinter/client.py');raw=p.read_bytes()
+          assert hashlib.sha1(b'blob '+str(len(raw)).encode()+bytes([0])+raw).hexdigest()=='b0dc1f8505499d77bb238326d67d528980b64d1e'
+          s=raw.decode()
+          s=s.replace('MAX_INPUT = 64000','MAX_INPUT = 64000\nCONTROL_TIMEOUT = 10.0\nREQUEST_TIMEOUT = 30.0\nJSON_CHAT_TIMEOUT = 120.0\nSTREAM_DEADLINE = 660.0')
+          anchor='def _open(path: str, body: dict | None = None):'
+          helper='''def _request_timeout(path: str, body: dict | None) -> float:
+              if path == "/models":
+                  return CONTROL_TIMEOUT
+              if path == "/chat/completions" and not (body or {}).get("stream"):
+                  return JSON_CHAT_TIMEOUT
+              return REQUEST_TIMEOUT
+          
+          
+          '''
+          assert anchor in s;s=s.replace(anchor,helper+anchor)
+          old='urllib.request.build_opener(_NoRedirect()).open(request, timeout=30)';assert old in s
+          s=s.replace(old,'urllib.request.build_opener(_NoRedirect()).open(request, timeout=_request_timeout(path, body))')
+          old='request = urllib.request.Request(_endpoint(path), data=data, headers=_headers())';assert old in s
+          s=s.replace(old,'headers = _headers()\n    if body and body.get("stream"):\n        headers["Accept"] = "text/event-stream"\n    request = urllib.request.Request(_endpoint(path), data=data, headers=headers)')
+          old='def _events(response) -> Iterator[str]:\n    data: list[str] = []\n    size, started = 0, time.monotonic()\n    while True:\n        raw = response.readline(65537)\n        if not raw:'
+          new='''def _events(response, *, deadline: float | None = None) -> Iterator[str]:
+              data: list[str] = []
+              size = 0
+              deadline = time.monotonic() + STREAM_DEADLINE if deadline is None else deadline
+              while True:
+                  if time.monotonic() >= deadline:
+                      raise APIError("The stream exceeded its overall time budget. Review any partial output.")
+                  raw = response.readline(65537)
+                  if time.monotonic() >= deadline:
+                      raise APIError("The stream exceeded its overall time budget. Review any partial output.")
+                  if not raw:'''
+          assert old in s;s=s.replace(old,new)
+          old=' or time.monotonic() - started > 120';assert old in s;s=s.replace(old,'')
+          old='finish_reason = ""\n    try:\n        with _post_raw';new='finish_reason = ""\n    deadline = time.monotonic() + STREAM_DEADLINE\n    try:\n        with _post_raw';assert old in s;s=s.replace(old,new)
+          s=s.replace('for event in _events(response):','for event in _events(response, deadline=deadline):')
+          p.write_text(s)
+          Path('tests/test_reliability_budgets.py').write_text('''"""Clock-controlled regressions: queue time is not socket idle time."""
+          import io
+          from unittest.mock import patch
+          import pytest
+          from sinter import client
+          
+          def test_operation_budgets_are_distinct_and_bounded():
+              assert client._request_timeout('/models', None) == 10
+              assert client._request_timeout('/search', {'query':'hello'}) == 30
+              assert client._request_timeout('/chat/completions', {}) == 120
+              assert client._request_timeout('/chat/completions', {'stream':True}) == 30
+              assert client.STREAM_DEADLINE == 660
+          
+          def test_slow_stream_beyond_old_cutoff_finishes_without_retry():
+              now=[0.0]
+              class Slow(io.BytesIO):
+                  def readline(self, limit=-1):
+                      now[0] += 45
+                      return super().readline(limit)
+              raw=b': keep-alive\\n\\ndata: {"choices":[{"delta":{"content":"Hello"}}]}\\n\\ndata: {"choices":[{"delta":{},"finish_reason":"stop"}]}\\n\\ndata: [DONE]\\n\\n'
+              with patch.object(client.time,'monotonic',side_effect=lambda:now[0]), patch.object(client,'_post_raw',return_value=Slow(raw)) as send:
+                  assert ''.join(client.chat_stream([client.Message('user','hello')]))=='Hello'
+                  assert now[0] > 120
+                  send.assert_called_once()
+          
+          def test_keepalive_never_resets_absolute_deadline():
+              now=[0.0]
+              class Heartbeats(io.BytesIO):
+                  def readline(self, limit=-1):
+                      now[0] += 100
+                      return b': keep-alive\\n'
+              with patch.object(client.time,'monotonic',side_effect=lambda:now[0]), pytest.raises(client.APIError,match='overall time budget'):
+                  list(client._events(Heartbeats()))
+          
+          def test_late_eof_cannot_turn_expired_pending_data_into_success():
+              now=[0.0]
+              class LateEOF(io.BytesIO):
+                  def readline(self, limit=-1):
+                      now[0]=661
+                      return b''
+              with patch.object(client.time,'monotonic',side_effect=lambda:now[0]), pytest.raises(client.APIError,match='overall time budget'):
+                  list(client._events(LateEOF(),deadline=660))
+          
+          def test_buffered_generation_uses_larger_network_timeout_without_retries():
+              with patch.object(client.urllib.request,'build_opener') as opener:
+                  client._open('/chat/completions',{'messages':[]})
+                  opener.return_value.open.assert_called_once()
+                  assert opener.return_value.open.call_args.kwargs['timeout']==120
+          
+          def test_stream_negotiates_sse_and_retains_short_idle_timeout():
+              with patch.object(client.urllib.request,'build_opener') as opener:
+                  client._open('/chat/completions',{'stream':True})
+                  args=opener.return_value.open.call_args
+                  assert args.args[0].get_header('Accept')=='text/event-stream'
+                  assert args.kwargs['timeout']==30
+          ''')
+          Path('docs').mkdir(exist_ok=True)
+          Path('docs/serving-reliability.md').write_text('''# Shared-service reliability
+          
+          Sinter allows 660 seconds overall for a streamed operation, including opening the request. Keep-alives do not reset that clock. The 30-second idle socket timeout still detects a dead connection; the server normally emits waiting heartbeats every 10 seconds. Time is checked before and after each bounded read, including EOF; a blocking read can consume up to the remaining socket-idle allowance before that check.
+          
+          Buffered chat uses a 120-second network timeout, above the public edge's 115-second budget; the public origin still limits buffered work to 105 seconds. Select streaming for long queued conversations. Search retains its 30-second network timeout and model discovery has a 10-second timeout. These are maximum waits, never intentional delays.
+          
+          A 429 means busy or rate-limited. No immediate or ambiguous-generation retry was added. Interrupted/expired output is not a complete result. Authentication, redirect refusal, response byte caps and request-local connection settings remain unchanged. Local workflows still work when the hosted model is offline.
+          
+          Source changes require a new package/install to reach an already installed desktop app; an existing 0.4.0 executable is not updated by a repository merge.
+          ''')
+          PY
+      - name: Run the full toolkit regression suite and package build
+        run: |
+          mkdir -p /tmp/sinter-reliability
+          python -m pytest -q --junitxml=/tmp/sinter-reliability/tests.xml
+          python -m build --outdir /tmp/sinter-reliability/dist
+      - name: Commit only the verified client change and tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/reliability-budgets-once.yml
+          git add src/sinter/client.py tests/test_reliability_budgets.py docs/serving-reliability.md
+          git commit -m 'Let queued Fracture requests finish without weakening idle or size bounds'
+          git config --local credential.helper '!gh auth git-credential'
+          git push origin HEAD:refs/heads/fix/reliability-budgets-20260911
+          git rev-parse HEAD > /tmp/sinter-reliability/commit.txt
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
+        with:
+          name: sinter-reliability-validation
+          path: /tmp/sinter-reliability/
+          retention-days: 3
