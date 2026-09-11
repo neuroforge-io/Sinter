@@ -17,7 +17,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from . import __version__, workbench
+from . import __version__, workbench, casebooks
 from .server import make_server
 
 
@@ -48,6 +48,13 @@ def self_test(destination: str) -> int:
                     result = workbench.run(workbench.example(kind))
                     assert result['workflow'] == kind
                 receipt['checks'].append('three deterministic example workflows')
+                example = {'title': 'Native package community check', 'questions': 'Is the hall confirmed?',
+                           'documents': [{'title': 'Fictional note', 'content': 'The hall is not confirmed.'}]}
+                saved = server.app.casebooks.save(example)
+                report = casebooks.build(saved['document'])
+                assert report['coverage']['documents_supplied'] == 1 and 'not confirmed' in report['markdown']
+                assert server.app.casebooks.get(saved['id'])['revision'] == 1
+                receipt['checks'].append('installed casebook persistence and exact-source retrieval')
             finally:
                 server.shutdown(); server.app.close(); server.server_close(); thread.join(timeout=5)
         receipt['passed'] = True

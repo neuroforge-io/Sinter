@@ -7,7 +7,7 @@ import tempfile
 import threading
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from sinter.server import make_server
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 
 def main():
@@ -29,6 +29,9 @@ def main():
                 assert 'No wording match' in page.locator('.document').inner_text()
                 assert 'No one agreed' in page.locator('.document').inner_text()
                 page.screenshot(path=str(out / 'casebook-desktop.png'), full_page=True)
+                page.get_by_role('button', name='Light theme', exact=True).click()
+                page.screenshot(path=str(out / 'casebook-light.png'), full_page=True)
+                page.get_by_role('button', name='Dark theme', exact=True).click()
                 with page.expect_download() as download:
                     page.get_by_role('button', name='Export project backup', exact=True).click()
                 contents = json.loads(Path(download.value.path()).read_text())
@@ -43,7 +46,7 @@ def main():
                 page.on('request', lambda req: counts.__setitem__('posts', counts['posts'] + 1) if req.url.endswith('/api/casebooks/build') else None)
                 page.get_by_role('button', name='Prepare source-only report', exact=True).click()
                 page.get_by_role('button', name='Prepare source-only report', exact=True).wait_for(state='visible')
-                page.wait_for_function("!document.querySelector('fieldset').disabled")
+                expect(page.get_by_role("button", name="Prepare source-only report", exact=True)).to_be_enabled(timeout=15000)
                 assert counts['polls'] >= 2 and counts['posts'] == 1
                 page.get_by_role('link', name='Recent activity', exact=True).click()
                 page.get_by_role('button', name='Open result', exact=True).first.click()
@@ -56,6 +59,11 @@ def main():
                 page.set_viewport_size({'width': 390, 'height': 844})
                 page.screenshot(path=str(out / 'casebook-mobile.png'), full_page=True)
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
+                page.get_by_text('Add notes and references', exact=True).click()
+                page.get_by_label('Add text files', exact=True).set_input_files([
+                    {'name': f'fragment-{i}.txt', 'mimeType': 'text/plain', 'buffer': b'example'} for i in range(301)])
+                page.get_by_text('Choose fewer files. A casebook supports at most 300 documents.', exact=True).wait_for()
+                assert page.get_by_label('Project name', exact=True).input_value() == 'Fictional P&C community evening'
                 assert not errors, errors
                 browser.close()
         finally:

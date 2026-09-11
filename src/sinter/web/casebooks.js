@@ -1,5 +1,5 @@
 /** Revisioned, local casebooks. No automatic upload, URL fetching or draft approval. */
-import {h, field, selectField, check, button, notice, download, dateTime, announce} from './ui.js';
+import {h, field, selectField, check, button, notice, download, dateTime} from './ui.js';
 import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
 
@@ -13,12 +13,21 @@ const example = () => ({schema: 'sinter-casebook/v1', title: 'Fictional P&C comm
 
 export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   let savedId = seed.savedId || null, revision = seed.revision || null;
-  let docs = [...(seed.book?.documents || [])], busy = false;
+  let docs = [...(seed.book?.documents || [])], busy = false, activeJob = null;
   const title = field('Project name', 'text', seed.book?.title || '', 'For example: school garden proposal or volunteer handover.', {maxLength: 200});
   const questions = field('What do you need to find out?', 'textarea', seed.book?.questions || '', 'One question per line, up to 20. Missing answers stay visible.', {maxLength: 12000, rows: 5});
   const format = selectField('Prepare a', [['brief', 'Briefing note'], ['enquiry', 'Enquiry letter'], ['agenda', 'Agenda item'], ['handover', 'Volunteer handover']]);
   const status = h('div', {'aria-live': 'polite'}), output = h('div', {class: 'stack'}), sources = h('div', {class: 'stack'});
   const catalogue = h('div', {class: 'casebook-shelf'}), totals = h('p', {class: 'muted'});
+  const stop = button('Stop this task', async () => {
+    if (!activeJob) return;
+    stop.disabled = true;
+    try {
+      await request('/api/jobs/cancel', {data: {id: activeJob}});
+      status.replaceChildren(notice('Stop requested. Waiting for the current bounded operation to finish; your saved project is unchanged.'));
+    } catch (error) { stop.disabled = false; status.replaceChildren(notice(error.message + ' Check Recent activity before starting another task.', 'error')); }
+  }, 'quiet');
+  stop.hidden = true;
   const name = field('Source title', 'text', '', 'Give each note or reference an identifiable name.', {maxLength: 300});
   const contents = field('Paste a note, policy or reference', 'textarea', '', 'Original wording is preserved. Links are not followed automatically.', {maxLength: 200000, rows: 5});
   const sourceDate = field('Source date (optional)', 'date'), sourceURL = field('Source link (optional)', 'url', '', 'Only add a link you trust. The text above is the actual evidence.');
@@ -67,11 +76,12 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
       await save();
       const result = await request(`/api/casebooks/${kind}`, {data: {id: savedId, revision, document_type: format.input.value,
         ...(kind === 'draft' ? {consent: true, fingerprint} : {})}});
+      activeJob = result.id; stop.hidden = false; stop.disabled = false;
       status.replaceChildren(notice('Task started. You can recover its result in Recent activity if this window loses contact.'));
       const report = await waitForJob(result.id, job => status.replaceChildren(notice(job.message)));
       drawReport(report); status.replaceChildren(notice('Ready to review. Source matches do not establish answers.', 'success'));
     } catch (error) { status.replaceChildren(notice(error.message, 'error')); }
-    finally { lock(false); }
+    finally { activeJob = null; stop.hidden = true; lock(false); }
   }
   function drawReport(report) {
     const coverage = report.coverage;
@@ -96,20 +106,29 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   title.input.addEventListener('input', changed); questions.input.addEventListener('input', changed);
   format.input.addEventListener('change', changed);
   upload.input.addEventListener('change', async () => {
-    const batch = [];
+    if (busy) return;
+    const batch = [], files = [...upload.input.files];
+    let characters = docs.reduce((n, row) => n + row.content.length, 0);
+    lock(true);
     try {
-      for (const file of upload.input.files) {
+      if (docs.length + files.length > 300) throw new Error('Choose fewer files. A casebook supports at most 300 documents.');
+      if (files.reduce((n, file) => n + file.size, 0) > 8000000) throw new Error('This selection is too large. Split it into smaller projects.');
+      for (const file of files) {
         if (file.size > 800000) throw new Error(`${file.name} is too large. Split it into smaller text sources.`);
         const content = new TextDecoder('utf-8', {fatal: true}).decode(await file.arrayBuffer());
         if (!content.trim() || content.includes('\0') || content.length > 200000) throw new Error(`${file.name} is empty, binary or too large.`);
+        characters += content.length;
+        if (characters > 2000000) throw new Error('This selection exceeds the two-million-character limit. No files from this selection were added.');
         batch.push({title: file.name, content});
       }
       if (docs.length + batch.length > 300 || [...docs, ...batch].reduce((n, row) => n + row.content.length, 0) > 2000000) throw new Error('The project exceeds the collection limit. Use a separate casebook.');
       docs.push(...batch); changed(); drawSources(); status.replaceChildren(notice(`${batch.length} text files added. Nothing has been sent to an API.`));
     } catch (error) { status.replaceChildren(notice(error.message, 'error')); }
-    upload.input.value = '';
+    finally { upload.input.value = ''; lock(false); }
   });
   backup.input.addEventListener('change', async () => {
+    if (busy) return;
+    lock(true);
     try {
       const file = backup.input.files[0]; if (!file) return;
       if (file.size > 10000000) throw new Error('This backup is too large.');
@@ -117,7 +136,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
       const result = await request('/api/casebooks/validate', {data: {document: JSON.parse(await file.text())}});
       load(result.document); status.replaceChildren(notice('Backup opened as a new unsaved project.'));
     } catch (error) { status.replaceChildren(notice(error.message, 'error')); }
-    finally { backup.input.value = ''; }
+    finally { backup.input.value = ''; lock(false); }
   });
   editor.append(h('legend', {}, 'Bring the fragments together'), title.wrap, questions.wrap,
     h('div', {class: 'casebook-actions'}, button('Try a fictional community example', () => {
@@ -145,5 +164,5 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   return h('div', {class: 'stack casebooks-page'}, h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'LESS CHASING. MORE CONTEXT.'),
     h('h2', {}, 'All the bits. One useful picture.'), h('p', {}, 'Gather scattered notes, replies, policies and past decisions. Find the original wording behind each question and keep the gaps visible.')),
     h('section', {class: 'card'}, h('h3', {}, 'Your saved projects'), catalogue),
-    notice('Local by default. Sources are not fetched or uploaded automatically. Save deliberately, export backups, and review before sharing.'), editor, status, output);
+    notice('Local by default. Sources are not fetched or uploaded automatically. Save deliberately, export backups, and review before sharing.'), editor, status, stop, output);
 }
