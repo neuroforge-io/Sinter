@@ -7,3 +7,5 @@ Buffered chat uses a 120-second network timeout, above the public edge's 115-sec
 A 429 means busy or rate-limited. No immediate or ambiguous-generation retry was added. Interrupted/expired output is not a complete result. Authentication, redirect refusal, response byte caps and request-local connection settings remain unchanged. Local workflows still work when the hosted model is offline.
 
 Source changes require a new package/install to reach an already installed desktop app; an existing 0.4.0 executable is not updated by a repository merge.
+
+The browser stream budget is 700 seconds, above the Python 660-second budget plus its final bounded socket read. Ordinary local JSON/job-status calls remain 35 seconds; polling waits for each completed status request rather than holding a single long HTTP request. Browser cancellation remains effective and no generation retry is added.

@@ -64,7 +64,8 @@ export async function stream(path, data, onEvent, signal) {
   const abort = () => controller.abort();
   if (signal?.aborted) abort();
   signal?.addEventListener('abort', abort, {once: true});
-  const timer = setTimeout(abort, 150000);
+  // Allow the 660-second Python stream budget plus one idle-read and delivery margin.
+  const timer = setTimeout(abort, 700000);
   let reader, completed = false, size = 0;
   try {
     const response = await fetch(path, {method: 'POST', cache: 'no-store', signal: controller.signal,
