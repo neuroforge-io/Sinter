@@ -20,6 +20,10 @@ MODEL = "erais-fracture-gemma"
 _KEY_FILE = Path.home() / ".sinter_key"
 MAX_RESPONSE = 2 * 1024 * 1024
 MAX_INPUT = 64000
+CONTROL_TIMEOUT = 10.0
+REQUEST_TIMEOUT = 30.0
+JSON_CHAT_TIMEOUT = 120.0
+STREAM_DEADLINE = 660.0
 _CONNECTION = ContextVar("sinter_connection", default=None)
 
 
@@ -134,11 +138,22 @@ def _endpoint(path: str) -> str:
     return base + path
 
 
+def _request_timeout(path: str, body: dict | None) -> float:
+    if path == "/models":
+        return CONTROL_TIMEOUT
+    if path == "/chat/completions" and not (body or {}).get("stream"):
+        return JSON_CHAT_TIMEOUT
+    return REQUEST_TIMEOUT
+
+
 def _open(path: str, body: dict | None = None):
     data = None if body is None else json.dumps(body).encode("utf-8")
-    request = urllib.request.Request(_endpoint(path), data=data, headers=_headers())
+    headers = _headers()
+    if body and body.get("stream"):
+        headers["Accept"] = "text/event-stream"
+    request = urllib.request.Request(_endpoint(path), data=data, headers=headers)
     try:
-        return urllib.request.build_opener(_NoRedirect()).open(request, timeout=30)
+        return urllib.request.build_opener(_NoRedirect()).open(request, timeout=_request_timeout(path, body))
     except urllib.error.HTTPError as exc:
         code = exc.code
         exc.close()
@@ -218,17 +233,22 @@ def chat(messages: list[Message], max_tokens: int = 512) -> ChatResult:
         raise APIError("The API returned an invalid chat response.") from exc
 
 
-def _events(response) -> Iterator[str]:
+def _events(response, *, deadline: float | None = None) -> Iterator[str]:
     data: list[str] = []
-    size, started = 0, time.monotonic()
+    size = 0
+    deadline = time.monotonic() + STREAM_DEADLINE if deadline is None else deadline
     while True:
+        if time.monotonic() >= deadline:
+            raise APIError("The stream exceeded its overall time budget. Review any partial output.")
         raw = response.readline(65537)
+        if time.monotonic() >= deadline:
+            raise APIError("The stream exceeded its overall time budget. Review any partial output.")
         if not raw:
             if data:
                 yield "\n".join(data)
             return
         size += len(raw)
-        if len(raw) > 65536 or size > MAX_RESPONSE or time.monotonic() - started > 120:
+        if len(raw) > 65536 or size > MAX_RESPONSE:
             raise APIError("The streamed response exceeded its safety limit.")
         line = raw.decode("utf-8").rstrip("\r\n")
         if not line:
@@ -243,9 +263,10 @@ def chat_stream(messages: list[Message], max_tokens: int = 512) -> Iterator[str]
     body = _chat_body(messages, max_tokens)
     body["stream"] = True
     finish_reason = ""
+    deadline = time.monotonic() + STREAM_DEADLINE
     try:
         with _post_raw("/chat/completions", body) as response:
-            for event in _events(response):
+            for event in _events(response, deadline=deadline):
                 if event.strip() == "[DONE]":
                     if finish_reason not in {"", "stop"}:
                         raise APIError("Generation stopped before a complete answer. Review the partial output.")
