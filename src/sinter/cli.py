@@ -30,7 +30,12 @@ def main(argv: list[str] | None = None) -> None:
     review.add_argument("file")
     review.add_argument("-l", "--language", default="Python")
     review.add_argument("-o", "--output")
-    review.add_argument("--no-stream", action="store_true")
+    review.add_argument("--no-stream", action="store_true", help="Compatibility flag; bounded batches use JSON responses")
+    review.add_argument("--max-parts", type=int, default=8, help="Maximum small batches to review now (1-64)")
+    review.add_argument("--resume", action="store_true", help="Reuse completed batches for identical sources and retry remaining work")
+    review.add_argument("--offline", action="store_true", help="Produce a coverage plan without an API request")
+    review.add_argument("--consent", action="store_true", help="Approve sending admitted folder contents to the configured API")
+    review.add_argument("--question", default="Review this material for mistakes, gaps and inconsistencies.")
     research = sub.add_parser("research", help="Build a search-backed evidence report")
     research.add_argument("topic")
     research.add_argument("-o", "--output", default="research_output.md")
@@ -108,18 +113,35 @@ def _dispatch(args) -> None:
             history = messages + [client.Message("assistant", "".join(parts))]
             if args.message is not None:
                 return
-    elif args.command in {"review", "template"}:
-        if args.command == "review":
-            template = resolve_template("code-review")
-            variables = {"code": Path(args.file).read_text(encoding="utf-8"), "language": args.language}
-            output = args.output or str(Path(args.file).with_suffix(".review.md"))
-        else:
-            template, variables, output = resolve_template(args.name), {}, args.output
-            for pair in args.var:
-                key, sep, value = pair.partition("=")
-                if not sep:
-                    raise ValueError("Template arguments use KEY=VALUE.")
-                variables[key] = value
+    elif args.command == "review":
+        from .review import load_collection, run, atomic_save
+        payload, admission = load_collection(args.file)
+        if Path(args.file).is_dir() and not (args.consent or args.offline):
+            raise ValueError("Folder review sends text to the API. Use --offline to inspect admission, then --consent after checking for private material.")
+        output = Path(args.output or (str(Path(args.file)) + ".review.md"))
+        receipt = Path(str(output) + ".checkpoint.json")
+        saved = None
+        if args.resume:
+            if receipt.is_symlink() or receipt.stat().st_size > 10_000_000:
+                raise ValueError("Invalid or oversized review checkpoint.")
+            saved = json.loads(receipt.read_text(encoding="utf-8"))
+        result = run(payload, question=args.question, max_parts=args.max_parts, resume=saved,
+                     offline=args.offline, on_checkpoint=lambda value: atomic_save(receipt, value),
+                     progress=lambda message: print(message, file=sys.stderr))
+        result['admission'] = admission
+        if not args.offline:
+            atomic_save(receipt, result)
+        _write(str(output), result['markdown'] + "\n\n## File admission\n\n" + json.dumps(admission, indent=2))
+        print(json.dumps(result['coverage'], indent=2))
+        if result['coverage']['batches_failed']:
+            raise SystemExit(2)
+    elif args.command == "template":
+        template, variables, output = resolve_template(args.name), {}, args.output
+        for pair in args.var:
+            key, sep, value = pair.partition("=")
+            if not sep:
+                raise ValueError("Template arguments use KEY=VALUE.")
+            variables[key] = value
         results, references, streamed = [], [], False
         for event in template_events(template, variables, stream=not args.no_stream):
             if event["type"] == "step":

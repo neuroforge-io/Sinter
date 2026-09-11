@@ -15,3 +15,17 @@ summary{cursor:pointer;min-height:2.75rem;align-content:center}
   .sidebar{overflow-y:auto;overscroll-behavior:contain}
   .sidebar>*{flex-shrink:0}
 }
+
+/* Casebooks: readable editorial hierarchy without heavyweight UI dependencies. */
+.casebook-editor{border:1px solid var(--line);border-radius:1.2rem;padding:clamp(1rem,3vw,2rem);min-width:0;display:grid;gap:1.2rem}
+.casebook-editor legend{font-weight:750;font-size:1.15rem;padding:0 .6rem}
+.casebook-editor:disabled{opacity:.8}
+.casebook-shelf{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:1rem}
+.casebook-tile{display:grid;gap:.7rem;align-content:start;padding:1rem;border:1px solid var(--line);border-radius:.85rem;overflow-wrap:anywhere}
+.casebook-actions{display:flex;flex-wrap:wrap;gap:.75rem}
+.casebook-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:1rem}
+.casebook-stats>div{padding:1.2rem;border:1px solid var(--line);border-radius:1rem;background:var(--surface)}
+.casebook-stats strong{display:block;font-size:2rem;color:var(--accent);font-variant-numeric:tabular-nums}
+.casebook-stats span{font-size:.8rem}
+.casebooks-page .source{content-visibility:auto;contain-intrinsic-size:auto 120px}
+.casebooks-page pre{max-height:28rem;overflow:auto}

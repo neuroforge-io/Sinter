@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import http.client
 import os
 import time
 import urllib.error
@@ -14,6 +15,7 @@ from typing import Iterator
 from urllib.parse import urlsplit
 
 from . import __version__
+from .operations import checkpoint, remaining, DeadlineExceeded
 
 BASE_URL = "https://neuroforge.io/v1"
 MODEL = "erais-fracture-gemma"
@@ -153,7 +155,7 @@ def _open(path: str, body: dict | None = None):
         headers["Accept"] = "text/event-stream"
     request = urllib.request.Request(_endpoint(path), data=data, headers=headers)
     try:
-        return urllib.request.build_opener(_NoRedirect()).open(request, timeout=_request_timeout(path, body))
+        return urllib.request.build_opener(_NoRedirect()).open(request, timeout=remaining(_request_timeout(path, body)))
     except urllib.error.HTTPError as exc:
         code = exc.code
         exc.close()
@@ -161,14 +163,34 @@ def _open(path: str, body: dict | None = None):
                     429: "The API is busy or rate-limited. Please try again later."}
         raise APIError(messages.get(code, f"The API returned HTTP {code}."),
                        429 if code == 429 else 502) from exc
+    except DeadlineExceeded:
+        raise
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise APIError("Cannot reach NeuroForge. Check your connection and try again.") from exc
+        if isinstance(exc, TimeoutError) or isinstance(getattr(exc, "reason", None), TimeoutError):
+            raise APIError("The service did not respond in time. No request was replayed. Try a smaller task or check the service status.", 504) from exc
+        raise APIError("Cannot reach the configured API. Check your connection and try again.") from exc
 
 
 def _request_json(path: str, body: dict | None = None) -> dict:
+    deadline = time.monotonic() + _request_timeout(path, body)
     try:
         with _open(path, body) as response:
-            raw = response.read(MAX_RESPONSE + 1)
+            parts, size = [], 0
+            while True:
+                checkpoint()
+                if time.monotonic() >= deadline:
+                    raise APIError("The API response exceeded its overall time budget. No request was replayed.", 504)
+                _read_timeout(response, deadline, _request_timeout(path, body))
+                part = response.read1(min(16384, MAX_RESPONSE + 1 - size)) if isinstance(response, http.client.HTTPResponse) else response.read(MAX_RESPONSE + 1 - size)
+                checkpoint()
+                if time.monotonic() >= deadline:
+                    raise APIError("The API response exceeded its overall time budget. No request was replayed.", 504)
+                if not part:
+                    break
+                parts.append(part); size += len(part)
+                if size > MAX_RESPONSE:
+                    raise APIError("The API response exceeded the safety limit.")
+            raw = b"".join(parts)
         if len(raw) > MAX_RESPONSE:
             raise APIError("The API response exceeded the safety limit.")
         result = json.loads(raw)
@@ -177,8 +199,10 @@ def _request_json(path: str, body: dict | None = None) -> dict:
         return result
     except (ValueError, UnicodeError) as exc:
         raise APIError("The API returned invalid JSON.") from exc
+    except DeadlineExceeded:
+        raise
     except (OSError, TimeoutError) as exc:
-        raise APIError("The API connection was interrupted. Please retry.") from exc
+        raise APIError("The API connection was interrupted or timed out. No request was replayed; your source inputs are unchanged.", 504) from exc
 
 
 def _post(path: str, body: dict) -> dict:
@@ -233,14 +257,53 @@ def chat(messages: list[Message], max_tokens: int = 512) -> ChatResult:
         raise APIError("The API returned an invalid chat response.") from exc
 
 
+def _read_timeout(response, deadline, idle=REQUEST_TIMEOUT):
+    """Clamp a real HTTP socket to the remaining deadline without disabling TLS."""
+    socket = getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
+    if socket is not None:
+        socket.settimeout(remaining(max(.001, min(idle, deadline - time.monotonic()))))
+
+
+def _bounded_lines(response, deadline):
+    # HTTPResponse.readline can be kept alive forever by a peer dribbling bytes.
+    # read1 performs at most one underlying read, so each chunk checks the clock.
+    if not isinstance(response, http.client.HTTPResponse):
+        while True:
+            line = response.readline(65537)
+            if not line:
+                return
+            yield line
+    else:
+        buffer = b''
+        while True:
+            checkpoint()
+            if time.monotonic() >= deadline:
+                raise APIError('The stream exceeded its overall time budget. Review any partial output.', 504)
+            _read_timeout(response, deadline)
+            chunk = response.read1(16384)
+            if not chunk:
+                if buffer:
+                    yield buffer
+                return
+            buffer += chunk
+            while b'\n' in buffer:
+                line, buffer = buffer.split(b'\n', 1)
+                yield line + b'\n'
+            if len(buffer) > 65536:
+                raise APIError('The streamed response exceeded its safety limit.')
+
+
 def _events(response, *, deadline: float | None = None) -> Iterator[str]:
     data: list[str] = []
     size = 0
     deadline = time.monotonic() + STREAM_DEADLINE if deadline is None else deadline
+    lines = _bounded_lines(response, deadline)
     while True:
         if time.monotonic() >= deadline:
             raise APIError("The stream exceeded its overall time budget. Review any partial output.")
-        raw = response.readline(65537)
+        checkpoint()
+        raw = next(lines, b"")
+        checkpoint()
         if time.monotonic() >= deadline:
             raise APIError("The stream exceeded its overall time budget. Review any partial output.")
         if not raw:

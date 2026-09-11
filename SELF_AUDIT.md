@@ -1,4 +1,4 @@
-# Sinter 0.4 verification scope
+# Sinter 0.5 verification scope
 
 This is a public API client and local community workbench, not the proprietary ERAIS/Fracture implementation. A check counts as verified only when its actual run passes against the relevant source revision.
 
@@ -26,3 +26,20 @@ Nine native targets build interpreter-bundled installers and execute installed a
 - The public-boundary scanner is narrow, not a forensic history, complete secret or dependency-licensing audit.
 
 See the [README](README.md), [installation](docs/INSTALLATION.md), [workflow](docs/WORKFLOWS.md), [atlas](docs/ATLAS.md) and [transcription](docs/TRANSCRIPTION.md) guides.
+
+
+## 0.5 resilience and community collections
+
+Run `python tools/self_audit.py` for a deterministic dogfood check over Sinter source
+plus fictional community workflows. The receipt names admitted inputs, source hash,
+retrieval coverage and zero model requests. It is not an independent bug audit.
+
+Casebook tests cover exact spans, missing evidence, provisional and negative wording,
+limits, malformed imports, revision conflicts, source-only defaults and withheld
+invalid model citations. Review tests cover checkpoints, source/provider binding,
+partial coverage and a no-replay failure. A real local HTTP drip-feed test checks
+that data arriving slowly cannot extend the response budget indefinitely.
+
+The casebook browser journey tests backups, saved-project reopening, one deliberately
+failed status read with no duplicate submission, task recovery and mobile layout.
+Browser results are verified only from actual passing runs, not local test availability.

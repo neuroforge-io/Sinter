@@ -21,7 +21,7 @@ export async function request(path, {data, signal, method = data === undefined ?
     const response = await fetch(path, {method, headers, cache: 'no-store',
       body: data === undefined ? undefined : JSON.stringify(data), signal: controller.signal});
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || result.message || `The request failed (${response.status}).`);
+    if (!response.ok) { const error = new Error(result.error || result.message || `The request failed (${response.status}).`); error.status = response.status; throw error; }
     return result;
   } catch (error) {
     if (error.name === 'TypeError') throw new Error('Cannot reach the local Sinter app. Keep the launcher window open, then retry.');
@@ -97,13 +97,25 @@ export async function stream(path, data, onEvent, signal) {
   }
 }
 
-export async function waitForJob(id, onStatus) {
+export async function waitForJob(id, onStatus = () => {}) {
+  let failures = 0, delay = 500;
   for (;;) {
-    const job = await request(`/api/jobs/${id}`);
+    let job;
+    try { job = await request(`/api/jobs/${id}`); failures = 0; }
+    catch (error) {
+      if ([400, 403, 404].includes(error.status) || ++failures > 5) {
+        const failure = new Error(`${error.message} Open Recent activity to check task ${id} before starting another copy.`);
+        failure.jobId = id; throw failure;
+      }
+      onStatus({id, status: 'reconnecting', message: 'Connection interrupted. Rechecking the existing task, not starting it again...'});
+      await new Promise(resolve => setTimeout(resolve, Math.min(500 * 2 ** failures, 8000)));
+      continue;
+    }
     onStatus(job);
     if (job.status === 'done') return job.result;
     if (job.status === 'failed') throw new Error(job.error);
     if (job.status === 'cancelled') throw new Error('Cancelled. No report was saved.');
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, delay));
+    delay = Math.min(delay + 100, 2000);
   }
 }
