@@ -1,7 +1,7 @@
 name: Sinter quality
 on:
   push:
-    branches: [main, 'upgrade/**']
+    branches: [main]
   pull_request:
   workflow_call:
   workflow_dispatch:
@@ -56,6 +56,7 @@ jobs:
       - run: python tools/browser_smoke.py
       - run: python tools/studio_browser.py
       - run: python tools/desktop_browser.py
+      - run: python tools/site_browser.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -89,7 +90,7 @@ jobs:
           retention-days: 14
   source:
     name: Verified source and portable app
-    needs: [tests, browser, speech]
+    needs: [tests, browser, speech, rkc]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -109,4 +110,34 @@ jobs:
             sinter-source.zip
             dist/sinter.pyz
             verified-commit.txt
+          retention-days: 14
+  rkc:
+    name: Actual RKC interoperability
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: neuroforge-io/RKC
+          ref: 37a908e9f99cc246d8185bdc202981c0b55e9ef5
+          path: .rkc-upstream
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - run: go build -o "$RUNNER_TEMP/rkc" ./cmd/rkc
+        working-directory: .rkc-upstream
+      - run: python tools/rkc_smoke.py "$RUNNER_TEMP/rkc"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rkc-compatibility
+          path: rkc-artifacts/
           retention-days: 14

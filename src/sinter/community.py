@@ -21,7 +21,7 @@ def compare(before, after):
         if op != 'equal':
             changes.append({'kind': op, 'before_start': a+1, 'after_start': c+1,
                             'before': '\n'.join(left[a:b]), 'after': '\n'.join(right[c:d])})
-    return {'changes': changes, 'changed_blocks': len(changes), 'notice': 'Exact wording comparison, not a judgement of meaning, correctness or approval.'}
+    return {'changes': changes, 'changed_blocks': len(changes), 'notice': 'Line-by-line wording comparison; line-ending style and a final newline are ignored. This is not a judgement of meaning, correctness or approval.'}
 
 
 def plan(title, rows):
