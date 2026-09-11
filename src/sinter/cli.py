@@ -135,6 +135,8 @@ def _dispatch(args) -> None:
             elif event["type"] == "step_done":
                 print("" if streamed else event["content"])
                 results.append("## " + event["step"] + "\n\n" + event["content"])
+                if output:
+                    _write(output, "# Model-generated draft - review required\n\n" + "\n\n".join(results))
         if references:
             results.append("## Source register\n\n" + "\n".join(dict.fromkeys(references)))
         if output:

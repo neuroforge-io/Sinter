@@ -6,8 +6,8 @@ variables:
 steps:
   - name: Review
     prompt: "Review this {{language}} code. Distinguish suspected bugs from demonstrated ones: {{code}}"
-    max_tokens: 512
+    max_tokens: 2048
   - name: Fixes
     prompt: "Suggest concrete fixes for the issues above. Do not claim tests were run."
     stream: true
-    max_tokens: 512
+    max_tokens: 2048

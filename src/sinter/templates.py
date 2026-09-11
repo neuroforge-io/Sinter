@@ -46,9 +46,10 @@ def _builtins() -> dict[str, Template]:
                          [Step("Chat", "{{message}}", stream=True)], ["message", "system"], "builtin"),
         "code-review": Template("Code Review", "Three-pass review with shared code context.", [
             Step("Identify Issues", "Review this {{language}} code. Identify bugs and security issues. "
-                 "Give line references; distinguish suspected issues from demonstrated defects.\n{{code}}"),
-            Step("Suggest Fixes", "Suggest concrete fixes for the issues above. Do not invent test results.", stream=True),
-            Step("Summary", "Summarize the issues and uncertainties. Do not claim tests were run.", max_tokens=256),
+                 "Give line references; distinguish suspected issues from demonstrated defects.\n{{code}}",
+                 max_tokens=2048),
+            Step("Suggest Fixes", "Suggest concrete fixes for the issues above. Do not invent test results.", stream=True, max_tokens=2048),
+            Step("Summary", "Summarize the issues and uncertainties. Do not claim tests were run.", max_tokens=1024),
         ], ["code", "language"], "builtin"),
         "research": Template("Research", "Search-backed exploration; review every claim before use.", [
             Step("Outline", "Research {{topic}} using the supplied search excerpts. Cite their URLs. "
