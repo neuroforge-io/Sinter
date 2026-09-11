@@ -1,9 +1,4 @@
-"""Bounded, dependency-free client for the public Fracture API.
-
-Modified for Sinter 0.2: validated transport and explicit stream failures.
-No model weights, routing logic or proprietary implementation lives here.
-Generation requests are never automatically replayed, including partial streams.
-"""
+"""Bounded public Fracture client. Modified in 0.4 for isolated connection settings."""
 from __future__ import annotations
 
 import json
@@ -11,6 +6,8 @@ import os
 import time
 import urllib.error
 import urllib.request
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
@@ -23,11 +20,21 @@ MODEL = "erais-fracture-gemma"
 _KEY_FILE = Path.home() / ".sinter_key"
 MAX_RESPONSE = 2 * 1024 * 1024
 MAX_INPUT = 64000
+_CONNECTION = ContextVar("sinter_connection", default=None)
+
+
+@contextmanager
+def connection_settings(settings):
+    """Bind an immutable configuration snapshot to this request or worker."""
+    token = _CONNECTION.set(dict(settings))
+    try:
+        yield
+    finally:
+        _CONNECTION.reset(token)
 
 
 class APIError(RuntimeError):
-    """Safe-to-display error, without credentials or upstream response bodies."""
-
+    """An error safe to display without upstream bodies or credentials."""
     def __init__(self, message: str, status: int = 502):
         super().__init__(message)
         self.status = status
@@ -62,7 +69,6 @@ class SearchResponse:
 
 
 def safe_url(value: str) -> bool:
-    """References are HTTP(S) links, not executable or credential-bearing URLs."""
     if not isinstance(value, str) or "\\" in value or any(ord(c) < 33 or ord(c) == 127 for c in value):
         return False
     try:
@@ -96,7 +102,13 @@ def _load_key() -> str:
 def _headers() -> dict[str, str]:
     headers = {"Content-Type": "application/json", "Accept": "application/json",
                "User-Agent": f"sinter/{__version__}"}
-    key = _load_key()
+    settings = _CONNECTION.get()
+    if settings is None:
+        key = _load_key()
+    else:
+        key = settings.get("api_key", "")
+        if not key and settings.get("inherit_key"):
+            key = _load_key()
     if key:
         if any(ord(c) < 33 or ord(c) > 126 for c in key):
             raise APIError("The API key contains invalid characters.")
@@ -106,12 +118,12 @@ def _headers() -> dict[str, str]:
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        # Never forward private prompts or credentials to redirect destinations.
         return None
 
 
 def _endpoint(path: str) -> str:
-    base = os.environ.get("NEUROFORGE_BASE_URL", BASE_URL).rstrip("/")
+    settings = _CONNECTION.get()
+    base = (settings["api_url"] if settings is not None else os.environ.get("NEUROFORGE_BASE_URL", BASE_URL)).rstrip("/")
     if not safe_url(base):
         raise APIError("NEUROFORGE_BASE_URL must be a valid HTTP(S) URL.")
     parsed = urlsplit(base)
@@ -177,7 +189,10 @@ def _chat_body(messages: list[Message], max_tokens: int) -> dict:
         raise ValueError("Messages require a valid role and text content.")
     if sum(len(m.content) for m in messages) > MAX_INPUT:
         raise ValueError("This conversation is too long. Start a new chat or shorten it.")
-    return {"model": os.environ.get("NEUROFORGE_MODEL", MODEL),
+    settings = _CONNECTION.get()
+    if settings is not None:
+        max_tokens = min(max_tokens, settings["max_tokens"])
+    return {"model": settings["model"] if settings is not None else os.environ.get("NEUROFORGE_MODEL", MODEL),
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "max_tokens": max_tokens}
 
@@ -197,15 +212,13 @@ def chat(messages: list[Message], max_tokens: int = 512) -> ChatResult:
         if not isinstance(content, str):
             raise ValueError("non-text reply")
         usage = result.get("usage") or {}
-        return ChatResult(content, usage.get("prompt_tokens", 0),
-                          usage.get("completion_tokens", 0), usage.get("total_tokens", 0),
-                          choice.get("finish_reason", ""))
+        return ChatResult(content, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
+                          usage.get("total_tokens", 0), choice.get("finish_reason", ""))
     except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
         raise APIError("The API returned an invalid chat response.") from exc
 
 
 def _events(response) -> Iterator[str]:
-    """SSE frames, including CRLF, comments, multiline data and final unclosed frame."""
     data: list[str] = []
     size, started = 0, time.monotonic()
     while True:
