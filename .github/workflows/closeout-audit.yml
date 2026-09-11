@@ -1,0 +1,61 @@
+name: Closeout branch audit
+on:
+  push:
+    branches: [integration/closeout-20260911]
+    paths: [.github/workflows/closeout-audit.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read-only ancestry, merge and CI audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess, urllib.request
+          out = pathlib.Path('/tmp/closeout-audit'); out.mkdir()
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+          main = git('rev-parse', 'origin/main')
+          tree = git('rev-parse', main + '^{tree}')
+          report = {'main': main, 'main_tree': tree, 'branches': []}
+          refs = git('for-each-ref', '--format=%(refname:short)', 'refs/remotes/origin').splitlines()
+          for ref in refs:
+              if ref in ('origin', 'origin/HEAD', 'origin/main', 'origin/integration/closeout-20260911'): continue
+              sha = git('rev-parse', ref)
+              behind, ahead = map(int, git('rev-list', '--left-right', '--count', main + '...' + sha).split())
+              row = {'branch': ref.removeprefix('origin/'), 'sha': sha, 'ahead': ahead, 'behind': behind}
+              if ahead:
+                  base = git('merge-base', main, sha); row['base'] = base
+                  row['files'] = git('diff', '--name-only', base, sha).splitlines()
+                  result = subprocess.run(['git', 'merge-tree', '--write-tree', main, sha], text=True, capture_output=True)
+                  row['merge_clean'] = result.returncode == 0
+                  row['merge_output'] = result.stdout.strip()
+                  row['no_content_change'] = result.returncode == 0 and result.stdout.splitlines()[0] == tree
+                  stem = row['branch'].replace('/', '__')
+                  (out / (stem + '.patch')).write_text(git('diff', base, sha))
+                  (out / (stem + '-vs-main.patch')).write_text(git('diff', main, sha))
+              report['branches'].append(row)
+              print(json.dumps(row), flush=True)
+          url = 'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs?branch=main&per_page=30'
+          req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+          data = json.load(urllib.request.urlopen(req))
+          report['runs'] = [{k: r[k] for k in ('id','name','head_sha','status','conclusion','html_url','event')} for r in data['workflow_runs']]
+          print('CI', json.dumps(report['runs']), flush=True)
+          (out / 'audit.json').write_text(json.dumps(report, indent=2))
+          subprocess.run(['git', 'archive', '--format=tar.gz', '-o', str(out / 'main-source.tar.gz'), main], check=True)
+          print('MAIN', main, 'TREE', tree, flush=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: closeout-branch-audit
+          path: /tmp/closeout-audit
+          retention-days: 3
