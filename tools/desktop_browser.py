@@ -24,7 +24,7 @@ def main():
                 options = {'headless': True}
                 if os.environ.get('SINTER_CHROMIUM'): options['executable_path'] = os.environ['SINTER_CHROMIUM']
                 browser = playwright.chromium.launch(**options)
-                context = browser.new_context(viewport={'width': 1440, 'height': 1000})
+                context = browser.new_context(viewport={'width': 1440, 'height': 1000}, reduced_motion='reduce')
                 page = context.new_page(); errors = []; external = []
                 page.on('pageerror', lambda error: errors.append(str(error)))
                 page.on('dialog', lambda dialog: dialog.accept())
@@ -70,6 +70,15 @@ def main():
                 expect(page.get_by_role('region', name='Knowledge results')).to_contain_text('approve the excerpt transfer')
                 page.get_by_role('link', name='Overview', exact=True).click()
                 expect(page.get_by_role('heading', name='Less busywork.', exact=False)).to_be_visible()
+                page.set_viewport_size({'width': 1280, 'height': 600})
+                last_link = page.get_by_role('link', name='Getting started', exact=True)
+                last_link.scroll_into_view_if_needed()
+                bounds = last_link.bounding_box()
+                assert bounds and 0 <= bounds['y'] and bounds['y'] + bounds['height'] <= 600
+                assert page.locator('.sidebar').evaluate('(node) => getComputedStyle(node).overflowY') == 'auto'
+                page.set_viewport_size({'width': 1440, 'height': 1000})
+                page.locator('.sidebar').evaluate('(node) => { node.scrollTop = 0; }')
+                page.evaluate('window.scrollTo(0, 0)')
                 artifacts = ROOT/'browser-artifacts'; artifacts.mkdir(exist_ok=True)
                 page.screenshot(path=str(artifacts/'desktop-overview.png'), full_page=True)
                 page.set_viewport_size({'width':390, 'height':844})
@@ -80,6 +89,6 @@ def main():
                 browser.close()
         finally:
             server.shutdown(); server.app.close(); server.server_close(); thread.join(timeout=5)
-    print('PASS: persistent appearance, user plans/calendar, wording comparison, RKC citation import/context and consent. No remote service calls.')
+    print('PASS: persistent appearance, short-screen navigation, user plans/calendar, wording comparison, RKC citation import/context and consent. No remote service calls.')
 
 if __name__ == '__main__': main()

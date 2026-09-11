@@ -9,3 +9,9 @@
 .plan-row{border-inline-start:3px solid var(--accent)}
 .plain-wrap{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}
 summary{cursor:pointer;min-height:2.75rem;align-content:center}
+
+/* Keep every task and the desktop Quit action reachable on short screens. */
+@media(min-width:941px){
+  .sidebar{overflow-y:auto;overscroll-behavior:contain}
+  .sidebar>*{flex-shrink:0}
+}
