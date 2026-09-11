@@ -5,7 +5,7 @@ export function home(go, drafts) {
   const cards = [
     ['grants', '01', 'FUNDING', 'Find the right opportunity.', 'Discover funding, check the requirements and keep a watch on what changes.', 'Find funding', 'A shortlist with sources and open questions'],
     ['brief', '02', 'RESEARCH & WRITING', 'Make your case clearly.', 'Turn notes and references into an evidence pack, enquiry letter or agenda item.', 'Build a brief', 'A reviewable draft and evidence register'],
-    ['meeting', '03', 'MEETINGS', 'Keep a reliable record.', 'Transcribe locally, listen back, confirm speakers and prepare traceable draft minutes.', 'Prepare minutes', 'A transcript, review queue and draft minutes']
+    ['meeting', '03', 'MEETINGS', 'Keep a reliable record.', 'Import a transcript, or transcribe in a speech-enabled installation. Confirm speakers and prepare traceable draft minutes.', 'Prepare minutes', 'A transcript, review queue and draft minutes']
   ];
   const preview = h('aside', {class: 'deliverable-preview', 'aria-label': 'Fictional example preview'},
     h('div', {class: 'preview-top'}, h('span', {class: 'eyebrow'}, 'FICTIONAL EXAMPLE'), h('span', {class: 'badge warm'}, 'Ready to review')),
@@ -32,6 +32,13 @@ export function home(go, drafts) {
       h('article', {class: 'card workflow-card'}, h('span', {class: 'card-index', 'aria-hidden': 'true'}, index),
         h('span', {class: 'eyebrow'}, category), h('h3', {}, title), h('p', {}, description), h('small', {class: 'outcome'}, outcome),
         h('div', {class: 'button-row'}, button(label, () => go(id), 'primary'), button('See example', () => go(`${id}?example=1`), 'quiet'))))),
+    h('div', {class: 'card-grid secondary-tools'},
+      h('article', {class: 'card'}, h('span', {class: 'eyebrow'}, 'KNOWLEDGE'), h('h3', {}, 'Put past work to work.'),
+        h('p', {}, 'Find cited material in RKC atlases. Optional Fracture assistance helps draft from a bounded source pack.'), button('Explore knowledge atlases', () => go('atlas'), 'quiet')),
+      h('article', {class: 'card'}, h('span', {class: 'eyebrow'}, 'EVERYDAY ADMIN'), h('h3', {}, 'Keep everyone on the same page.'),
+        h('p', {}, 'Action lists, volunteer plans, calendar exports and document comparisons. No AI or account needed.'), button('Open community tools', () => go('tools'), 'quiet')),
+      h('article', {class: 'card'}, h('span', {class: 'eyebrow'}, 'YOUR WORKSPACE'), h('h3', {}, 'Make yourself comfortable.'),
+        h('p', {}, 'Larger type, calmer motion and your own API connection. A workspace that fits the way you work.'), button('Personalise Sinter', () => go('settings'), 'quiet'))),
     h('section', {class: 'steps-strip', 'aria-label': 'How Sinter works'},
       h('div', {}, h('strong', {}, 'Bring the context'), h('p', {}, 'Add notes, reference text or a recording. Choose whether anything is sent to the public API.')),
       h('div', {}, h('strong', {}, 'Check the evidence'), h('p', {}, 'Follow exact excerpts back to their source. Unanswered questions remain open.')),

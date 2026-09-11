@@ -1,3 +1,6 @@
+import {settingsPage, applyAppearance} from './settings.js';
+import {atlasPage} from './atlas.js';
+import {communityPage} from './community.js';
 import {home} from './home.js';
 import {h, button, notice, announce, safeLink} from './ui.js';
 import {session, request} from './api.js';
@@ -9,7 +12,7 @@ const view = document.getElementById('view');
 const drafts = new Map();
 let busy = false, current = '#home', routeSequence = 0;
 const routes = [['home', 'Overview'], ['grants', 'Find funding'], ['brief', 'Briefs & letters'], ['meeting', 'Meeting minutes'],
-  ['watches', 'Search watches'], ['library', 'My workspace'], ['explore', 'Explore Fracture'], ['help', 'Getting started']];
+  ['watches', 'Search watches'], ['library', 'My workspace'], ['explore', 'Explore Fracture'], ['atlas', 'Knowledge atlases'], ['tools', 'Community tools'], ['settings', 'Settings'], ['help', 'Getting started']];
 const navigation = document.getElementById('navigation');
 for (const [id, label] of routes) navigation.append(h('a', {href: '#' + id, class: 'nav-button'}, label));
 function setBusy(value) {
@@ -29,12 +32,12 @@ function help() {
       h('p', {}, '3. Prepare the draft, check sources and unknowns, then download or save it. Nothing is sent automatically.'),
       button('Open a local example', () => go('brief?example=1'), 'primary')),
     h('div', {class: 'card'}, h('h3', {}, 'Privacy and trust'),
-      h('p', {}, 'The interface runs on your computer. Unsaved inputs live in this browser session; saved reports and watches live in ~/.sinter (or the configured data directory). Only the theme preference is stored in browser storage.'),
-      h('p', {}, 'Search sends the exact query. Optional model ranking sends up to six excerpts and the project question. Explore Fracture sends conversation or template inputs. Avoid private information in external requests.'),
+      h('p', {}, 'The interface runs on your computer. Unsaved inputs live in this browser session; saved reports and watches live in ~/.sinter (or the configured data directory). Appearance and connection preferences are saved locally. API keys entered in Settings stay in memory for this session only.'),
+      h('p', {}, 'Search sends the exact query. Optional model ranking sends up to six excerpts and the project question. Explore Fracture sends conversation or template inputs. Atlas drafting sends selected excerpts and your question. Avoid private information in external requests.'),
       h('p', {}, 'Quotes, hashes and links establish traceability, not truth. Selection can miss material. Review official guidance, deadlines, eligibility, names, voting and decisions.'),
-      h('p', {}, 'Keep the launcher window open. Closing it stops the app and watch checks. Unfinished jobs are not saved automatically.')),
+      h('p', {}, 'Installed apps run until you choose Quit Sinter. Source users keep the launcher window open; Ctrl+C stops it and watch checks. Unfinished jobs are not saved automatically.')),
     h('div', {class: 'card'}, h('h3', {}, 'Meeting audio: optional, local, honest'),
-      h('p', {}, 'Import a transcript without extra installation. Audio transcription needs the optional speech package and an explicitly authorised model download. From the Sinter source folder run:'),
+      h('p', {}, 'Import a transcript without extra installation. Core native installers do not bundle the speech engine. Audio transcription needs the optional speech package in a source installation and an explicitly authorised model download. From the Sinter source folder run:'),
       h('pre', {class: 'help-code'}, 'python3 setup_speech.py\n# Windows: py setup_speech.py'),
       h('p', {}, 'Audio is processed locally. Separate isolated microphone channels, listen back to individual passages and keep word timings in JSON. Mixed-room speaker diarization and voice identity are not inferred. Confirm names manually.'),
       h('p', {}, 'Speech recognition can omit or invent words. Listen again to unclear passages, names, amounts and negation before correcting anything.')),
@@ -68,6 +71,9 @@ async function route() {
     else if (id === 'library') content = await library();
     else if (id === 'watches') content = await watches(options);
     else if (id === 'explore') content = await playground(options);
+    else if (id === 'atlas') content = atlasPage(options);
+    else if (id === 'tools') content = communityPage(options);
+    else if (id === 'settings') content = await settingsPage();
     else if (id === 'help') content = help();
     else content = home(go, drafts);
     if (sequence !== routeSequence) return;
@@ -85,11 +91,19 @@ try { applyTheme(localStorage.getItem('sinter-theme') === 'light' ? 'light' : 'd
 theme.addEventListener('click', () => {
   const value = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; applyTheme(value);
   try { localStorage.setItem('sinter-theme', value); } catch { /* Preferences are optional. */ }
+  request('/api/settings').then(state => request('/api/settings', {data: {settings: {...state.settings, theme: value}}})).catch(() => announce('Theme changed for this window; saving the preference failed.'));
 });
 document.querySelector('.skip-link').addEventListener('click', event => {
   event.preventDefault(); document.getElementById('content').focus();
 });
 window.addEventListener('hashchange', route);
 window.addEventListener('beforeunload', event => { if (busy || drafts.size) { event.preventDefault(); event.returnValue = ''; } });
-session().then(value => { document.getElementById('version').textContent = `v${value.version} / Apache 2.0`; }).catch(() => {});
-route();
+session().then(value => {
+  document.getElementById('version').textContent = `v${value.version} / Apache 2.0`;
+  if (value.desktop) navigation.append(button('Quit Sinter', async () => {
+    if ((busy || drafts.size) && !confirm('Quit Sinter? Download or save your work first. Unsaved work will be lost.')) return;
+    try { await request('/api/desktop/quit', {data: {}}); busy = false; drafts.clear(); view.replaceChildren(notice('Sinter has stopped. You can close this window.')); }
+    catch (error) { announce(error.message); }
+  }, 'quiet'));
+}).catch(() => {});
+request('/api/settings').then(state => applyAppearance(state.settings)).catch(() => {}).finally(route);

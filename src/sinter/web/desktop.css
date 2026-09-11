@@ -1,0 +1,11 @@
+/* User-selected accessibility and comfortable community tools. */
+:root[data-text-size="large"]{font-size:120%}
+:root[data-text-size="large"] input,:root[data-text-size="large"] textarea,:root[data-text-size="large"] select,:root[data-text-size="large"] .document{font-size:1rem}
+:root[data-density="compact"] .card{padding:1rem}
+:root[data-density="compact"] .stack{gap:1rem}
+:root[data-reduce-motion="true"] *,:root[data-reduce-motion="true"] *::before,:root[data-reduce-motion="true"] *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:1rem;align-items:start}
+.secondary-tools{margin-top:1.2rem}
+.plan-row{border-inline-start:3px solid var(--accent)}
+.plain-wrap{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}
+summary{cursor:pointer;min-height:2.75rem;align-content:center}

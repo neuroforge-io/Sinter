@@ -1,8 +1,7 @@
-"""Build and install-test an architecture-specific, interpreter-bundled core app.
+"""Build and install-test interpreter-bundled core packages on their target OS.
 
-Run on the target OS with PyInstaller 6.22.2. No cross-build is represented as a
-native run. Linux 32-bit CI uses a declared container/emulator. Signing requires
-publisher credentials and is never fabricated. Runtime models are not bundled.
+No publisher signing is claimed. ARMv7 emulation and x86 compatibility runs
+are labelled explicitly. Optional speech engines and RKC are not bundled.
 """
 from __future__ import annotations
 
@@ -12,12 +11,14 @@ import importlib.metadata
 import json
 import os
 import platform
+import plistlib
 import shutil
 import struct
 import subprocess
 import sys
 import sysconfig
 import tempfile
+import time
 import zlib
 from pathlib import Path
 
@@ -31,25 +32,46 @@ def run(*args, **kwargs):
 
 
 def icon(folder: Path) -> tuple[Path, Path]:
-    """Original pixel artwork encoded using the standard library, not font assets."""
+    """Original pixel artwork, encoded without fonts or third-party image assets."""
     width = 256
     bitmap = ('01110', '11001', '11000', '01110', '00011', '10011', '01110')
     pixels = bytearray()
     for y in range(width):
         pixels.append(0)
         for x in range(width):
-            c = (255, 205 + y//16, 112, 255)
+            colour = (255, 205 + y//16, 112, 255)
             gx, gy = (x-64)//26, (y-38)//26
             if 0 <= gx < 5 and 0 <= gy < 7 and bitmap[gy][gx] == '1':
-                c = (26, 32, 43, 255)
-            pixels.extend(c)
+                colour = (26, 32, 43, 255)
+            pixels.extend(colour)
     def chunk(kind, data):
         return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind+data) & 0xffffffff)
     png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, width, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(pixels)) + chunk(b'IEND', b'')
-    ico = folder / 'sinter.ico'; icns = folder / 'sinter.icns'
+    ico, icns = folder/'sinter.ico', folder/'sinter.icns'
     ico.write_bytes(struct.pack('<HHH', 0, 1, 1) + struct.pack('<BBBBHHII', 0, 0, 0, 0, 1, 32, len(png), 22) + png)
     icns.write_bytes(b'icns' + struct.pack('>I', len(png)+16) + b'ic08' + struct.pack('>I', len(png)+8) + png)
     return ico, icns
+
+
+def collect_licences(notices):
+    notices.mkdir(parents=True, exist_ok=True)
+    for name in ('LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md'):
+        shutil.copy2(ROOT/name, notices/name)
+    for folder in (Path(sysconfig.get_path('stdlib')), Path(sys.base_prefix)):
+        for name in ('LICENSE.txt', 'LICENSE'):
+            if (folder/name).is_file():
+                shutil.copy2(folder/name, notices/'Python-LICENSE.txt')
+    if not (notices/'Python-LICENSE.txt').exists():
+        raise RuntimeError('Python runtime licence could not be collected')
+    for package, target in [('pyinstaller', 'PyInstaller-COPYING.txt'), ('certifi', 'certifi-LICENSE.txt')]:
+        distribution = importlib.metadata.distribution(package)
+        for entry in distribution.files or []:
+            if entry.name.startswith('COPYING') or entry.name in {'LICENSE', 'LICENSE.txt'}:
+                source = distribution.locate_file(entry)
+                if source.is_file():
+                    shutil.copy2(source, notices/target)
+        if not (notices/target).exists():
+            raise RuntimeError(f'{package} licence could not be collected')
 
 
 def main():
@@ -60,9 +82,8 @@ def main():
     os.chdir(ROOT)
     bits = struct.calcsize('P')*8
     assert bits == (32 if args.arch in {'x86', 'armv7'} else 64), 'Wrong Python architecture'
-    machine = platform.machine().lower()
     if args.arch == 'arm64':
-        assert machine in {'arm64', 'aarch64'}, 'An ARM64 Python interpreter is required'
+        assert platform.machine().lower() in {'arm64', 'aarch64'}, 'ARM64 Python is required'
     build, release = ROOT/'build', ROOT/'release'
     build.mkdir(exist_ok=True); release.mkdir(exist_ok=True)
     ico, icns = icon(build)
@@ -75,51 +96,23 @@ def main():
         cmd += ['--windowed', '--icon', str(ico)]
     elif sys.platform == 'darwin':
         cmd += ['--windowed', '--icon', str(icns), '--osx-bundle-identifier', 'io.neuroforge.sinter']
-    cmd += [str(ROOT/'packaging'/'desktop_entry.py')]
-    run(*cmd)
+    run(*cmd, ROOT/'packaging'/'desktop_entry.py')
     app = ROOT/'dist'/'Sinter'
     if sys.platform == 'darwin':
         app = ROOT/'dist'/'Sinter.app'
-        binary = app/'Contents'/'MacOS'/'Sinter'
-        notices = app/'Contents'/'Resources'/'licenses'
+        binary, notices = app/'Contents'/'MacOS'/'Sinter', app/'Contents'/'Resources'/'licenses'
     else:
-        binary = app/('Sinter.exe' if sys.platform == 'win32' else 'Sinter')
-        notices = app/'licenses'
-    notices.mkdir(parents=True, exist_ok=True)
-    for name in ('LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md'):
-        if (ROOT/name).exists():
-            shutil.copy2(ROOT/name, notices/name)
-    for folder in (Path(sysconfig.get_path('stdlib')), Path(sys.base_prefix)):
-        for name in ('LICENSE.txt', 'LICENSE'):
-            if (folder/name).is_file():
-                shutil.copy2(folder/name, notices/'Python-LICENSE.txt')
-    if not (notices/'Python-LICENSE.txt').exists():
-        raise RuntimeError('Python runtime licence could not be collected')
-    import PyInstaller
-    for name in ('COPYING.txt', 'COPYING'):
-        candidates = [Path(PyInstaller.__file__).parent/name, Path(PyInstaller.__file__).parent.parent/name]
-        for path in candidates:
-            if path.is_file():
-                shutil.copy2(path, notices/'PyInstaller-COPYING.txt')
-    for entry in importlib.metadata.files('pyinstaller') or []:
-        if entry.name.startswith('COPYING'):
-            path = importlib.metadata.distribution('pyinstaller').locate_file(entry)
-            if path.is_file():
-                shutil.copy2(path, notices/'PyInstaller-COPYING.txt')
-    if not (notices/'PyInstaller-COPYING.txt').exists():
-        raise RuntimeError('PyInstaller distribution licence could not be collected')
-    for entry in importlib.metadata.files('certifi') or []:
-        if entry.name in {'LICENSE', 'LICENSE.txt'}:
-            shutil.copy2(importlib.metadata.distribution('certifi').locate_file(entry), notices/'certifi-LICENSE.txt')
+        binary, notices = app/('Sinter.exe' if sys.platform == 'win32' else 'Sinter'), app/'licenses'
+    collect_licences(notices)
     if sys.platform == 'darwin':
-        run('codesign', '--force', '--deep', '--sign', '-', str(app))
+        run('codesign', '--force', '--deep', '--sign', '-', app)
     prefix = f'Sinter-{__version__}-{platform.system().lower()}-{args.arch}'
     receipt_path = release/(prefix+'-test.json')
     try:
         run(binary, '--self-test', receipt_path, timeout=60)
     except subprocess.CalledProcessError:
         if receipt_path.exists():
-            print(receipt_path.read_text(encoding='utf-8'))
+            print(receipt_path.read_text(encoding='utf-8'), flush=True)
         raise
     receipt = json.loads(receipt_path.read_text())
     assert receipt['passed'] and receipt['frozen'] and receipt['pointer_bits'] == bits
@@ -133,6 +126,9 @@ def main():
             if not candidates:
                 raise RuntimeError('Install Inno Setup before building the Windows installer')
             iscc = str(sorted(candidates)[-1])
+        compiler_license = Path(iscc).parent/'license.txt'
+        if compiler_license.is_file():
+            shutil.copy2(compiler_license, notices/'Inno-Setup-LICENSE.txt')
         run(iscc, f'/DAppVersion={__version__}', f'/DTargetArch={args.arch}', ROOT/'packaging'/'windows.iss')
         installer = release/(prefix+'-setup.exe')
         with tempfile.TemporaryDirectory(prefix='sinter-install-') as temp:
@@ -142,7 +138,11 @@ def main():
             run(target/'Sinter.exe', '--self-test', installed_receipt, timeout=60)
             assert json.loads(installed_receipt.read_text())['passed']
             run(target/'unins000.exe', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', timeout=120)
-            assert not (target/'Sinter.exe').exists()
+            deadline = time.monotonic()+30
+            while (target/'unins000.exe').exists() and time.monotonic() < deadline:
+                time.sleep(.2)
+            assert not (target/'Sinter.exe').exists(), 'Application remained after uninstall'
+            assert not (target/'unins000.exe').exists(), 'Uninstaller did not finish cleanup'
         receipt['installer_test'] = 'installed, ran packaged HTTP/examples, uninstalled'
     elif sys.platform == 'darwin':
         stage = build/'pkg-root'
@@ -150,8 +150,14 @@ def main():
             shutil.rmtree(stage)
         stage.mkdir(); shutil.copytree(app, stage/'Sinter.app', symlinks=True)
         installer = release/(prefix+'.pkg')
-        run('pkgbuild', '--root', stage, '--identifier', 'io.neuroforge.sinter', '--version', __version__,
-            '--install-location', '/Applications', installer)
+        components = build/'components.plist'
+        run('pkgbuild', '--analyze', '--root', stage, components)
+        definitions = plistlib.loads(components.read_bytes())
+        for definition in definitions:
+            definition['BundleIsRelocatable'] = False
+        components.write_bytes(plistlib.dumps(definitions))
+        run('pkgbuild', '--root', stage, '--component-plist', components, '--identifier', 'io.neuroforge.sinter',
+            '--version', __version__, '--install-location', '/Applications', installer)
         run('sudo', 'installer', '-pkg', installer, '-target', '/')
         with tempfile.TemporaryDirectory() as temp:
             installed_receipt = Path(temp)/'installed.json'
@@ -167,8 +173,9 @@ def main():
         target.parent.mkdir(parents=True)
         shutil.copytree(app, target, symlinks=True)
         (stage/'usr'/'share'/'applications').mkdir(parents=True)
-        (stage/'usr'/'share'/'icons'/'hicolor'/'scalable'/'apps').mkdir(parents=True)
-        shutil.copy2(ROOT/'src'/'sinter'/'web'/'icon.svg', stage/'usr'/'share'/'icons'/'hicolor'/'scalable'/'apps'/'sinter.svg')
+        icons = stage/'usr'/'share'/'icons'/'hicolor'/'scalable'/'apps'
+        icons.mkdir(parents=True)
+        shutil.copy2(ROOT/'src'/'sinter'/'web'/'icon.svg', icons/'sinter.svg')
         (stage/'usr'/'share'/'applications'/'sinter.desktop').write_text('[Desktop Entry]\nType=Application\nName=Sinter\nComment=Community workbench by NeuroForge\nExec=/opt/neuroforge/sinter/Sinter\nIcon=sinter\nTerminal=false\nCategories=Office;Utility;\n', encoding='utf-8')
         control = stage/'DEBIAN'; control.mkdir()
         libc = platform.libc_ver()[1]
