@@ -62,18 +62,23 @@ def validate(document: dict) -> dict:
             if citation != expected:
                 raise ValueError('A context citation does not match its snapshot and object identity.')
             content = _string(row.get('text'), 'Indexed excerpt', 262144)
-            if not isinstance(row.get('evidence_ids'), list) or any(not isinstance(v, str) or len(v) > 300 for v in row['evidence_ids']):
+            evidence_ids = row.get('evidence_ids')
+            if evidence_ids is None:
+                evidence_ids = []
+            if not isinstance(evidence_ids, list) or any(not isinstance(v, str) or len(v) > 300 for v in evidence_ids):
                 raise ValueError('Evidence references must be text identifiers.')
             if type(row.get('score')) not in (int, float) or not math.isfinite(row['score']):
                 raise ValueError('The context score must be finite.')
             items.append({'id': citation, 'object_id': identifier, 'object_type': object_type,
                           'title': _string(row.get('title'), 'Title', 2000),
                           'path': _string(row.get('path'), 'Source path', 4000), 'text': content,
-                          'pointer': f'/items/{len(items)}/text', 'evidence_ids': list(row['evidence_ids']),
+                          'pointer': f'/items/{len(items)}/text', 'evidence_ids': list(evidence_ids),
                           'kind': _string(row.get('kind', ''), 'Kind', 100)})
         if document['truncated']:
             warnings.append('RKC marked this context packet as truncated; it is not an exhaustive atlas.')
         supplied = document.get('warnings', [])
+        if supplied is None:
+            supplied = []
         if not isinstance(supplied, list) or len(supplied) > 100:
             raise ValueError('Invalid context warnings.')
         warnings.extend(_string(value, 'RKC warning', 4000) for value in supplied)
@@ -84,7 +89,11 @@ def validate(document: dict) -> dict:
         snapshot = _string(snapshot_data.get('id'), 'Snapshot ID', 300, True)
         claimed_integrity = 'bundle import; not independently verified'
         for field in ('artifacts', 'edges', 'evidence', 'diagnostics', 'nodes'):
-            _rows(document.get(field), field)
+            value = document.get(field)
+            # Go emits nil optional slices as null. Nodes/artifacts stay required.
+            if value is None and field in {'edges', 'evidence', 'diagnostics'}:
+                value = []
+            _rows(value, field)
         paths = {row.get('id'): row.get('path', '') for row in document['artifacts'] if isinstance(row.get('id'), str)}
         for index, row in enumerate(document['nodes']):
             identifier = _string(row.get('id'), 'Node ID', 300, True)

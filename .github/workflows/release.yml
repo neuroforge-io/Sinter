@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   plan:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       publish: ${{ steps.version.outputs.publish }}
