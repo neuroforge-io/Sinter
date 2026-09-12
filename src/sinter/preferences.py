@@ -10,19 +10,23 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .client import BASE_URL, MODEL, PUBLIC_MAX_OUTPUT_TOKENS, safe_url, validate_max_tokens
+from .profiles import PROFILE_DEFAULTS, validate_profile
 
 DEFAULTS = {
-    'schema_version': 1, 'organisation': '', 'theme': 'dark', 'text_size': 'normal',
+    **PROFILE_DEFAULTS,
+    'schema_version': 1, 'theme': 'dark', 'text_size': 'normal',
     'density': 'comfortable', 'reduce_motion': False, 'api_url': BASE_URL,
     'model': MODEL, 'max_tokens': 2048, 'rkc_port': 8787, 'rkc_executable': '',
 }
+MAX_PREFERENCES_BYTES = 65536
 
 
 def validate(values: dict) -> dict:
     if not isinstance(values, dict) or set(values) - set(DEFAULTS):
         raise ValueError('Unrecognised settings. Reload the settings page.')
     result = {**DEFAULTS, **values}
-    for key in ('organisation', 'api_url', 'model', 'rkc_executable'):
+    result.update(validate_profile(result))
+    for key in ('api_url', 'model', 'rkc_executable'):
         value = result[key]
         if not isinstance(value, str) or len(value) > 1024 or any(ord(c) < 32 for c in value):
             raise ValueError(f'Please use ordinary text for {key.replace("_", " ")}.')
@@ -58,7 +62,7 @@ class Preferences:
         self._values = dict(DEFAULTS)
         self.warning = ''
         try:
-            if self.path.stat().st_size > 16384:
+            if self.path.stat().st_size > MAX_PREFERENCES_BYTES:
                 raise ValueError('Settings file is too large.')
             self._values = validate(json.loads(self.path.read_text(encoding='utf-8')))
         except FileNotFoundError:
@@ -72,7 +76,8 @@ class Preferences:
 
     def connection(self) -> dict:
         with self.lock:
-            values = dict(self._values)
+            # Contact details are local draft defaults, never connection metadata.
+            values = {name: self._values[name] for name in ('api_url', 'model', 'max_tokens')}
             # Environment variables remain an explicit administrator/CLI override.
             values['api_url'] = os.environ.get('NEUROFORGE_BASE_URL', values['api_url'])
             values['model'] = os.environ.get('NEUROFORGE_MODEL', values['model'])
@@ -86,11 +91,15 @@ class Preferences:
                 'environment_override': bool(os.environ.get('NEUROFORGE_BASE_URL') or os.environ.get('NEUROFORGE_MODEL'))}
 
     def update(self, values: dict, *, confirm_endpoint=False, api_key=None) -> dict:
-        validated = validate(values)
+        if not isinstance(values, dict) or set(values) - set(DEFAULTS):
+            raise ValueError('Unrecognised settings. Reload the settings page.')
         if api_key is not None and (not isinstance(api_key, str) or len(api_key) > 4096 or
                                     any(ord(c) < 33 or ord(c) > 126 for c in api_key)):
             raise ValueError('The API key contains invalid characters.')
         with self.lock:
+            # Partial saves (for example, a theme toggle) preserve the saved profile.
+            # An explicit empty string clears just that profile field.
+            validated = validate({**self._values, **values})
             changed = validated['api_url'] != self._values['api_url']
             if changed and confirm_endpoint is not True:
                 raise ValueError('Confirm the new API destination before saving it.')
