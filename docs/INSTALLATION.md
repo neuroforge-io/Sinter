@@ -55,7 +55,15 @@ cd Sinter
 python3 start.py
 ```
 
-Windows uses `py start.py` or `Start-Sinter.bat`. The launchers detect `.venv`.
+With no arguments, `start.py` opens the local workbench. Windows uses `py start.py`
+or `Start-Sinter.bat`; macOS can use `Start-Sinter.command`, and Linux can use
+`./start-sinter.sh`. The platform wrappers prefer `.venv` when present and pass
+arguments through, including paths containing spaces.
+
+Explicit help, version and commands retain their CLI meaning: `python3 start.py
+--help`, `python3 start.py --version`, or `python3 start.py serve --no-browser
+--port 9000`. A bare installed `sinter` or `python -m sinter` prints help and exits;
+use `sinter serve` to open the workbench from those entry points.
 
 For speech recognition, stop Sinter and run `python3 setup_speech.py` (`py setup_speech.py` on Windows). The helper asks before installing into `.venv`; it does not install a model without the later model-download choice. See [transcription](TRANSCRIPTION.md).
 

@@ -97,8 +97,12 @@ sinter watches --run-due
 
 Install with `python -m pip install .` for the `sinter` command. `python -m sinter` is equivalent. Without installation, `python start.py` runs directly from source and opens the workbench.
 
-`sinter` with no arguments prints help and exits. Use `sinter serve` to open the
-workbench explicitly; desktop and source launchers continue to open it directly.
+`sinter` and `python -m sinter` with no arguments print help and exit. Use
+`sinter serve` to open the workbench explicitly. The source `start.py` boundary
+defaults to `serve` only when no arguments are supplied; `--help`, `--version`
+and explicit commands pass through unchanged. The shell, macOS `.command` and
+Windows `.bat` wrappers delegate to that boundary and preserve arguments.
+Desktop launchers also open the workbench directly.
 Research accepts repeated focus questions, for example:
 
 ```sh

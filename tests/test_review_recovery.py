@@ -1,5 +1,8 @@
 """User-facing review recovery regressions; responses are deterministic fixtures."""
+import json
 import os
+import runpy
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -308,6 +311,78 @@ def test_explicit_serve_still_dispatches_to_the_workbench():
     with patch('sinter.server.serve') as serve:
         cli.main(['serve', '--no-browser'])
     serve.assert_called_once_with('127.0.0.1', 8420, False)
+
+
+@pytest.mark.parametrize('arguments, expected', [
+    ([], ('127.0.0.1', 8420, True)),
+    (['serve', '--no-browser', '--port', '9000'], ('127.0.0.1', 9000, False)),
+])
+def test_source_launcher_opens_workbench_and_preserves_serve_options(
+    monkeypatch, arguments, expected,
+):
+    launcher = Path(__file__).parents[1] / 'start.py'
+    monkeypatch.setattr(sys, 'argv', [str(launcher), *arguments])
+    monkeypatch.setattr(sys, 'path', sys.path.copy())
+    with patch('sinter.server.serve') as serve:
+        runpy.run_path(str(launcher), run_name='__main__')
+    serve.assert_called_once_with(*expected)
+
+
+@pytest.mark.parametrize('argument, expected', [
+    ('--help', 'usage: sinter'), ('--version', 'sinter '),
+])
+def test_source_launcher_preserves_help_and_version(monkeypatch, capsys, argument, expected):
+    launcher = Path(__file__).parents[1] / 'start.py'
+    monkeypatch.setattr(sys, 'argv', [str(launcher), argument])
+    monkeypatch.setattr(sys, 'path', sys.path.copy())
+    with patch('sinter.server.serve') as serve, pytest.raises(SystemExit) as exited:
+        runpy.run_path(str(launcher), run_name='__main__')
+    assert exited.value.code == 0
+    serve.assert_not_called()
+    assert expected in capsys.readouterr().out
+
+
+def test_source_launcher_preserves_other_commands(monkeypatch, capsys):
+    launcher = Path(__file__).parents[1] / 'start.py'
+    monkeypatch.setattr(sys, 'argv', [str(launcher), 'health'])
+    monkeypatch.setattr(sys, 'path', sys.path.copy())
+    with patch('sinter.server.serve') as serve, patch.object(
+        client, 'health_check', return_value=(True, 'Fictional connection'),
+    ) as health, pytest.raises(SystemExit) as exited:
+        runpy.run_path(str(launcher), run_name='__main__')
+    assert exited.value.code == 0
+    serve.assert_not_called()
+    health.assert_called_once_with()
+    assert 'OK: Fictional connection' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize('wrapper', ['start-sinter.sh', 'Start-Sinter.command', 'Start-Sinter.bat'])
+@pytest.mark.parametrize('arguments', [
+    [], ['--help'], ['--version'], ['serve', '--no-browser', '--port', '9000'],
+    ['review', 'notes with spaces.txt', '--offline'],
+])
+def test_platform_wrappers_preserve_arguments_from_another_directory(
+    tmp_path, wrapper, arguments,
+):
+    windows = wrapper.endswith('.bat')
+    if windows != (os.name == 'nt'):
+        pytest.skip('Execute each wrapper on its native CI platform.')
+    directory = tmp_path / 'source folder with spaces'
+    directory.mkdir()
+    launcher = directory / wrapper
+    shutil.copyfile(Path(__file__).parents[1] / wrapper, launcher)
+    (directory / 'start.py').write_text(
+        'import json, os, sys\n'
+        'print(json.dumps({"arguments": sys.argv[1:], "cwd": os.getcwd()}))\n',
+        encoding='utf-8',
+    )
+    command = (['cmd', '/c', str(launcher)] if windows else ['sh', str(launcher)])
+    result = subprocess.run(command + arguments, cwd=tmp_path, capture_output=True,
+                            text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    recorded = json.loads(result.stdout)
+    assert recorded['arguments'] == arguments
+    assert Path(recorded['cwd']) == directory
 
 
 def test_research_cli_dispatches_research_questions(tmp_path):

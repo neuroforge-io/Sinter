@@ -19,3 +19,17 @@ release claim is implied. Earlier review evidence remains historical.
   alternate ports/paths, explicit custom/session keys and redirect rejection.
 - Validation: credential, desktop/atlas, profile and template-reliability suites
   passed together (**184 tests**); the repository fatal Ruff gate passed.
+
+## 2. Source-launcher startup (P1)
+
+- Corrects the earlier F1 closeout's overbroad statement about all entry points:
+  installed `sinter` and `python -m sinter` still print help without arguments;
+  source `start.py` now supplies `serve` only for an empty argument list.
+- Explicit help, version, serve options and other commands retain CLI behavior.
+  All three platform wrappers continue to pass arguments to `start.py`.
+- Regression evidence: `tests/test_review_recovery.py` uses `runpy` with a mocked
+  server for the source boundary, subprocesses for bare CLI help, and real native
+  wrapper execution from another directory with a spaced source path and argument.
+  Windows batch execution is CI-platform-specific; the local host is Linux.
+- Validation: review-recovery and tooling CLI suites passed (**106 tests**,
+  **5 Windows-only wrapper cases skipped**); the fatal Ruff gate passed.
