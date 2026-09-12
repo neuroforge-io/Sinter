@@ -9,7 +9,10 @@ import threading
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .client import BASE_URL, MODEL, PUBLIC_MAX_OUTPUT_TOKENS, safe_url, validate_max_tokens
+from .client import (
+    BASE_URL, MODEL, PUBLIC_MAX_OUTPUT_TOKENS, safe_url, same_api_destination,
+    uses_neuroforge_api, validate_max_tokens,
+)
 from .profiles import PROFILE_DEFAULTS, validate_profile
 
 DEFAULTS = {
@@ -49,7 +52,7 @@ def validate(values: dict) -> dict:
     if not result['model'] or not re.fullmatch(r'[A-Za-z0-9_./:@+-]{1,200}', result['model']):
         raise ValueError('Enter the model identifier supplied by your provider.')
     result['api_url'] = url
-    if parsed.hostname == 'neuroforge.io' and parsed.path.rstrip('/') == '/v1' and result['max_tokens'] > PUBLIC_MAX_OUTPUT_TOKENS:
+    if uses_neuroforge_api(url) and result['max_tokens'] > PUBLIC_MAX_OUTPUT_TOKENS:
         raise ValueError('The public NeuroForge API supports at most 2,048 output tokens per step. Choose 2,048 or less.')
     return result
 
@@ -81,9 +84,10 @@ class Preferences:
             # Environment variables remain an explicit administrator/CLI override.
             values['api_url'] = os.environ.get('NEUROFORGE_BASE_URL', values['api_url'])
             values['model'] = os.environ.get('NEUROFORGE_MODEL', values['model'])
-            values['api_key'] = self._key
+            values['api_key'] = (self._key if same_api_destination(
+                values['api_url'], self._values['api_url']) else '')
             # Never forward an inherited NeuroForge credential to a custom server.
-            values['inherit_key'] = values['api_url'].rstrip('/') == BASE_URL
+            values['inherit_key'] = uses_neuroforge_api(values['api_url'])
             return values
 
     def public(self) -> dict:

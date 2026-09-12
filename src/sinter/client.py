@@ -12,7 +12,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Generator, Iterator
-from urllib.parse import urlsplit
+from urllib.parse import SplitResult, urlsplit
 
 from . import __version__
 from .operations import checkpoint, remaining, DeadlineExceeded
@@ -123,6 +123,7 @@ def safe_url(value: str) -> bool:
 
 
 def _load_key() -> str:
+    """Read credentials belonging to the default NeuroForge service only."""
     key = os.environ.get("NEUROFORGE_API_KEY", "").strip()
     if key:
         return key
@@ -142,16 +143,56 @@ def _load_key() -> str:
     return ""
 
 
-def _headers() -> dict[str, str]:
+def same_api_destination(first: str, second: str) -> bool:
+    """Compare complete API bases, including scheme, port and path."""
+    if not safe_url(first) or not safe_url(second):
+        return False
+    left, right = urlsplit(first), urlsplit(second)
+    if left.query or left.fragment or right.query or right.fragment:
+        return False
+
+    def identity(url: SplitResult) -> tuple[str, str | None, int, str]:
+        return (url.scheme, url.hostname,
+                url.port or (443 if url.scheme == "https" else 80),
+                url.path.rstrip("/"))
+
+    return identity(left) == identity(right)
+
+
+def uses_neuroforge_api(base_url: str) -> bool:
+    """Allow public-provider credentials and limits only at the official API."""
+    return same_api_destination(base_url, BASE_URL)
+
+
+def destination_key(base_url: str, *, api_key: str = "",
+                    inherit_key: bool = True) -> str:
+    """Select an explicit destination key or an eligible public-provider key.
+
+    Session keys are supplied with their connection snapshot. A CLI custom key
+    must be paired with an explicit environment URL, so changing saved UI
+    preferences cannot silently retarget that credential.
+    """
+    if api_key:
+        return api_key
+    environment_url = os.environ.get("NEUROFORGE_BASE_URL", "")
+    if same_api_destination(base_url, environment_url):
+        custom_key = os.environ.get("SINTER_API_KEY", "").strip()
+        if custom_key:
+            return custom_key
+    if inherit_key and uses_neuroforge_api(base_url):
+        return _load_key()
+    return ""
+
+
+def _headers(base_url: str | None = None) -> dict[str, str]:
     headers = {"Content-Type": "application/json", "Accept": "application/json",
                "User-Agent": f"sinter/{__version__}"}
-    settings = _CONNECTION.get()
-    if settings is None:
-        key = _load_key()
-    else:
-        key = settings.get("api_key", "")
-        if not key and settings.get("inherit_key"):
-            key = _load_key()
+    settings = _CONNECTION.get() or {}
+    key = destination_key(
+        _endpoint("") if base_url is None else base_url,
+        api_key=settings.get("api_key", ""),
+        inherit_key=settings.get("inherit_key", True),
+    )
     if key:
         if any(ord(c) < 33 or ord(c) > 126 for c in key):
             raise APIError("The API key contains invalid characters.")
@@ -187,10 +228,11 @@ def _request_timeout(path: str, body: dict | None) -> float:
 
 def _open(path: str, body: dict | None = None):
     data = None if body is None else _json_bytes(body)
-    headers = _headers()
+    base_url = _endpoint("")
+    headers = _headers(base_url)
     if body and body.get("stream"):
         headers["Accept"] = "text/event-stream"
-    request = urllib.request.Request(_endpoint(path), data=data, headers=headers)
+    request = urllib.request.Request(base_url + path, data=data, headers=headers)
     try:
         return urllib.request.build_opener(_NoRedirect()).open(request, timeout=remaining(_request_timeout(path, body)))
     except urllib.error.HTTPError as exc:
@@ -280,8 +322,7 @@ def effective_max_tokens(max_tokens: int) -> int:
 
 
 def _uses_public_api() -> bool:
-    endpoint = urlsplit(_endpoint(""))
-    return endpoint.hostname == "neuroforge.io" and endpoint.path.rstrip("/") == "/v1"
+    return uses_neuroforge_api(_endpoint(""))
 
 
 def _json_bytes(body: dict) -> bytes:

@@ -2,6 +2,9 @@
 
 ## Unreleased - user-testing quality and recovery
 
+- Bind inherited NeuroForge credentials to the official destination in both CLI
+  and UI requests. Custom providers use an explicit session key or `SINTER_API_KEY`
+  paired with `NEUROFORGE_BASE_URL`; URL overrides cannot redirect UI session keys.
 - Give Research its own source-backed brief in the CLI and workbench, with focus
   questions, exact highlights, source locations and explicit gaps.
 - Add a searchable tool finder, grouped navigation, simpler research intake,

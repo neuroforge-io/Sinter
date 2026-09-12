@@ -67,11 +67,19 @@ version literal in `pyproject.toml`.
 | --- | --- |
 | `NEUROFORGE_BASE_URL` | Public API base; default `https://neuroforge.io/v1`. Remote URLs require HTTPS; loopback HTTP is allowed for local integrations. |
 | `NEUROFORGE_MODEL` | Chat/ranking model; default `erais-fracture-gemma`. |
-| `NEUROFORGE_API_KEY` | Optional credential, read only in Python. Alternatively use `NEUROFORGE_API_KEY=...` in `~/.sinter_key`. |
+| `NEUROFORGE_API_KEY` | Optional NeuroForge credential, read only in Python and sent only to the official HTTPS `/v1` endpoint on its standard port. Alternatively use `NEUROFORGE_API_KEY=...` in `~/.sinter_key`. |
+| `SINTER_API_KEY` | Explicit credential for the URL set alongside it in `NEUROFORGE_BASE_URL`. Takes precedence over the default provider key; ignored without a matching explicit URL. Never saved by Sinter. |
 | `SINTER_DATA_DIR` | Local reports/watch database directory. Default `~/.sinter`. |
 | `SINTER_CHROMIUM` | Optional existing Chromium executable for the browser smoke test. |
 
 The server binds to loopback, validates Host/Origin, uses a per-launch write token, and rejects unbounded requests. It is **not** an internet-facing, authenticated multi-user server. No generation request is automatically replayed after an error or partial stream.
+
+CLI and UI connections share the same destination-bound credential policy. Custom
+HTTPS and loopback endpoints do not inherit `NEUROFORGE_API_KEY` or `~/.sinter_key`.
+For a custom CLI provider, set `NEUROFORGE_BASE_URL` and `SINTER_API_KEY` together
+in the process environment. In Settings, enter a session key for the selected
+destination; an environment override to another destination cannot receive that
+session key. API redirects are rejected, including redirects to another provider.
 
 ## CLI
 
