@@ -2,6 +2,7 @@
 import {h, field, selectField, check, button, notice, download, dateTime} from './ui.js';
 import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
+import {senderFields} from './profile.js';
 
 const example = () => ({schema: 'sinter-casebook/v1', title: 'Fictional P&C community evening',
   questions: 'Has the hall booking been confirmed?\nWhat access arrangements need checking?\nWho agreed to organise the volunteer roster?\nWhat is the insurance excess?',
@@ -12,6 +13,9 @@ const example = () => ({schema: 'sinter-casebook/v1', title: 'Fictional P&C comm
   ]});
 
 export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
+  const {settings} = await request('/api/settings');
+  const sender = senderFields(seed.book || {}, settings);
+  const recipient = field('Recipient or audience', 'text', seed.book?.recipient || '', '', {maxLength: 200});
   let savedId = seed.savedId || null, revision = seed.revision || null;
   let docs = [...(seed.book?.documents || [])], busy = false, activeJob = null;
   const title = field('Project name', 'text', seed.book?.title || '', 'For example: school garden proposal or volunteer handover.', {maxLength: 200});
@@ -34,7 +38,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   const upload = field('Add text files', 'file', '', 'TXT, Markdown, UTF-8 notes or code. Up to 300 documents and 2 million characters. No PDF/DOCX extraction.', {multiple: true});
   const backup = field('Restore a casebook backup', 'file', '', 'Opens as a new unsaved project; existing casebooks are not overwritten.', {accept: '.json'});
   const editor = h('fieldset', {class: 'casebook-editor'});
-  const value = () => ({schema: 'sinter-casebook/v1', title: title.input.value, questions: questions.input.value, documents: docs});
+  const value = () => ({schema: 'sinter-casebook/v1', title: title.input.value, questions: questions.input.value, recipient: recipient.input.value, ...sender.values(), documents: docs});
   function changed() { remember?.('casebooks', {book: value(), savedId, revision}); output.replaceChildren(); }
   function drawSources() {
     sources.replaceChildren(); totals.textContent = `${docs.length} documents / ${docs.reduce((n, row) => n + row.content.length, 0).toLocaleString()} characters, stored locally only when you save.`;
@@ -48,6 +52,9 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   }
   function load(book, id = null, rev = null) {
     docs = book.documents; title.input.value = book.title; questions.input.value = book.questions || '';
+    recipient.input.value = book.recipient || '';
+    for (const [key, entry] of Object.entries(sender.entries)) entry.input.value = book[key] ?? '';
+    sender.panel.dispatchEvent(new Event('input', {bubbles: true}));
     savedId = id; revision = rev; changed(); drawSources();
   }
   async function refresh() {
@@ -150,7 +157,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
         if (docs.length >= 300 || docs.reduce((n, row) => n + row.content.length, contents.input.value.length) > 2000000) { status.replaceChildren(notice('The collection limit is reached. Start a separate casebook.', 'error')); return; }
         docs.push({title: name.input.value, content: contents.input.value, date: sourceDate.input.value, url: sourceURL.input.value});
         name.input.value = ''; contents.input.value = ''; sourceDate.input.value = ''; sourceURL.input.value = ''; changed(); drawSources();
-      }), upload.wrap), totals, sources, format.wrap,
+      }), upload.wrap), totals, sources, format.wrap, recipient.wrap, sender.panel,
     h('div', {class: 'casebook-actions'}, button('Prepare source-only report', () => perform('build'), 'primary'),
       button('Save project', async () => { lock(true); try { await save(); status.replaceChildren(notice(`Saved revision ${revision}. Local storage is not encrypted.`, 'success')); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } finally { lock(false); } }),
       button('Export project backup', () => download('sinter-casebook.json', JSON.stringify(value(), null, 2), 'application/json'))),

@@ -10,6 +10,12 @@ Add exact official guideline text as references, including exclusions. In the re
 
 Use **Search watches** for hourly, daily or weekly checks. Watches resume overdue work after restart and distinguish new, changed and not-returned results. Not appearing in a search is not proof a grant closed. The app must remain running. Calendar exports provide review reminders and optional human-confirmed closing dates; verify time zones and closing times separately. Reimporting does not establish a live calendar feed.
 
+## Funding campaigns
+
+**Funding campaigns** keep several opportunities, application answers, quotes and next actions in one local record. Statuses, costs and requirement checks are entered by a person. A requirement is only treated as checked when its status, evidence, source link, source wording and check date are all present. A budget total is incomplete while any item lacks a numeric unit cost or a quote reference. Unknowns remain visible in the prepared brief.
+
+Save revisions on this computer, export a JSON backup, or import a backup to continue. A stale revision is rejected and leaves your unsaved edits in the editor. Sinter does not submit applications, fetch funder pages, or treat a prepared brief as approval.
+
 ## Enquiry letters, briefs and agenda items
 
 Choose the output type before adding notes: **Enquiry letter**, **Briefing note** or **Agenda item for discussion**. Recipient, organisation and sign-off are optional. Missing details stay as placeholders instead of being invented.
@@ -36,7 +42,7 @@ A custom template cannot turn an unverified generative output into a verified re
 
 ## Saving and sharing
 
-Save explicitly in **My workspace**, download Markdown for editing, or export the JSON evidence pack. Browser printing also supports Save as PDF through your browser. Sinter does not upload saved reports to a cloud account, send official communications or approve records.
+Save explicitly in **My workspace**, copy the readable draft, download Markdown or a portable HTML document, or export a Word file built only from the current draft text. The JSON evidence pack keeps the original model output, sources and any later edits. Browser printing also supports Save as PDF through your browser. Sinter does not upload saved reports to a cloud account, send official communications or approve records.
 
 Data is stored without encryption in `~/.sinter/workspace.sqlite3` (or your `SINTER_DATA_DIR`). Back it up responsibly. Unsaved inputs are retained only during this browser session; reload or closing the app can lose them. Returning to Overview lets you continue an unsaved real project without erasing its inputs.
 

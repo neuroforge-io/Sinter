@@ -7,15 +7,18 @@ receipt are written to browser-artifacts/quality-*.
 """
 from __future__ import annotations
 
+import io
 import json
 import re
 import sys
 import tempfile
 import threading
 import time
+import zipfile
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from unittest.mock import patch
+from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -112,12 +115,33 @@ class QualityChecks:
             page.reload()
         else:
             page.goto(target)
-        page.locator('#view .page-intro, #view .hero').first.wait_for()
+        page.locator('#view .page-intro, #view .workspace-welcome').first.wait_for()
 
     def download_json(self, page, name):
+        return json.loads(self.download_text(page, name))
+
+    def download_text(self, page, name):
+        target = page.get_by_role('button', name=name, exact=True)
+        if not target.is_visible():
+            page.get_by_text('More options', exact=True).click()
         with page.expect_download() as pending:
-            page.get_by_role('button', name=name, exact=True).click()
-        return json.loads(Path(pending.value.path()).read_text(encoding='utf-8'))
+            target.click()
+        return Path(pending.value.path()).read_text(encoding='utf-8')
+
+    def inspect_html(self, page, html, inspect, name):
+        # Open the actual standalone export with its stylesheet. Parsing it in
+        # the application's document would incorrectly inherit the app's CSP.
+        exported = page.context.new_page()
+        exported.on('pageerror', lambda error: self.errors.append({'check': name, 'error': str(error)}))
+        exported.on('console', lambda message: self.errors.append({'check': name, 'error': message.text})
+                    if message.type == 'error' else None)
+        try:
+            exported.set_content(html)
+            result = exported.evaluate(inspect)
+            self.screenshot(exported, name)
+            return result
+        finally:
+            exported.close()
 
     def finder(self, page):
         from playwright.sync_api import expect
@@ -148,7 +172,7 @@ class QualityChecks:
         page.keyboard.press('Control+k')
         search.fill('research')
         page.keyboard.press('Enter')
-        expect(page.get_by_role('heading', name='A good question deserves good sources.')).to_be_visible()
+        expect(page.get_by_role('heading', name='Research a topic.', exact=True)).to_be_visible()
         expect(finder).not_to_be_visible()
 
     def research(self, page):
@@ -184,12 +208,13 @@ class QualityChecks:
         pack = self.download_json(page, 'Download evidence pack')
         assert pack['workflow'] == 'research' and pack['sources'] and pack['excerpts']
         assert pack['demo'] is True
+        page.get_by_role('tab', name='Evidence', exact=True).click()
         citation = report.get_by_role('button', name=re.compile('Show source:')).first
         source_title = citation.get_attribute('aria-label').removeprefix('Show source: ')
         citation.click()
         source = report.locator('details.source').filter(has=page.locator('summary', has_text=source_title)).first
         expect(source).to_have_attribute('open', '')
-        expect(source.locator('summary')).to_be_focused()
+        expect(source.locator(':scope > summary')).to_be_focused()
         assert page.url.endswith('#research?example=1'), 'Citation changed the application route.'
         page.get_by_role('button', name='Save to this computer').click()
         expect(report).to_contain_text('Saved in My workspace')
@@ -209,8 +234,8 @@ class QualityChecks:
         expect(page.get_by_role('region', name='Your draft report')).to_be_visible(timeout=10000)
         pack = self.download_json(page, 'Download evidence pack')
         assert len(pack['segments']) > 0
-        stat = page.locator('.report-stat').filter(has_text='Transcript passages')
-        expect(stat.locator('strong')).to_have_text(str(len(pack['segments'])))
+        page.get_by_role('tab', name='Evidence', exact=True).click()
+        expect(page.locator('.evidence-overview')).to_contain_text(f"{len(pack['segments'])} transcript passages")
         self.screenshot(page, 'meeting-stats')
 
     def settings(self, page):
@@ -266,21 +291,24 @@ class QualityChecks:
                 if request.method == 'POST' and request.url.endswith('/api/template/stream') else None)
         with model_fixture(complete=complete) as calls:
             page.get_by_role('button', name='Run template', exact=True).click()
-            button = 'Download template output' if complete else 'Download partial output'
+            button = 'Download Word (.docx)' if complete else 'Download partial output'
             expect(page.get_by_role('button', name=button, exact=True)).to_be_visible(timeout=10000)
-            pack = self.download_json(page, button)
+            exported = self.download_json(page, 'Download evidence pack' if complete else button)
+            pack = exported['template_run'] if complete else exported
         assert len(posts) == 1, 'Template request was replayed.'
         assert pack['complete'] is complete
         assert pack['results'][0]['content'] == COMPLETED
         if complete:
             assert len(calls) == 3 and len(pack['results']) == 3 and 'partial' not in pack
             assert pack['results'][1]['content'] == FINAL_PARTIAL
-            expect(page.locator('#view')).to_contain_text(SUMMARY)
+            page.get_by_role('tab', name='Evidence', exact=True).click()
+            expect(page.get_by_role('tabpanel', name='Evidence', exact=True)).to_contain_text(SUMMARY)
         else:
             assert len(calls) == 2 and len(pack['results']) == 1
             assert pack['partial']['content'] == FINAL_PARTIAL
             assert pack['partial']['finish_reason'] == 'length'
-            expect(page.locator('#view')).to_contain_text('INCOMPLETE / Dependent steps were not run.')
+            expect(page.locator('#view')).to_contain_text('Stopped with partial output')
+            expect(page.locator('#view')).to_contain_text('Incomplete: Suggest Fixes')
             expect(page.locator('#view')).to_contain_text(FINAL_PARTIAL)
             expect(page.locator('#view')).not_to_contain_text(INTERIM)
             expect(page.get_by_role('heading', name='Summary', exact=True)).to_have_count(0)
@@ -331,8 +359,8 @@ class QualityChecks:
         page.get_by_label('Prompt', exact=True).fill('Fictional browser formatting fixture.')
         with patch.object(templates, 'chat_stream', side_effect=streamed_answer) as model:
             page.get_by_role('button', name='Run template', exact=True).click()
-            expect(page.get_by_role('button', name='Download template output', exact=True)).to_be_visible()
-            rendered = page.locator('#view .document')
+            expect(page.get_by_role('button', name='Download Word (.docx)', exact=True)).to_be_visible()
+            rendered = page.get_by_role('tabpanel', name='Document', exact=True).locator('.document')
             expect(rendered.locator('strong')).to_have_text(['Availability:', 'venue'])
             expect(rendered.locator('ol > li')).to_have_count(3)
             expect(rendered.locator('code')).to_have_text('confirm_deadline')
@@ -340,7 +368,7 @@ class QualityChecks:
             expect(link).to_have_attribute('href', 'https://example.invalid/guidance?x=1&y=2')
             expect(link).to_have_attribute('target', '_blank')
             expect(link).to_have_attribute('rel', 'noopener noreferrer')
-            archive = self.download_json(page, 'Download template output')
+            archive = self.download_json(page, 'Download evidence pack')['template_run']
         assert model.call_count == 1
         assert archive['complete'] is True and archive['results'][0]['content'] == formatted
 
@@ -354,13 +382,28 @@ class QualityChecks:
                    '[encoded](jav&#x61;script:alert(1))\n'
                    '[credentials](https://user:password@example.invalid/source)')
         inspected = page.evaluate('''async ({source, hostile}) => {
-            const {markdown, h} = await import('/static/ui.js');
+            const {markdown, h, safeLink} = await import('/static/ui.js');
+            const {renderReport} = await import('/static/reports.js');
             window.__sinterUnsafe = false;
             const exact = markdown('> ' + source);
             const attacks = markdown(hostile);
             const codeText = '<script>**bold** &lt; literal code</script>';
             const fenced = markdown('```text\\n' + codeText + '\\n```');
             const numbered = markdown('4) Fourth item\\n5) Fifth item');
+            const inlineCode = markdown('Use ``a`b`` and snake_case_name; **bold** and _emphasis_.');
+            const angleLink = markdown('[Programme details](<https://example.invalid/fund_(round_(one))?a=1&amp;b=2>)');
+            const unsafeUrls = ['javascript:alert(1)', 'data:text/html,test', '//example.invalid',
+                'https:example.invalid', 'https://user:pass@example.invalid', 'https://example.invalid:0',
+                'https://example.invalid/\\\\redirect', 'https://example.invalid/\\u202Ehidden',
+                'https://example.invalid/\\u0085hidden', 'https://example.invalid/has space'];
+            const reference = 'S1111111111111111', missing = 'E2222222222222222';
+            const citationText = 'Known [' + reference + '] and unknown [' + missing + '].\\n\\n'
+                + '> Exact source says ' + reference + '.\\n\\n`' + reference + '`';
+            const citations = renderReport({title:'Fictional citations', markdown:citationText,
+                sources:[{id:reference, title:'Fictional source', content:'Original wording', kind:'user_note'}],
+                excerpts:[{id:missing, source_id:'S3333333333333333'}]});
+            const citationDocument = citations.querySelector('.document-panel .document');
+            const malformed = markdown('['.repeat(50000));
             const sample = h('section', {class:'stack', 'aria-label':'Formatting safety fixtures'},
                 h('h3',{},'Exact source quotation'), exact,
                 h('h3',{},'Untrusted markup shown as text'), attacks, fenced, numbered);
@@ -372,8 +415,20 @@ class QualityChecks:
                 attackText:attacks.textContent,
                 code:fenced.querySelector('pre').textContent,
                 codeElements:fenced.querySelector('pre').children.length,
+                codeMarkup:fenced.querySelector('code').children.length,
                 listStart:numbered.querySelector('ol').start,
                 listItems:numbered.querySelectorAll('ol > li').length,
+                inlineCode:inlineCode.querySelector('code').textContent,
+                inlineText:inlineCode.textContent,
+                inlineEmphasis:[...inlineCode.querySelectorAll('em')].map(node=>node.textContent),
+                angleLink:angleLink.querySelector('a').href,
+                invalidLinks:unsafeUrls.map(url=>safeLink(url, 'Unsafe').tagName),
+                validLink:safeLink('https://example.invalid/wiki/Water_(policy)?x=1&y=2', 'Safe').href,
+                citations:[...citationDocument.querySelectorAll('button')].map(node=>node.textContent),
+                quotedReference:citationDocument.querySelector('blockquote').textContent,
+                codeReference:citationDocument.querySelector('code').textContent,
+                inventedCitation:citations.textContent.includes('Source 0'),
+                malformedText:malformed.textContent.length,
                 executed:window.__sinterUnsafe};
         }''', {'source': evidence.literal(original), 'hostile': hostile})
         assert inspected['quote'] == original, inspected
@@ -383,9 +438,150 @@ class QualityChecks:
         assert '[unsafe](javascript:alert(1))' in inspected['attackText']
         assert inspected['executed'] is False
         assert inspected['code'] == '<script>**bold** &lt; literal code</script>\n'
-        assert inspected['codeElements'] == 0
+        assert inspected['codeElements'] == 1
+        assert inspected['codeMarkup'] == 0
         assert inspected['listStart'] == 4 and inspected['listItems'] == 2
+        assert inspected['inlineCode'] == 'a`b'
+        assert inspected['inlineText'] == 'Use a`b and snake_case_name; bold and emphasis.'
+        assert inspected['inlineEmphasis'] == ['emphasis']
+        assert inspected['angleLink'] == 'https://example.invalid/fund_(round_(one))?a=1&b=2'
+        assert set(inspected['invalidLinks']) == {'SPAN'}
+        assert inspected['validLink'] == 'https://example.invalid/wiki/Water_(policy)?x=1&y=2'
+        assert inspected['citations'] == ['Source 1'] and inspected['inventedCitation'] is False
+        assert inspected['quotedReference'] == 'Exact source says S1111111111111111.'
+        assert inspected['codeReference'] == 'S1111111111111111'
+        assert inspected['malformedText'] == 50000
         self.screenshot(page, 'safe-markdown')
+
+    def document_roundtrip(self, page):
+        """Exercise usable copy, parsed HTML export, editing and stored originals."""
+        from playwright.sync_api import expect
+        formatted = (
+            '# A fictional letter\n\nDear **Jordan**,\n\n'
+            'Please preserve snake_case_identifier and café_name_label.\n\n'
+            '4. Confirm the venue.\n'
+            '   1. Ask the coordinator.\n'
+            '   2. Record the answer.\n'
+            '5. Send the invitation.\n\n'
+            '| Task | Owner |\n| :---: | ---: |\n'
+            '| Keep `a|b` intact | Sam \\| Jo |\n'
+            '| Additional | Supplied | Never discard this cell |\n\n'
+            'Kind regards,\nMaya Chen\nCommunity coordinator\n'
+            'maya@example.invalid\n\n'
+            '[Read guidance](https://example.invalid/wiki/Water_(policy)?x=1&amp;y=2)\n\n'
+            '```text\n  first line\n\n\n```not-a-closing-fence\nlast line\n```'
+        )
+
+        def response(*args, **kwargs):
+            yield formatted
+            return client.ChatResult(formatted, finish_reason='stop')
+
+        self.goto(page, 'explore')
+        page.get_by_label('Tool', exact=True).select_option('templates')
+        page.get_by_label('Template', exact=True).select_option('custom')
+        page.get_by_label('Prompt', exact=True).fill('Create a fictional document for offline testing.')
+        with patch.object(templates, 'chat_stream', side_effect=response) as model:
+            page.get_by_role('button', name='Run template', exact=True).click()
+            expect(page.get_by_role('button', name='Download Word (.docx)', exact=True)).to_be_visible()
+        assert model.call_count == 1
+        paper = page.get_by_role('tabpanel', name='Document', exact=True).locator('.document')
+        expect(paper.locator('ol').first).to_have_attribute('start', '4')
+        expect(paper.locator('ol ol > li')).to_have_count(2)
+        expect(paper.locator('em')).to_have_count(0)
+        expect(paper.locator('tbody tr').first.locator('td')).to_have_text(['Keep a|b intact', 'Sam | Jo', ''])
+        expect(paper.locator('tbody tr').last.locator('td').last).to_have_text('Never discard this cell')
+        signature = paper.locator('p').filter(has_text='Kind regards,')
+        assert signature.inner_text() == 'Kind regards,\nMaya Chen\nCommunity coordinator\nmaya@example.invalid'
+        page.context.grant_permissions(['clipboard-read', 'clipboard-write'], origin=self.base)
+        page.get_by_role('button', name='Copy draft text', exact=True).click()
+        expect(page.get_by_text('Copied. Ready to paste into your email or document.', exact=True)).to_be_visible()
+        copied = page.evaluate('navigator.clipboard.readText()')
+        assert '4. Confirm the venue.\n   1. Ask the coordinator.\n   2. Record the answer.\n5. Send the invitation.' in copied, copied
+        assert 'Kind regards,\nMaya Chen\nCommunity coordinator\nmaya@example.invalid' in copied, copied
+        assert 'Read guidance (https://example.invalid/wiki/Water_(policy)?x=1&y=2)' in copied
+        assert 'Keep a|b intact\tSam | Jo\t' in copied and 'Never discard this cell' in copied
+        assert '  first line\n\n\n```not-a-closing-fence\nlast line\n' in copied
+        html = self.download_text(page, 'Download document')
+        parsed = self.inspect_html(page, html, '''() => {
+            const exported = document;
+            return {title:exported.title, headings:[...exported.querySelectorAll('h1')].map(x=>x.textContent),
+                signature:[...exported.querySelectorAll('p')].find(x=>x.textContent.startsWith('Kind regards')).innerHTML,
+                order:exported.querySelector('ol').start, nested:exported.querySelectorAll('ol ol > li').length,
+                cells:[...exported.querySelectorAll('tbody td')].map(x=>x.textContent),
+                href:exported.querySelector('a').getAttribute('href'),
+                alignment:[...exported.querySelectorAll('thead th')].map(x=>getComputedStyle(x).textAlign),
+                unsafe:exported.querySelectorAll('script,iframe,img,object,embed,form,input,button,[onclick]').length,
+                code:exported.querySelector('pre code').textContent,
+                hasPrintRules:exported.querySelector('style').textContent.includes('@media print')};
+        }''', 'document-export-original')
+        assert parsed['title'] == 'Custom' and parsed['headings'] == ['A fictional letter'], parsed
+        assert parsed['signature'] == 'Kind regards,<br>Maya Chen<br>Community coordinator<br>maya@example.invalid'
+        assert parsed['order'] == 4 and parsed['nested'] == 2
+        assert parsed['cells'] == ['Keep a|b intact', 'Sam | Jo', '', 'Additional', 'Supplied', 'Never discard this cell']
+        assert parsed['href'] == 'https://example.invalid/wiki/Water_(policy)?x=1&y=2'
+        assert parsed['alignment'] == ['center', 'right', 'left']
+        assert parsed['code'] == '  first line\n\n\n```not-a-closing-fence\nlast line\n'
+        assert parsed['unsafe'] == 0 and parsed['hasPrintRules']
+        with page.expect_download() as pending:
+            page.get_by_role('button', name='Download Word (.docx)', exact=True).click()
+        assert pending.value.suggested_filename.endswith('.docx')
+        word_bytes = Path(pending.value.path()).read_bytes()
+        with zipfile.ZipFile(io.BytesIO(word_bytes)) as archive:
+            assert archive.testzip() is None
+            word = ET.fromstring(archive.read('word/document.xml'))
+            ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+            words = ''.join(word.itertext())
+            assert 'Maya Chen' in words and 'Never discard this cell' in words
+            assert word.find('.//w:numPr', ns) is not None and word.find('.//w:tbl', ns) is not None
+            assert word.find('.//w:hyperlink', ns) is not None
+            assert len(word.findall('.//w:br', ns)) >= 3
+        original = self.download_json(page, 'Download evidence pack')
+        assert original['template_run']['results'][0]['content'] == formatted
+        # Printing must still show the document if its evidence tab is selected.
+        page.get_by_role('tab', name='Evidence', exact=True).click()
+        page.emulate_media(media='print')
+        expect(page.get_by_role('tabpanel', name='Document', exact=True)).to_be_visible()
+        expect(page.locator('.evidence-panel')).not_to_be_visible()
+        page.emulate_media(media='screen')
+        page.get_by_role('tab', name='Document', exact=True).click()
+        page.get_by_text('More options', exact=True).click()
+        page.get_by_role('button', name='Edit draft', exact=True).click()
+        editor = page.get_by_label('Edit your draft', exact=True)
+        expect(editor).to_have_value(formatted)
+        edited = '# Ready to send\n\nDear Jordan,\n\nThe meeting is confirmed.\n\nKind regards,\nMaya Chen\nCommunity coordinator'
+        editor.fill(edited)
+        page.get_by_role('button', name='Apply edits', exact=True).click()
+        expect(paper).to_contain_text('The meeting is confirmed.')
+        expect(paper).not_to_contain_text('Please preserve')
+        page.get_by_role('button', name='Copy draft text', exact=True).click()
+        expect(page.get_by_text('Copied. Ready to paste into your email or document.', exact=True)).to_be_visible()
+        assert page.evaluate('navigator.clipboard.readText()') == edited.removeprefix('# ')
+        assert self.download_text(page, 'Download Markdown') == edited
+        page.get_by_role('button', name='Save to this computer', exact=True).click()
+        expect(page.get_by_role('region', name='Your draft report')).to_contain_text('Saved in My workspace')
+        self.goto(page, 'library')
+        page.get_by_role('button', name='Open draft', exact=True).first.click()
+        stored = self.download_json(page, 'Download evidence pack')
+        assert stored['document_edits']['markdown'] == edited
+        assert stored['document_edits']['author'] == 'user' and stored['document_edits']['edited_at']
+        assert stored['markdown'] == original['markdown'] and stored['template_run'] == original['template_run']
+        assert stored['sources'] == original['sources'] and stored['excerpts'] == original['excerpts']
+        saved_html = self.download_text(page, 'Download document')
+        saved_document = self.inspect_html(page, saved_html, '''() => {
+            return {title:document.querySelector('h1').textContent, text:document.querySelector('.document').textContent,
+                breaks:document.querySelectorAll('.document br').length};
+        }''', 'document-export-edited')
+        assert saved_document['title'] == 'Ready to send'
+        assert 'The meeting is confirmed.' in saved_document['text'] and 'Please preserve' not in saved_document['text']
+        assert saved_document['breaks'] == 2
+        with page.expect_download() as pending:
+            page.get_by_role('button', name='Download Word (.docx)', exact=True).click()
+        with zipfile.ZipFile(pending.value.path()) as archive:
+            word = ET.fromstring(archive.read('word/document.xml'))
+            words = ''.join(word.itertext())
+            assert 'The meeting is confirmed.' in words and 'Please preserve' not in words
+            assert len(word.findall('.//w:br', ns)) == 2
+        self.screenshot(page, 'document-edited-roundtrip')
 
     def responsive(self, page):
         from playwright.sync_api import expect
@@ -472,6 +668,7 @@ def main(argv=None):
                 checks.check('template-stream-partial', lambda page: checks.template_stream(page, complete=False))
                 checks.check('template-job-recovery', checks.template_job)
                 checks.check('safe-markdown-rendering', checks.safe_markdown)
+                checks.check('document-copy-edit-export-roundtrip', checks.document_roundtrip)
                 checks.check('responsive-contrast', checks.responsive)
                 receipt = {'schema': 'sinter-quality-browser/v1', 'fixture_notice': 'Fictional model responses; no external requests permitted.',
                            'checks': checks.results, 'browser_errors': checks.errors, 'external_requests': checks.external,

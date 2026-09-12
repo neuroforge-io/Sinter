@@ -46,7 +46,7 @@ jobs:
   browser:
     name: Chromium workflows
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -61,6 +61,8 @@ jobs:
       - run: python tools/desktop_browser.py
       - run: python tools/site_browser.py
       - run: python tools/casebook_browser.py
+      - run: python tools/deliverable_browser.py
+      - run: python tools/campaign_browser.py
       - run: python tools/quality_browser.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

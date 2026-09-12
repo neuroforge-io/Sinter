@@ -17,6 +17,22 @@ export async function settingsPage() {
   let current = await request('/api/settings');
   const s = current.settings;
   const organisation = field('Your group or organisation', 'text', s.organisation, 'A local preference; no account is created.', {maxLength: 200});
+  const profile = {
+    full_name: field('Your full name', 'text', s.full_name || '', '', {maxLength: 200, autocomplete: 'name'}),
+    role: field('Your role', 'text', s.role || '', '', {maxLength: 200, autocomplete: 'organization-title'}),
+    email: field('Email address', 'email', s.email || '', '', {maxLength: 254, autocomplete: 'email'}),
+    phone: field('Phone number', 'tel', s.phone || '', '', {maxLength: 80, autocomplete: 'tel'}),
+    website: field('Website', 'url', s.website || '', '', {maxLength: 2048, autocomplete: 'url'}),
+    location: field('Location', 'text', s.location || '', 'Used to prefill funding searches and your organisation profile.', {maxLength: 200}),
+    organisation_type: field('Organisation type', 'text', s.organisation_type || '', 'For example, incorporated association or community group.', {maxLength: 200})
+  };
+  const signature = h('div', {class: 'signature-preview'});
+  function preview() {
+    signature.replaceChildren(h('span', {class: 'eyebrow'}, 'YOUR SIGN-OFF'),
+      h('strong', {}, profile.full_name.input.value || 'Add your name above'),
+      ...[profile.role.input.value, organisation.input.value, profile.email.input.value, profile.phone.input.value, profile.website.input.value].filter(Boolean).map(value => h('span', {}, value)));
+  }
+  [organisation, ...Object.values(profile)].forEach(entry => entry.input.addEventListener('input', preview)); preview();
   const theme = selectField('Colour theme', [['dark', 'Dark'], ['light', 'Light']], s.theme);
   const size = selectField('Reading size', [['normal', 'Standard'], ['large', 'Larger text']], s.text_size);
   const density = selectField('Layout', [['comfortable', 'Comfortable'], ['compact', 'Compact']], s.density);
@@ -39,10 +55,10 @@ export async function settingsPage() {
   let keyEdited = false;
   key.input.addEventListener('input', () => { keyEdited = true; });
   const save = button('Save my preferences', async () => {
-    if (![url, model, port, organisation, length].every(f => f.input.reportValidity())) return;
+    if (![url, model, port, organisation, length, ...Object.values(profile)].every(f => f.input.reportValidity())) return;
     save.disabled = true;
     try {
-      const next = {...s, organisation: organisation.input.value, theme: theme.input.value, text_size: size.input.value,
+      const next = {...s, ...Object.fromEntries(Object.entries(profile).map(([key, entry]) => [key, entry.input.value])), organisation: organisation.input.value, theme: theme.input.value, text_size: size.input.value,
         density: density.input.value, reduce_motion: motion.input.checked, api_url: url.input.value,
         model: model.input.value, max_tokens: Number(length.input.value), rkc_port: Number(port.input.value), rkc_executable: executable.input.value};
       current = await request('/api/settings', {data: {settings: next, confirm_endpoint: destination.input.checked,
@@ -58,10 +74,15 @@ export async function settingsPage() {
     catch (error) { state.replaceChildren(notice(error.message, 'error')); }
   }, 'quiet');
   return h('div', {class: 'stack'}, h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'MAKE IT YOURS'),
-    h('h2', {}, 'Comfortable to read. Simple to use.'), h('p', {}, 'Choose how Sinter looks and where optional AI requests go. No account required.')),
+    h('h2', {}, 'A workspace that knows your details.'), h('p', {}, 'Save your details once. Sinter fills them into new drafts so you can get straight to the work.')),
     current.warning ? notice(current.warning, 'error') : null,
     current.environment_override ? notice('An environment variable overrides the API address or model. Change that launcher configuration to use the values below.') : null,
-    h('section', {class: 'card'}, h('h3', {}, 'Your workspace'), organisation.wrap,
+    h('section', {class: 'card profile-settings'}, h('div', {}, h('h3', {}, 'Your profile'),
+      h('p', {class: 'muted'}, 'Saved on this computer. You can change or remove these details in each draft.'),
+      h('div', {class: 'form-grid'}, profile.full_name.wrap, profile.role.wrap), organisation.wrap,
+      h('div', {class: 'form-grid'}, profile.email.wrap, profile.phone.wrap), profile.website.wrap,
+      h('details', {}, h('summary', {}, 'Funding and organisation defaults'), profile.location.wrap, profile.organisation_type.wrap)), signature),
+    h('section', {class: 'card'}, h('h3', {}, 'Reading and appearance'),
       h('div', {class: 'form-grid'}, theme.wrap, size.wrap, density.wrap), motion.wrap),
     h('details', {class: 'card'}, h('summary', {}, 'Advanced: API and optional RKC connection'),
       notice('Only change these when using another compatible deployment. Search may not be supported by every provider. Changing the destination clears the previous session key.'),

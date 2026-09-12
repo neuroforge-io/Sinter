@@ -5,7 +5,7 @@ export function session() {
   return sessionPromise;
 }
 
-export async function request(path, {data, signal, method = data === undefined ? 'GET' : 'POST'} = {}) {
+export async function request(path, {data, signal, method = data === undefined ? 'GET' : 'POST', responseType = 'json'} = {}) {
   if (!path.startsWith('/api/')) throw new Error('Only local API paths are allowed.');
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -20,7 +20,7 @@ export async function request(path, {data, signal, method = data === undefined ?
     }
     const response = await fetch(path, {method, headers, cache: 'no-store',
       body: data === undefined ? undefined : JSON.stringify(data), signal: controller.signal});
-    const result = await response.json();
+    const result = response.ok && responseType === 'blob' ? await response.blob() : await response.json();
     if (!response.ok) { const error = new Error(result.error || result.message || `The request failed (${response.status}).`); error.status = response.status; error.partialResult = result.partial_result; throw error; }
     return result;
   } catch (error) {

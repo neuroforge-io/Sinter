@@ -49,7 +49,7 @@ def main(argv: list[str] | None = None) -> None:
                     else: route.continue_()
                 context.route('**/*', guard)
                 page.goto(base)
-                expect(page.get_by_role('heading', name=re.compile('Less busywork'))).to_be_visible()
+                expect(page.get_by_role('heading', name='Your next piece of work starts here.', exact=True)).to_be_visible()
                 page.get_by_role('link', name='Skip to main content').focus()
                 expect(page.get_by_role('link', name='Skip to main content')).to_be_focused()
                 page.keyboard.press('Enter')
@@ -63,18 +63,26 @@ def main(argv: list[str] | None = None) -> None:
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
                 page.screenshot(path=str(artifacts / 'overview-mobile.png'), full_page=True)
                 page.set_viewport_size({'width': 1440, 'height': 1000})
+                page.get_by_role('button', name='Open funding campaigns', exact=True).click()
+                expect(page.get_by_role('heading', name='Keep the whole application together.', exact=True)).to_be_visible()
+                expect(page.get_by_label('Campaign name', exact=True)).to_be_visible()
+                page.get_by_role('link', name='Overview', exact=True).click()
+                expect(page.get_by_role('heading', name='Your next piece of work starts here.', exact=True)).to_be_visible()
                 for kind in ['brief', 'grants', 'meeting']:
                     page.goto(base + f'/#{kind}?example=1')
                     page.get_by_role('button', name='Prepare my draft').click()
                     report = page.get_by_role('region', name='Your draft report')
                     expect(report).to_be_visible(timeout=10000)
-                    expect(report).to_contain_text('DRAFT')
+                    expect(report.get_by_role('tab', name='Document', exact=True)).to_have_attribute('aria-selected', 'true')
                     expect(report).to_contain_text('FICTIONAL')
                     page.screenshot(path=str(artifacts / f'{kind}-draft.png'), full_page=True)
+                    page.get_by_text('More options', exact=True).click()
                     with page.expect_download() as download:
                         page.get_by_role('button', name='Download evidence pack').click()
                     pack = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
-                    assert pack['workflow'] == kind and pack['sources']
+                    assert pack['workflow'] == kind and pack['sources'] and pack['review_status'] == 'draft'
+                    assert pack['document_markdown'] and pack['markdown']
+                    page.get_by_text('More options', exact=True).click()
                     if kind == 'brief':
                         page.get_by_role('button', name='Save to this computer').click()
                         expect(report).to_contain_text('Saved in My workspace')
@@ -83,6 +91,8 @@ def main(argv: list[str] | None = None) -> None:
                         page.get_by_label('Reviewed replacement', exact=True).fill('We discussed the garden but did not approve any spending.')
                         page.get_by_label('Why is this correction justified?', exact=True).fill('Fictional test correction; wording verified for this fixture.')
                         page.get_by_role('button', name='Apply reviewed correction').click()
+                        expect(report.get_by_role('tabpanel', name='Document', exact=True)).to_contain_text('We discussed the garden but did not approve any spending.', timeout=10000)
+                        report.get_by_role('tab', name='Evidence', exact=True).click()
                         expect(report).to_contain_text('Human correction history', timeout=10000)
                         expect(report).to_contain_text('We discussed the garden but did not approve any spending.')
                 page.get_by_role('link', name='My workspace', exact=True).click()

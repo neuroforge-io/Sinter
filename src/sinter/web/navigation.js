@@ -3,6 +3,7 @@ import {h, button, announce} from './ui.js';
 
 export const tools = [
   {id: 'home', label: 'Overview', group: 'WORKSPACE', icon: '⌂', description: 'Start a task or try a local example', keywords: 'start home example'},
+  {id: 'campaigns', label: 'Funding campaigns', group: 'WORKSPACE', icon: '◇', description: 'Keep opportunities, application answers, quotes and next actions together', keywords: 'grant campaign funding budget eligibility application'},
   {id: 'casebooks', label: 'Community casebooks', group: 'WORKSPACE', icon: '▤', description: 'Connect notes, policies and questions in a saved project', keywords: 'knowledge project collection documents'},
   {id: 'library', label: 'My workspace', group: 'WORKSPACE', icon: '▱', description: 'Open reports you saved on this computer', keywords: 'saved library documents exports'},
   {id: 'activity', label: 'Recent activity', group: 'WORKSPACE', icon: '◷', description: 'Recover a result or check a running task', keywords: 'jobs cancel recover progress'},

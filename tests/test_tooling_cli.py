@@ -13,7 +13,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 BROWSER_TOOLS = [
-    'browser_smoke.py', 'casebook_browser.py', 'desktop_browser.py',
+    'browser_smoke.py', 'campaign_browser.py', 'casebook_browser.py',
+    'deliverable_browser.py', 'desktop_browser.py', 'quality_browser.py',
     'site_browser.py', 'studio_browser.py',
 ]
 

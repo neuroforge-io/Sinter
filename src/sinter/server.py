@@ -14,12 +14,14 @@ import threading
 from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from . import __version__, atlas, casebooks, client, community, speech, workbench
 from .preferences import Preferences
+from . import campaigns
 from .evidence import collect, text
 from .grants import screen
+from .docx_export import export_docx
 from .jobs import Jobs
 from .meetings import parse_transcript
 from .store import Store, calendar
@@ -34,6 +36,7 @@ class Application:
         self.store = Store(directory)
         self.preferences = Preferences(self.store.directory)
         self.casebooks = casebooks.Casebooks(self.store)
+        self.campaigns = campaigns.CampaignStore(self.store.directory)
         self.desktop_shutdown = None
         self.jobs = Jobs()
         self.token = secrets.token_urlsafe(32)
@@ -110,9 +113,11 @@ class Handler(BaseHTTPRequestHandler):
                          "img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
                          "frame-ancestors 'none'; form-action 'self'")
 
-    def _send(self, body: bytes, content_type: str, status: int = 200):
+    def _send(self, body: bytes, content_type: str, status: int = 200, *, filename: str | None = None):
         self.send_response(status)
-        self.send_header("Content-Type", content_type + "; charset=utf-8")
+        self.send_header("Content-Type", content_type + ("" if filename else "; charset=utf-8"))
+        if filename:
+            self.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + quote(filename, safe=""))
         self.send_header("Content-Length", str(len(body)))
         self._security_headers()
         self.end_headers()
@@ -216,7 +221,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/templates":
             self._json({"templates": [{"id": key, "name": template.name, "description": template.description,
                                        "variables": [{"name": value, "label": value.replace("_", " ").title()} for value in template.variables],
-                                       "steps": len(template.steps)} for key, template in available_templates().items()]})
+                                       "steps": len(template.steps), "output_step": template.output_step, "review_step": template.review_step} for key, template in available_templates().items()]})
         elif path == "/api/example":
             query = parse_qs(parsed.query, max_num_fields=8)
             self._json(workbench.example(query.get("workflow", ["brief"])[0]))
@@ -224,6 +229,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"jobs": self.app.jobs.list()})
         elif path == "/api/casebooks":
             self._json({"casebooks": self.app.casebooks.list()})
+        elif path == "/api/campaigns":
+            self._json({"campaigns": self.app.campaigns.list()})
+        elif path.startswith("/api/campaigns/"):
+            self._json(self.app.campaigns.get(path.removeprefix("/api/campaigns/")))
         elif path.startswith("/api/casebooks/"):
             self._json(self.app.casebooks.get(path.removeprefix("/api/casebooks/")))
         elif path.startswith("/api/jobs/"):
@@ -257,6 +266,13 @@ class Handler(BaseHTTPRequestHandler):
             threading.Thread(target=self.app.desktop_shutdown, daemon=True).start()
         elif path == "/api/casebooks/validate":
             self._json({"document": casebooks.validate(body.get("document"))})
+        elif path == "/api/campaigns/prepare":
+            self._json(campaigns.prepare(body.get("document")))
+        elif path == "/api/campaigns/save":
+            self._json(self.app.campaigns.save(body.get("document"), body.get("id"), body.get("revision")))
+        elif path == "/api/campaigns/delete":
+            self.app.campaigns.delete(body.get("id"), body.get("revision"))
+            self._json({"ok": True})
         elif path == "/api/casebooks/save":
             self._json(self.app.casebooks.save(body.get("document"), body.get("id"), body.get("revision")))
         elif path == "/api/casebooks/delete":
@@ -343,6 +359,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
         elif path == "/api/reports":
             self._json({"id": self.app.store.save_report(body.get("report"))}, 201)
+        elif path == "/api/documents/docx":
+            document = export_docx(body)
+            self._send(document.content, document.content_type, filename=document.filename)
         elif path == "/api/reports/delete":
             self.app.store.delete_report(body.get("id", ""))
             self._json({"ok": True})

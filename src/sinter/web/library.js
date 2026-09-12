@@ -2,7 +2,7 @@ import {h, button, field, check, notice, selectField, safeLink, dateTime, announ
 import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
 
-export async function library() {
+export async function library({onEditProject} = {}) {
   const root = h('div');
   const list = h('div', {class: 'stack non-print'}), opened = h('div');
   const feedback = h('div', {class: 'non-print', 'aria-live': 'polite'});
@@ -11,7 +11,7 @@ export async function library() {
     list.replaceChildren(...reports.map(report => h('article', {class: 'card'},
       h('h3', {}, report.title), h('p', {class: 'muted'}, 'Saved ' + dateTime(report.created_at)),
       h('div', {class: 'button-row'}, button('Open draft', async () => {
-        try { opened.replaceChildren(renderReport(await request(`/api/reports/${report.id}`))); opened.scrollIntoView({block: 'start'}); }
+        try { const document = await request(`/api/reports/${report.id}`); opened.replaceChildren(...[document.input_snapshot && onEditProject ? h('div', {class: 'button-row non-print'}, button('Edit project inputs', () => onEditProject(document.input_snapshot))) : null, renderReport(document)].filter(Boolean)); opened.scrollIntoView({block: 'start'}); }
         catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
       }), button('Delete saved copy', async () => {
         if (!window.confirm(`Delete the saved copy of "${report.title}"? Downloaded copies are not deleted.`)) return;

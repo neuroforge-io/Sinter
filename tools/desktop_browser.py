@@ -71,7 +71,7 @@ def main(argv: list[str] | None = None) -> None:
                 page.get_by_role('button', name='Draft with Fracture', exact=True).click()
                 expect(page.get_by_role('region', name='Knowledge results')).to_contain_text('approve the excerpt transfer')
                 page.get_by_role('link', name='Overview', exact=True).click()
-                expect(page.get_by_role('heading', name='Less busywork.', exact=False)).to_be_visible()
+                expect(page.get_by_role('heading', name='Your next piece of work starts here.', exact=True)).to_be_visible()
                 page.set_viewport_size({'width': 1280, 'height': 600})
                 last_link = page.get_by_role('link', name='Getting started', exact=True)
                 last_link.scroll_into_view_if_needed()

@@ -1,29 +1,22 @@
 import {h, button} from './ui.js';
 
 /** Overview is intentionally separate from routing and task execution. */
-export function home(go, drafts) {
+export function home(go, drafts, settings = {}) {
   const cards = [
     ['research', '01', 'RESEARCH', 'Follow the evidence.', 'Explore a topic through source excerpts, clear citations and questions worth asking next.', 'Research a topic', 'A research brief with highlights and gaps'],
     ['grants', '01', 'FUNDING', 'Find the right opportunity.', 'Discover funding, check the requirements and keep a watch on what changes.', 'Find funding', 'A shortlist with sources and open questions'],
     ['brief', '02', 'RESEARCH & WRITING', 'Make your case clearly.', 'Turn notes and references into an evidence pack, enquiry letter or agenda item.', 'Build a brief', 'A reviewable draft and evidence register'],
     ['meeting', '03', 'MEETINGS', 'Keep a reliable record.', 'Import a transcript, or transcribe in a speech-enabled installation. Confirm speakers and prepare traceable draft minutes.', 'Prepare minutes', 'A transcript, review queue and draft minutes']
   ];
-  const preview = h('aside', {class: 'deliverable-preview', 'aria-label': 'Fictional example preview'},
-    h('div', {class: 'preview-top'}, h('span', {class: 'eyebrow'}, 'FICTIONAL EXAMPLE'), h('span', {class: 'badge warm'}, 'Ready to review')),
-    h('h3', {}, 'Community venue enquiry'),
-    h('p', {class: 'muted'}, 'From loose notes to a source-linked draft.'),
-    h('div', {class: 'preview-row'}, h('span', {class: 'preview-number'}, '01'), h('div', {}, h('strong', {}, 'Context, collected'), h('small', {}, 'Notes and reference text stay distinct.'))),
-    h('div', {class: 'preview-row'}, h('span', {class: 'preview-number'}, '02'), h('div', {}, h('strong', {}, 'Questions, made visible'), h('small', {}, 'What is supported? What still needs an answer?'))),
-    h('div', {class: 'preview-row'}, h('span', {class: 'preview-number'}, '03'), h('div', {}, h('strong', {}, 'A draft you control'), h('small', {}, 'Review, export or save. Never sent automatically.'))),
-    button('Open this example', () => go('brief?example=1'), 'quiet'));
   const pending = [...drafts.entries()].filter(([, data]) => !data.demo && (data.title || data.notes || data.book?.title));
   return h('div', {},
-    h('section', {class: 'hero hero-grid'}, h('div', {class: 'hero-copy'},
-      h('span', {class: 'eyebrow'}, 'THE COMMUNITY WORKBENCH'),
-      h('h2', {}, 'Less busywork.', h('br'), h('span', {}, 'More community.')),
-      h('p', {}, 'Funding research. Clearer correspondence. Better meeting records. Practical tools for the people doing the work - with sources visible and decisions still yours.'),
-      h('div', {class: 'button-row'}, button('Try an example', () => go('brief?example=1'), 'primary'), button('Getting started', () => go('help'), 'quiet')),
-      h('div', {class: 'hero-meta'}, h('span', {}, 'Local-first'), h('span', {}, 'No account for examples'), h('span', {}, 'Apache 2.0'))), preview),
+    h('header', {class: 'workspace-welcome'}, h('div', {}, h('span', {class: 'eyebrow'}, settings.organisation || 'YOUR COMMUNITY WORKSPACE'),
+      h('h2', {}, settings.full_name ? 'What are we working on, ' + settings.full_name.split(' ')[0] + '?' : 'Your next piece of work starts here.'),
+      h('p', {}, 'Research a question, write a letter or make sense of meeting notes. Leave with a document you can actually use.')),
+      button('Try an example', () => go('brief?example=1'), 'quiet')),
+    !settings.full_name ? h('section', {class: 'profile-nudge'}, h('div', {}, h('strong', {}, 'Your details, ready for every draft'),
+      h('p', {}, 'Add your name, group and contact details once. Sinter will complete the sign-off for you.')),
+      button('Set up my details', () => go('settings'), 'primary')) : null,
     pending.length ? h('section', {class: 'resume-strip', 'aria-label': 'Continue an unsaved project'},
       h('span', {class: 'muted'}, 'Still in this session'),
       ...pending.map(([kind, data]) => button(`Continue: ${data.title || data.book?.title || kind}`, () => go(kind), 'quiet'))) : null,
@@ -33,6 +26,9 @@ export function home(go, drafts) {
       h('article', {class: 'card workflow-card'}, h('span', {class: 'card-index', 'aria-hidden': 'true'}, String(position + 1).padStart(2, '0')),
         h('span', {class: 'eyebrow'}, category), h('h3', {}, title), h('p', {}, description), h('small', {class: 'outcome'}, outcome),
         h('div', {class: 'button-row'}, button(label, () => go(id), 'primary'), button('See example', () => go(`${id}?example=1`), 'quiet'))))),
+    h('section', {class: 'card secondary-tools'}, h('span', {class: 'eyebrow'}, 'FUNDING CAMPAIGNS'), h('h3', {}, 'Keep the whole application together.'),
+      h('p', {}, 'Compare opportunities, prepare answers, record quotes and turn missing checks into next actions. Saved on this computer, with the original guidance beside the work.'),
+      button('Open funding campaigns', () => go('campaigns'), 'primary')),
     h('section', {class: 'card secondary-tools'}, h('span', {class: 'eyebrow'}, 'NEW / COMMUNITY CASEBOOKS'), h('h3', {}, 'Scattered information. Connected work.'),
       h('p', {}, 'Bring notes, replies, policies and handovers together. Save a project, ask your questions, and prepare a source-only briefing with the gaps still visible.'),
       button('Open community casebooks', () => go('casebooks'), 'primary')),

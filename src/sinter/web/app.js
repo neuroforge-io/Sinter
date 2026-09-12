@@ -1,4 +1,5 @@
 import {casebooksPage} from './casebooks.js';
+import {campaignsPage} from './campaigns.js';
 import {activityPage} from './activity.js';
 import {settingsPage, applyAppearance} from './settings.js';
 import {atlasPage} from './atlas.js';
@@ -68,19 +69,27 @@ async function route() {
   view.firstElementChild?.dispose?.();
   view.replaceChildren(notice('Opening your workspace...'));
   try {
-    const options = {setBusy, remember, seed: drafts.get(id) || {}, example: new URLSearchParams(query || '').get('example') === '1'};
+    const options = {setBusy, remember, seed: drafts.get(id) || {}, example: new URLSearchParams(query || '').get('example') === '1',
+      onDraftWithModel: payload => {
+        drafts.set('explore', {mode: 'templates', template: 'enquiry-letter', signatory: payload.signatory,
+          sender_role: payload.sender_role, organisation: payload.organisation, contact_details: payload.contact_details,
+          variables: {recipient: payload.recipient, questions: payload.questions,
+            context: [payload.title, payload.notes, ...(payload.sources || []).map(source => `${source.title}\n${source.content}\n${source.url || ''}`)].filter(Boolean).join('\n\n')}});
+        go('explore');
+      }};
     let content;
     if (['research', 'grants', 'brief', 'meeting'].includes(id)) content = await workbench(id, options);
     else if (id === 'casebooks') content = await casebooksPage(options);
+    else if (id === 'campaigns') content = await campaignsPage(options);
     else if (id === 'activity') content = await activityPage();
-    else if (id === 'library') content = await library();
+    else if (id === 'library') content = await library({onEditProject: payload => { drafts.set(payload.workflow, payload); go(payload.workflow); }});
     else if (id === 'watches') content = await watches(options);
     else if (id === 'explore') content = await playground(options);
     else if (id === 'atlas') content = atlasPage(options);
     else if (id === 'tools') content = communityPage(options);
     else if (id === 'settings') content = await settingsPage();
     else if (id === 'help') content = help();
-    else content = home(go, drafts);
+    else content = home(go, drafts, (await request('/api/settings')).settings);
     if (sequence !== routeSequence) return;
     view.replaceChildren(content); document.getElementById('content').focus({preventScroll: true}); window.scrollTo(0, 0);
   } catch (error) { if (sequence === routeSequence) view.replaceChildren(notice(error.message, 'error'), button('Try again', route)); }

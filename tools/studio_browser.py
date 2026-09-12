@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> None:
                 expect(page.get_by_label('Your notes and context', exact=True)).to_have_value('No spending has been approved.')
                 page.get_by_role('link', name='Meeting minutes', exact=True).click()
                 # A label shared by two routes can otherwise match the outgoing page.
-                expect(page.get_by_role('heading', name='A clearer record. Not a different story.', exact=True)).to_be_visible()
+                expect(page.get_by_role('heading', name='Prepare a clear meeting record.', exact=True)).to_be_visible()
                 page.get_by_label('Project name', exact=True).fill('Review test')
                 expect(page.get_by_label('Project name', exact=True)).to_have_value('Review test')
                 page.get_by_text('Start with an audio recording (optional)', exact=True).click()

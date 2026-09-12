@@ -2,17 +2,19 @@ import {h, button, field, selectField, check, notice, announce} from './ui.js';
 import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
 import {audioForm} from './audio.js';
+import {senderFields} from './profile.js';
 
-const titles = {research: 'A good question deserves good sources.', grants: 'Find funding for good ideas.', brief: 'Bring the whole picture together.', meeting: 'A clearer record. Not a different story.'};
+const titles = {research: 'Research a topic.', grants: 'Find funding for good ideas.', brief: 'Write a letter that is ready to use.', meeting: 'Prepare a clear meeting record.'};
 const descriptions = {
   research: 'Explore a topic through source highlights, citations and gaps to investigate. Keep the original wording within reach.',
   grants: 'Discover opportunities, then check actual requirements. No invented deadlines or automatic eligibility decisions.',
-  brief: 'Gather notes, questions and references into a source-linked briefing and a ready-to-edit enquiry letter.',
+  brief: 'Add the context and what you need to know. Your saved details complete the sign-off; supporting sources stay attached.',
   meeting: 'Import a transcript or transcribe audio locally. Confirm speakers and corrections before preparing draft minutes.'
 };
 
-export async function workbench(kind, {example = false, seed = {}, setBusy, remember}) {
-  const data = example ? await request(`/api/example?workflow=${kind}`) : seed;
+export async function workbench(kind, {example = false, seed = {}, setBusy, remember, onDraftWithModel}) {
+  const [data, preferences] = await Promise.all([example ? request(`/api/example?workflow=${kind}`) : seed, request('/api/settings')]);
+  const settings = example ? {} : preferences.settings;
   const root = h('div', {class: 'workbench-page'});
   const demo = Boolean(data.demo);
   const sources = [...(data.sources || [])];
@@ -32,20 +34,19 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     if (kind === 'research' && !queryEdited) query.input.value = title.input.value;
   });
   const ranking = check('Let Fracture rank a small set of source excerpts', !demo && Boolean(data.use_model));
-  const org = field('Organisation type', 'text', data.profile?.organisation_type || '', 'For example: incorporated P&C association.');
-  const location = field('Location', 'text', data.profile?.location || '');
+  const org = field('Organisation type', 'text', data.profile?.organisation_type ?? settings.organisation_type ?? '', 'Use your actual legal structure, such as a state-school P&C association.');
+  const location = field('Location', 'text', data.profile?.location ?? settings.location ?? '');
   const budget = field('Project budget', 'number', data.profile?.budget || '', 'Numbers only; record currency in your notes.', {min: '0', step: 'any'});
   const state = () => ({workflow: kind, title: title.input.value, notes: notes.input.value,
     questions: kind === 'meeting' ? '' : questions.input.value, query: kind === 'meeting' ? '' : query.input.value,
     use_search: kind !== 'meeting' && !demo && search.input.checked,
     use_model: kind !== 'meeting' && !demo && ranking.input.checked,
     demo, sources: [...sources], speaker_map: {...speakerMap}, corrections,
-    document_type: documentType.input.value, recipient: recipient.input.value, signatory: signatory.input.value, organisation: organisation.input.value,
+    document_type: documentType.input.value, recipient: recipient.input.value, ...sender.values(),
     profile: {organisation_type: org.input.value, location: location.input.value, budget: budget.input.value}});
   const documentType = selectField('What are you preparing?', [['enquiry', 'Enquiry letter'], ['briefing', 'Briefing note'], ['agenda', 'Agenda item for discussion']], data.document_type || 'enquiry');
   const recipient = field('Recipient or audience', 'text', data.recipient || '', '', {maxLength: 200});
-  const signatory = field('Your name or role', 'text', data.signatory || '', '', {maxLength: 200});
-  const organisation = field('Organisation name', 'text', data.organisation || '', '', {maxLength: 200});
+  const sender = senderFields(data, settings);
   const form = h('form', {class: 'form-panel non-print'});
   const inputSummary = h('summary', {hidden: true}, 'Review or edit project inputs');
   const inputPanel = h('details', {class: 'project-inputs non-print', open: true}, inputSummary, form);
@@ -73,7 +74,9 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     try {
       const job = await request('/api/workbench', {data: payload}); jobId = job.id;
       const report = await waitForJob(jobId, value => { status.textContent = value.message || 'Preparing...'; });
-      results.replaceChildren(renderReport(report, {onCorrect: async changes => {
+      report.input_snapshot = payload;
+      report.profile = payload.profile;
+      results.replaceChildren(renderReport(report, {onEditInputs: () => { inputPanel.open = true; inputPanel.scrollIntoView({block: 'start'}); }, onCorrect: async changes => {
         corrections = changes; await perform({...lastPayload, corrections});
       }}));
       status.textContent = 'Draft ready. Review sources before using it.';
@@ -81,6 +84,10 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
       announce('Your draft is ready for review.'); results.scrollIntoView({block: 'start'});
     } catch (error) {
       feedback.replaceChildren(notice(error.message, 'error'));
+      if (payload.use_search) feedback.append(h('p', {}, 'Your inputs are safe. You can retry, or add official reference text and prepare without web search.'),
+        button('Continue with my notes and references', () => {
+          search.input.checked = false; updateScope(); perform({...payload, use_search: false});
+        }, 'quiet'));
       status.textContent = 'Not completed. Your inputs and previous report are unchanged.';
     } finally {
       fields.disabled = false; cancel.hidden = true; jobId = null; running = false; setBusy(false); remember(kind, state());
@@ -92,7 +99,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   if (kind === 'brief') fields.append(documentType.wrap);
   fields.append(title.wrap);
   if (kind === 'research' && !demo) fields.append(search.wrap, query.wrap);
-  if (kind === 'brief') fields.append(h('details', {}, h('summary', {}, 'Recipient and sign-off (optional)'), recipient.wrap, signatory.wrap, organisation.wrap));
+  if (kind === 'brief') fields.append(recipient.wrap, sender.panel);
   if (kind === 'grants') fields.append(h('details', {}, h('summary', {}, 'About your organisation (optional)'),
     h('div', {class: 'form-grid'}, org.wrap, location.wrap, budget.wrap)));
   fields.append(kind === 'research' ? h('details', {}, h('summary', {}, 'Add your notes (optional)'), notes.wrap) : notes.wrap);
@@ -161,12 +168,16 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   }
   const prepare = h('div', {class: 'prepare-bar'}, scope,
     h('button', {type: 'submit', class: 'button primary'}, kind === 'research' ? 'Prepare research brief' : 'Prepare my draft'));
+  if (kind === 'brief' && !demo && onDraftWithModel) prepare.append(button('Draft with Fracture', () => {
+    if (!form.reportValidity()) return;
+    const payload = state(); remember(kind, payload); onDraftWithModel(payload);
+  }, 'quiet'), h('p', {class: 'fine'}, 'Opens a guided draft with these inputs for you to review before sending them to the model.'));
   fields.append(h('h3', {class: 'form-section-title'}, 'Review and prepare'), prepare);
   form.append(fields, status, h('div', {class: 'button-row'}, cancel), feedback);
   root.append(h('header', {class: 'page-intro non-print'}, h('span', {class: 'eyebrow'}, 'COMMUNITY WORKBENCH'),
     h('h2', {}, titles[kind]), h('p', {}, descriptions[kind])),
     h('div', {class: 'non-print'}, demo ? notice('OFFLINE EXAMPLE / All people, programmes and details are fictional. Start a new project from Home for real data.') :
-      notice('Work stays in this session until you save it. Reloading loses unsaved drafts. Review before sending; Sinter never sends letters or approves minutes.')), inputPanel, results);
+      h('p', {class: 'workspace-hint'}, 'Save your finished draft to keep it in My workspace. ', h('a', {href: '#settings'}, 'Set up your details'))), inputPanel, results);
   root.dispose = () => root.querySelectorAll('[data-audio-panel]').forEach(panel => panel.dispose?.());
   return root;
 }
