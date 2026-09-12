@@ -3,6 +3,7 @@ import {h, button} from './ui.js';
 /** Overview is intentionally separate from routing and task execution. */
 export function home(go, drafts) {
   const cards = [
+    ['research', '01', 'RESEARCH', 'Follow the evidence.', 'Explore a topic through source excerpts, clear citations and questions worth asking next.', 'Research a topic', 'A research brief with highlights and gaps'],
     ['grants', '01', 'FUNDING', 'Find the right opportunity.', 'Discover funding, check the requirements and keep a watch on what changes.', 'Find funding', 'A shortlist with sources and open questions'],
     ['brief', '02', 'RESEARCH & WRITING', 'Make your case clearly.', 'Turn notes and references into an evidence pack, enquiry letter or agenda item.', 'Build a brief', 'A reviewable draft and evidence register'],
     ['meeting', '03', 'MEETINGS', 'Keep a reliable record.', 'Import a transcript, or transcribe in a speech-enabled installation. Confirm speakers and prepare traceable draft minutes.', 'Prepare minutes', 'A transcript, review queue and draft minutes']
@@ -28,8 +29,8 @@ export function home(go, drafts) {
       ...pending.map(([kind, data]) => button(`Continue: ${data.title || data.book?.title || kind}`, () => go(kind), 'quiet'))) : null,
     h('div', {class: 'section-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, 'START WITH A REAL TASK'),
       h('h2', {}, 'What would you like to get done?')), h('span', {class: 'muted'}, 'No clever prompting needed.')),
-    h('div', {class: 'card-grid'}, cards.map(([id, index, category, title, description, label, outcome]) =>
-      h('article', {class: 'card workflow-card'}, h('span', {class: 'card-index', 'aria-hidden': 'true'}, index),
+    h('div', {class: 'card-grid task-grid'}, cards.map(([id, index, category, title, description, label, outcome], position) =>
+      h('article', {class: 'card workflow-card'}, h('span', {class: 'card-index', 'aria-hidden': 'true'}, String(position + 1).padStart(2, '0')),
         h('span', {class: 'eyebrow'}, category), h('h3', {}, title), h('p', {}, description), h('small', {class: 'outcome'}, outcome),
         h('div', {class: 'button-row'}, button(label, () => go(id), 'primary'), button('See example', () => go(`${id}?example=1`), 'quiet'))))),
     h('section', {class: 'card secondary-tools'}, h('span', {class: 'eyebrow'}, 'NEW / COMMUNITY CASEBOOKS'), h('h3', {}, 'Scattered information. Connected work.'),

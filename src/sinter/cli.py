@@ -172,7 +172,9 @@ def _dispatch(args) -> None:
                 print("" if streamed else event["content"])
                 results.append("## " + event["step"] + "\n\n" + event["content"])
                 if output:
-                    _write(output, "# Model-generated draft - review required\n\n" + "\n\n".join(results))
+                    source_register = ("\n\n## Source register\n\n" + "\n".join(dict.fromkeys(references))) if references else ""
+                    _write(output, "# Model-generated draft - INCOMPLETE until all steps finish\n\n"
+                           + "\n\n".join(results) + source_register)
             elif event["type"] == "step_partial":
                 print("" if streamed else event["content"])
                 print(f"INCOMPLETE: {event['step']}. {event['error']}", file=sys.stderr)

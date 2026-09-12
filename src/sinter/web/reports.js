@@ -25,7 +25,7 @@ export function renderReport(report, {onCorrect} = {}) {
   const sources = h('aside', {class: 'sources-panel non-print', 'aria-label': 'Source register'},
     h('h3', {}, 'Follow the evidence'), h('p', {class: 'muted'}, 'A citation shows where text came from, not that it is true.'));
   for (const source of report.sources || []) {
-    sources.append(h('details', {class: 'source'}, h('summary', {}, source.title),
+    sources.append(h('details', {class: 'source source-jump', 'data-source-id': source.id}, h('summary', {}, source.title),
       h('p', {class: 'source-id'}, source.id + ' / ' + source.kind),
       source.url ? safeLink(source.url, 'Open the source') : h('p', {}, 'Supplied locally; no public link.'),
       h('p', {class: 'muted'}, 'Retrieved / imported: ' + source.retrieved_at),
@@ -33,16 +33,49 @@ export function renderReport(report, {onCorrect} = {}) {
   }
   result.append(h('header', {class: 'report-header'},
     h('div', {}, h('span', {class: 'badge warm'}, 'DRAFT / REVIEW REQUIRED'), h('h2', {}, 'Your work, with the receipts.')), controls),
-    message, h('div', {class: 'non-print stack'}, (report.warnings || []).map(item => notice(item))),
+    message, h('div', {class: 'report-summary non-print', 'aria-label': 'Report at a glance'},
+      h('div', {class: 'report-stat'}, h('strong', {}, (report.sources || []).length), h('small', {}, 'Sources retained')),
+      h('div', {class: 'report-stat'}, h('strong', {}, (report.segments || report.excerpts || []).length), h('small', {}, report.segments ? 'Transcript passages' : 'Selected excerpts')),
+      report.question_index?.length ? h('div', {class: 'report-stat'}, h('strong', {}, report.question_index.length), h('small', {}, 'Questions to investigate')) : null),
+    (report.warnings || []).length ? h('details', {class: 'report-notes non-print'},
+      h('summary', {}, `${report.warnings.length} review notes · source limits and checks`),
+      h('ul', {}, report.warnings.map(item => h('li', {}, item)))) : null,
     h('div', {class: 'report-layout'}, article, sources));
+  connectCitations(article, report, sources);
   if (report.workflow === 'grants' && report.sources?.length) {
     result.append(grantChecks(report, () => {
-      const updated = markdown(report.markdown); article.replaceWith(updated); article = updated;
+      const updated = markdown(report.markdown); connectCitations(updated, report, sources); article.replaceWith(updated); article = updated;
       save.disabled = false; message.replaceChildren(notice('The report changed. Save a new copy to retain these checks.'));
     }));
   }
   if (onCorrect && report.segments?.length) result.append(correctionForm(report, onCorrect));
   return result;
+}
+
+/** Source IDs become local disclosure controls; no navigation or HTML parsing. */
+function connectCitations(article, report, sources) {
+  const references = new Map((report.sources || []).map(item => [item.id, item.id]));
+  for (const item of report.excerpts || []) references.set(item.id, item.source_id);
+  for (const question of report.question_index || []) for (const item of question.matches || []) references.set(item.excerpt_id, item.source_id);
+  const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
+  const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const matches = [...node.textContent.matchAll(/\b[SE][a-f0-9]{16}\b/g)].filter(match => references.has(match[0]));
+    if (!matches.length) continue;
+    const fragment = document.createDocumentFragment(); let start = 0;
+    for (const match of matches) {
+      fragment.append(document.createTextNode(node.textContent.slice(start, match.index)));
+      const sourceId = references.get(match[0]);
+      const parent = (report.sources || []).find(item => item.id === sourceId);
+      const jump = button(match[0], () => {
+        const source = [...sources.querySelectorAll('details')].find(item => item.dataset.sourceId === sourceId);
+        if (source) { source.open = true; source.scrollIntoView({block: 'center'}); source.querySelector('summary').focus({preventScroll: true}); }
+      }, 'citation-link');
+      jump.setAttribute('aria-label', `Show source: ${parent?.title || sourceId}`);
+      fragment.append(jump); start = match.index + match[0].length;
+    }
+    fragment.append(document.createTextNode(node.textContent.slice(start))); node.replaceWith(fragment);
+  }
 }
 
 function grantChecks(report, update) {

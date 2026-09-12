@@ -85,6 +85,7 @@ class Jobs:
                 with self._lock:
                     job.completed_at = time.time()
                     job.status, job.error = "failed", str(exc)
+                    job.result = getattr(exc, "partial_result", None)
             except Exception:
                 log.exception("A workbench job failed")
                 with self._lock:
@@ -117,7 +118,7 @@ class Jobs:
             self._purge()
             return [{"id": j.id, "status": j.status, "message": j.message, "error": j.error,
                      "created_at": j.created_at, "completed_at": j.completed_at, "started_at": j.started_at,
-                     "label": j.label, "cancel_requested": j.cancel.is_set()}
+                     "label": j.label, "cancel_requested": j.cancel.is_set(), "has_result": j.result is not None}
                     for j in sorted(self._jobs.values(), key=lambda j: j.created_at, reverse=True)]
 
     def cancel(self, identifier: str) -> None:

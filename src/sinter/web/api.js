@@ -21,7 +21,7 @@ export async function request(path, {data, signal, method = data === undefined ?
     const response = await fetch(path, {method, headers, cache: 'no-store',
       body: data === undefined ? undefined : JSON.stringify(data), signal: controller.signal});
     const result = await response.json();
-    if (!response.ok) { const error = new Error(result.error || result.message || `The request failed (${response.status}).`); error.status = response.status; throw error; }
+    if (!response.ok) { const error = new Error(result.error || result.message || `The request failed (${response.status}).`); error.status = response.status; error.partialResult = result.partial_result; throw error; }
     return result;
   } catch (error) {
     if (error.name === 'TypeError') throw new Error('Cannot reach the local Sinter app. Keep the launcher window open, then retry.');
@@ -113,7 +113,7 @@ export async function waitForJob(id, onStatus = () => {}) {
     }
     onStatus(job);
     if (job.status === 'done') return job.result;
-    if (job.status === 'failed') throw new Error(job.error);
+    if (job.status === 'failed') { const error = new Error(job.error); error.partialResult = job.result; error.jobId = id; throw error; }
     if (job.status === 'cancelled') throw new Error('Cancelled. No report was saved.');
     await new Promise(resolve => setTimeout(resolve, delay));
     delay = Math.min(delay + 100, 2000);

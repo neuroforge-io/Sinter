@@ -23,7 +23,14 @@ export async function settingsPage() {
   const motion = check('Reduce movement and animation', s.reduce_motion);
   const url = field('API address', 'url', s.api_url, 'Default: NeuroForge Fracture. Remote connections must use HTTPS.');
   const model = field('Model identifier', 'text', s.model);
-  const length = selectField('Maximum answer length', [['512', 'Shorter / 512 tokens'], ['2048', 'Balanced / 2,048 tokens'], ['8192', 'Longer / 8,192 tokens']], String(s.max_tokens));
+  const length = field('Maximum answer length', 'number', s.max_tokens,
+    'Output tokens per step. The public API accepts 32–2,048; some custom providers allow up to 8,192. Small limits can leave drafts incomplete.',
+    {min: 32, max: 8192, step: 1, required: true});
+  function updateLengthLimit() {
+    try { const parsed = new URL(url.input.value); length.input.max = parsed.hostname === 'neuroforge.io' && parsed.pathname.replace(/\/$/, '') === '/v1' ? '2048' : '8192'; }
+    catch { length.input.max = '8192'; }
+  }
+  url.input.addEventListener('input', updateLengthLimit); updateLengthLimit();
   const key = field('Optional API key for this session', 'password', '', 'Not saved to disk. Leave untouched to retain the current session key.', {autocomplete: 'off'});
   const port = field('Local RKC port', 'number', s.rkc_port, 'For an already-running local RKC context service.', {min: 1024, max: 65535});
   const executable = field('Installed RKC executable', 'text', s.rkc_executable, 'Optional absolute path. Used only when you explicitly compile a selected collection.');
@@ -32,7 +39,7 @@ export async function settingsPage() {
   let keyEdited = false;
   key.input.addEventListener('input', () => { keyEdited = true; });
   const save = button('Save my preferences', async () => {
-    if (![url, model, port, organisation].every(f => f.input.reportValidity())) return;
+    if (![url, model, port, organisation, length].every(f => f.input.reportValidity())) return;
     save.disabled = true;
     try {
       const next = {...s, organisation: organisation.input.value, theme: theme.input.value, text_size: size.input.value,

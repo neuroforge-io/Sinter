@@ -55,10 +55,13 @@ def sections(
     for row in index:
         lines.append("### " + literal(row["question"]))
         if row["matches"]:
-            lines.append("Start with: " + "; ".join(
-                f"{literal(by_id[match['source_id']].title)} [{match['excerpt_id']}]"
-                for match in row["matches"]
-            ))
+            for match in row["matches"]:
+                lines.extend([
+                    f"Related wording: {literal(by_id[match['source_id']].title)} "
+                    f"[{match['excerpt_id']}]",
+                    "> " + literal(match["quote"]).replace("\n", "\n> "),
+                    f"Source: {match['source_id']}; characters {match['start']}–{match['end']}.",
+                ])
         else:
             lines.append("No wording match in this collection. Refine the search "
                          "or ask the original publisher for clarification.")

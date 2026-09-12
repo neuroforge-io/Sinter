@@ -15,6 +15,7 @@ python tools/build_zipapp.py
 python dist/sinter.pyz --version
 python -m playwright install chromium
 python tools/browser_smoke.py
+python tools/quality_browser.py
 ```
 
 Windows activation: `.venv\Scripts\activate`. Browser integration uses fictional local fixtures and a temporary workspace. It must run in an environment that permits a browser to access its local HTTP server; do not bypass managed browser policies. The Actions workflow provides such an environment.
@@ -85,6 +86,17 @@ sinter watches --run-due
 
 Install with `python -m pip install .` for the `sinter` command. `python -m sinter` is equivalent. Without installation, `python start.py` runs directly from source and opens the workbench.
 
+`sinter` with no arguments prints help and exits. Use `sinter serve` to open the
+workbench explicitly; desktop and source launchers continue to open it directly.
+Research accepts repeated focus questions, for example:
+
+```sh
+sinter research "community garden water planning" -q "What water access is needed?" -o research.md
+```
+
+This compiles source excerpts into a research brief. `sinter template research`
+is the separate, model-generated exploration workflow and is labelled accordingly.
+
 ## Custom templates
 
 Add JSON or supported YAML to `~/.sinter/templates/`. Templates appear as `user:NAME` in the UI and CLI. JSON is recommended for complex prompts:
@@ -103,16 +115,34 @@ Add JSON or supported YAML to `~/.sinter/templates/`. Templates appear as `user:
 
 The dependency-free YAML subset supports indented variables/steps and quoted one-line scalars. Block scalars, tags, anchors and inline collections are rejected. Malformed files do not prevent startup. Shared template execution preserves history and search URLs and reports incomplete streams explicitly.
 
+Templates may set a top-level `system_prompt` and a per-step `include_history`
+boolean (default `true`). For focused multi-step work, set `include_history: false`
+and explicitly include original variables plus `{{previous}}` in each drafting and
+checking prompt. This keeps the source context available without copying the full
+conversation into every step. Source text remains untrusted data.
+
+Output limits are 32–8,192 tokens for compatible custom providers; the public
+NeuroForge endpoint accepts at most 2,048. It also accepts at most 49,152 UTF-8 bytes
+of alternating user/assistant messages and 8,192 bytes of initial system instructions.
+Admission failures are local validation errors. A length-limited template step
+emits `step_partial` before failing; dependent steps do not run. JSON errors include
+`partial_result`, failed jobs retain it for Recent activity, and streamed output
+can be downloaded with its incomplete label. No generation is automatically replayed.
+
 ## Module boundaries
 
 | Module | Responsibility |
 | --- | --- |
 | `client.py`, `templates.py`, `recipes.py` | Public API transport and explicitly generative exploration. |
+| `template_runs.py` | Shared collection of complete and recoverable partial template output. |
 | `evidence.py`, `briefs.py`, `grants.py`, `workbench.py` | Source-constrained compilation, question navigation and conservative checks. |
+| `research.py` | Source-backed research formatting and visible question-to-excerpt coverage. |
 | `meetings.py`, `speech.py`, `transcript_export.py` | Transcript integrity, optional recognition and interchange exports. |
 | `casebooks.py`, `review.py` | Revisioned source collections, bounded admission, checkpointed reviews and coverage. |
+| `review_checkpoints.py` | Safe output paths and bounded, identity-preserving checkpoint discovery. |
 | `store.py`, `jobs.py`, `server.py` | Persistence, bounded work, cancellation and local HTTP. |
 | `web/home.js`, `web/app.js`, `web/workbench.js` | Overview, routing and guided tasks. |
+| `web/navigation.js` | One tool registry for navigation, page labels and the keyboard finder. |
 | `web/audio.js`, `web/transcription.js` | Local playback, transcription controls and passage review. |
 
 Native HTML/CSS/JavaScript are shipped without a frontend build step or external fonts. External text is never inserted through `innerHTML`. Keep source truth, model suggestions and human edits distinguishable. New features need regression tests, understandable failure states and an explicit privacy boundary.

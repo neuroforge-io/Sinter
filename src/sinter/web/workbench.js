@@ -3,8 +3,9 @@ import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
 import {audioForm} from './audio.js';
 
-const titles = {grants: 'Find funding for good ideas.', brief: 'Bring the whole picture together.', meeting: 'A clearer record. Not a different story.'};
+const titles = {research: 'A good question deserves good sources.', grants: 'Find funding for good ideas.', brief: 'Bring the whole picture together.', meeting: 'A clearer record. Not a different story.'};
 const descriptions = {
+  research: 'Explore a topic through source highlights, citations and gaps to investigate. Keep the original wording within reach.',
   grants: 'Discover opportunities, then check actual requirements. No invented deadlines or automatic eligibility decisions.',
   brief: 'Gather notes, questions and references into a source-linked briefing and a ready-to-edit enquiry letter.',
   meeting: 'Import a transcript or transcribe audio locally. Confirm speakers and corrections before preparing draft minutes.'
@@ -12,18 +13,24 @@ const descriptions = {
 
 export async function workbench(kind, {example = false, seed = {}, setBusy, remember}) {
   const data = example ? await request(`/api/example?workflow=${kind}`) : seed;
-  const root = h('div');
+  const root = h('div', {class: 'workbench-page'});
   const demo = Boolean(data.demo);
   const sources = [...(data.sources || [])];
   let speakerMap = {...(data.speaker_map || {})}, corrections = [...(data.corrections || [])];
   let running = false, lastPayload, jobId;
-  const title = field('Project name', 'text', data.title || '', 'A name you will recognise later.', {required: true, maxLength: 200});
+  const title = field(kind === 'research' ? 'Research topic' : 'Project name', 'text', data.title || '', 'A name you will recognise later.', {required: true, maxLength: 200});
   const notes = field(kind === 'meeting' ? 'Transcript' : 'Your notes and context', 'textarea', data.notes || '',
     kind === 'meeting' ? 'Paste Speaker: words, or import TXT, SRT, VTT or JSON segments. Unlabelled turns remain unidentified.'
       : 'Keep original wording where it matters. Notes are labelled as notes, not verified facts.', {rows: 7, maxLength: kind === 'meeting' ? 1000000 : 200000});
   const questions = field('Questions you need answered', 'textarea', data.questions || '', 'One question per line works well.', {rows: 4, maxLength: 12000});
   const query = field('Exact web search query', 'text', data.query || '', 'Only this query is sent to NeuroForge search. Avoid names and private details.', {maxLength: 1024});
-  const search = check('Search the web for related material', !demo && (data.use_search ?? kind === 'grants'));
+  const search = check('Search the web for related material', !demo && (data.use_search ?? ['grants', 'research'].includes(kind)));
+  if (kind === 'research' && !data.query) query.input.value = data.title || '';
+  let queryEdited = Boolean(data.query && data.query !== data.title);
+  query.input.addEventListener('input', () => { queryEdited = true; });
+  title.input.addEventListener('input', () => {
+    if (kind === 'research' && !queryEdited) query.input.value = title.input.value;
+  });
   const ranking = check('Let Fracture rank a small set of source excerpts', !demo && Boolean(data.use_model));
   const org = field('Organisation type', 'text', data.profile?.organisation_type || '', 'For example: incorporated P&C association.');
   const location = field('Location', 'text', data.profile?.location || '');
@@ -40,8 +47,17 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   const signatory = field('Your name or role', 'text', data.signatory || '', '', {maxLength: 200});
   const organisation = field('Organisation name', 'text', data.organisation || '', '', {maxLength: 200});
   const form = h('form', {class: 'form-panel non-print'});
+  const inputSummary = h('summary', {hidden: true}, 'Review or edit project inputs');
+  const inputPanel = h('details', {class: 'project-inputs non-print', open: true}, inputSummary, form);
   const fields = h('fieldset', {}, h('legend', {class: 'sr-only'}, 'Project inputs'));
   const feedback = h('div', {'aria-live': 'polite'}), results = h('div');
+  const scope = h('p', {class: 'run-scope'});
+  function updateScope() {
+    scope.textContent = demo ? 'Offline example · No external requests' : kind === 'meeting' || (!search.input.checked && !ranking.input.checked) ?
+      'On this computer · No external requests' : `Uses your configured API · ${search.input.checked ? 'Search query' : ''}${search.input.checked && ranking.input.checked ? ' + ' : ''}${ranking.input.checked ? 'selected source excerpts' : ''}`;
+    query.input.required = !demo && kind !== 'meeting' && search.input.checked;
+  }
+  search.input.addEventListener('change', updateScope); ranking.input.addEventListener('change', updateScope); updateScope();
   const status = h('div', {class: 'progress', role: 'status'});
   const cancel = button('Cancel', async () => {
     if (jobId) await request('/api/jobs/cancel', {data: {id: jobId}})
@@ -50,7 +66,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   cancel.hidden = true;
   async function perform(payload) {
     if (running) return;
-    if (!title.input.value.trim()) { title.input.reportValidity(); return; }
+    if (!form.reportValidity()) return;
     running = true; setBusy(true); fields.disabled = true; feedback.replaceChildren();
     status.textContent = 'Starting your evidence pack...'; cancel.hidden = false;
     lastPayload = payload;
@@ -61,6 +77,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
         corrections = changes; await perform({...lastPayload, corrections});
       }}));
       status.textContent = 'Draft ready. Review sources before using it.';
+      inputSummary.hidden = false; inputPanel.open = false;
       announce('Your draft is ready for review.'); results.scrollIntoView({block: 'start'});
     } catch (error) {
       feedback.replaceChildren(notice(error.message, 'error'));
@@ -74,10 +91,11 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   fields.append(h('h3', {class: 'form-section-title'}, '1. Set the context'));
   if (kind === 'brief') fields.append(documentType.wrap);
   fields.append(title.wrap);
+  if (kind === 'research' && !demo) fields.append(search.wrap, query.wrap);
   if (kind === 'brief') fields.append(h('details', {}, h('summary', {}, 'Recipient and sign-off (optional)'), recipient.wrap, signatory.wrap, organisation.wrap));
   if (kind === 'grants') fields.append(h('details', {}, h('summary', {}, 'About your organisation (optional)'),
     h('div', {class: 'form-grid'}, org.wrap, location.wrap, budget.wrap)));
-  fields.append(notes.wrap);
+  fields.append(kind === 'research' ? h('details', {}, h('summary', {}, 'Add your notes (optional)'), notes.wrap) : notes.wrap);
   const imported = field(kind === 'meeting' ? 'Import a transcript file' : 'Add text files as context', 'file', '',
     'Text and Markdown are supported. Meeting imports also accept JSON, VTT and SRT. Imports remain local unless you enable excerpt ranking.',
     {accept: kind === 'meeting' ? '.txt,.md,.json,.vtt,.srt' : '.txt,.md', multiple: kind !== 'meeting'});
@@ -100,10 +118,13 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
       feedback.replaceChildren(notice('Imported locally. Review the text before continuing.', 'success'));
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
   });
-  fields.append(imported.wrap); refreshSources();
+  fields.append(kind === 'research' ? h('details', {}, h('summary', {}, 'Import text files (optional)'), imported.wrap) : imported.wrap); refreshSources();
   if (kind !== 'meeting') {
-    fields.append(h('h3', {class: 'form-section-title'}, '2. Add questions and references'), questions.wrap, referenceForm(sources, refreshSources, () => remember(kind, state())), sourceList,
-      h('details', {open: kind === 'grants'}, h('summary', {}, 'Search & public API options'), search.wrap, query.wrap,
+    fields.append(h('h3', {class: 'form-section-title'}, kind === 'research' ? '2. Focus your research (optional)' : '2. Add questions and references'),
+      kind === 'research' ? h('details', {}, h('summary', {}, 'Add focus questions'), questions.wrap) : questions.wrap,
+      referenceForm(sources, refreshSources, () => remember(kind, state())), sourceList,
+      h('details', {open: kind === 'grants'}, h('summary', {}, kind === 'research' ? 'Optional source ranking' : 'Search & public API options'),
+        kind === 'research' ? null : [search.wrap, query.wrap],
         ranking.wrap, notice('Search sends the query above. Optional Fracture ranking sends up to six source excerpts and the project question to the configured service. '
           + 'Leave ranking off for sensitive material. Ranking cannot add factual prose to this report.')));
     if (demo) { search.input.disabled = true; ranking.input.disabled = true; }
@@ -138,12 +159,14 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
       remember(kind, state()); feedback.replaceChildren(notice('Transcript inserted. Check names, numbers, negation and unclear words against the recording.', 'success'));
     }, value => { if (value) audioInputSnapshot = notes.input.value; running = value; setBusy(value); }, () => running));
   }
-  fields.append(h('h3', {class: 'form-section-title'}, 'Review and prepare'), h('div', {class: 'button-row'}, h('button', {type: 'submit', class: 'button primary'}, 'Prepare my draft')));
+  const prepare = h('div', {class: 'prepare-bar'}, scope,
+    h('button', {type: 'submit', class: 'button primary'}, kind === 'research' ? 'Prepare research brief' : 'Prepare my draft'));
+  fields.append(h('h3', {class: 'form-section-title'}, 'Review and prepare'), prepare);
   form.append(fields, status, h('div', {class: 'button-row'}, cancel), feedback);
   root.append(h('header', {class: 'page-intro non-print'}, h('span', {class: 'eyebrow'}, 'COMMUNITY WORKBENCH'),
     h('h2', {}, titles[kind]), h('p', {}, descriptions[kind])),
     h('div', {class: 'non-print'}, demo ? notice('OFFLINE EXAMPLE / All people, programmes and details are fictional. Start a new project from Home for real data.') :
-      notice('Work stays in this session until you save it. Reloading loses unsaved drafts. Review before sending; Sinter never sends letters or approves minutes.')), form, results);
+      notice('Work stays in this session until you save it. Reloading loses unsaved drafts. Review before sending; Sinter never sends letters or approves minutes.')), inputPanel, results);
   root.dispose = () => root.querySelectorAll('[data-audio-panel]').forEach(panel => panel.dispose?.());
   return root;
 }

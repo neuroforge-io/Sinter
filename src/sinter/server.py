@@ -174,7 +174,10 @@ class Handler(BaseHTTPRequestHandler):
         except KeyError:
             self._json({"error": "That item was not found or has expired."}, 404)
         except client.APIError as exc:
-            self._json({"error": str(exc)}, exc.status)
+            payload = {"error": str(exc)}
+            if getattr(exc, "partial_result", None) is not None:
+                payload["partial_result"] = exc.partial_result
+            self._json(payload, exc.status)
         except Exception:
             log.exception("A local API operation failed")
             self._json({"error": "Sinter could not complete this operation. Your original inputs are unchanged."}, 500)
@@ -286,12 +289,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(values, dict):
                     raise ValueError("Template variables must be an object.")
                 def operation(progress):
-                    results, sources = [], []
-                    for event in template_events(template, values, stream=False):
-                        if event["type"] == "step": progress(event["name"])
-                        elif event["type"] == "step_done": results.append(event)
-                        elif event["type"] == "sources": sources.append(event)
-                    return {"results": results, "sources": sources}
+                    from .template_runs import collect_run
+                    return collect_run(template, values, progress)
             self._json({"id": self.app.jobs.submit(operation, label="Model task", timeout=900)}, 202)
         elif path == "/api/atlas/inspect":
             self._json(atlas.inspect(body.get("document")))
@@ -335,9 +334,8 @@ class Handler(BaseHTTPRequestHandler):
             if path.endswith("/stream"):
                 self._stream(events)
             else:
-                collected = list(events)
-                self._json({"results": [event for event in collected if event["type"] == "step_done"],
-                            "sources": [event for event in collected if event["type"] == "sources"]})
+                from .template_runs import collect_run
+                self._json(collect_run(template, variables))
         elif path == "/api/workbench":
             self._json({"id": self.app.jobs.submit(lambda progress: workbench.run(body, progress), label="Community report")}, 202)
         elif path == "/api/jobs/cancel":

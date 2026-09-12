@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .client import BASE_URL, MODEL, safe_url
+from .client import BASE_URL, MODEL, PUBLIC_MAX_OUTPUT_TOKENS, safe_url, validate_max_tokens
 
 DEFAULTS = {
     'schema_version': 1, 'organisation': '', 'theme': 'dark', 'text_size': 'normal',
@@ -33,8 +33,7 @@ def validate(values: dict) -> dict:
             raise ValueError('Choose one of the offered appearance settings.')
     if type(result['reduce_motion']) is not bool or type(result['schema_version']) is not int or result['schema_version'] != 1:
         raise ValueError('Unsupported settings version or motion preference.')
-    if type(result['max_tokens']) is not int or not 128 <= result['max_tokens'] <= 8192:
-        raise ValueError('Answer length must be between 128 and 8192 tokens.')
+    validate_max_tokens(result['max_tokens'])
     if type(result['rkc_port']) is not int or not 1024 <= result['rkc_port'] <= 65535:
         raise ValueError('Choose an RKC port from 1024 to 65535.')
     url = result['api_url'].rstrip('/')
@@ -46,6 +45,8 @@ def validate(values: dict) -> dict:
     if not result['model'] or not re.fullmatch(r'[A-Za-z0-9_./:@+-]{1,200}', result['model']):
         raise ValueError('Enter the model identifier supplied by your provider.')
     result['api_url'] = url
+    if parsed.hostname == 'neuroforge.io' and parsed.path.rstrip('/') == '/v1' and result['max_tokens'] > PUBLIC_MAX_OUTPUT_TOKENS:
+        raise ValueError('The public NeuroForge API supports at most 2,048 output tokens per step. Choose 2,048 or less.')
     return result
 
 

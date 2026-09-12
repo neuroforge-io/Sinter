@@ -9,6 +9,27 @@ from .evidence import Source, literal, text
 FIELDS = {"organisation_type", "location", "budget"}
 
 
+def _requirement_source(rule: dict, sources: list[Source],
+                        by_id: dict[str, Source]) -> tuple[str, Source | None]:
+    """Resolve an exact, unique title to its evidence identity without changing trust."""
+    identifier = text(rule.get("source_id", ""), "Source ID", 100)
+    if "source_title" not in rule:
+        return identifier, by_id.get(identifier)
+    title = text(rule["source_title"], "Source title", 500, True)
+    matches = {item.id: item for item in sources if item.title == title}
+    if not matches:
+        raise ValueError("No source has that exact source_title. Copy a source title "
+                         "exactly, including its capitalisation and spacing.")
+    if len(matches) != 1:
+        raise ValueError("That source_title matches more than one source. Give the "
+                         "sources distinct titles or use source_id alone.")
+    ref = next(iter(matches.values()))
+    if identifier and identifier != ref.id:
+        raise ValueError("source_id and source_title identify different sources. "
+                         "Use one selector or make both identify the same source.")
+    return ref.id, ref
+
+
 def screen(profile: dict, criteria: list[dict], sources: list[Source]) -> dict:
     if not isinstance(profile, dict) or not isinstance(criteria, list) or len(criteria) > 30:
         raise ValueError("Provide an organisation profile and up to 30 requirements.")
@@ -21,8 +42,7 @@ def screen(profile: dict, criteria: list[dict], sources: list[Source]) -> dict:
         if not isinstance(field, str) or not isinstance(op, str) or field not in FIELDS or op not in {"equals", "contains", "minimum", "maximum"}:
             raise ValueError("Unsupported profile field or comparison.")
         quote = text(rule.get("quote", ""), "Requirement wording", 4000)
-        identifier = text(rule.get("source_id", ""), "Source ID", 100)
-        ref = by_id.get(identifier)
+        identifier, ref = _requirement_source(rule, sources, by_id)
         actual, expected = profile.get(field), rule.get("value")
         if isinstance(actual, (dict, list)) or isinstance(expected, (dict, list)):
             raise ValueError("Requirement and profile values must be text or numbers.")
@@ -56,6 +76,7 @@ def screen(profile: dict, criteria: list[dict], sources: list[Source]) -> dict:
             except (ValueError, TypeError, OverflowError):
                 reason = "The values cannot be compared; check units and values."
         checks.append({"field": field, "status": status, "reason": reason, "source_id": identifier,
+                       "source_title": ref.title if ref else "",
                        "quote": quote, "operator": op, "actual": actual, "expected": expected})
     notice = ("These are checks of entered requirements, not an eligibility determination. "
               "Confirm every condition, exclusion, deadline and applicant detail with the funder.")

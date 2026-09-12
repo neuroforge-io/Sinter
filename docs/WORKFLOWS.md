@@ -45,3 +45,51 @@ Data is stored without encryption in `~/.sinter/workspace.sqlite3` (or your `SIN
 **Community tools** prepares action lists from details you enter. Keep unassigned owners and unconfirmed dates blank, export CSV/calendar/JSON or save the result locally. A separate line-oriented comparison shows changed wording; line-ending style and final-newline differences are ignored.
 
 **Knowledge atlases** can use an exported RKC bundle without installing RKC. A running local RKC provides richer context; an explicitly selected executable can compile selected files. Model drafting requires separate transfer consent and never changes canonical atlas evidence. See [the atlas guide](ATLAS.md).
+
+## Funding requirements in a JSON project
+
+When preparing a project for `sinter workbench`, identify each requirement's source
+by its exact `source_title`. You do not need to calculate a source hash. Titles
+must match the supplied source title exactly, including capitalisation and spacing,
+and identify one source. If two sources have the same title, give them distinct
+titles or use the existing `source_id` from a report instead. When both selectors
+are supplied, they must identify the same source; ambiguous or conflicting selectors
+are rejected. Report checks retain the resolved source ID and title for tracing.
+
+This fictional example runs offline. Save it as `funding.json` and run
+`sinter workbench funding.json -o funding-report.json`:
+
+```json
+{
+  "workflow": "grants",
+  "title": "Fictional community project budget check",
+  "use_search": false,
+  "use_model": false,
+  "sources": [
+    {
+      "title": "Fictional funder budget guideline",
+      "kind": "reference_excerpt",
+      "url": "https://example.org/fictional-guidelines",
+      "content": "For this fictional example, project budgets must not exceed $5,000."
+    }
+  ],
+  "profile": {"budget": 4000},
+  "criteria": [
+    {
+      "field": "budget",
+      "operator": "maximum",
+      "value": 5000,
+      "source_title": "Fictional funder budget guideline",
+      "quote": "For this fictional example, project budgets must not exceed $5,000.",
+      "confirmed": false
+    }
+  ]
+}
+```
+
+The example remains **unknown** because `confirmed` is false. For a real project,
+replace the fictional source and quotation with current official guideline text.
+Only set `confirmed` to true after a person checks its authority, currency and
+interpretation. Title selection does not relax the exact-quotation check or make
+notes, transcripts or examples authoritative. A matching comparison is still a
+check of one entered requirement, never an eligibility determination.

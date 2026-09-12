@@ -21,7 +21,7 @@ result = casebooks.build(collection)
 for excerpt in result['excerpts']:
     assert validate_excerpt(Excerpt(**excerpt), [Source(**source) for source in result['sources']])
 ledger = review.run(collection, offline=True)
-for kind in ('brief', 'grants', 'meeting'):
+for kind in workbench.WORKFLOWS:
     assert workbench.run(workbench.example(kind))['workflow'] == kind
 receipt = {'schema': 'sinter-self-audit/v1', 'passed': True, 'network_requests': 0,
            'scope': 'Deterministic collection/provenance and fictional workflow integration; not an independent code audit.',

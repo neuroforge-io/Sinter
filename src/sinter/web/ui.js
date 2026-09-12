@@ -63,6 +63,23 @@ function unescapeLiteral(value) {
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
 
+/** Format a small Markdown subset using text nodes and safe elements only. */
+function inline(value) {
+  const pieces = [];
+  const pattern = /\\[\\`*_{}\[\]#!|]|\*\*([^*\n]+)\*\*|`([^`\n]+)`|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  let start = 0;
+  for (const match of value.matchAll(pattern)) {
+    if (match.index > start) pieces.push(unescapeLiteral(value.slice(start, match.index)));
+    if (match[1] !== undefined) pieces.push(h('strong', {}, unescapeLiteral(match[1])));
+    else if (match[2] !== undefined) pieces.push(h('code', {}, match[2]));
+    else if (match[3] !== undefined) pieces.push(safeLink(match[4], unescapeLiteral(match[3])));
+    else pieces.push(unescapeLiteral(match[0]));
+    start = match.index + match[0].length;
+  }
+  pieces.push(unescapeLiteral(value.slice(start)));
+  return pieces;
+}
+
 /** Deliberately non-HTML Markdown. Source links use safeLink separately. */
 export function markdown(value) {
   const root = h('div', {class: 'document'});
@@ -77,12 +94,16 @@ export function markdown(value) {
     if (code) { code.append(document.createTextNode(line + '\n')); continue; }
     if (!line.trim()) { list = null; continue; }
     const heading = /^(#{1,3}) (.+)$/.exec(line);
-    if (heading) { root.append(h(`h${heading[1].length}`, {}, unescapeLiteral(heading[2]))); list = null; }
-    else if (line.startsWith('> ')) { root.append(h('blockquote', {}, h('p', {}, unescapeLiteral(line.slice(2))))); list = null; }
+    if (heading) { root.append(h(`h${heading[1].length}`, {}, inline(heading[2]))); list = null; }
+    else if (line.startsWith('> ')) { root.append(h('blockquote', {}, h('p', {}, inline(line.slice(2))))); list = null; }
     else if (line.startsWith('- ')) {
-      if (!list) { list = h('ul'); root.append(list); }
-      list.append(h('li', {}, unescapeLiteral(line.slice(2))));
-    } else { root.append(h('p', {}, unescapeLiteral(line))); list = null; }
+      if (!list || list.tagName !== 'UL') { list = h('ul'); root.append(list); }
+      list.append(h('li', {}, inline(line.slice(2))));
+    } else if (/^\d+[.)] /.test(line)) {
+      const item = /^(\d+)[.)] (.*)$/.exec(line);
+      if (!list || list.tagName !== 'OL') { list = h('ol', {start: Number(item[1])}); root.append(list); }
+      list.append(h('li', {}, inline(item[2])));
+    } else { root.append(h('p', {}, inline(line))); list = null; }
   }
   return root;
 }

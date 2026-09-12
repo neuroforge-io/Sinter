@@ -217,6 +217,10 @@ def test_literal_home_folder_path_still_requires_consent(tmp_path, monkeypatch, 
     source.mkdir()
     (source / 'source.txt').write_text(SOURCE)
     monkeypatch.setenv('HOME', str(tmp_path))
+    # pathlib uses HOME on POSIX and USERPROFILE on Windows. Exercise the
+    # consent check against an existing home-relative folder on both platforms.
+    monkeypatch.setenv('USERPROFILE', str(tmp_path))
+    assert Path('~/notes').expanduser() == source
     with patch('sinter.client.chat') as model, pytest.raises(SystemExit) as exited:
         cli.main(['review', '~/notes'])
     assert exited.value.code == 1

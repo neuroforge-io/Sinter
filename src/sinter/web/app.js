@@ -9,14 +9,15 @@ import {session, request} from './api.js';
 import {workbench} from './workbench.js';
 import {library, watches} from './library.js';
 import {playground} from './playground.js';
+import {tools, buildNavigation, installToolFinder} from './navigation.js';
 
 const view = document.getElementById('view');
 const drafts = new Map();
 let busy = false, current = '#home', routeSequence = 0;
-const routes = [['home', 'Overview'], ['casebooks', 'Community casebooks'], ['activity', 'Recent activity'], ['grants', 'Find funding'], ['brief', 'Briefs & letters'], ['meeting', 'Meeting minutes'],
-  ['watches', 'Search watches'], ['library', 'My workspace'], ['explore', 'Explore Fracture'], ['atlas', 'Knowledge atlases'], ['tools', 'Community tools'], ['settings', 'Settings'], ['help', 'Getting started']];
+const routes = tools.map(({id, label}) => [id, label]);
 const navigation = document.getElementById('navigation');
-for (const [id, label] of routes) navigation.append(h('a', {href: '#' + id, class: 'nav-button'}, label));
+buildNavigation(navigation);
+installToolFinder(go, () => busy);
 function setBusy(value) {
   busy = value;
   for (const link of navigation.querySelectorAll('a')) link.setAttribute('aria-disabled', String(value));
@@ -69,7 +70,7 @@ async function route() {
   try {
     const options = {setBusy, remember, seed: drafts.get(id) || {}, example: new URLSearchParams(query || '').get('example') === '1'};
     let content;
-    if (['grants', 'brief', 'meeting'].includes(id)) content = await workbench(id, options);
+    if (['research', 'grants', 'brief', 'meeting'].includes(id)) content = await workbench(id, options);
     else if (id === 'casebooks') content = await casebooksPage(options);
     else if (id === 'activity') content = await activityPage();
     else if (id === 'library') content = await library();

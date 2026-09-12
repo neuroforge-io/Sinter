@@ -11,10 +11,10 @@ export async function activityPage() {
       for (const job of result.jobs) {
         const card = h('article', {class: 'card'}, h('h3', {}, job.label), h('span', {class: 'badge'}, job.status),
           h('p', {}, job.error || job.message), h('small', {class: 'muted'}, 'Started: ' + dateTime(job.started_at || job.created_at)));
-        if (job.status === 'done') card.append(button('Open result', async () => {
+        if (job.status === 'done' || job.has_result) card.append(button(job.status === 'done' ? 'Open result' : 'Recover partial output', async () => {
           try {
             const current = await request('/api/jobs/' + job.id);
-            output.replaceChildren(current.result?.markdown ? renderReport(current.result) :
+            output.replaceChildren(current.result?.results ? templateResult(current.result) : current.result?.markdown ? renderReport(current.result) :
               h('div', {class: 'card'}, h('pre', {class: 'plain-wrap'}, JSON.stringify(current.result, null, 2)),
                 button('Download task result', () => download('sinter-task.json', JSON.stringify(current.result, null, 2), 'application/json'))));
           } catch(error) { status.replaceChildren(notice(error.message, 'error')); }
@@ -32,4 +32,14 @@ export async function activityPage() {
     h('p', {}, 'A dropped browser connection does not necessarily stop the task. Check here before running it again.')),
     notice('Recent results remain in this running app for up to 30 minutes after completion, subject to its 20-task retention cap. They are not saved across app restarts. Save or download what you need.'),
     button('Refresh task status', refresh), status, list, output);
+}
+
+function templateResult(result) {
+  return h('section', {class: 'stack', 'aria-label': 'Recovered template output'},
+    result.complete ? notice('Template complete. Review the model output before using it.') :
+      notice('INCOMPLETE / ' + (result.error || 'The template stopped. Completed steps and partial text are retained below.'), 'error'),
+    ...(result.results || []).map(step => h('article', {class: 'card'}, h('h3', {}, step.step), markdown(step.content))),
+    result.partial ? h('article', {class: 'card'}, h('span', {class: 'badge warm'}, 'INCOMPLETE STEP'),
+      h('h3', {}, result.partial.step), markdown(result.partial.content)) : null,
+    button('Download task result', () => download('sinter-template-result.json', JSON.stringify(result, null, 2), 'application/json')));
 }

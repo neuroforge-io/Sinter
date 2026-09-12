@@ -1,4 +1,4 @@
-import {h, button, field, selectField, notice, markdown, safeLink, announce} from './ui.js';
+import {h, button, field, selectField, notice, markdown, safeLink, announce, download} from './ui.js';
 import {request, stream} from './api.js';
 
 /** Free-form model output is deliberately separate from evidence-only reports. */
@@ -35,12 +35,14 @@ export async function playground({setBusy}) {
       const body = h('div');
       log.append(h('article', {class: 'chat-entry'}, h('div', {class: 'chat-role'}, 'Fracture / unverified'), body));
       let full = '', scheduled = false;
+      input.input.disabled = true;
       await execute('/api/chat/stream', {messages, max_tokens: 768}, event => {
         if (event.type === 'token') {
           full += event.t;
           if (!scheduled) { scheduled = true; requestAnimationFrame(() => { body.replaceChildren(markdown(full)); scheduled = false; }); }
         }
       }, () => { history.push({role: 'user', content}, {role: 'assistant', content: full}); input.input.value = ''; });
+      input.input.disabled = false;
     });
     view.replaceChildren(log, form);
   }
@@ -84,17 +86,27 @@ export async function playground({setBusy}) {
       event.preventDefault();
       if (active) return;
       output.replaceChildren(); choice.input.disabled = true;
+      Object.values(inputs).forEach(input => { input.disabled = true; });
       let current, content = '', body;
+      const saved = {results: [], sources: [], complete: false};
       await execute('/api/template/stream', {template: choice.input.value,
         variables: Object.fromEntries(Object.entries(inputs).map(([name, input]) => [name, input.value]))}, event => {
         if (event.type === 'step') {
           content = ''; body = h('div'); current = h('article', {class: 'card'}, h('h3', {}, event.name), body); output.append(current);
         }
         if (event.type === 'token' && body) { content += event.t; body.textContent = content; }
-        if (event.type === 'step_done') body?.replaceChildren(markdown(event.content));
-        if (event.type === 'sources') for (const item of event.sources || []) output.append(h('p', {}, safeLink(item.url, item.title)));
-      });
+        if (event.type === 'step_done') { body?.replaceChildren(markdown(event.content)); saved.results.push(event); }
+        if (event.type === 'step_partial') {
+          saved.partial = event;
+          body?.replaceChildren(notice('INCOMPLETE / Dependent steps were not run.', 'error'), markdown(event.content));
+        }
+        if (event.type === 'sources') { saved.sources.push(event); for (const item of event.sources || []) output.append(h('p', {}, safeLink(item.url, item.title))); }
+      }, () => { saved.complete = true; });
+      if (!saved.complete && !saved.partial && content) saved.partial = {content, complete: false};
+      if (saved.results.length || saved.partial) output.append(button(saved.complete ? 'Download template output' : 'Download partial output',
+        () => download('sinter-template-' + (saved.complete ? 'complete' : 'INCOMPLETE') + '.json', JSON.stringify(saved, null, 2), 'application/json')));
       choice.input.disabled = false;
+      Object.values(inputs).forEach(input => { input.disabled = false; });
     });
     view.replaceChildren(form, output);
   }

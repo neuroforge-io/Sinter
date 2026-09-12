@@ -115,7 +115,7 @@ def example(kind: str) -> dict:
     if kind == "research":
         return {**common, "title": "Planning an accessible community garden",
                 "query": "community garden accessible paths water planning",
-                "questions": "What access arrangements should we check?\nWhat is still undecided about water?",
+                "questions": "What accessible paths and seating should we check?\nWhat is still undecided about water?",
                 "sources": [
                     {"title": "Fictional garden access notes", "kind": "sample", "content":
                      "The proposed community garden has a level entrance. Path widths have not been measured.\n"

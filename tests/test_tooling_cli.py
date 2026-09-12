@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import os
 import subprocess
 import sys
@@ -171,3 +172,94 @@ def test_invalid_chromium_environment_is_reported(monkeypatch, tmp_path, capsys)
         helper.browser_arguments('Fixture tool', [])
     assert error.value.code == 2
     assert 'Chromium executable does not exist' in capsys.readouterr().err
+
+
+def rkc_module():
+    spec = importlib.util.spec_from_file_location(
+        'rkc_provenance', ROOT / 'tools' / 'rkc_smoke.py'
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_rkc_receipt_uses_actual_binary_digest_and_embedded_revision(monkeypatch, tmp_path):
+    module = rkc_module()
+    binary = tmp_path / 'rkc'
+    binary.write_bytes(b'actual executable fixture')
+    revision = 'd' * 40
+    monkeypatch.setattr(module.shutil, 'which', lambda _: '/test/go')
+    calls = []
+
+    def invoke(args, **kwargs):
+        calls.append(args)
+        output = ('0.4.0\n' if args[-1] == '--version' else
+                  f'{binary}: go1.26.5\n\tmod\tgithub.com/neuroforge-io/RKC\tv0.4.0\n'
+                  f'\tbuild\tvcs.revision={revision}\n\tbuild\tvcs.modified=false\n')
+        return subprocess.CompletedProcess(args, 0, output, '')
+
+    monkeypatch.setattr(module.subprocess, 'run', invoke)
+    metadata = module.binary_metadata(binary)
+    assert metadata['sha256'] == hashlib.sha256(binary.read_bytes()).hexdigest()
+    assert metadata['reported_version'] == '0.4.0'
+    assert metadata['go_build']['vcs_revision'] == revision
+    assert metadata['go_build']['vcs_modified'] is False
+    assert metadata['go_build']['go_version'] == 'go1.26.5'
+    assert not metadata['warnings']
+    assert calls == [[str(binary), '--version'], ['/test/go', 'version', '-m', str(binary)]]
+
+
+def test_rkc_without_go_still_records_digest_but_cannot_claim_revision(monkeypatch, tmp_path):
+    module = rkc_module()
+    binary = tmp_path / 'rkc'
+    binary.write_bytes(b'fixture')
+    monkeypatch.setattr(module.shutil, 'which', lambda _: None)
+    monkeypatch.setattr(module.subprocess, 'run', lambda *args, **kwargs:
+                        subprocess.CompletedProcess(args[0], 0, '0.4.0\n', ''))
+    metadata = module.binary_metadata(binary)
+    assert metadata['sha256'] == hashlib.sha256(b'fixture').hexdigest()
+    assert metadata['go_build'] is None
+    assert module.ci_reference(metadata)['observed_revision_matches'] is None
+    assert 'Go is unavailable' in metadata['warnings'][0]
+
+
+@pytest.mark.parametrize('revision', ['', 'not-a-commit'])
+def test_rkc_missing_or_invalid_embedded_revision_is_unknown(monkeypatch, tmp_path, revision):
+    module = rkc_module()
+    binary = tmp_path / 'rkc'
+    binary.write_bytes(b'fixture')
+    monkeypatch.setattr(module.shutil, 'which', lambda _: '/test/go')
+    monkeypatch.setattr(module.subprocess, 'run', lambda *args, **kwargs:
+                        subprocess.CompletedProcess(args[0], 0, f'\tbuild\tvcs.revision={revision}\n', ''))
+    metadata = module.binary_metadata(binary)
+    assert metadata['go_build']['vcs_revision'] is None
+    assert module.ci_reference(metadata)['observed_revision_matches'] is None
+    assert any('does not identify a source revision' in value for value in metadata['warnings'])
+
+
+@pytest.mark.parametrize('observed,expected_match', [('a' * 40, True), ('b' * 40, False), (None, None)])
+def test_rkc_ci_pin_is_separate_from_observed_revision(monkeypatch, tmp_path, observed, expected_match):
+    module = rkc_module()
+    workflow = tmp_path / '.github' / 'workflows' / 'ci.yml'
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text('repository: neuroforge-io/RKC\n  ref: ' + 'a' * 40 + '\n')
+    monkeypatch.setattr(module, 'ROOT', tmp_path)
+    comparison = module.ci_reference({'go_build': {'vcs_revision': observed}})
+    assert comparison['expected_revision'] == 'a' * 40
+    assert comparison['observed_revision_matches'] is expected_match
+    assert 'not independently reproduced' in comparison['notice']
+
+
+def test_rkc_version_probe_failure_remains_explicitly_unknown(monkeypatch, tmp_path):
+    module = rkc_module()
+    binary = tmp_path / 'rkc'
+    binary.write_bytes(b'fixture')
+    monkeypatch.setattr(module.shutil, 'which', lambda _: None)
+
+    def failed(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], 10)
+
+    monkeypatch.setattr(module.subprocess, 'run', failed)
+    metadata = module.binary_metadata(binary)
+    assert metadata['reported_version'] is None and metadata['go_build'] is None
+    assert 'version could not be read' in metadata['warnings'][0]

@@ -4,7 +4,7 @@ from __future__ import annotations
 from .evidence import excerpts, literal, text, tokens, validate_excerpt
 
 FORMATS = {"enquiry": "Enquiry letter", "briefing": "Briefing note", "agenda": "Agenda item"}
-QUESTION_WORDS = set("what when where who which how could would should please confirm provide does have has are can need available information".split())
+QUESTION_WORDS = set("what when where who which how could would should please confirm provide does have has are can need available information about still stated supplied evidence source material relevant say says tell know".split())
 
 
 def question_index(questions: str, sources: list) -> list[dict]:

@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased - user-testing quality and recovery
+
+- Give Research its own source-backed brief in the CLI and workbench, with focus
+  questions, exact highlights, source locations and explicit gaps.
+- Add a searchable tool finder, grouped navigation, simpler research intake,
+  clickable source citations, evidence counts and collapsible completed inputs.
+- Make no-argument CLI entry points print help while preserving explicit serve
+  and desktop launchers. Recover a matching review checkpoint across output paths,
+  with an explicit selection for ambiguous cases and clear next-step commands.
+- Accept source-grounded prose and line-referenced review findings while rejecting
+  refusals and unsupported assertions. Preserve retry budgets, prior commentary and
+  uncertain request identity. Prevent review reports from overwriting or entering
+  their own source collection.
+- Keep original source fields in every community recipe step; add explicit system
+  and step-task contracts. Research drafting uses bounded larger budgets and scopes
+  conclusions to supplied source locations and dates.
+- Preserve completed template steps and partial output across JSON, streams and
+  failed jobs. Dependent steps stop, errors stay visible and no request is replayed.
+- Validate token limits and public API conversation byte/shape limits locally,
+  including UTF-8 input. Reject missing atlas-answer consent before job admission.
+- Make developer tool help work without optional packages and report missing
+  setup clearly without turning an unexecuted check into a pass.
+
+Model drafts and self-checks still require human review. Source matching is lexical,
+not semantic verification. Partial review coverage still returns exit code 2.
+
 ## 0.5.2 - review quality
 
 - Analyse each source deterministically (symbols, imports and risk-shaped lines) and

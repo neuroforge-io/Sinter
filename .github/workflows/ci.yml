@@ -61,6 +61,7 @@ jobs:
       - run: python tools/desktop_browser.py
       - run: python tools/site_browser.py
       - run: python tools/casebook_browser.py
+      - run: python tools/quality_browser.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

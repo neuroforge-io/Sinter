@@ -18,6 +18,24 @@ Action plans and shared knowledge, with the evidence still in view.
 
 ## Reliability update: 0.5.2
 
+### Latest source improvements
+
+Research now has a dedicated brief: source highlights, clickable citations, focus
+questions and gaps to investigate. **Find a tool** (`Ctrl+K` or `⌘K`) takes you straight
+to the work you need. Completed forms fold away, reports show evidence counts, and
+every example runs locally with accurate fictional labels.
+
+The `sinter` command now prints help when run without arguments; `sinter serve`
+opens the workbench. Reviews can discover a matching checkpoint or use an explicit
+`--checkpoint`, retain useful grounded prose findings and explain the next recovery
+step. Template steps keep their source context, preserve incomplete output and never
+silently replay a request. These changes are available from source; release downloads
+remain identified by their own version.
+
+[Testing findings and validation](docs/QUALITY_REVIEW_2026-09-12.md)
+
+### Released review quality changes
+
 Collection review now shapes batches from a deterministic local analysis: each batch
 is cut at statement and line boundaries and asked targeted questions about the real
 symbols, imports and risk-shaped lines in its own excerpt. A received but unsupported

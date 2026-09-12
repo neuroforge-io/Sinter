@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/studio.css">
   <link rel="stylesheet" href="/static/desktop.css">
+  <link rel="stylesheet" href="/static/workspace.css">
   <script type="module" src="/static/app.js"></script>
 </head>
 <body>
@@ -19,18 +20,16 @@
       <span class="brand-mark" aria-hidden="true">S</span>
       <span><strong>SINTER</strong><small>BY NEUROFORGE</small></span>
     </a>
-    <span class="nav-label">YOUR WORKBENCH</span>
     <nav id="navigation" aria-label="Main navigation"></nav>
     <div class="sidebar-bottom">
       <span class="local-label"><span class="status-dot" aria-hidden="true"></span>Runs on your computer</span>
-      <p>Useful work.<br>Visible evidence.</p>
       <span id="version" class="fine">Apache 2.0</span>
     </div>
   </aside>
   <div class="shell">
     <header class="topbar">
       <div><span class="eyebrow">YOUR LOCAL WORKSPACE</span><h1 id="page-title">Overview</h1></div>
-      <div class="top-actions"><span class="badge subtle">Community edition</span><button class="button quiet" id="theme-toggle" type="button">Light theme</button></div>
+      <div class="top-actions"><button class="button quiet" id="tool-finder-button" type="button">Find a tool <kbd aria-hidden="true">Ctrl K</kbd></button><button class="button quiet" id="theme-toggle" type="button">Light theme</button></div>
     </header>
     <main id="content" tabindex="-1">
       <noscript><p>Sinter needs JavaScript for its workbench. Enable it for this localhost page, or use the command-line interface.</p></noscript>
