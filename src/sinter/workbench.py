@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import re
 
 from . import client
 from .evidence import MAX_CONTEXT, collect, literal, render_evidence, select, source, text, utc_now
@@ -16,6 +17,103 @@ WORKFLOWS = {
 }
 
 
+def _source_passage(item, selected) -> str:
+    match = next((part for part in selected if part.source_id == item.id), None)
+    return match.quote if match else item.content[:1000]
+
+
+def _quoted(value: str) -> str:
+    return "> " + literal(value).replace("\n", "\n> ")
+
+
+def _research_document(title, questions, sources, selected):
+    lines = ["# " + literal(title), "## What the collected sources say"]
+    by_id = {item.id: item for item in sources}
+    for part in selected[:8]:
+        parent = by_id[part.source_id]
+        lines.extend(["### " + literal(parent.title), _quoted(part.quote)])
+        if parent.url:
+            lines.append("Read more: " + literal(parent.url))
+    if not selected:
+        lines.append("No source passage matches this topic yet.")
+    if questions.strip():
+        lines.extend(["## Questions to investigate",
+                      "\n".join("- " + literal(line.strip()) for line in questions.splitlines() if line.strip())])
+    lines.extend(["## Next steps",
+                  "- Open the sources above and check which directly address the research question.\n"
+                  "- Compare their dates, scope and any conflicting accounts.\n"
+                  "- Record the answer supported by each source and the questions that remain open."])
+    return "\n\n".join(lines)
+
+
+def _funding_document(title, sources, selected, screening):
+    references = [item for item in sources if item.kind in {"reference_excerpt", "search_excerpt", "sample"}]
+    lines = ["# " + literal(title), "## Funding opportunities and guidance to review"]
+    if not references:
+        lines.append("No funding source has been added yet. Add a programme page or guideline excerpt to build the shortlist.")
+    statuses = {"met": "Matches the entered requirement", "not_met": "Does not match the entered requirement",
+                "unknown": "Still to check"}
+    for position, item in enumerate(references, 1):
+        label = ("Fictional example: " if item.kind == "sample" else "") + item.title
+        lines.extend([f"### {position}. {literal(label)}", _quoted(_source_passage(item, selected))])
+        if item.url:
+            lines.append("Programme or source page: " + literal(item.url))
+        checks = [row for row in screening["checks"] if row["source_id"] == item.id]
+        if checks:
+            for row in checks:
+                label = row["field"].replace("_", " ").capitalize()
+                lines.append(f"- {label}: {statuses[row['status']]}. {row['reason']} "
+                             f"Your value: {literal(str(row['actual']))}; requirement: "
+                             f"{row['operator']} {literal(str(row['expected']))}.")
+        else:
+            lines.append("Requirements have not been checked for this source yet.")
+        lines.append("Next action: check the current official programme page for the application window, applicant conditions and exclusions.")
+    if screening["checks"]:
+        matched = sum(row["status"] == "met" for row in screening["checks"])
+        unresolved = sum(row["status"] == "unknown" for row in screening["checks"])
+        not_matched = sum(row["status"] == "not_met" for row in screening["checks"])
+        lines.extend(["## Your requirement checks",
+                      f"{matched} matched; {not_matched} did not match; {unresolved} still need checking. "
+                      "These results cover only the requirements entered above."])
+    lines.extend(["## Before applying", "Confirm the current application window and every applicant condition with the funder. "
+                  "A source excerpt or a matching requirement does not establish eligibility."])
+    return "\n\n".join(lines)
+
+
+def _meeting_document(title, report, details):
+    """Surface the recorded commitments and decisions without inferring outcomes."""
+    corrections = {row["segment_id"]: row["replacement"] for row in report["corrections"]}
+    groups = {"Actions mentioned in the record": [], "Decision and voting statements": [], "Other discussion": []}
+    for segment in report["segments"]:
+        content = corrections.get(segment["id"], segment["text"])
+        if re.search(r"\b(agreed|approved|resolved|decision|motion|vote|carried|deferred)\b", content, re.I):
+            group = "Decision and voting statements"
+        elif re.search(r"\b(will|action|follow up|undertake|task)\b", content, re.I):
+            group = "Actions mentioned in the record"
+        else:
+            group = "Other discussion"
+        name = report["speaker_map"].get(segment["speaker"], segment["speaker"])
+        groups[group].append((name, content))
+    lines = ["# " + literal(title), "Draft minutes"]
+    if details["signatory"]:
+        lines.append("Prepared by: " + literal(details["signatory"]))
+    if details["organisation"]:
+        lines.append(literal(details["organisation"]))
+    for heading, rows in groups.items():
+        if not rows:
+            continue
+        lines.append("## " + heading)
+        for name, content in rows[:20]:
+            lines.extend(["### " + literal(name), _quoted(content)])
+        if len(rows) > 20:
+            lines.append(f"{len(rows) - 20} further statements are retained in the full transcript.")
+    lines.extend(["## Follow-up for approval",
+                  "- Confirm which stated actions have an agreed owner and due date.\n"
+                  "- Check any proposed or disputed decisions against the meeting record.\n"
+                  "- Ask the chair to approve the minutes before circulating them as final."])
+    return "\n\n".join(lines)
+
+
 def run(payload: dict, progress=lambda message: None) -> dict:
     if not isinstance(payload, dict):
         raise ValueError("Provide a workflow object.")
@@ -23,6 +121,8 @@ def run(payload: dict, progress=lambda message: None) -> dict:
     if not isinstance(kind, str) or kind not in WORKFLOWS:
         raise ValueError("Choose a research, funding, briefing or meeting workflow.")
     title = text(payload.get("title", ""), "Project title", 200, True)
+    from .briefs import document_details
+    details = document_details(payload)
     notes = text(payload.get("notes", ""), "Notes", 1000000 if kind == "meeting" else MAX_CONTEXT)
     query = text(payload.get("query", ""), "Search query", 1024)
     questions = text(payload.get("questions", ""), "Questions", 12000)
@@ -36,14 +136,18 @@ def run(payload: dict, progress=lambda message: None) -> dict:
     if demo:
         warnings.append("ILLUSTRATIVE EXAMPLE: people, funding and organisation details are fictional.")
     result = {"workflow": kind, "title": title, "created_at": utc_now(), "demo": demo,
-              "review_status": "draft", "warnings": warnings, "sources": [], "excerpts": []}
+              "review_status": "draft", "warnings": warnings, "sources": [], "excerpts": [],
+              "document_title": title, "document_details": details,
+              "missing_fields": [], "document_ready": True}
     if kind == "meeting":
         if payload.get("use_search") or payload.get("use_model"):
             raise ValueError("Minutes are processed locally. Do not enable web search or model ranking for transcripts.")
         progress("Preserving the transcript and speaker labels")
         result.update(minutes(title, notes, payload.get("speaker_map"), payload.get("corrections")))
+        result["document_markdown"] = _meeting_document(title, result, details)
         if demo:
             result["markdown"] = "ILLUSTRATIVE EXAMPLE - FICTIONAL MEETING\n\n" + result["markdown"]
+            result["document_markdown"] = "Fictional example — for practice only.\n\n" + result["document_markdown"]
         result["sources"] = [asdict(source("Original transcript", notes, kind="transcript"))]
         progress("Ready for chair and speaker review")
         return result
@@ -85,6 +189,7 @@ def run(payload: dict, progress=lambda message: None) -> dict:
                       "amount limits; opening/closing date and time zone; evidence needed; official contact.",
                       "## Deadline status", "Unconfirmed. Only dates explicitly checked by a person should become reminders."])
         result["screening"] = screen(payload.get("profile", {}), payload.get("criteria", []), sources)
+        result["document_markdown"] = _funding_document(title, sources, selected, result["screening"])
         if result["screening"]["checks"]:
             lines.append(result["screening"]["markdown"])
     elif kind == "research":
@@ -93,10 +198,13 @@ def run(payload: dict, progress=lambda message: None) -> dict:
         lines.extend(document)
         result.update(metadata)
         result["document_type"] = "research"
+        result["document_markdown"] = _research_document(title, questions, sources, selected)
     else:
-        from .briefs import sections
-        document, question_map = sections(payload, sources)
+        from .briefs import prepare_document, sections
+        prepared = prepare_document(payload, sources, selected)
+        document, question_map = sections(payload, sources, prepared)
         lines.extend(document)
+        result.update(prepared)
         result["document_type"] = payload.get("document_type", "enquiry")
         result["question_index"] = question_map
     progress("Checking every excerpt against its original source")
@@ -105,13 +213,18 @@ def run(payload: dict, progress=lambda message: None) -> dict:
     lines.extend(["## Limitations and review", "\n".join("- " + literal(warning) for warning in warnings)])
     result.update({"markdown": "\n\n".join(lines), "sources": [asdict(item) for item in sources],
                    "excerpts": [asdict(item) for item in selected]})
+    if demo:
+        result["document_markdown"] = "Fictional example — for practice only.\n\n" + result["document_markdown"]
     return result
 
 
 def example(kind: str) -> dict:
     if not isinstance(kind, str) or kind not in WORKFLOWS:
         raise ValueError("Unknown example.")
-    common = {"workflow": kind, "demo": True, "use_search": False, "use_model": False}
+    common = {"workflow": kind, "demo": True, "use_search": False, "use_model": False,
+              "signatory": "Alex Morgan (fictional)", "sender_role": "Volunteer secretary",
+              "organisation": "Riverbank Community Group (fictional)",
+              "contact_details": "alex@example.org", "recipient": "Community venue coordinator"}
     if kind == "research":
         return {**common, "title": "Planning an accessible community garden",
                 "query": "community garden accessible paths water planning",

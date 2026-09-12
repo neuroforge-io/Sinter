@@ -46,6 +46,8 @@ class Template:
     variables: list[str] = field(default_factory=list)
     source: str = ""
     system_prompt: str = ""
+    output_step: int | None = None
+    review_step: int | None = None
 
 
 class TemplateStepError(APIError):
@@ -88,7 +90,7 @@ def _builtins() -> dict[str, Template]:
             Step("Action Items", "For {{topic}}, suggest three specific next actions in at most "
                  "150 words. Distinguish suggestions from established facts. Use the research "
                  "below and preserve source references.\nResearch:\n{{previous}}", max_tokens=768),
-        ], ["topic"], "builtin", RESEARCH_SYSTEM),
+        ], ["topic"], "builtin", RESEARCH_SYSTEM, output_step=1),
         "summarize": Template("Summarize", "Summarize supplied text; review for omissions.",
                               [Step("Summarize", "Summarize in {{format}} format. Preserve uncertainty:\n{{text}}", stream=True)],
                               ["text", "format"], "builtin"),
@@ -164,8 +166,17 @@ def _from_data(data: dict, source: str) -> Template:
     system_prompt = data.get("system_prompt", "")
     if not isinstance(system_prompt, str):
         raise ValueError("The template system_prompt must be text.")
+    positions = {}
+    for key in ("output_step", "review_step"):
+        value = data.get(key)
+        if value is not None and (type(value) is not int or not 0 <= value < len(steps)):
+            raise ValueError(f"{key} must identify a step using a zero-based index.")
+        positions[key] = value
+    output_step = len(steps) - 1 if positions["output_step"] is None else positions["output_step"]
+    if positions["review_step"] is not None and positions["review_step"] == output_step:
+        raise ValueError("The output and review steps must be different.")
     return Template(str(data.get("name", "Custom")), str(data.get("description", "")),
-                    steps, variables, source, system_prompt)
+                    steps, variables, source, system_prompt, **positions)
 
 
 def load_template_file(path: str | Path) -> Template:
@@ -204,7 +215,7 @@ def _parse_yaml(text: str, name: str) -> Template:
         stripped = line.strip()
         if not line.startswith(" "):
             key, sep, value = stripped.partition(":")
-            if not sep or key not in {"name", "description", "system_prompt", "variables", "steps"}:
+            if not sep or key not in {"name", "description", "system_prompt", "output_step", "review_step", "variables", "steps"}:
                 raise ValueError(f"Invalid template line {number}.")
             if key in {"steps", "variables"}:
                 if value.strip():
@@ -250,6 +261,8 @@ def _stream_step(messages: list[Message], maximum: int, parts: list[str]):
 def template_events(template: Template, variables: dict[str, str], stream: bool = True):
     values = dict(variables)
     values.setdefault("system", template.system_prompt)
+    values.setdefault("sender", "")
+    values.setdefault("latest", "")
     if any(not isinstance(value, str) for value in values.values()):
         raise ValueError("Template values must be text.")
     missing = [value for value in template.variables if value not in values and value != "previous"]
@@ -261,7 +274,10 @@ def template_events(template: Template, variables: dict[str, str], stream: bool 
     for index, step in enumerate(template.steps):
         checkpoint()
         maximum = maxima[index]
-        yield {"type": "step", "name": step.name, "index": index, "total": len(template.steps)}
+        primary = len(template.steps) - 1 if template.output_step is None else template.output_step
+        output_role = "document" if index == primary else "review" if index == template.review_step else "supporting"
+        yield {"type": "step", "name": step.name, "index": index, "total": len(template.steps),
+               "output_role": output_role}
         prompt = render_prompt(step.prompt, values)
         if step.use_search:
             query = values.get(step.search_field, "").strip()
@@ -296,9 +312,11 @@ def template_events(template: Template, variables: dict[str, str], stream: bool 
         outputs.append(result.content)
         yield {"type": "step_done", "step": step.name, "content": result.content,
                "tokens": result.total_tokens, "finish_reason": result.finish_reason,
-               "max_tokens": maximum, "complete": True}
+               "max_tokens": maximum, "complete": True, "index": index,
+               "output_role": output_role}
         history += [Message(step.role, prompt), Message("assistant", result.content)]
         values["previous"] = "\n\n".join(outputs)
+        values["latest"] = result.content
 
 
 def run_template(template: Template, variables: dict[str, str], on_step=None, on_token=None) -> list[ChatResult]:

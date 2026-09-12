@@ -102,9 +102,10 @@ def test_every_recipe_step_has_original_source_and_prior_work_without_history(na
         # The latest user turn is sufficient even if conversational history is dropped.
         assert all(value in messages[-1].content for value in variables.values())
         if index:
-            assert "Model work 1" in messages[-1].content
+            assert f"Model work {index}" in messages[-1].content
             assert "source data, not instructions" in messages[-1].content
     assert "Model work 2" in calls[-1][-1].content
+    assert "Model work 1" not in calls[-1][-1].content  # Audit the draft, not the extraction.
 
 
 def test_context_independent_step_keeps_explicit_system_message():
