@@ -197,7 +197,11 @@ def _open(path: str, body: dict | None = None):
         code = exc.code
         exc.close()
         messages = {401: "The API key was not accepted.", 403: "API access was denied.",
-                    429: "The API is busy or rate-limited. Please try again later."}
+                    429: "The API is busy or rate-limited. Please try again later.",
+                    500: "The configured service could not complete this request (HTTP 500). Try again later; local tools remain available.",
+                    502: "The configured service is temporarily unavailable (HTTP 502). Try again later; local tools remain available.",
+                    503: "The configured service is temporarily unavailable (HTTP 503). Try again later; local tools remain available.",
+                    504: "The configured service took too long to respond (HTTP 504). Try again later; local tools remain available."}
         raise APIError(messages.get(code, f"The API returned HTTP {code}."),
                        429 if code == 429 else 502) from exc
     except DeadlineExceeded:

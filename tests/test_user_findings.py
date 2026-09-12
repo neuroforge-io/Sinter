@@ -1,6 +1,8 @@
 """Regressions from the September 12 user-testing session."""
 import json
 import time
+import io
+from urllib.error import HTTPError
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +12,18 @@ from sinter.preferences import DEFAULTS, validate
 from sinter.templates import Step, Template
 from sinter.template_runs import TemplateRunError, collect_run
 from test_runtime import post, request, server
+
+
+@pytest.mark.parametrize('code', [500, 502, 503, 504])
+def test_service_outage_has_recovery_advice_without_exposing_upstream_body(code):
+    failure = HTTPError('https://example.org', code, 'error', {}, io.BytesIO(b'private upstream details'))
+    with patch.object(client.urllib.request, 'build_opener') as opener:
+        opener.return_value.open.side_effect = failure
+        with pytest.raises(client.APIError) as raised:
+            client._open('/search', {'query': 'public query'})
+    assert f'HTTP {code}' in str(raised.value)
+    assert 'local tools remain available' in str(raised.value)
+    assert 'private upstream' not in str(raised.value)
 
 
 def test_research_delivers_relevant_sources_without_letter_placeholders():

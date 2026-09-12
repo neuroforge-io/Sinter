@@ -33,7 +33,7 @@ def _research_document(title, questions, sources, selected):
         parent = by_id[part.source_id]
         lines.extend(["### " + literal(parent.title), _quoted(part.quote)])
         if parent.url:
-            lines.append("Read more: " + literal(parent.url))
+            lines.append("[Read the source](" + parent.url.replace("(", "%28").replace(")", "%29") + ")")
     if not selected:
         lines.append("No source passage matches this topic yet.")
     if questions.strip():
@@ -57,7 +57,7 @@ def _funding_document(title, sources, selected, screening):
         label = ("Fictional example: " if item.kind == "sample" else "") + item.title
         lines.extend([f"### {position}. {literal(label)}", _quoted(_source_passage(item, selected))])
         if item.url:
-            lines.append("Programme or source page: " + literal(item.url))
+            lines.append("[Open the programme or source page](" + item.url.replace("(", "%28").replace(")", "%29") + ")")
         checks = [row for row in screening["checks"] if row["source_id"] == item.id]
         if checks:
             for row in checks:
