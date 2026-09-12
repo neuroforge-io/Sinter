@@ -3,6 +3,8 @@
 Sinter 0.5 preserves the post-0.4 timeout fixes and adds bounded collection review.
 Do not paste an entire repository into a single template and assume every file was
 reviewed. Source admission, model commentary and verified tests are different things.
+Running `sinter` without arguments prints help. Use `sinter serve` to open the web
+workbench; the separately packaged desktop app still opens the workbench directly.
 
 ## First inspect the scope offline
 
@@ -26,6 +28,28 @@ python -m sinter review ./src --consent --max-parts 8 -o self-review.md
 python -m sinter review ./src --consent --max-parts 8 --resume -o self-review.md
 ```
 
+Progress is stored in `<output>.checkpoint.json`. Keep the same `-o` path when
+resuming. Review output must be outside a folder being reviewed so it cannot be
+admitted as new source material on the next run. The default output is a sibling
+of the source, including when reviewing `.`. A single-file review cannot overwrite
+its input. If older reports or checkpoints are already inside a source folder,
+move them outside before starting or resuming its review.
+If the expected checkpoint is missing, Sinter searches only the output directory,
+the source's parent directory and the current directory for a checkpoint with the
+same source, question, language and API identity. A unique match is reused and its
+path is displayed; progress is then saved alongside the current output. Searches
+never recurse and are bounded to 1,000 entries and 20 MB of checkpoint reads. An
+ambiguous or incomplete search asks you to select the original receipt explicitly:
+
+```sh
+sinter review ./src --consent --resume --checkpoint self-review.md.checkpoint.json -o recovered-review.md
+```
+
+`--checkpoint` selects the saved progress to read; the new receipt is written to
+`recovered-review.md.checkpoint.json`. Invalid JSON, symbolic links and oversized
+receipts receive an actionable error before any model request. Missing checkpoints
+never silently start a fresh review.
+
 Each request receives at most 6,000 source characters plus the question and source
 metadata, but batches are cut at statement and line boundaries inside that window,
 never mid-line, so no content is dropped and structure is preserved. The user
@@ -40,6 +64,10 @@ A `running` checkpoint is atomically persisted **before** dispatch, then
 updated after the response. If that first write fails, no request is sent.
 Completed batches are reused only when the collection, question, endpoint, model
 and language hint match. Creation time is retained; update time changes on saves.
+The endpoint includes `NEUROFORGE_BASE_URL`; changing providers or the model is a
+new review. Restore the original environment settings to resume the old receipt,
+or use a new output path without `--resume`. `--retry-uncertain` cannot override
+this identity check.
 Checkpoint fingerprints include the review engine, so checkpoints written by an
 earlier chunking or prompt layout are rejected as different inputs instead of misread.
 
@@ -56,17 +84,37 @@ This permission applies only to requests attempted in this invocation. Uncertain
 batches outside its budget remain blocked on a later ordinary resume. Older
 checkpoints with ambiguous `failed` records are treated conservatively as uncertain.
 A received but empty or truncated response is a definitive failed batch; another
-explicit resume may retry it. A received but unsupported reply - no verbatim quote
-of the material and no explicit result - is a defined partial batch. Partials are
+explicit resume may retry it. A response is treated as complete when it contains a
+verbatim source quote, a finding tied to existing source lines and specific source
+words, a DEMONSTRATED/SUSPECTED finding carrying a concrete phrase from the source,
+an unlabelled defect that retains a longer source phrase, or an explicit no-issues
+result. Missing-source refusals cannot pass by repeating a source word or a clean-result
+phrase. Line numbers and confidence labels by themselves
+do not pass. This gate recognizes usable commentary; it does not verify a finding.
+A received but unsupported reply remains a partial batch. Partials are
 never silently repeated; an explicit resume may re-review one with a bounded
 follow-up question, at most two hops, and each re-review records its attempt in the
-ledger. No run automatically retries generation or continues issuing requests after
+ledger. Existing partial answers are first reassessed locally against their actual
+excerpt, including answers written by the older quote-only gate and those already
+at the follow-up limit. A newly recognized answer needs no repeat model request.
+The terminal and report both explain the remaining attempts and recovery action.
+If an answer remains vague after two follow-ups, review its saved commentary
+manually or start a new review with a narrower question and a new output path;
+repeated `--resume` cannot reset the limit or establish completion.
+Interrupted follow-ups retain the count and earlier received commentary; explicitly
+retrying an uncertain request cannot reset the follow-up budget.
+No run automatically retries generation or continues issuing requests after
 a provider failure. Failed, uncertain and partial results return exit code 2,
 retain earlier work, and distinguish complete, failed, partial, uncertain and
 not-attempted batches. These five counts are disjoint. `not_reviewed` is the
-aggregate of the last four, not a sixth state. Bounded partial runs can return 0;
-inspect the coverage ledger rather than interpreting that exit code as exhaustive
-review.
+aggregate of the last four, not a sixth state. A run limited by `--max-parts` can
+return 0 while leaving batches unattempted, provided every received answer passed
+the commentary gate. Inspect the coverage ledger rather than interpreting that
+exit code as exhaustive review.
+For work left outside `--max-parts`, Sinter prints a ready-to-run continuation
+command. Failed or partial results retain an honest exit code 2 and their output;
+ordinary progress is never confused with a transport failure or silently promoted
+to a verified review.
 
 Use `--question` for a particular concern and `--language` for a language hint sent
 with each excerpt. The same mechanism works on policies and notes, not only code.

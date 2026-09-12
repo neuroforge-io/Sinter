@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import sys
 from pathlib import Path
 
@@ -33,12 +34,14 @@ def main(argv: list[str] | None = None) -> None:
     review.add_argument("--no-stream", action="store_true", help="Compatibility flag; bounded batches use JSON responses")
     review.add_argument("--max-parts", type=int, default=8, help="Maximum small batches to review now (1-64)")
     review.add_argument("--resume", action="store_true", help="Reuse completed batches and continue unattempted work; uncertain requests stay blocked")
+    review.add_argument("--checkpoint", metavar="FILE", help="With --resume, read progress from this checkpoint; save beside the current output")
     review.add_argument("--retry-uncertain", action="store_true", help="With --resume, explicitly allow another request whose remote outcome is unknown")
     review.add_argument("--offline", action="store_true", help="Produce a coverage plan without an API request")
     review.add_argument("--consent", action="store_true", help="Approve sending admitted folder contents to the configured API")
     review.add_argument("--question", default="Review this material for mistakes, gaps and inconsistencies.")
-    research = sub.add_parser("research", help="Build a search-backed evidence report")
+    research = sub.add_parser("research", help="Research a topic with cited source excerpts")
     research.add_argument("topic")
+    research.add_argument("-q", "--question", action="append", default=[], help="Optional focus question; repeat for several questions")
     research.add_argument("-o", "--output", default="research_output.md")
     research.add_argument("--no-stream", action="store_true", help="Compatibility flag; reports are validated before display")
     template = sub.add_parser("template", help="Run a built-in or user:NAME template")
@@ -115,19 +118,23 @@ def _dispatch(args) -> None:
             if args.message is not None:
                 return
     elif args.command == "review":
-        from .review import atomic_save, load_collection, run
+        from .review import atomic_save, load_collection, plan, run
+        from .review_checkpoints import output_paths, resolve_checkpoint
         if args.retry_uncertain and (not args.resume or args.offline):
             raise ValueError("--retry-uncertain requires --resume without --offline.")
+        if args.checkpoint and not args.resume:
+            raise ValueError("--checkpoint requires --resume. Omit both to start a new review.")
+        output, receipt = output_paths(args.file, args.output)
         payload, admission = load_collection(args.file)
-        if Path(args.file).is_dir() and not (args.consent or args.offline):
+        if Path(args.file).expanduser().is_dir() and not (args.consent or args.offline):
             raise ValueError("Folder review sends text to the API. Use --offline to inspect admission, then --consent after checking for private material.")
-        output = Path(args.output or (str(Path(args.file)) + ".review.md"))
-        receipt = Path(str(output) + ".checkpoint.json")
         saved = None
         if args.resume:
-            if receipt.is_symlink() or receipt.stat().st_size > 10_000_000:
-                raise ValueError("Invalid or oversized review checkpoint.")
-            saved = json.loads(receipt.read_text(encoding="utf-8"))
+            source = Path(args.file).expanduser()
+            recovered, saved = resolve_checkpoint(
+                args.checkpoint or receipt, plan(payload, args.question, args.language)[3],
+                (receipt.parent, source.parent, Path.cwd()), explicit=bool(args.checkpoint))
+            print(f"Resuming saved progress from: {recovered}", file=sys.stderr)
         result = run(payload, question=args.question, max_parts=args.max_parts, resume=saved,
                      offline=args.offline, language=args.language, retry_uncertain=args.retry_uncertain,
                      on_checkpoint=lambda value: atomic_save(receipt, value),
@@ -137,6 +144,8 @@ def _dispatch(args) -> None:
             atomic_save(receipt, result)
         _write(str(output), result['markdown'] + "\n\n## File admission\n\n" + json.dumps(admission, indent=2))
         print(json.dumps(result['coverage'], indent=2))
+        if not args.offline:
+            _review_next_steps(args, output, result)
         if (result['coverage']['batches_failed'] or result['coverage']['batches_uncertain']
                 or result['coverage']['batches_partial']):
             raise SystemExit(2)
@@ -164,13 +173,23 @@ def _dispatch(args) -> None:
                 results.append("## " + event["step"] + "\n\n" + event["content"])
                 if output:
                     _write(output, "# Model-generated draft - review required\n\n" + "\n\n".join(results))
+            elif event["type"] == "step_partial":
+                print("" if streamed else event["content"])
+                print(f"INCOMPLETE: {event['step']}. {event['error']}", file=sys.stderr)
+                results.append("## " + event['step'] + " - INCOMPLETE\n\n" + event['content']
+                               + "\n\nIncomplete step: " + event['error'])
+                if output:
+                    source_register = ("\n\n## Source register\n\n" + "\n".join(dict.fromkeys(references))) if references else ""
+                    _write(output, "# Model-generated draft - INCOMPLETE, review required\n\n"
+                           + "\n\n".join(results) + source_register)
         if references:
             results.append("## Source register\n\n" + "\n".join(dict.fromkeys(references)))
         if output:
             _write(output, "# Model-generated draft - review required\n\n" + "\n\n".join(results))
     elif args.command in {"research", "workbench"}:
         from .workbench import run
-        payload = ({"workflow": "brief", "title": args.topic, "query": args.topic, "use_search": True}
+        payload = ({"workflow": "research", "title": args.topic, "query": args.topic, "use_search": True,
+                    "questions": "\n".join(args.question)}
                    if args.command == "research" else json.loads(Path(args.file).read_text(encoding="utf-8")))
         result = run(payload, progress=lambda message: print(message, file=sys.stderr))
         _write(args.output, json.dumps(result, indent=2, ensure_ascii=False) if args.output.endswith(".json") else result["markdown"])
@@ -189,8 +208,30 @@ def _dispatch(args) -> None:
         _write(args.output or f"transcript.{args.format}", export_transcript(result, args.format))
 
 
+def _review_next_steps(args, output, result):
+    coverage, recovery = result['coverage'], result['recovery']
+    base = ['sinter', 'review', args.file, '--resume', '-o', str(output), '--max-parts', str(args.max_parts)]
+    if args.consent:
+        base.append('--consent')
+    if args.language:
+        base.extend(['--language', args.language])
+    if args.question != 'Review this material for mistakes, gaps and inconsistencies.':
+        base.extend(['--question', args.question])
+    if recovery['reassessed_locally']:
+        print(f"Recovered {recovery['reassessed_locally']} saved answer(s) using their source references; no repeat request was needed.", file=sys.stderr)
+    if coverage['batches_not_attempted'] or coverage['batches_failed'] or recovery['follow_up_available']:
+        print('Continue saved work: ' + shlex.join(base), file=sys.stderr)
+    if coverage['batches_uncertain']:
+        print('Some requests have an unknown remote outcome. Check with your provider before authorising a possible duplicate:', file=sys.stderr)
+        print(shlex.join(base + ['--retry-uncertain']), file=sys.stderr)
+    if recovery['follow_up_exhausted']:
+        print(f"{recovery['follow_up_exhausted']} batch(es) still need manual review after two follow-ups. "
+              'Read the saved commentary, or start a new review with a narrower --question and a new -o path. '
+              'Another --resume will not repeat those batches.', file=sys.stderr)
+
+
 def launch() -> None:
-    main(sys.argv[1:] or ["serve"])
+    main(sys.argv[1:])
 
 
 if __name__ == "__main__":
