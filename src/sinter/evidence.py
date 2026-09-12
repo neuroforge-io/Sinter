@@ -167,7 +167,13 @@ def render_evidence(selected: list[Excerpt], sources: list[Source]) -> str:
         parts.extend([f"### {literal(parent.title)} [{item.id}]",
                       "> " + literal(item.quote).replace("\n", "\n> "),
                       f"Source: {parent.id}; characters {item.start}-{item.end}; {parent.kind}."])
-    parts.append("## Source register")
+    parts.append(render_source_register(sources))
+    return "\n\n".join(parts)
+
+
+def render_source_register(sources: list[Source]) -> str:
+    """Render the common provenance register for any source-backed report."""
+    parts = ["## Source register"]
     for item in sources:
         parts.extend([f"### [{item.id}] {literal(item.title)}",
                       f"Kind: {item.kind}. Retrieved/imported: {literal(item.retrieved_at)}.",

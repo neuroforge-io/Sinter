@@ -177,9 +177,14 @@ def retrieve(port: int, question: str) -> dict:
         raise ValueError('Cannot read the local RKC context. Start rkc serve and check the port and snapshot. '+str(type(exc).__name__)) from exc
 
 
-def answer(document, question, consent, progress=lambda value: None):
+def require_answer_consent(consent: bool) -> None:
+    """Validate transfer approval before queuing work or contacting the API."""
     if consent is not True:
         raise ValueError('Confirm that the selected atlas excerpts may be sent to your configured API.')
+
+
+def answer(document, question, consent, progress=lambda value: None):
+    require_answer_consent(consent)
     result = context(document, question)
     if not result['items']:
         result['answer'] = 'There is no matching evidence in the supplied atlas.'

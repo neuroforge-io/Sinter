@@ -300,6 +300,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/atlas/retrieve":
             self._json({"document": atlas.retrieve(self.app.preferences.snapshot()["rkc_port"], body.get("question"))})
         elif path == "/api/atlas/answer":
+            atlas.require_answer_consent(body.get("consent"))
             self._json({"id": self.app.jobs.submit(lambda progress: atlas.answer(body.get("document"), body.get("question"), body.get("consent"), progress))}, 202)
         elif path == "/api/atlas/compile":
             executable = self.app.preferences.snapshot()["rkc_executable"]
