@@ -102,13 +102,21 @@ def test_review_resume_and_failure_keep_completed_work():
     with patch('sinter.client.chat', side_effect=[client.ChatResult('Unverified first review'), client.APIError('timeout', 504)]) as model:
         first = review.run(book, on_checkpoint=lambda value: checkpoints.append(copy.deepcopy(value)))
     assert model.call_count == 2
-    assert first['coverage']['batches_complete'] == 1 and first['coverage']['batches_failed'] == 1
-    assert len(checkpoints) == 2 and checkpoints[0]['batches'][0]['status'] == 'done'
+    assert first['coverage']['batches_complete'] == 1
+    assert first['coverage']['batches_failed'] == 0
+    assert first['coverage']['batches_uncertain'] == 1
+    assert len(checkpoints) == 4
+    assert checkpoints[0]['batches'][0]['status'] == 'running'
+    assert checkpoints[1]['batches'][0]['status'] == 'done'
     with patch('sinter.client.chat', return_value=client.ChatResult('Remaining review')) as model:
         second = review.run(book, resume=first)
-    assert model.call_count == 3 and second['coverage']['batches_complete'] == 4
-    assert 'Unverified first review' in second['markdown']
-    assert second['coverage']['whole_collection_verified'] is False
+    assert model.call_count == 2 and second['coverage']['batches_complete'] == 3
+    assert second['coverage']['batches_uncertain'] == 1
+    with patch('sinter.client.chat', return_value=client.ChatResult('Explicit retry')) as model:
+        third = review.run(book, resume=second, retry_uncertain=True)
+    assert model.call_count == 1 and third['coverage']['batches_complete'] == 4
+    assert 'Unverified first review' in third['markdown']
+    assert third['coverage']['whole_collection_verified'] is False
 
 
 def test_review_offline_no_network_and_checkpoint_binding():

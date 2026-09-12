@@ -26,13 +26,14 @@ def main(argv: list[str] | None = None) -> None:
     chat.add_argument("-m", "--message")
     chat.add_argument("-s", "--system", default="")
     chat.add_argument("--max-tokens", type=int, default=512)
-    review = sub.add_parser("review", help="Shared-context code review")
+    review = sub.add_parser("review", help="Bounded text collection review with explicit coverage")
     review.add_argument("file")
-    review.add_argument("-l", "--language", default="Python")
+    review.add_argument("-l", "--language", default="", help="Optional language hint for the review; part of checkpoint identity")
     review.add_argument("-o", "--output")
     review.add_argument("--no-stream", action="store_true", help="Compatibility flag; bounded batches use JSON responses")
     review.add_argument("--max-parts", type=int, default=8, help="Maximum small batches to review now (1-64)")
-    review.add_argument("--resume", action="store_true", help="Reuse completed batches for identical sources and retry remaining work")
+    review.add_argument("--resume", action="store_true", help="Reuse completed batches and continue unattempted work; uncertain requests stay blocked")
+    review.add_argument("--retry-uncertain", action="store_true", help="With --resume, explicitly allow another request whose remote outcome is unknown")
     review.add_argument("--offline", action="store_true", help="Produce a coverage plan without an API request")
     review.add_argument("--consent", action="store_true", help="Approve sending admitted folder contents to the configured API")
     review.add_argument("--question", default="Review this material for mistakes, gaps and inconsistencies.")
@@ -115,6 +116,8 @@ def _dispatch(args) -> None:
                 return
     elif args.command == "review":
         from .review import load_collection, run, atomic_save
+        if args.retry_uncertain and (not args.resume or args.offline):
+            raise ValueError("--retry-uncertain requires --resume without --offline.")
         payload, admission = load_collection(args.file)
         if Path(args.file).is_dir() and not (args.consent or args.offline):
             raise ValueError("Folder review sends text to the API. Use --offline to inspect admission, then --consent after checking for private material.")
@@ -126,14 +129,15 @@ def _dispatch(args) -> None:
                 raise ValueError("Invalid or oversized review checkpoint.")
             saved = json.loads(receipt.read_text(encoding="utf-8"))
         result = run(payload, question=args.question, max_parts=args.max_parts, resume=saved,
-                     offline=args.offline, on_checkpoint=lambda value: atomic_save(receipt, value),
+                     offline=args.offline, language=args.language, retry_uncertain=args.retry_uncertain,
+                     on_checkpoint=lambda value: atomic_save(receipt, value),
                      progress=lambda message: print(message, file=sys.stderr))
         result['admission'] = admission
         if not args.offline:
             atomic_save(receipt, result)
         _write(str(output), result['markdown'] + "\n\n## File admission\n\n" + json.dumps(admission, indent=2))
         print(json.dumps(result['coverage'], indent=2))
-        if result['coverage']['batches_failed']:
+        if result['coverage']['batches_failed'] or result['coverage']['batches_uncertain']:
             raise SystemExit(2)
     elif args.command == "template":
         template, variables, output = resolve_template(args.name), {}, args.output
