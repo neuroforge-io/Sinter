@@ -16,6 +16,16 @@ Action plans and shared knowledge, with the evidence still in view.
 
 ---
 
+## Reliability update: 0.5.2
+
+Collection review now shapes batches from a deterministic local analysis: each batch
+is cut at statement and line boundaries and asked targeted questions about the real
+symbols, imports and risk-shaped lines in its own excerpt. A received but unsupported
+answer is recorded as a defined partial batch that an explicit resume may re-review
+with a bounded follow-up question. Coverage reports partials separately and returns
+exit code 2 while any partial, failed or uncertain batch remains. Checkpoints embed
+the review engine so older plans are rejected cleanly.
+
 ## Reliability update: 0.5.1
 
 Collection review now writes a checkpoint before each remote request, preserves

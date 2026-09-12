@@ -1,5 +1,18 @@
 # Sinter 0.5 - Community casebooks and recoverable work
 
+## 0.5.2 - review quality
+
+Reviews are now shaped by source structure. Every source is analysed locally for
+symbols, imports and risk-shaped lines; batches are cut at statement boundaries and
+each batch is asked targeted questions about the real functions and risky lines in
+its own excerpt, with an optional bounded planning request that falls back cleanly to
+the deterministic inventory. A received but unsupported answer counts as a defined
+partial batch - never silently replayed, re-reviewable on resume with at most two
+follow-up hops. Coverage reports `batches_partial` separately and exits 2 while any
+partial, failed or uncertain batch remains. See docs/LARGE_REVIEWS.md.
+
+## 0.5.1 - review reliability
+
 A local-first workspace for fragmented notes, correspondence, policies and volunteer
 handover material. New casebooks retain originals, optimistic revisions, backups,
 per-question source passages and explicit coverage gaps. Optional model drafts have

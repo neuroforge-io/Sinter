@@ -99,7 +99,9 @@ def test_draft_requires_consent_and_known_citations():
 def test_review_resume_and_failure_keep_completed_work():
     book = {'title': 'Large source', 'documents': [{'title': 'Policy', 'content': 'A' * 19000}]}
     checkpoints = []
-    with patch('sinter.client.chat', side_effect=[client.ChatResult('Unverified first review'), client.APIError('timeout', 504)]) as model:
+    substantive = 'no issues found after checking the supplied material.'
+    with patch('sinter.client.chat', side_effect=[client.ChatResult('Unverified first review: ' + substantive),
+                                                  client.APIError('timeout', 504)]) as model:
         first = review.run(book, on_checkpoint=lambda value: checkpoints.append(copy.deepcopy(value)))
     assert model.call_count == 2
     assert first['coverage']['batches_complete'] == 1
@@ -108,14 +110,15 @@ def test_review_resume_and_failure_keep_completed_work():
     assert len(checkpoints) == 4
     assert checkpoints[0]['batches'][0]['status'] == 'running'
     assert checkpoints[1]['batches'][0]['status'] == 'done'
-    with patch('sinter.client.chat', return_value=client.ChatResult('Remaining review')) as model:
+    with patch('sinter.client.chat', return_value=client.ChatResult('Remaining review: ' + substantive)) as model:
         second = review.run(book, resume=first)
     assert model.call_count == 2 and second['coverage']['batches_complete'] == 3
     assert second['coverage']['batches_uncertain'] == 1
-    with patch('sinter.client.chat', return_value=client.ChatResult('Explicit retry')) as model:
+    with patch('sinter.client.chat', return_value=client.ChatResult('Explicit retry: ' + substantive)) as model:
         third = review.run(book, resume=second, retry_uncertain=True)
     assert model.call_count == 1 and third['coverage']['batches_complete'] == 4
     assert 'Unverified first review' in third['markdown']
+    assert third['coverage']['batches_partial'] == 0
     assert third['coverage']['whole_collection_verified'] is False
 
 

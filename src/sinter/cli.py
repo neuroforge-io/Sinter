@@ -115,7 +115,7 @@ def _dispatch(args) -> None:
             if args.message is not None:
                 return
     elif args.command == "review":
-        from .review import load_collection, run, atomic_save
+        from .review import atomic_save, load_collection, run
         if args.retry_uncertain and (not args.resume or args.offline):
             raise ValueError("--retry-uncertain requires --resume without --offline.")
         payload, admission = load_collection(args.file)
@@ -137,7 +137,8 @@ def _dispatch(args) -> None:
             atomic_save(receipt, result)
         _write(str(output), result['markdown'] + "\n\n## File admission\n\n" + json.dumps(admission, indent=2))
         print(json.dumps(result['coverage'], indent=2))
-        if result['coverage']['batches_failed'] or result['coverage']['batches_uncertain']:
+        if (result['coverage']['batches_failed'] or result['coverage']['batches_uncertain']
+                or result['coverage']['batches_partial']):
             raise SystemExit(2)
     elif args.command == "template":
         template, variables, output = resolve_template(args.name), {}, args.output

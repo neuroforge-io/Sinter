@@ -27,10 +27,21 @@ python -m sinter review ./src --consent --max-parts 8 --resume -o self-review.md
 ```
 
 Each request receives at most 6,000 source characters plus the question and source
-metadata. A `running` checkpoint is atomically persisted **before** dispatch, then
+metadata, but batches are cut at statement and line boundaries inside that window,
+never mid-line, so no content is dropped and structure is preserved. The user
+question is refined by a deterministic local inventory of every source - symbols,
+imports and risk-shaped lines - into targeted per-batch questions about the real
+functions, classes and risky lines in that batch. When code structure is present,
+one small planning request may refine those questions further; an offline run, a
+resume, or any missing/invalid planning reply reports the batch ledger untouched and
+falls back to the deterministic questions. Every batch record stores which question
+was actually asked.
+A `running` checkpoint is atomically persisted **before** dispatch, then
 updated after the response. If that first write fails, no request is sent.
 Completed batches are reused only when the collection, question, endpoint, model
 and language hint match. Creation time is retained; update time changes on saves.
+Checkpoint fingerprints include the review engine, so checkpoints written by an
+earlier chunking or prompt layout are rejected as different inputs instead of misread.
 
 A timeout, cancellation or interrupted process can leave the remote result unknown.
 Ordinary `--resume` preserves completed work and continues unattempted batches;
@@ -45,12 +56,17 @@ This permission applies only to requests attempted in this invocation. Uncertain
 batches outside its budget remain blocked on a later ordinary resume. Older
 checkpoints with ambiguous `failed` records are treated conservatively as uncertain.
 A received but empty or truncated response is a definitive failed batch; another
-explicit resume may retry it. No run automatically retries generation or continues
-issuing requests after a provider failure. Failed or uncertain results return exit
-code 2, retain earlier work, and distinguish complete, failed, uncertain and
-not-attempted batches. These four counts are disjoint. `not_reviewed` is the aggregate
-of the last three, not a fifth state. Bounded partial runs can return 0; inspect the
-coverage ledger rather than interpreting that exit code as exhaustive review.
+explicit resume may retry it. A received but unsupported reply - no verbatim quote
+of the material and no explicit result - is a defined partial batch. Partials are
+never silently repeated; an explicit resume may re-review one with a bounded
+follow-up question, at most two hops, and each re-review records its attempt in the
+ledger. No run automatically retries generation or continues issuing requests after
+a provider failure. Failed, uncertain and partial results return exit code 2,
+retain earlier work, and distinguish complete, failed, partial, uncertain and
+not-attempted batches. These five counts are disjoint. `not_reviewed` is the
+aggregate of the last four, not a sixth state. Bounded partial runs can return 0;
+inspect the coverage ledger rather than interpreting that exit code as exhaustive
+review.
 
 Use `--question` for a particular concern and `--language` for a language hint sent
 with each excerpt. The same mechanism works on policies and notes, not only code.

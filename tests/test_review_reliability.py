@@ -20,7 +20,7 @@ def test_checkpoint_is_saved_before_remote_dispatch():
 
     def respond(*args, **kwargs):
         assert saved[-1]['batches'][0]['status'] == 'running'
-        return client.ChatResult('Unverified fictional commentary')
+        return client.ChatResult('Unverified fictional commentary: no issues found after checking the supplied material.')
 
     with patch('sinter.client.chat', side_effect=respond):
         result = review.run(book(), on_checkpoint=lambda row: saved.append(row))
@@ -66,7 +66,7 @@ def test_unattempted_explicit_retries_stay_uncertain_after_budget():
     old = review.run(payload, offline=True)
     old['batches'] = [{'id': chunk['id'], 'status': 'uncertain_remote_outcome'}
                       for chunk in review.plan(payload)[2]]
-    with patch('sinter.client.chat', return_value=client.ChatResult('Explicit retry')) as model:
+    with patch('sinter.client.chat', return_value=client.ChatResult('Explicit retry: no issues found after checking the supplied material.')) as model:
         result = review.run(payload, resume=old, retry_uncertain=True, max_parts=1)
     assert model.call_count == 1
     assert result['coverage']['batches_complete'] == 1
@@ -167,3 +167,101 @@ def test_zero_overlap_does_not_send_unrelated_evidence_to_ranker():
     assert selected == []
     assert any('No relevant evidence' in warning for warning in warnings)
     assert any('not proof' in warning for warning in warnings)
+
+
+def test_vague_hedge_becomes_partial_and_bound_on_resume():
+    vague = 'The supplied material appears broadly consistent with expectations.'
+    with patch('sinter.client.chat', return_value=client.ChatResult(vague)) as model:
+        first = review.run(book())
+    assert model.call_count == 1
+    assert first['coverage']['batches_partial'] == 1
+    assert first['coverage']['batches_complete'] == 0
+    assert first['batches'][0]['status'] == 'partial'
+    assert first['batches'][0]['follow_ups'] == 0
+    with patch('sinter.client.chat', return_value=client.ChatResult(vague)) as model:
+        second = review.run(book(), resume=first)
+    assert model.call_count == 1
+    assert second['batches'][0]['follow_ups'] == 1
+    assert second['batches'][0]['question'].startswith(review.FOLLOW_UP_HINT[:20])
+    with patch('sinter.client.chat', return_value=client.ChatResult(vague)) as model:
+        third = review.run(book(), resume=second)
+    assert model.call_count == 1 and third['batches'][0]['follow_ups'] == 2
+    with patch('sinter.client.chat') as model:
+        fourth = review.run(book(), resume=third)
+        model.assert_not_called()
+    assert fourth['coverage']['batches_partial'] == 1
+    assert fourth['coverage']['batches_not_reviewed'] == 1
+
+
+def test_substantive_gate_and_token_budget():
+    assert review._substantive('No issues found after checking the supplied material.', 'x * 12')
+    assert not review._substantive('Looks fine.', 'x * 12')
+    assert review._substantive('"Volunteers meet beside the garden."', 'Volunteers meet beside the garden.')
+    assert not review._substantive('"Volunteers meet beside the garden."', 'Unrelated wording entirely.')
+    assert review._token_budget([]) == 704
+    assert review._token_budget(['one']) == 704
+    assert review._token_budget(['a', 'b', 'c']) == 1088
+    assert review._token_budget(['x'] * 20) == 2048
+
+
+def test_boundary_aware_chunks_are_contiguous_and_complete():
+    block = 'def foo():\n    return 1\n'
+    content = block * 200 + 'x' * 5000 + '\n'
+    chunks = review.plan({'title': 'Structured', 'documents': [{'title': 's.py', 'content': content}]})[2]
+    assert len(chunks) == 2
+    assert chunks[0]['end'] == 4800 and chunks[0]['start'] == 0
+    assert chunks[1]['start'] == 4800 and chunks[1]['end'] == len(content)
+    assert ''.join(chunk['text'] for chunk in chunks) == content
+    assert chunks[0]['end_line'] == chunks[1]['line']
+
+
+def test_targeted_questions_are_grounded_in_real_symbols():
+    code = ('import os\n\n'
+            'def parse_path(value):\n'
+            '    return os.system(value)\n\n'
+            'class Loader:\n'
+            '    def load(self):\n'
+            '        return eval("2")\n')
+    book = {'title': 'Code', 'documents': [{'title': 'main.py', 'content': code}]}
+    _, _, chunks, _ = review.plan(book)
+    chunk = chunks[0]
+    assert set(chunk['symbols']) == {'parse_path', 'Loader', 'load'}
+    assert any('subprocess or shell' in row for row in chunk['smells'])
+    assert any('dynamic code execution' in row for row in chunk['smells'])
+    questions = review._final_plan({}, chunks, review.DEFAULT_QUESTION)[chunk['id']]
+    assert questions
+    for question in questions:
+        assert any(name in question for name in ('parse_path', 'Loader', 'load'))
+
+
+def test_refine_with_model_is_gated_and_graceful():
+    plain = {'title': 'Plain', 'documents': [{'title': 'note', 'content': 'A' * 120}]}
+    with patch('sinter.client.chat', side_effect=AssertionError('gated')) as model:
+        assert review._refine_with_model(review.plan(plain)[2]) == {}
+        model.assert_not_called()
+    code = {'title': 'Code', 'documents': [{'title': 'main.py', 'content': 'def works():\n    return 1\n'}]}
+    chunks = review.plan(code)[2]
+    good = '{"questions": [{"question": "Wrap loads in error handling and verify it.", "target": "works"}]}'
+    with patch('sinter.client.chat', return_value=client.ChatResult(good)):
+        refined = review._refine_with_model(chunks)
+    assert refined[chunks[0]['id']] == ['Wrap loads in error handling and verify it.']
+    for bad in ('not json', '{"questions": []}', '{"questions": "x"}',
+                '{"questions": [{"target": "works"}]}'):
+        with patch('sinter.client.chat', return_value=client.ChatResult(bad)):
+            assert review._refine_with_model(chunks) == {}
+    with patch('sinter.client.chat', side_effect=client.APIError('down', 503)):
+        assert review._refine_with_model(chunks) == {}
+
+
+def test_questions_plan_survives_resume_without_model_calls():
+    code = 'def load(path):\n    return open(path).read()\n'
+    book = {'title': 'Code', 'documents': [{'title': 'main.py', 'content': code}]}
+    with patch('sinter.client.chat', side_effect=AssertionError('no planning call')) as model:
+        first = review.run(book, offline=True)
+        model.assert_not_called()
+    assert first['questions']
+    with patch('sinter.client.chat', side_effect=AssertionError('no planning call')) as model:
+        second = review.run(book, offline=True, resume=first)
+        model.assert_not_called()
+    assert second['questions'] == first['questions']
+    assert 'Question:' in second['markdown']
