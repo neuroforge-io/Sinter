@@ -9,6 +9,7 @@ python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install '.[dev,browser]'
 python -m pytest -q
+python -m ruff check --select E9,F63,F7,F82 src tests tools
 python tools/check_public_boundary.py
 python tools/build_zipapp.py
 python dist/sinter.pyz --version
@@ -26,6 +27,11 @@ python tools/speech_smoke.py
 ```
 
 The test prints and retains an explicit receipt. It is a bounded interoperability check, not a meeting accuracy benchmark. Upstream audio fixtures and model weights are not redistributed in the Sinter source or portable app.
+
+The Ruff gate covers fatal syntax and undefined-name correctness checks. It does
+not certify that all historical formatting/style debt has been removed. Package
+version metadata is read from `src/sinter/__init__.py` by Hatch; do not duplicate a
+version literal in `pyproject.toml`.
 
 ## Configuration
 
@@ -80,6 +86,7 @@ The dependency-free YAML subset supports indented variables/steps and quoted one
 | `client.py`, `templates.py`, `recipes.py` | Public API transport and explicitly generative exploration. |
 | `evidence.py`, `briefs.py`, `grants.py`, `workbench.py` | Source-constrained compilation, question navigation and conservative checks. |
 | `meetings.py`, `speech.py`, `transcript_export.py` | Transcript integrity, optional recognition and interchange exports. |
+| `casebooks.py`, `review.py` | Revisioned source collections, bounded admission, checkpointed reviews and coverage. |
 | `store.py`, `jobs.py`, `server.py` | Persistence, bounded work, cancellation and local HTTP. |
 | `web/home.js`, `web/app.js`, `web/workbench.js` | Overview, routing and guided tasks. |
 | `web/audio.js`, `web/transcription.js` | Local playback, transcription controls and passage review. |

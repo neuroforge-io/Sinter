@@ -12,7 +12,10 @@ from sinter.templates import Step, render_prompt, get_builtin_template, list_bui
 
 def test_version():
     assert re.fullmatch(r'\d+\.\d+\.\d+', __version__)
-    assert f'version = "{__version__}"' in (Path(__file__).parents[1]/'pyproject.toml').read_text(encoding='utf-8')
+    metadata = (Path(__file__).parents[1] / 'pyproject.toml').read_text(encoding='utf-8')
+    assert 'dynamic = ["version"]' in metadata
+    assert '[tool.hatch.version]\npath = "src/sinter/__init__.py"' in metadata
+    assert not re.search(r'^version\s*=', metadata, re.M)
 
 
 def test_message():

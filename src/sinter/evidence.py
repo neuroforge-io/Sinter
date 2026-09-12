@@ -115,6 +115,8 @@ def tokens(value: str) -> set[str]:
 def select(sources: list[Source], query: str, use_model: bool = False) -> tuple[list[Excerpt], list[str]]:
     terms = tokens(query)
     candidates = excerpts(sources)
+    all_candidates = candidates
+    candidates = [item for item in candidates if terms & tokens(item.quote)]
     candidates.sort(key=lambda item: len(terms & tokens(item.quote)), reverse=True)
     chosen, counts = [], {}
     for candidate in candidates:
@@ -124,7 +126,9 @@ def select(sources: list[Source], query: str, use_model: bool = False) -> tuple[
         if len(chosen) == 12:
             break
     warnings = []
-    if len(chosen) < len(candidates):
+    if not chosen:
+        warnings.append('No relevant evidence found by wording overlap. This is not proof that the sources contain no answer; revise the query or inspect the originals.')
+    if len(chosen) < len(all_candidates):
         warnings.append("This is selected evidence, not an exhaustive review. Full supplied source text is retained in the evidence pack.")
     if use_model and chosen:
         allowed = {item.id: item for item in chosen[:6]}

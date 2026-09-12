@@ -16,6 +16,15 @@ Action plans and shared knowledge, with the evidence still in view.
 
 ---
 
+## Reliability update: 0.5.1
+
+Collection review now writes a checkpoint before each remote request, preserves
+uncertain outcomes without silently replaying them, and separates completed,
+failed, uncertain and unattempted coverage. Intake includes CI/configuration and
+extensionless UTF-8 text with bounded admission and original-byte hashes. Evidence
+selection no longer substitutes unrelated excerpts when wording overlap is absent.
+See the [changelog](CHANGELOG.md) and [recovery guide](docs/LARGE_REVIEWS.md).
+
 ## New in 0.5: put the fragments together
 
 **Community casebooks** bring notes, replies, policies and past work into one local,

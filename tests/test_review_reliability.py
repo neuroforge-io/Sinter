@@ -1,0 +1,169 @@
+"""Recovery safety and admission regressions; all model responses are fictional."""
+import copy
+import hashlib
+import json
+from unittest.mock import patch
+
+import pytest
+
+from sinter import client, evidence, review
+from sinter.operations import Cancelled
+
+
+def book(characters=100):
+    return {'title': 'Community policies', 'documents': [
+        {'title': 'Meeting notes', 'content': 'A' * characters}]}
+
+
+def test_checkpoint_is_saved_before_remote_dispatch():
+    saved = []
+
+    def respond(*args, **kwargs):
+        assert saved[-1]['batches'][0]['status'] == 'running'
+        return client.ChatResult('Unverified fictional commentary')
+
+    with patch('sinter.client.chat', side_effect=respond):
+        result = review.run(book(), on_checkpoint=lambda row: saved.append(row))
+    assert saved[0]['batches'][0]['status'] == 'running'
+    assert saved[1]['batches'][0]['status'] == 'done'
+    assert result['coverage']['requests_this_run'] == 1
+    assert len({row['created_at'] for row in saved}) == 1
+
+
+def test_failed_write_ahead_checkpoint_prevents_dispatch():
+    with patch('sinter.client.chat') as model:
+        with pytest.raises(OSError, match='disk full'):
+            review.run(book(), on_checkpoint=lambda _: (_ for _ in ()).throw(OSError('disk full')))
+        model.assert_not_called()
+
+
+@pytest.mark.parametrize('failure', [Cancelled(), KeyboardInterrupt(), RuntimeError('process interrupted')])
+def test_inflight_interruption_remains_blocked_on_resume(failure):
+    saved = []
+    with patch('sinter.client.chat', side_effect=failure):
+        with pytest.raises(type(failure)):
+            review.run(book(), on_checkpoint=lambda row: saved.append(copy.deepcopy(row)))
+    with patch('sinter.client.chat') as model:
+        resumed = review.run(book(), resume=saved[-1])
+        model.assert_not_called()
+    assert resumed['coverage']['batches_uncertain'] == 1
+    assert resumed['coverage']['batches_not_attempted'] == 0
+
+
+def test_legacy_failure_is_conservatively_uncertain():
+    old = review.run(book(), offline=True)
+    chunk = review.plan(book())[2][0]
+    old.pop('recovery_version')
+    old['batches'] = [{'id': chunk['id'], 'status': 'failed', 'error': 'legacy timeout'}]
+    with patch('sinter.client.chat') as model:
+        result = review.run(book(), resume=old)
+        model.assert_not_called()
+    assert result['coverage']['batches_uncertain'] == 1
+
+
+def test_unattempted_explicit_retries_stay_uncertain_after_budget():
+    payload = book(13000)
+    old = review.run(payload, offline=True)
+    old['batches'] = [{'id': chunk['id'], 'status': 'uncertain_remote_outcome'}
+                      for chunk in review.plan(payload)[2]]
+    with patch('sinter.client.chat', return_value=client.ChatResult('Explicit retry')) as model:
+        result = review.run(payload, resume=old, retry_uncertain=True, max_parts=1)
+    assert model.call_count == 1
+    assert result['coverage']['batches_complete'] == 1
+    assert result['coverage']['batches_uncertain'] == 2
+    with patch('sinter.client.chat') as model:
+        resumed = review.run(payload, resume=result)
+        model.assert_not_called()
+    assert resumed['coverage']['batches_uncertain'] == 2
+
+
+def test_received_incomplete_response_is_failed_not_uncertain():
+    with patch('sinter.client.chat', return_value=client.ChatResult('Truncated', finish_reason='length')):
+        result = review.run(book(13000))
+    coverage = result['coverage']
+    assert coverage['batches_failed'] == 1 and coverage['batches_uncertain'] == 0
+    assert coverage['batches_not_attempted'] == 2
+    assert sum(coverage[key] for key in ('batches_complete', 'batches_failed',
+                                       'batches_uncertain', 'batches_not_attempted')) == coverage['batches_total']
+
+
+def test_creation_time_survives_resume_and_language_is_bound():
+    with patch('sinter.review.utc_now', return_value='2026-09-12T01:00:00+00:00'):
+        first = review.run(book(), offline=True, language='German')
+    with patch('sinter.review.utc_now', return_value='2026-09-12T02:00:00+00:00'):
+        second = review.run(book(), offline=True, language='German', resume=first)
+    assert second['created_at'] == first['created_at']
+    assert second['updated_at'] != first['updated_at']
+    with pytest.raises(ValueError, match='different inputs'):
+        review.run(book(), language='English', resume=first)
+    with patch('sinter.client.chat', return_value=client.ChatResult('Fictional response')) as model:
+        review.run(book(), language='German')
+    assert json.loads(model.call_args.args[0][1].content)['language_hint'] == 'German'
+
+
+def test_duplicate_checkpoint_batches_are_rejected():
+    old = review.run(book(13000), offline=True)
+    chunk = review.plan(book(13000))[2][0]
+    old['batches'] = [{'id': chunk['id'], 'status': 'running'}] * 2
+    with pytest.raises(ValueError, match='checkpoint batch'):
+        review.run(book(13000), resume=old)
+
+
+@pytest.mark.parametrize('options', [{'retry_uncertain': True}, {'retry_uncertain': 'yes'},
+                                      {'retry_uncertain': True, 'offline': True}])
+def test_retry_permission_requires_explicit_online_resume(options):
+    with pytest.raises(ValueError, match='Retrying uncertain'):
+        review.run(book(), **options)
+
+
+def test_intake_admits_ci_extensionless_and_unknown_utf8_with_byte_hash(tmp_path):
+    workflow = tmp_path / '.github' / 'workflows'
+    workflow.mkdir(parents=True)
+    (workflow / 'ci.yml').write_text('name: Fictional CI\n', encoding='utf-8')
+    raw = b'\xef\xbb\xbfFROM fictional\r\n'
+    (tmp_path / 'Dockerfile').write_bytes(raw)
+    (tmp_path / 'notes.community').write_text('Volunteer shifts need confirmation.', encoding='utf-8')
+    payload, manifest = review.load_collection(tmp_path)
+    titles = {row['title'] for row in payload['documents']}
+    assert titles == {'.github/workflows/ci.yml', 'Dockerfile', 'notes.community'}
+    record = next(row for row in manifest['admitted'] if row['path'] == 'Dockerfile')
+    assert record['source_bytes_sha256'] == hashlib.sha256(raw).hexdigest()
+    assert record['bytes'] == len(raw)
+    assert manifest['discovery_complete']
+
+
+def test_intake_excludes_suspected_credentials_and_binary_data(tmp_path):
+    (tmp_path / 'safe.txt').write_text('Ordinary community note.', encoding='utf-8')
+    (tmp_path / '.env').write_text('SENSITIVE=fixture', encoding='utf-8')
+    (tmp_path / 'token.txt').write_text('api_key=' + 'FAKE' * 6, encoding='utf-8')
+    (tmp_path / 'key.txt').write_text('-----BEGIN PRIVATE KEY-----\nfixture', encoding='utf-8')
+    (tmp_path / 'binary.unknown').write_bytes(b'\x00binary\x01')
+    (tmp_path / 'document.pdf').write_bytes(b'%PDF-fixture')
+    payload, manifest = review.load_collection(tmp_path)
+    assert [row['title'] for row in payload['documents']] == ['safe.txt']
+    assert len(manifest['skipped']) == 5
+    assert any('suspected-sensitive content' in key for key in manifest['exclusion_counts'])
+
+
+def test_discovery_cap_is_visible_and_operational_priority_is_preserved(tmp_path, monkeypatch):
+    for index in range(6):
+        (tmp_path / f'{index}.txt').write_text('Fictional note', encoding='utf-8')
+    (tmp_path / 'Dockerfile').write_text('FROM fictional', encoding='utf-8')
+    monkeypatch.setattr(review, 'MAX_FILES', 1)
+    payload, manifest = review.load_collection(tmp_path)
+    assert payload['documents'][0]['title'] == 'Dockerfile'
+    assert manifest['exclusion_counts']['document count limit'] == 6
+    monkeypatch.setattr(review, 'MAX_DISCOVERY_ENTRIES', 3)
+    _, manifest = review.load_collection(tmp_path)
+    assert manifest['entries_examined'] == 3
+    assert not manifest['discovery_complete']
+
+
+def test_zero_overlap_does_not_send_unrelated_evidence_to_ranker():
+    sources = [evidence.source('Fictional note', 'Volunteers meet beside the garden.')]
+    with patch('sinter.client.chat') as model:
+        selected, warnings = evidence.select(sources, 'Insurance excess', use_model=True)
+        model.assert_not_called()
+    assert selected == []
+    assert any('No relevant evidence' in warning for warning in warnings)
+    assert any('not proof' in warning for warning in warnings)

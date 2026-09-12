@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sinter"
-version = "0.5.0"
+dynamic = ["version"]
 description = "A local-first community workbench: source-linked briefs, funding research and reviewable meeting transcription."
 readme = "README.md"
 license = "Apache-2.0"
@@ -22,7 +22,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9", "build>=1,<2"]
+dev = ["pytest>=8,<9", "build>=1,<2", "ruff>=0.11,<1"]
 browser = ["playwright>=1.50,<2"]
 speech = ["faster-whisper>=1.1,<2"]
 
@@ -32,6 +32,9 @@ sinter = "sinter.cli:launch"
 [project.urls]
 Homepage = "https://github.com/neuroforge-io/Sinter"
 Documentation = "https://neuroforge.io"
+
+[tool.hatch.version]
+path = "src/sinter/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sinter"]
