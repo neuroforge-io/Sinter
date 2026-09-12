@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator
+from typing import Generator, Iterator
 from urllib.parse import urlsplit
 
 from . import __version__
@@ -22,6 +22,16 @@ MODEL = "erais-fracture-gemma"
 _KEY_FILE = Path.home() / ".sinter_key"
 MAX_RESPONSE = 2 * 1024 * 1024
 MAX_INPUT = 64000
+MIN_OUTPUT_TOKENS = 32
+MAX_OUTPUT_TOKENS = 8192
+PUBLIC_MAX_OUTPUT_TOKENS = 2048
+PUBLIC_MAX_CONVERSATION_BYTES = 49152
+PUBLIC_MAX_SYSTEM_BYTES = 8192
+PUBLIC_MAX_REQUEST_BYTES = 98304
+_PUBLIC_WHITESPACE = (
+    "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006"
+    "\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+)
 CONTROL_TIMEOUT = 10.0
 REQUEST_TIMEOUT = 30.0
 JSON_CHAT_TIMEOUT = 120.0
@@ -59,6 +69,33 @@ class ChatResult:
     completion_tokens: int = 0
     total_tokens: int = 0
     finish_reason: str = ""
+
+
+class IncompleteGeneration(APIError):
+    """A received answer that must remain visibly incomplete, with no replay."""
+
+    def __init__(self, result: ChatResult, max_tokens: int):
+        self.result = result
+        self.max_tokens = max_tokens
+        if result.finish_reason == "length":
+            message = (f"The answer reached its {max_tokens}-token output limit. "
+                       "The partial text is available for review. Shorten the requested "
+                       "answer or raise the output limit within your service's range.")
+        else:
+            message = "The model stopped before completing its answer. Review the partial text."
+        super().__init__(message + " No request was replayed.")
+
+
+def require_complete(result: ChatResult, max_tokens: int) -> ChatResult:
+    """Apply the same explicit completion policy to JSON and streamed answers."""
+    if not isinstance(result.content, str) or not result.content.strip():
+        raise APIError("The model returned no answer. No request was replayed. "
+                       "Try a clearer or shorter prompt.")
+    if not isinstance(result.finish_reason, str):
+        raise APIError("The API returned an invalid completion reason.")
+    if result.finish_reason not in {"", "stop"}:
+        raise IncompleteGeneration(result, max_tokens)
+    return result
 
 
 @dataclass
@@ -149,7 +186,7 @@ def _request_timeout(path: str, body: dict | None) -> float:
 
 
 def _open(path: str, body: dict | None = None):
-    data = None if body is None else json.dumps(body).encode("utf-8")
+    data = None if body is None else _json_bytes(body)
     headers = _headers()
     if body and body.get("stream"):
         headers["Accept"] = "text/event-stream"
@@ -217,9 +254,76 @@ def _post_raw(path: str, body: dict):
     return _open(path, body)
 
 
+def validate_max_tokens(max_tokens: int) -> int:
+    """Validate the shared template, CLI and API output-token range."""
+    if (type(max_tokens) is not int
+            or not MIN_OUTPUT_TOKENS <= max_tokens <= MAX_OUTPUT_TOKENS):
+        raise ValueError(f"max_tokens must be an integer from {MIN_OUTPUT_TOKENS} "
+                         f"to {MAX_OUTPUT_TOKENS}.")
+    return max_tokens
+
+
+def effective_max_tokens(max_tokens: int) -> int:
+    """Apply the user's cap and fail locally for unsupported public API budgets."""
+    validate_max_tokens(max_tokens)
+    settings = _CONNECTION.get()
+    if settings is not None:
+        max_tokens = min(max_tokens, validate_max_tokens(settings["max_tokens"]))
+    if _uses_public_api() and max_tokens > PUBLIC_MAX_OUTPUT_TOKENS:
+        raise ValueError("The NeuroForge public API supports an output limit from "
+                         f"{MIN_OUTPUT_TOKENS} to {PUBLIC_MAX_OUTPUT_TOKENS} tokens.")
+    return max_tokens
+
+
+def _uses_public_api() -> bool:
+    endpoint = urlsplit(_endpoint(""))
+    return endpoint.hostname == "neuroforge.io" and endpoint.path.rstrip("/") == "/v1"
+
+
+def _json_bytes(body: dict) -> bytes:
+    """Keep Unicode as UTF-8 and use one encoding for admission and transport."""
+    return json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+def _validate_public_messages(messages: list[Message]) -> None:
+    """Match the public service's UTF-8 and conversation-shape admission rules."""
+    conversation_bytes = 0
+    expected_role = "user"
+    for index, message in enumerate(messages):
+        if not message.content.strip(_PUBLIC_WHITESPACE):
+            raise ValueError(f"Message {index + 1} is empty. "
+                             "Enter text or remove the empty message.")
+        if "\0" in message.content:
+            raise ValueError(f"Message {index + 1} contains a null character. "
+                             "Remove it before sending.")
+        try:
+            size = len(message.content.encode("utf-8"))
+        except UnicodeEncodeError as exc:
+            raise ValueError(f"Message {index + 1} contains invalid Unicode text. "
+                             "Paste valid text before sending.") from exc
+        if index == 0 and message.role == "system":
+            if size > PUBLIC_MAX_SYSTEM_BYTES:
+                raise ValueError("The system instructions exceed the NeuroForge "
+                                 f"public API's {PUBLIC_MAX_SYSTEM_BYTES}-byte limit. "
+                                 "Shorten them before sending.")
+        else:
+            if message.role != expected_role:
+                raise ValueError("The NeuroForge public API requires alternating user "
+                                 "and assistant messages, with optional system instructions "
+                                 "first. Start a new chat or correct the message order.")
+            conversation_bytes += size
+            expected_role = "assistant" if expected_role == "user" else "user"
+    if expected_role != "assistant":
+        raise ValueError("The conversation must end with a user message. "
+                         "Add your question before sending.")
+    if conversation_bytes > PUBLIC_MAX_CONVERSATION_BYTES:
+        raise ValueError("This conversation exceeds the NeuroForge public API's "
+                         f"{PUBLIC_MAX_CONVERSATION_BYTES}-byte limit (UTF-8). "
+                         "Start a new chat or shorten the supplied text.")
+
+
 def _chat_body(messages: list[Message], max_tokens: int) -> dict:
-    if type(max_tokens) is not int or not 1 <= max_tokens <= 8192:
-        raise ValueError("max_tokens must be an integer from 1 to 8192.")
+    max_tokens = effective_max_tokens(max_tokens)
     if not isinstance(messages, list) or not 1 <= len(messages) <= 64:
         raise ValueError("Provide between 1 and 64 messages; start a new chat if needed.")
     if any(not isinstance(m, Message) or not isinstance(m.role, str)
@@ -228,12 +332,21 @@ def _chat_body(messages: list[Message], max_tokens: int) -> dict:
         raise ValueError("Messages require a valid role and text content.")
     if sum(len(m.content) for m in messages) > MAX_INPUT:
         raise ValueError("This conversation is too long. Start a new chat or shorten it.")
+    public_api = _uses_public_api()
+    if public_api:
+        _validate_public_messages(messages)
     settings = _CONNECTION.get()
-    if settings is not None:
-        max_tokens = min(max_tokens, settings["max_tokens"])
-    return {"model": settings["model"] if settings is not None else os.environ.get("NEUROFORGE_MODEL", MODEL),
+    body = {"model": settings["model"] if settings is not None else os.environ.get("NEUROFORGE_MODEL", MODEL),
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "max_tokens": max_tokens}
+    if public_api:
+        # Account for JSON escaping and the defaults added by the public gateway.
+        expanded = {**body, "stream": False, "temperature": 0, "n": 1}
+        if len(_json_bytes(expanded)) > PUBLIC_MAX_REQUEST_BYTES:
+            raise ValueError("This request exceeds the NeuroForge public API's "
+                             f"{PUBLIC_MAX_REQUEST_BYTES}-byte JSON limit after escaping. "
+                             "Shorten the supplied text before sending.")
+    return body
 
 
 def list_models() -> list[dict]:
@@ -248,7 +361,7 @@ def chat(messages: list[Message], max_tokens: int = 512) -> ChatResult:
     try:
         choice = result["choices"][0]
         content = choice["message"]["content"]
-        if not isinstance(content, str):
+        if not isinstance(content, str) or not isinstance(choice.get("finish_reason", ""), str):
             raise ValueError("non-text reply")
         usage = result.get("usage") or {}
         return ChatResult(content, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
@@ -322,21 +435,27 @@ def _events(response, *, deadline: float | None = None) -> Iterator[str]:
             data.append(line[5:].removeprefix(" "))
 
 
-def chat_stream(messages: list[Message], max_tokens: int = 512) -> Iterator[str]:
+def chat_stream(messages: list[Message], max_tokens: int = 512) -> Generator[str, None, ChatResult]:
+    """Yield text and return final metadata to callers that retain the generator result."""
     body = _chat_body(messages, max_tokens)
     body["stream"] = True
     finish_reason = ""
+    parts: list[str] = []
+    usage: dict = {}
     deadline = time.monotonic() + STREAM_DEADLINE
     try:
         with _post_raw("/chat/completions", body) as response:
             for event in _events(response, deadline=deadline):
                 if event.strip() == "[DONE]":
-                    if finish_reason not in {"", "stop"}:
-                        raise APIError("Generation stopped before a complete answer. Review the partial output.")
-                    return
+                    result = ChatResult("".join(parts), usage.get("prompt_tokens", 0),
+                                        usage.get("completion_tokens", 0), usage.get("total_tokens", 0),
+                                        finish_reason)
+                    return require_complete(result, body["max_tokens"])
                 chunk = json.loads(event)
                 if not isinstance(chunk, dict) or "error" in chunk:
                     raise APIError("The API reported an error during generation.")
+                if isinstance(chunk.get("usage"), dict):
+                    usage = chunk["usage"]
                 choices = chunk.get("choices", [])
                 if not choices:
                     continue
@@ -346,10 +465,13 @@ def chat_stream(messages: list[Message], max_tokens: int = 512) -> Iterator[str]
                 if content is not None:
                     if not isinstance(content, str):
                         raise ValueError("non-text delta")
+                    parts.append(content)
                     yield content
         raise APIError("The response ended early. The partial answer is not complete.")
     except (ValueError, UnicodeError, KeyError, IndexError, TypeError, AttributeError) as exc:
         raise APIError("The API returned a malformed stream.") from exc
+    except DeadlineExceeded:
+        raise
     except (OSError, TimeoutError) as exc:
         raise APIError("The stream was interrupted. The partial answer is not complete.") from exc
 
