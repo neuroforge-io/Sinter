@@ -23,8 +23,10 @@ import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'src'))
 from sinter import __version__
+from tools._support import require_module
 
 
 def run(*args, **kwargs):
@@ -74,11 +76,14 @@ def collect_licences(notices):
             raise RuntimeError(f'{package} licence could not be collected')
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--arch', required=True, choices=['x64', 'x86', 'arm64', 'armv7'])
-    parser.add_argument('--execution', default='native', choices=['native', 'compatibility', 'emulated'])
-    args = parser.parse_args()
+def main(argv: list[str] | None = None) -> None:
+    """Validate build setup before creating and install-testing native packages."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--arch', required=True, choices=['x64', 'x86', 'arm64', 'armv7'], help='Target architecture; requires a matching Python interpreter.')
+    parser.add_argument('--execution', default='native', choices=['native', 'compatibility', 'emulated'], help='Record how the installed app is tested.')
+    args = parser.parse_args(argv)
+    for module, label in [('PyInstaller', 'PyInstaller'), ('certifi', 'certifi')]:
+        require_module(parser, module, label, 'python -m pip install pyinstaller==6.22.2 certifi')
     os.chdir(ROOT)
     bits = struct.calcsize('P')*8
     assert bits == (32 if args.arch in {'x86', 'armv7'} else 64), 'Wrong Python architecture'

@@ -19,6 +19,30 @@ python tools/browser_smoke.py
 
 Windows activation: `.venv\Scripts\activate`. Browser integration uses fictional local fixtures and a temporary workspace. It must run in an environment that permits a browser to access its local HTTP server; do not bypass managed browser policies. The Actions workflow provides such an environment.
 
+Every browser integration tool accepts `--help` without Playwright installed.
+The same setup runs `browser_smoke.py`, `studio_browser.py`, `desktop_browser.py`,
+`casebook_browser.py` and `site_browser.py`. Use `--chromium /path/to/chromium` or
+`SINTER_CHROMIUM` for an existing browser; the command-line option takes priority.
+Missing packages or browsers fail with installation guidance and a nonzero exit
+status, so an unexecuted integration test cannot silently pass CI.
+
+Other integration and release tools also explain their arguments with `--help`:
+
+```sh
+python tools/rkc_smoke.py /path/to/rkc
+python -m pip install pyinstaller==6.22.2 certifi
+python tools/package_native.py --arch x64
+python tools/release_manifest.py publish source-package
+```
+
+Build the pinned RKC revision in `.github/workflows/ci.yml` for the real RKC
+check. Native packaging requires a matching target interpreter and builds,
+installs and tests the package using the platform tools documented by
+`.github/workflows/native.yml`. Release assembly requires `GITHUB_SHA` to be the
+full 40-character source commit verified by CI, plus all nine matching installer
+receipts and the verified source package. Setup errors exit with status 2;
+release validation failures exit with status 1 and never waive missing receipts.
+
 Optional real speech integration downloads short test audio from a pinned revision of the upstream faster-whisper tests, and a tiny model from its normal model host. No personal recording, repository secret or Fracture API key is used:
 
 ```sh

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
 import tempfile
@@ -12,13 +11,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'src'))
-from playwright.sync_api import expect, sync_playwright
 from sinter import client, speech
 from sinter.server import make_server
+from tools._support import browser_arguments, launch_chromium
 
 
-def main():
+def main(argv: list[str] | None = None) -> None:
+    """Exercise studio journeys after checking optional browser setup."""
+    args = browser_arguments(__doc__, argv)
+    from playwright.sync_api import expect, sync_playwright
+
     artifacts = ROOT / 'browser-artifacts'
     artifacts.mkdir(exist_ok=True)
     errors, external = [], []
@@ -41,10 +45,7 @@ def main():
                  patch.object(client, 'chat', side_effect=AssertionError('Unexpected remote model')), \
                  patch.object(speech, 'capabilities', return_value={'available': True, 'notice': 'Test engine available'}), \
                  patch.object(speech, 'transcribe_upload', return_value=transcript) as recogniser, sync_playwright() as playwright:
-                options = {'headless': True}
-                if os.environ.get('SINTER_CHROMIUM'):
-                    options['executable_path'] = os.environ['SINTER_CHROMIUM']
-                browser = playwright.chromium.launch(**options)
+                browser = launch_chromium(playwright, args.chromium)
                 context = browser.new_context(viewport={'width': 1440, 'height': 1000}, reduced_motion='reduce')
                 page = context.new_page()
                 page.on('pageerror', lambda error: errors.append(str(error)))

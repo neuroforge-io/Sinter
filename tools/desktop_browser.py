@@ -2,28 +2,30 @@
 from __future__ import annotations
 import hashlib
 import json
-import os
 import sys
 import tempfile
 import threading
 from pathlib import Path
 from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT/'src'))
-from playwright.sync_api import expect, sync_playwright
 from sinter import client
 from sinter.server import make_server
+from tools._support import browser_arguments, launch_chromium
 
 
-def main():
+def main(argv: list[str] | None = None) -> None:
+    """Exercise desktop journeys after checking optional browser setup."""
+    args = browser_arguments(__doc__, argv)
+    from playwright.sync_api import expect, sync_playwright
+
     with tempfile.TemporaryDirectory(prefix='sinter-desktop-browser-') as temp, patch.object(client, 'chat', side_effect=AssertionError('Unexpected AI call')), patch.object(client, 'search', side_effect=AssertionError('Unexpected search')):
         server = make_server(port=0, directory=temp)
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
         try:
             with sync_playwright() as playwright:
-                options = {'headless': True}
-                if os.environ.get('SINTER_CHROMIUM'): options['executable_path'] = os.environ['SINTER_CHROMIUM']
-                browser = playwright.chromium.launch(**options)
+                browser = launch_chromium(playwright, args.chromium)
                 context = browser.new_context(viewport={'width': 1440, 'height': 1000}, reduced_motion='reduce')
                 page = context.new_page(); errors = []; external = []
                 page.on('pageerror', lambda error: errors.append(str(error)))

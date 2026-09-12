@@ -1,8 +1,10 @@
 """Fail a release unless all nine installed-app receipts match this checkout."""
 from __future__ import annotations
+import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -51,5 +53,26 @@ def assemble(output: Path, source: Path, commit: str):
     print(f'Verified {len(records)} installed targets and source at {commit}')
 
 
+def main(argv: list[str] | None = None) -> None:
+    """Validate release inputs before assembling the required target receipts."""
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog='GITHUB_SHA must contain the full source commit tested by CI.',
+    )
+    parser.add_argument('output', type=Path, help='Directory containing all nine installers and test receipts.')
+    parser.add_argument('source', type=Path, help='Tested source package with verified-commit.txt, sinter-source.zip and dist/sinter.pyz.')
+    args = parser.parse_args(argv)
+    commit = os.environ.get('GITHUB_SHA', '').strip()
+    if not re.fullmatch(r'[0-9a-fA-F]{40}', commit):
+        parser.error('Set GITHUB_SHA to the full 40-character source commit tested by CI. Release provenance is required.')
+    for name, folder in [('output', args.output), ('source', args.source)]:
+        if not folder.is_dir():
+            parser.error(f'The {name} directory does not exist: {folder}')
+    try:
+        assemble(args.output, args.source, commit)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        parser.exit(1, f'{parser.prog}: release validation failed: {exc}\n')
+
+
 if __name__ == '__main__':
-    assemble(Path(sys.argv[1]), Path(sys.argv[2]), os.environ['GITHUB_SHA'])
+    main()

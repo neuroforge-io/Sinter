@@ -1,23 +1,29 @@
 """Real browser journey: community casebook, original excerpts, recovery and backups."""
+from __future__ import annotations
 from pathlib import Path
 import json
-import os
 import sys
 import tempfile
 import threading
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / 'src'))
 from sinter.server import make_server
-from playwright.sync_api import sync_playwright, expect
+from tools._support import browser_arguments, launch_chromium
 
 
-def main():
+def main(argv: list[str] | None = None) -> None:
+    """Exercise casebook journeys after checking optional browser setup."""
+    args = browser_arguments(__doc__, argv)
+    from playwright.sync_api import sync_playwright, expect
+
     out = Path('browser-artifacts'); out.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory() as directory:
         server = make_server(port=0, directory=directory)
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
         try:
             with sync_playwright() as driver:
-                browser = driver.chromium.launch(executable_path=os.environ.get('SINTER_CHROMIUM') or None)
+                browser = launch_chromium(driver, args.chromium)
                 page = browser.new_page(viewport={'width': 1440, 'height': 1000}, reduced_motion='reduce')
                 errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
                 base = f'http://127.0.0.1:{server.server_port}'

@@ -1,6 +1,8 @@
 """Actual pinned RKC compilation and HTTP context interoperability; no AI calls."""
 from __future__ import annotations
+import argparse
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -12,8 +14,27 @@ sys.path.insert(0, str(ROOT/'src'))
 from sinter import atlas
 
 
-def main():
-    binary = Path(sys.argv[1]).resolve()
+def main(argv: list[str] | None = None) -> None:
+    """Run the real RKC interoperability gate using an explicit binary."""
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog='Build the pinned RKC revision used by .github/workflows/ci.yml first.',
+    )
+    parser.add_argument('binary', type=Path, help='Path to the compiled RKC executable.')
+    args = parser.parse_args(argv)
+    binary = args.binary.expanduser().resolve()
+    if not binary.is_file():
+        parser.error(f'RKC executable does not exist: {binary}. Build RKC and pass its executable path.')
+    if not os.access(binary, os.X_OK):
+        parser.error(f'RKC path is not executable: {binary}. Pass the compiled RKC binary.')
+    try:
+        run_check(binary)
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+        parser.exit(1, f'{parser.prog}: RKC integration failed: {exc}\n')
+
+
+def run_check(binary: Path) -> None:
+    """Compile and query actual RKC, retaining a receipt only after success."""
     files = [{'name':'garden.py', 'content':'def garden_budget():\n    """Garden budget is proposed; spending has not been approved."""\n    return 0\n'},
              {'name':'notes.md','content':'# Garden planning\nNo spending was approved. Request quotes before a decision.\n'}]
     generated = atlas.compile_collection(files, str(binary), True)

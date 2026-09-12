@@ -6,13 +6,18 @@ import sys
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from playwright.sync_api import expect, sync_playwright
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from tools._support import browser_arguments, launch_chromium
 API = 'https://api.github.com/repos/neuroforge-io/Sinter/releases?per_page=10'
 REPO = 'https://github.com/neuroforge-io/Sinter'
 
 
-def main():
+def main(argv: list[str] | None = None) -> None:
+    """Exercise the public download page after checking browser setup."""
+    args = browser_arguments(__doc__, argv)
+    from playwright.sync_api import expect, sync_playwright
+
     handler = functools.partial(SimpleHTTPRequestHandler, directory=str(ROOT/'site'))
     server = ThreadingHTTPServer(('127.0.0.1', 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
@@ -25,7 +30,7 @@ def main():
     base = f'http://127.0.0.1:{server.server_port}'
     try:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
+            browser = launch_chromium(playwright, args.chromium)
             context = browser.new_context(viewport={'width':1440,'height':1000})
             errors = []; unexpected = []
             def guard(route):
