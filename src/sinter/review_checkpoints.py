@@ -6,31 +6,26 @@ import os
 import stat
 from pathlib import Path
 
+from .outputs import validate_output
+
 MAX_CHECKPOINT_BYTES = 10_000_000
 MAX_DISCOVERY_ENTRIES = 1000
 MAX_DISCOVERY_BYTES = 20_000_000
 
 
-def output_paths(source, destination=None):
+def output_paths(source: str | Path, destination: str | Path | None = None) -> tuple[Path, Path]:
     """Keep generated reports out of the source collection and prevent clobbers."""
     source = Path(source).expanduser().resolve()
     output = (Path(destination).expanduser() if destination else
               source.parent / ((source.name or 'collection') + '.review.md'))
     receipt = Path(str(output) + '.checkpoint.json')
     for target in (output, receipt):
-        if target.is_symlink():
-            raise ValueError('Review output and checkpoint paths may not be symbolic links. Choose a new -o path.')
-        if target.resolve() == source or (target.exists() and source.exists() and target.samefile(source)):
-            raise ValueError('The review output or checkpoint would overwrite your source. Choose a different -o path.')
+        validate_output(target, sources=(source,))
         if source.is_dir() and target.resolve().is_relative_to(source):
             suggested = source.parent / ((source.name or 'collection') + '.review.md')
             raise ValueError('Save review output outside the folder being reviewed so reports and checkpoints '
                              f'do not become source material on resume. Use -o {json.dumps(str(suggested))}. '
                              'Move any earlier review reports and checkpoints out of that source folder first.')
-        if not target.parent.is_dir():
-            raise ValueError(f'The output directory {target.parent} does not exist. Create it or choose another -o path.')
-        if target.exists() and not target.is_file():
-            raise ValueError('Choose regular files for the review output and checkpoint, using another -o path.')
     return output, receipt
 
 

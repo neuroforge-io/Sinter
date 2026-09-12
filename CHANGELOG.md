@@ -7,6 +7,10 @@
   paired with `NEUROFORGE_BASE_URL`; URL overrides cannot redirect UI session keys.
 - Restore no-argument source-launcher workbench startup at `start.py`, preserving
   explicit arguments and the installed CLI/module help-only default.
+- Prevalidate CLI export paths before expensive work, reject source aliases and
+  non-regular destinations, and atomically replace deliverables with owned-temp
+  cleanup on failures. Protect custom template definitions as well as workflow
+  inputs, recordings and reviewed sources.
 - Give Research its own source-backed brief in the CLI and workbench, with focus
   questions, exact highlights, source locations and explicit gaps.
 - Add a searchable tool finder, grouped navigation, simpler research intake,

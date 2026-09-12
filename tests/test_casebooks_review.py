@@ -142,7 +142,7 @@ def test_review_file_admission_and_atomic_checkpoint(tmp_path):
     assert len(ledger['skipped']) == 3
     target = tmp_path / 'checkpoint.json'; review.atomic_save(target, {'n': 1}); review.atomic_save(target, {'n': 2})
     assert json.loads(target.read_text()) == {'n': 2}
-    assert not list(tmp_path.glob('.sinter-review-*'))
+    assert not list(tmp_path.glob('.sinter-output-*'))
 
 
 def test_operation_cancel_and_expired_budget():

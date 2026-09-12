@@ -112,6 +112,19 @@ sinter research "community garden water planning" -q "What water access is neede
 This compiles source excerpts into a research brief. `sinter template research`
 is the separate, model-generated exploration workflow and is labelled accordingly.
 
+CLI file exports validate `-o` before workflow, search, generation or speech work.
+The destination must have an existing writable parent and be a regular file or
+a new filename. Source files (including a custom template definition) cannot be
+used as outputs through the same path, a hard link or a symbolic link; output
+symlinks are rejected even when they point elsewhere. Review reports/checkpoints
+must also stay outside the reviewed folder. Choose a distinct export path.
+
+Text exports and review checkpoints are written to unique temporary files beside
+the destination, flushed, and atomically replaced. A failed write or replacement
+preserves the previous deliverable and removes only that operation's temporary
+file. Template progress still saves complete/partial steps with their existing
+incomplete labels. JSON report suffixes are case-insensitive.
+
 ## Custom templates
 
 Add JSON or supported YAML to `~/.sinter/templates/`. Templates appear as `user:NAME` in the UI and CLI. JSON is recommended for complex prompts:
@@ -154,7 +167,8 @@ can be downloaded with its incomplete label. No generation is automatically repl
 | `research.py` | Source-backed research formatting and visible question-to-excerpt coverage. |
 | `meetings.py`, `speech.py`, `transcript_export.py` | Transcript integrity, optional recognition and interchange exports. |
 | `casebooks.py`, `review.py` | Revisioned source collections, bounded admission, checkpointed reviews and coverage. |
-| `review_checkpoints.py` | Safe output paths and bounded, identity-preserving checkpoint discovery. |
+| `outputs.py` | Shared source/destination validation and same-directory atomic text output. |
+| `review_checkpoints.py` | Review-folder output exclusion and bounded, identity-preserving checkpoint discovery. |
 | `store.py`, `jobs.py`, `server.py` | Persistence, bounded work, cancellation and local HTTP. |
 | `web/home.js`, `web/app.js`, `web/workbench.js` | Overview, routing and guided tasks. |
 | `web/navigation.js` | One tool registry for navigation, page labels and the keyboard finder. |

@@ -33,3 +33,19 @@ release claim is implied. Earlier review evidence remains historical.
   Windows batch execution is CI-platform-specific; the local host is Linux.
 - Validation: review-recovery and tooling CLI suites passed (**106 tests**,
   **5 Windows-only wrapper cases skipped**); the fatal Ruff gate passed.
+
+## 3. Source-safe atomic CLI exports (P2)
+
+- `outputs.py` shares narrow source-alias/target validation and a flushed,
+  same-directory atomic text writer. Review-folder exclusion remains in
+  `review_checkpoints.py`; review checkpoint serialization uses the shared writer.
+- Workbench, research, template and transcription destinations are checked before
+  workflow/search/model/speech work. Same paths, hard links, output symlinks,
+  non-regular files and invalid parents are rejected, including default filenames.
+- Adjacent fixes: protect a custom template's definition from its own export;
+  expand home-relative workflow/audio paths consistently; recognize `.JSON`
+  report outputs. Existing template partial-output recovery is retained.
+- Regression evidence: `tests/test_cli_outputs.py` covers alias admission with
+  expensive operations mocked, successful real offline workbench exports and all
+  transcript formats using fictional ASR output, partial write/flush/replace/
+  encoding/temp-creation failures, owned-temp cleanup and late target changes.

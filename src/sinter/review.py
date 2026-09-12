@@ -394,22 +394,11 @@ def _payload(chunk, questions, language):
             'end_line': chunk['end_line'], 'excerpt': chunk['text']}
 
 
-def atomic_save(path, data):
-    path = Path(path)
-    if path.is_symlink():
-        raise ValueError('A checkpoint may not be a symbolic link.')
-    import tempfile
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
-                                         prefix='.sinter-review-', delete=False) as output:
-            temporary = Path(output.name)
-            json.dump(data, output, ensure_ascii=False, allow_nan=False)
-            output.flush(); os.fsync(output.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary and temporary.exists():
-            temporary.unlink()
+def atomic_save(path: str | Path, data: dict, *, sources: tuple[str | Path, ...] = ()) -> None:
+    """Save a review checkpoint using the shared source-safe output boundary."""
+    from .outputs import atomic_write_text
+    atomic_write_text(path, json.dumps(data, ensure_ascii=False, allow_nan=False),
+                      sources=sources)
 
 
 def run(payload, *, question='Review this material for mistakes, gaps and inconsistencies.',

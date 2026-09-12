@@ -5,13 +5,15 @@ import argparse
 import json
 import shlex
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 from . import __version__, client
+from .outputs import atomic_write_text, validate_output
 
 
-def _write(path: str, content: str) -> None:
-    Path(path).write_text(content, encoding="utf-8")
+def _write(path: str | Path, content: str, *, sources: Sequence[str | Path] = ()) -> None:
+    atomic_write_text(path, content, sources=sources)
     print(f"Saved: {path}")
 
 
@@ -137,12 +139,13 @@ def _dispatch(args) -> None:
             print(f"Resuming saved progress from: {recovered}", file=sys.stderr)
         result = run(payload, question=args.question, max_parts=args.max_parts, resume=saved,
                      offline=args.offline, language=args.language, retry_uncertain=args.retry_uncertain,
-                     on_checkpoint=lambda value: atomic_save(receipt, value),
+                      on_checkpoint=lambda value: atomic_save(receipt, value, sources=(args.file,)),
                      progress=lambda message: print(message, file=sys.stderr))
         result['admission'] = admission
         if not args.offline:
-            atomic_save(receipt, result)
-        _write(str(output), result['markdown'] + "\n\n## File admission\n\n" + json.dumps(admission, indent=2))
+            atomic_save(receipt, result, sources=(args.file,))
+        _write(output, result['markdown'] + "\n\n## File admission\n\n" + json.dumps(admission, indent=2),
+               sources=(args.file,))
         print(json.dumps(result['coverage'], indent=2))
         if not args.offline:
             _review_next_steps(args, output, result)
@@ -150,7 +153,11 @@ def _dispatch(args) -> None:
                 or result['coverage']['batches_partial']):
             raise SystemExit(2)
     elif args.command == "template":
-        template, variables, output = resolve_template(args.name), {}, args.output
+        output = validate_output(args.output) if args.output is not None else None
+        template, variables = resolve_template(args.name), {}
+        sources = (template.source,) if template.source and template.source != "builtin" else ()
+        if output is not None:
+            validate_output(output, sources=sources)
         for pair in args.var:
             key, sep, value = pair.partition("=")
             if not sep:
@@ -174,7 +181,7 @@ def _dispatch(args) -> None:
                 if output:
                     source_register = ("\n\n## Source register\n\n" + "\n".join(dict.fromkeys(references))) if references else ""
                     _write(output, "# Model-generated draft - INCOMPLETE until all steps finish\n\n"
-                           + "\n\n".join(results) + source_register)
+                           + "\n\n".join(results) + source_register, sources=sources)
             elif event["type"] == "step_partial":
                 print("" if streamed else event["content"])
                 print(f"INCOMPLETE: {event['step']}. {event['error']}", file=sys.stderr)
@@ -183,18 +190,22 @@ def _dispatch(args) -> None:
                 if output:
                     source_register = ("\n\n## Source register\n\n" + "\n".join(dict.fromkeys(references))) if references else ""
                     _write(output, "# Model-generated draft - INCOMPLETE, review required\n\n"
-                           + "\n\n".join(results) + source_register)
+                           + "\n\n".join(results) + source_register, sources=sources)
         if references:
             results.append("## Source register\n\n" + "\n".join(dict.fromkeys(references)))
         if output:
-            _write(output, "# Model-generated draft - review required\n\n" + "\n\n".join(results))
+            _write(output, "# Model-generated draft - review required\n\n" + "\n\n".join(results),
+                   sources=sources)
     elif args.command in {"research", "workbench"}:
         from .workbench import run
+        sources = (Path(args.file).expanduser(),) if args.command == "workbench" else ()
+        output = validate_output(args.output, sources=sources)
         payload = ({"workflow": "research", "title": args.topic, "query": args.topic, "use_search": True,
                     "questions": "\n".join(args.question)}
-                   if args.command == "research" else json.loads(Path(args.file).read_text(encoding="utf-8")))
+                   if args.command == "research" else json.loads(sources[0].read_text(encoding="utf-8")))
         result = run(payload, progress=lambda message: print(message, file=sys.stderr))
-        _write(args.output, json.dumps(result, indent=2, ensure_ascii=False) if args.output.endswith(".json") else result["markdown"])
+        _write(output, json.dumps(result, indent=2, ensure_ascii=False) if output.suffix.lower() == ".json" else result["markdown"],
+               sources=sources)
     elif args.command == "watches":
         from .store import Store
         store = Store()
@@ -204,10 +215,12 @@ def _dispatch(args) -> None:
     elif args.command == "transcribe":
         from .speech import transcribe
         from .transcript_export import export_transcript
-        result = transcribe(Path(args.file), args.model, args.consent, args.allow_download,
+        source = Path(args.file).expanduser()
+        output = validate_output(args.output or f"transcript.{args.format}", sources=(source,))
+        result = transcribe(source, args.model, args.consent, args.allow_download,
                             progress=lambda message: print(message, file=sys.stderr),
                             language=args.language, split_channels=args.split_channels)
-        _write(args.output or f"transcript.{args.format}", export_transcript(result, args.format))
+        _write(output, export_transcript(result, args.format), sources=(source,))
 
 
 def _review_next_steps(args, output, result):
