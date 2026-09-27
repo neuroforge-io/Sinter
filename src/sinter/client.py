@@ -1,9 +1,10 @@
-"""Bounded public Fracture client. Modified in 0.4 for isolated connection settings."""
+"""Bounded model client. Modified 2026-09-27 for explicit hosted model identity."""
 from __future__ import annotations
 
 import json
 import http.client
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -15,10 +16,17 @@ from typing import Generator, Iterator
 from urllib.parse import SplitResult, urlsplit
 
 from . import __version__
-from .operations import checkpoint, remaining, DeadlineExceeded
+from .operations import checkpoint, remaining, DeadlineExceeded, budget
 
 BASE_URL = "https://neuroforge.io/v1"
-MODEL = "erais-fracture-gemma"
+MODEL = "erais-fracture-gemma"  # Explicit legacy selection remains supported.
+DENSE_MODEL = "erais-dense-gemma4-e4b"
+AUTO_MODEL = "auto"
+DEFAULT_MODEL = AUTO_MODEL
+DENSE_MAX_OUTPUT_TOKENS = 512
+DEFAULT_OUTPUT_TOKENS = 64
+_HOSTED_GENERATION = threading.Lock()
+_HOSTED_PENDING = threading.BoundedSemaphore(4)
 _KEY_FILE = Path.home() / ".sinter_key"
 MAX_RESPONSE = 2 * 1024 * 1024
 MAX_INPUT = 64000
@@ -218,6 +226,64 @@ def _endpoint(path: str) -> str:
     return base + path
 
 
+
+def selected_model() -> str:
+    settings = _CONNECTION.get()
+    return settings["model"] if settings is not None else os.environ.get("NEUROFORGE_MODEL", DEFAULT_MODEL)
+
+
+def resolve_model(models: list[dict] | None = None) -> str:
+    """Discovery chooses only an unambiguous official model, never a fallback."""
+    selected = selected_model()
+    if selected != AUTO_MODEL:
+        if models is not None and selected not in {item.get("id") for item in models}:
+            available = ", ".join(item["id"] for item in models[:8])
+            raise APIError(f"The selected model is unavailable. Available models: {available}. Choose one in Settings; no request was sent.")
+        return selected
+    if not _uses_public_api():
+        raise APIError("Choose the model identifier supplied by your custom provider; automatic selection is only available at NeuroForge.")
+    available = list_models() if models is None else models
+    identifiers = [item.get("id") for item in available]
+    if len(identifiers) != 1 or identifiers[0] not in {MODEL, DENSE_MODEL}:
+        raise APIError("The service did not advertise one supported model. Choose a model explicitly in Settings; no request was sent.")
+    return identifiers[0]
+
+
+@contextmanager
+def _hosted_generation(seconds: float):
+    """Only official model requests share this local, cancellable admission slot."""
+    if not _uses_public_api():
+        yield
+        return
+    # Queueing and discovery consume the existing operation budget. The lock
+    # stays held until the response closes, including partial/abandoned streams.
+    with budget(seconds):
+        if not _HOSTED_PENDING.acquire(blocking=False):
+            raise APIError("Four hosted model requests are already active or waiting. Finish or cancel one before starting another.", 429)
+        acquired = False
+        try:
+            while not acquired:
+                checkpoint()
+                acquired = _HOSTED_GENERATION.acquire(timeout=min(.05, remaining(seconds)))
+            checkpoint()
+            yield
+        finally:
+            if acquired:
+                _HOSTED_GENERATION.release()
+            _HOSTED_PENDING.release()
+
+
+def _resolved_body(body: dict) -> dict:
+    model = resolve_model()
+    return {**body, "model": model,
+            "max_tokens": effective_max_tokens(body["max_tokens"], model=model)}
+
+
+def _require_response_model(value: dict, model: str) -> None:
+    if not isinstance(value, dict) or value.get("model") != model:
+        raise APIError("The response model did not match the requested model. The output was rejected; no request was replayed.")
+
+
 def _request_timeout(path: str, body: dict | None) -> float:
     if path == "/models":
         return CONTROL_TIMEOUT
@@ -309,12 +375,14 @@ def validate_max_tokens(max_tokens: int) -> int:
     return max_tokens
 
 
-def effective_max_tokens(max_tokens: int) -> int:
+def effective_max_tokens(max_tokens: int, *, model: str | None = None) -> int:
     """Apply the user's cap and fail locally for unsupported public API budgets."""
     validate_max_tokens(max_tokens)
     settings = _CONNECTION.get()
     if settings is not None:
         max_tokens = min(max_tokens, validate_max_tokens(settings["max_tokens"]))
+    if _uses_public_api() and (model or selected_model()) in {AUTO_MODEL, DENSE_MODEL}:
+        return min(max_tokens, DENSE_MAX_OUTPUT_TOKENS)
     if _uses_public_api() and max_tokens > PUBLIC_MAX_OUTPUT_TOKENS:
         raise ValueError("The NeuroForge public API supports an output limit from "
                          f"{MIN_OUTPUT_TOKENS} to {PUBLIC_MAX_OUTPUT_TOKENS} tokens.")
@@ -380,8 +448,7 @@ def _chat_body(messages: list[Message], max_tokens: int) -> dict:
     public_api = _uses_public_api()
     if public_api:
         _validate_public_messages(messages)
-    settings = _CONNECTION.get()
-    body = {"model": settings["model"] if settings is not None else os.environ.get("NEUROFORGE_MODEL", MODEL),
+    body = {"model": selected_model(),
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "max_tokens": max_tokens}
     if public_api:
@@ -396,23 +463,31 @@ def _chat_body(messages: list[Message], max_tokens: int) -> dict:
 
 def list_models() -> list[dict]:
     models = _get("/models").get("data")
-    if not isinstance(models, list) or any(not isinstance(model, dict) for model in models):
+    if (not isinstance(models, list) or len(models) > 256
+            or any(not isinstance(model, dict) or not isinstance(model.get("id"), str)
+                   or not model["id"] or len(model["id"]) > 200 for model in models)
+            or len({model["id"] for model in models}) != len(models)):
         raise APIError("The API returned an invalid model list.")
     return models
 
 
-def chat(messages: list[Message], max_tokens: int = 512) -> ChatResult:
-    result = _post("/chat/completions", _chat_body(messages, max_tokens))
-    try:
-        choice = result["choices"][0]
-        content = choice["message"]["content"]
-        if not isinstance(content, str) or not isinstance(choice.get("finish_reason", ""), str):
-            raise ValueError("non-text reply")
-        usage = result.get("usage") or {}
-        return ChatResult(content, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
-                          usage.get("total_tokens", 0), choice.get("finish_reason", ""))
-    except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
-        raise APIError("The API returned an invalid chat response.") from exc
+def chat(messages: list[Message], max_tokens: int = DEFAULT_OUTPUT_TOKENS) -> ChatResult:
+    body = _chat_body(messages, max_tokens)
+    with _hosted_generation(JSON_CHAT_TIMEOUT):
+        body = _resolved_body(body)
+        checkpoint()
+        result = _post("/chat/completions", body)
+        _require_response_model(result, body["model"])
+        try:
+            choice = result["choices"][0]
+            content = choice["message"]["content"]
+            if not isinstance(content, str) or not isinstance(choice.get("finish_reason", ""), str):
+                raise ValueError("non-text reply")
+            usage = result.get("usage") or {}
+            return ChatResult(content, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
+                              usage.get("total_tokens", 0), choice.get("finish_reason", ""))
+        except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
+            raise APIError("The API returned an invalid chat response.") from exc
 
 
 def _read_timeout(response, deadline, idle=REQUEST_TIMEOUT):
@@ -480,10 +555,17 @@ def _events(response, *, deadline: float | None = None) -> Iterator[str]:
             data.append(line[5:].removeprefix(" "))
 
 
-def chat_stream(messages: list[Message], max_tokens: int = 512) -> Generator[str, None, ChatResult]:
-    """Yield text and return final metadata to callers that retain the generator result."""
+def chat_stream(messages: list[Message], max_tokens: int = DEFAULT_OUTPUT_TOKENS) -> Generator[str, None, ChatResult]:
+    """Yield identity-checked text; closing the iterator releases hosted admission."""
     body = _chat_body(messages, max_tokens)
-    body["stream"] = True
+    with _hosted_generation(STREAM_DEADLINE):
+        body = _resolved_body(body)
+        body["stream"] = True
+        checkpoint()
+        return (yield from _chat_stream_body(body))
+
+
+def _chat_stream_body(body: dict) -> Generator[str, None, ChatResult]:
     finish_reason = ""
     parts: list[str] = []
     usage: dict = {}
@@ -499,6 +581,7 @@ def chat_stream(messages: list[Message], max_tokens: int = 512) -> Generator[str
                 chunk = json.loads(event)
                 if not isinstance(chunk, dict) or "error" in chunk:
                     raise APIError("The API reported an error during generation.")
+                _require_response_model(chunk, body["model"])
                 if isinstance(chunk.get("usage"), dict):
                     usage = chunk["usage"]
                 choices = chunk.get("choices", [])
@@ -541,6 +624,8 @@ def health_check() -> tuple[bool, str]:
         models = list_models()
         if not models:
             return False, "The API returned no available models. Local workflows remain available."
-        return True, "Connected. Models: " + ", ".join(str(model.get("id", "?")) for model in models)
+        model = resolve_model(models)
+        label = "dense Gemma 4 E4B; text preview" if model == DENSE_MODEL else ("Fracture hybrid" if model == MODEL else "configured model")
+        return True, f"Connected. Selected model: {model} ({label})."
     except (APIError, ValueError) as exc:
         return False, str(exc)

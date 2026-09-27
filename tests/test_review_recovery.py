@@ -13,6 +13,13 @@ import pytest
 from sinter import cli, client, review, review_checkpoints
 
 
+
+@pytest.fixture(autouse=True)
+def explicit_legacy_model(monkeypatch):
+    """Legacy transport/recovery fixtures keep an explicit backend identity."""
+    monkeypatch.setenv("NEUROFORGE_MODEL", "erais-fracture-gemma")
+
+
 SOURCE = ('Volunteers must submit booking requests by Thursday.\n'
           'The booking deadline is Friday at noon.\n'
           'The coordinator confirms available garden spaces.\n')

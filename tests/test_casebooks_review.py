@@ -15,6 +15,12 @@ from sinter.operations import Cancelled, DeadlineExceeded, budget, checkpoint
 from sinter.store import Store
 
 
+@pytest.fixture(autouse=True)
+def explicit_legacy_model(monkeypatch):
+    """Recovery fixtures bind a named backend, never automatic discovery."""
+    monkeypatch.setenv("NEUROFORGE_MODEL", "erais-fracture-gemma")
+
+
 def project():
     return {'title': 'School evening', 'questions': 'Is the hall booking confirmed?\nInsurance excess?',
             'documents': [{'title': 'Early note', 'content': 'Hall booking discussed. It is not confirmed.'},

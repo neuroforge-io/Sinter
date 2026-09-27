@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .client import (
-    BASE_URL, MODEL, PUBLIC_MAX_OUTPUT_TOKENS, safe_url, same_api_destination,
+    BASE_URL, DEFAULT_MODEL, DEFAULT_OUTPUT_TOKENS, PUBLIC_MAX_OUTPUT_TOKENS, safe_url, same_api_destination,
     uses_neuroforge_api, validate_max_tokens,
 )
 from .profiles import PROFILE_DEFAULTS, validate_profile
@@ -19,7 +19,7 @@ DEFAULTS = {
     **PROFILE_DEFAULTS,
     'schema_version': 1, 'theme': 'dark', 'text_size': 'normal',
     'density': 'comfortable', 'reduce_motion': False, 'api_url': BASE_URL,
-    'model': MODEL, 'max_tokens': 2048, 'rkc_port': 8787, 'rkc_executable': '',
+    'model': DEFAULT_MODEL, 'max_tokens': DEFAULT_OUTPUT_TOKENS, 'rkc_port': 8787, 'rkc_executable': '',
 }
 MAX_PREFERENCES_BYTES = 65536
 

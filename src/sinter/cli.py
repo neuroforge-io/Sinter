@@ -18,7 +18,7 @@ def _write(path: str | Path, content: str, *, sources: Sequence[str | Path] = ()
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="sinter", description="Sinter - source-linked community work and the Fracture API")
+    parser = argparse.ArgumentParser(prog="sinter", description="Sinter - source-linked community work and a configured model API")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command")
     server = sub.add_parser("serve", help="Open the local web workbench")
@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> None:
     chat = sub.add_parser("chat", help="Generative chat (not verified)")
     chat.add_argument("-m", "--message")
     chat.add_argument("-s", "--system", default="")
-    chat.add_argument("--max-tokens", type=int, default=512)
+    chat.add_argument("--max-tokens", type=int, default=client.DEFAULT_OUTPUT_TOKENS)
     review = sub.add_parser("review", help="Bounded text collection review with explicit coverage")
     review.add_argument("file")
     review.add_argument("-l", "--language", default="", help="Optional language hint for the review; part of checkpoint identity")

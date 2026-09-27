@@ -34,7 +34,7 @@ export function home(go, drafts, settings = {}) {
       button('Open community casebooks', () => go('casebooks'), 'primary')),
     h('div', {class: 'card-grid secondary-tools'},
       h('article', {class: 'card'}, h('span', {class: 'eyebrow'}, 'KNOWLEDGE'), h('h3', {}, 'Put past work to work.'),
-        h('p', {}, 'Find cited material in RKC atlases. Optional Fracture assistance helps draft from a bounded source pack.'), button('Explore knowledge atlases', () => go('atlas'), 'quiet')),
+        h('p', {}, 'Find cited material in RKC atlases. Optional model assistance helps draft from a bounded source pack.'), button('Explore knowledge atlases', () => go('atlas'), 'quiet')),
       h('article', {class: 'card'}, h('span', {class: 'eyebrow'}, 'EVERYDAY ADMIN'), h('h3', {}, 'Keep everyone on the same page.'),
         h('p', {}, 'Action lists, volunteer plans, calendar exports and document comparisons. No AI or account needed.'), button('Open community tools', () => go('tools'), 'quiet')),
       h('article', {class: 'card'}, h('span', {class: 'eyebrow'}, 'YOUR WORKSPACE'), h('h3', {}, 'Make yourself comfortable.'),

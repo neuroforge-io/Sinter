@@ -66,7 +66,7 @@ version literal in `pyproject.toml`.
 | Variable | Purpose |
 | --- | --- |
 | `NEUROFORGE_BASE_URL` | Public API base; default `https://neuroforge.io/v1`. Remote URLs require HTTPS; loopback HTTP is allowed for local integrations. |
-| `NEUROFORGE_MODEL` | Chat/ranking model; default `erais-fracture-gemma`. |
+| `NEUROFORGE_MODEL` | Chat/ranking model; default `auto` discovers the sole supported model at the official endpoint. Explicit identifiers are preserved; custom endpoints require one. |
 | `NEUROFORGE_API_KEY` | Optional NeuroForge credential, read only in Python and sent only to the official HTTPS `/v1` endpoint on its standard port. Alternatively use `NEUROFORGE_API_KEY=...` in `~/.sinter_key`. |
 | `SINTER_API_KEY` | Explicit credential for the URL set alongside it in `NEUROFORGE_BASE_URL`. Takes precedence over the default provider key; ignored without a matching explicit URL. Never saved by Sinter. |
 | `SINTER_DATA_DIR` | Local reports/watch database directory. Default `~/.sinter`. |

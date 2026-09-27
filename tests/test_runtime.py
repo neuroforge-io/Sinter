@@ -20,6 +20,13 @@ from sinter.store import Store, calendar
 from sinter.workbench import example, run
 
 
+
+@pytest.fixture(autouse=True)
+def explicit_legacy_model(monkeypatch):
+    """Legacy transport/recovery fixtures keep an explicit backend identity."""
+    monkeypatch.setenv("NEUROFORGE_MODEL", "erais-fracture-gemma")
+
+
 @pytest.fixture
 def server(tmp_path):
     instance = make_server(port=0, directory=tmp_path)
@@ -198,14 +205,14 @@ def test_jobs_cancel_cooperatively_and_return_explicit_errors():
 
 
 @pytest.mark.parametrize('raw,expected', [
-    (b'data: {"choices":[{"delta":{"content":"Hi"}}]}\r\n\r\ndata:[DONE]\r\n\r\n', 'Hi'),
-    (b': comment\n\ndata: {"choices":[{"delta":{"content":"Hi"}}]}\n\ndata: [DONE]', 'Hi')])
+    (b'data: {"model": "erais-fracture-gemma", "choices":[{"delta":{"content":"Hi"}}]}\r\n\r\ndata:[DONE]\r\n\r\n', 'Hi'),
+    (b': comment\n\ndata: {"model": "erais-fracture-gemma", "choices":[{"delta":{"content":"Hi"}}]}\n\ndata: [DONE]', 'Hi')])
 def test_sse_frames_and_final_unclosed_frame(raw, expected):
     with patch.object(client, '_post_raw', return_value=io.BytesIO(raw)):
         assert ''.join(client.chat_stream([client.Message('user', 'hello')])) == expected
 
 
-@pytest.mark.parametrize('raw', [b'data: not-json\n\n', b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n', b'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n'])
+@pytest.mark.parametrize('raw', [b'data: not-json\n\n', b'data: {"model": "erais-fracture-gemma", "choices":[{"delta":{"content":"partial"}}]}\n\n', b'data: {"model": "erais-fracture-gemma", "choices":[{"delta":{},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n'])
 def test_malformed_incomplete_or_truncated_stream_raises(raw):
     with patch.object(client, '_post_raw', return_value=io.BytesIO(raw)), pytest.raises(client.APIError):
         list(client.chat_stream([client.Message('user', 'hello')]))

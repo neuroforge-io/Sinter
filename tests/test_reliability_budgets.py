@@ -4,6 +4,13 @@ from unittest.mock import patch
 import pytest
 from sinter import client
 
+
+@pytest.fixture(autouse=True)
+def explicit_legacy_model(monkeypatch):
+    """Legacy transport/recovery fixtures keep an explicit backend identity."""
+    monkeypatch.setenv("NEUROFORGE_MODEL", "erais-fracture-gemma")
+
+
 def test_operation_budgets_are_distinct_and_bounded():
     assert client._request_timeout('/models', None) == 10
     assert client._request_timeout('/search', {'query':'hello'}) == 30
@@ -17,7 +24,7 @@ def test_slow_stream_beyond_old_cutoff_finishes_without_retry():
         def readline(self, limit=-1):
             now[0] += 45
             return super().readline(limit)
-    raw=b': keep-alive\n\ndata: {"choices":[{"delta":{"content":"Hello"}}]}\n\ndata: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+    raw=b': keep-alive\n\ndata: {"model": "erais-fracture-gemma", "choices":[{"delta":{"content":"Hello"}}]}\n\ndata: {"model": "erais-fracture-gemma", "choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
     with patch.object(client.time,'monotonic',side_effect=lambda:now[0]), patch.object(client,'_post_raw',return_value=Slow(raw)) as send:
         assert ''.join(client.chat_stream([client.Message('user','hello')]))=='Hello'
         assert now[0] > 120

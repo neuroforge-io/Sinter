@@ -9,6 +9,7 @@ import hmac
 import json
 import logging
 import secrets
+import select
 import socket
 import threading
 from dataclasses import asdict
@@ -18,6 +19,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from . import __version__, atlas, casebooks, client, community, speech, workbench
 from .preferences import Preferences
+from .operations import budget
 from . import campaigns
 from .evidence import collect, text
 from .grants import screen
@@ -29,6 +31,19 @@ from .templates import available_templates, resolve_template, template_events
 
 log = logging.getLogger(__name__)
 MIME = {".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml"}
+
+
+class _Disconnected:
+    """Read-only disconnect probe used while a browser stream waits for admission."""
+    def __init__(self, connection):
+        self.connection = connection
+
+    def is_set(self):
+        try:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            return bool(readable) and self.connection.recv(1, socket.MSG_PEEK) == b""
+        except (OSError, ValueError):
+            return True
 
 
 class Application:
@@ -401,11 +416,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.close_connection = True
         try:
-            for event in events:
-                self.wfile.write(("data: " + json.dumps(event) + "\n\n").encode("utf-8"))
+            with budget(700, _Disconnected(self.connection)):
+                for event in events:
+                    self.wfile.write(("data: " + json.dumps(event) + "\n\n").encode("utf-8"))
+                    self.wfile.flush()
+                self.wfile.write(b"data: [DONE]\n\n")
                 self.wfile.flush()
-            self.wfile.write(b"data: [DONE]\n\n")
-            self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
             return
         except Exception as exc:
@@ -415,6 +431,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
                 pass
+        finally:
+            close = getattr(events, "close", None)
+            if close is not None:
+                close()
 
 
 def make_server(host="127.0.0.1", port=8420, directory=None):

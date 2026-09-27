@@ -10,6 +10,13 @@ from sinter import client, evidence, review
 from sinter.operations import Cancelled
 
 
+
+@pytest.fixture(autouse=True)
+def explicit_legacy_model(monkeypatch):
+    """Legacy transport/recovery fixtures keep an explicit backend identity."""
+    monkeypatch.setenv("NEUROFORGE_MODEL", "erais-fracture-gemma")
+
+
 def book(characters=100):
     return {'title': 'Community policies', 'documents': [
         {'title': 'Meeting notes', 'content': 'A' * characters}]}

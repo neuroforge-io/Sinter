@@ -10,6 +10,13 @@ from sinter.client import Message, ChatResult, SearchResult, SearchResponse
 from sinter.templates import Step, render_prompt, get_builtin_template, list_builtin_templates, _parse_yaml
 
 
+
+@pytest.fixture(autouse=True)
+def explicit_legacy_model(monkeypatch):
+    """Legacy transport/recovery fixtures keep an explicit backend identity."""
+    monkeypatch.setenv("NEUROFORGE_MODEL", "erais-fracture-gemma")
+
+
 def test_version():
     assert re.fullmatch(r'\d+\.\d+\.\d+', __version__)
     metadata = (Path(__file__).parents[1] / 'pyproject.toml').read_text(encoding='utf-8')
@@ -127,7 +134,7 @@ def test_cli_no_command(capsys):
 
 
 def test_client_chat_mock():
-    response = {"choices": [{"message": {"role": "assistant", "content": "Hello!"}, "finish_reason": "stop"}],
+    response = {"model": "erais-fracture-gemma", "choices": [{"message": {"role": "assistant", "content": "Hello!"}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12}}
     with patch("sinter.client._post", return_value=response):
         from sinter.client import chat

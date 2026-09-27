@@ -33,7 +33,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   title.input.addEventListener('input', () => {
     if (kind === 'research' && !queryEdited) query.input.value = title.input.value;
   });
-  const ranking = check('Let Fracture rank a small set of source excerpts', !demo && Boolean(data.use_model));
+  const ranking = check('Let the model rank a small set of source excerpts', !demo && Boolean(data.use_model));
   const org = field('Organisation type', 'text', data.profile?.organisation_type ?? settings.organisation_type ?? '', 'Use your actual legal structure, such as a state-school P&C association.');
   const location = field('Location', 'text', data.profile?.location ?? settings.location ?? '');
   const budget = field('Project budget', 'number', data.profile?.budget || '', 'Numbers only; record currency in your notes.', {min: '0', step: 'any'});
@@ -132,7 +132,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
       referenceForm(sources, refreshSources, () => remember(kind, state())), sourceList,
       h('details', {open: kind === 'grants'}, h('summary', {}, kind === 'research' ? 'Optional source ranking' : 'Search & public API options'),
         kind === 'research' ? null : [search.wrap, query.wrap],
-        ranking.wrap, notice('Search sends the query above. Optional Fracture ranking sends up to six source excerpts and the project question to the configured service. '
+        ranking.wrap, notice('Search sends the query above. Optional model ranking sends up to six source excerpts and the project question to the configured service. '
           + 'Leave ranking off for sensitive material. Ranking cannot add factual prose to this report.')));
     if (demo) { search.input.disabled = true; ranking.input.disabled = true; }
   } else {
@@ -168,7 +168,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   }
   const prepare = h('div', {class: 'prepare-bar'}, scope,
     h('button', {type: 'submit', class: 'button primary'}, kind === 'research' ? 'Prepare research brief' : 'Prepare my draft'));
-  if (kind === 'brief' && !demo && onDraftWithModel) prepare.append(button('Draft with Fracture', () => {
+  if (kind === 'brief' && !demo && onDraftWithModel) prepare.append(button('Draft with your model', () => {
     if (!form.reportValidity()) return;
     const payload = state(); remember(kind, payload); onDraftWithModel(payload);
   }, 'quiet'), h('p', {class: 'fine'}, 'Opens a guided draft with these inputs for you to review before sending them to the model.'));

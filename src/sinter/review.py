@@ -207,7 +207,7 @@ def plan(payload, question='Review this material for mistakes, gaps and inconsis
                            'smells': [f"{row['kind']} at line {row['line']}" for row in structure['smells']
                                       if start_line <= row['line'] <= end_line][:6]})
     settings = client._CONNECTION.get()
-    model = settings['model'] if settings else os.environ.get('NEUROFORGE_MODEL', client.MODEL)
+    model = settings['model'] if settings else os.environ.get('NEUROFORGE_MODEL', client.DEFAULT_MODEL)
     identity = {'schema': SCHEMA, 'source': book['fingerprint'], 'question': question,
                 'endpoint': client._endpoint('/chat/completions'), 'model': model, 'chunk_size': CHUNK_SIZE,
                 'engine': REVIEW_ENGINE}
@@ -409,6 +409,8 @@ def run(payload, *, question='Review this material for mistakes, gaps and incons
     if type(retry_uncertain) is not bool or (retry_uncertain and (resume is None or offline)):
         raise ValueError('Retrying uncertain requests requires an explicit online resume.')
     language = _text(language, 'Language hint', 100).strip()
+    if not offline and client.selected_model() == client.AUTO_MODEL:
+        raise ValueError('Resumable model reviews require an explicit model identifier in Settings or NEUROFORGE_MODEL. Check the connection to discover it; offline planning remains available.')
     book, question, chunks, fingerprint = plan(payload, question, language)
     created_at = utc_now()
     results = {}

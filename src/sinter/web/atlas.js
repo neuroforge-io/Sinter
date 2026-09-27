@@ -8,7 +8,7 @@ export function atlasPage({setBusy, remember, seed = {}}) {
   const input = field('Import an RKC atlas or context packet', 'file', '', 'Choose bundle.json or an RKC context JSON export. Up to 4 MB; no paths or scripts inside it are executed.', {accept: '.json,application/json'});
   const summary = h('div', {'aria-live': 'polite'}, notice('Start with an exported atlas, or connect to RKC running on this computer.'));
   const result = h('section', {'aria-label': 'Knowledge results', class: 'stack'});
-  const consent = check('Send selected source excerpts and my question to my configured Fracture API for an unverified draft.');
+  const consent = check('Send selected source excerpts and my question to my configured model API for an unverified draft.');
   const root = h('div', {class: 'stack'});
   const controls = [];
   const rememberNow = () => remember('atlas', {title: 'Knowledge atlas', document, question: question.input.value});
@@ -45,7 +45,7 @@ export function atlasPage({setBusy, remember, seed = {}}) {
     const value = await request('/api/atlas/retrieve', {data: {question: question.input.value}});
     await accept(value.document); show(await request('/api/atlas/context', {data: {document, question: question.input.value}}));
   }), 'quiet');
-  const draft = button('Draft with Fracture', () => task(async () => {
+  const draft = button('Draft with your model', () => task(async () => {
     if (!document || !consent.input.checked) throw new Error('Import sources and approve the excerpt transfer before generating a draft.');
     job = (await request('/api/atlas/answer', {data: {document, question: question.input.value, consent: true}})).id;
     show(await waitForJob(job, status => { result.replaceChildren(notice(status.message || 'Preparing a draft...')); }));
@@ -67,7 +67,7 @@ export function atlasPage({setBusy, remember, seed = {}}) {
   }));
   controls.push(search, local, draft, compile, input.input, files.input);
   root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'OPTIONAL RKC CONNECTION'), h('h2', {}, 'Make your shared knowledge useful.'),
-    h('p', {}, 'Find source material across an atlas. Create a cited context pack, or ask Fracture for a clearly labelled draft.')),
+    h('p', {}, 'Find source material across an atlas. Create a cited context pack, or ask your model for a clearly labelled draft.')),
     h('div', {class: 'card'}, input.wrap, summary, question.wrap, h('div', {class: 'button-row'}, search, local), consent.wrap,
       h('div', {class: 'button-row'}, draft, cancel)),
     h('details', {class: 'card'}, h('summary', {}, 'Create a new atlas with an installed RKC'), files.wrap, compileConsent.wrap, compile,

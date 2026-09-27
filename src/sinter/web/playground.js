@@ -6,7 +6,7 @@ import {renderReport} from './reports.js';
 /** Free-form model output is deliberately separate from evidence-only reports. */
 export async function playground({setBusy, seed = {}, remember}) {
   const preferences = await request('/api/settings');
-  const mode = selectField('Tool', [['chat', 'Chat with Fracture'], ['search', 'Search the web'], ['templates', 'Multi-step templates']], seed.mode || 'chat');
+  const mode = selectField('Tool', [['chat', 'Chat with your model'], ['search', 'Search the web'], ['templates', 'Multi-step templates']], seed.mode || 'chat');
   const view = h('div');
   const root = h('div', {}, h('header', {class: 'page-intro'}, h('h2', {}, 'From your context to a useful draft.'),
     h('p', {}, 'Write, summarise, research or ask a question. Your source material stays visible alongside the result.')),
@@ -36,10 +36,10 @@ export async function playground({setBusy, seed = {}, remember}) {
       }
       log.append(h('article', {class: 'chat-entry user'}, h('div', {class: 'chat-role'}, 'You'), h('p', {}, content)));
       const body = h('div');
-      log.append(h('article', {class: 'chat-entry'}, h('div', {class: 'chat-role'}, 'Fracture / unverified'), body));
+      log.append(h('article', {class: 'chat-entry'}, h('div', {class: 'chat-role'}, 'Model / unverified'), body));
       let full = '', scheduled = false;
       input.input.disabled = true;
-      await execute('/api/chat/stream', {messages, max_tokens: 768}, event => {
+      await execute('/api/chat/stream', {messages, max_tokens: preferences.settings.max_tokens}, event => {
         if (event.type === 'token') {
           full += event.t;
           if (!scheduled) { scheduled = true; requestAnimationFrame(() => { body.replaceChildren(markdown(full)); scheduled = false; }); }

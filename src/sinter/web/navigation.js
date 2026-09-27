@@ -13,7 +13,7 @@ export const tools = [
   {id: 'meeting', label: 'Meeting minutes', group: 'CREATE', icon: '≋', description: 'Review a transcript and prepare traceable minutes', keywords: 'audio speech recording transcript speakers'},
   {id: 'tools', label: 'Community tools', group: 'EXPLORE', icon: '⊞', description: 'Compare wording or build a plan and calendar', keywords: 'compare difference diff event volunteer action register calendar'},
   {id: 'watches', label: 'Search watches', group: 'EXPLORE', icon: '◉', description: 'Keep track of changes in repeat searches', keywords: 'monitor schedule alerts funding'},
-  {id: 'explore', label: 'Explore Fracture', group: 'EXPLORE', icon: '✧', description: 'Chat, search or use a guided drafting template', keywords: 'chat ai model templates recipes consultation newsletter enquiry'},
+  {id: 'explore', label: 'Explore AI', group: 'EXPLORE', icon: '✧', description: 'Chat, search or use a guided drafting template', keywords: 'chat ai model templates recipes consultation newsletter enquiry'},
   {id: 'atlas', label: 'Knowledge atlases', group: 'EXPLORE', icon: '⋈', description: 'Inspect cited material from an RKC atlas', keywords: 'rkc knowledge compile context'},
   {id: 'settings', label: 'Settings', group: 'PREFERENCES', icon: '⚙', description: 'Appearance, reading comfort and your API connection', keywords: 'theme light dark large text preferences'},
   {id: 'help', label: 'Getting started', group: 'PREFERENCES', icon: '?', description: 'A practical guide to your first piece of work', keywords: 'help guide support privacy'},

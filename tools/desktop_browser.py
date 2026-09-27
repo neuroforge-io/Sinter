@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None) -> None:
     args = browser_arguments(__doc__, argv)
     from playwright.sync_api import expect, sync_playwright
 
-    with tempfile.TemporaryDirectory(prefix='sinter-desktop-browser-') as temp, patch.object(client, 'chat', side_effect=AssertionError('Unexpected AI call')), patch.object(client, 'search', side_effect=AssertionError('Unexpected search')):
+    with tempfile.TemporaryDirectory(prefix='sinter-desktop-browser-') as temp, patch.object(client, 'chat', side_effect=AssertionError('Unexpected AI call')), patch.object(client, 'search', side_effect=AssertionError('Unexpected search')), patch.object(client, '_get', return_value={'data': [{'id': client.DENSE_MODEL}]}):
         server = make_server(port=0, directory=temp)
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
         try:
@@ -36,6 +36,13 @@ def main(argv: list[str] | None = None) -> None:
                     else: external.append(route.request.url); route.abort()
                 context.route('**/*', guard)
                 page.goto(base+'/#settings')
+                page.get_by_text('Advanced: API and optional RKC connection', exact=True).click()
+                expect(page.get_by_label('Model identifier', exact=True)).to_have_value('auto')
+                expect(page.get_by_label('Maximum answer length', exact=True)).to_have_value('64')
+                page.get_by_role('button', name='Check saved model selection', exact=True).click()
+                expect(page.get_by_text('dense Gemma 4 E4B; text preview', exact=False)).to_be_visible()
+                page.get_by_label('Model identifier', exact=True).fill(client.DENSE_MODEL)
+                expect(page.get_by_label('Maximum answer length', exact=True)).to_have_attribute('max', '512')
                 page.get_by_label('Your group or organisation', exact=True).fill('Garden P&C')
                 page.get_by_label('Reading size', exact=True).select_option('large')
                 page.get_by_label('Colour theme', exact=True).select_option('light')
@@ -44,6 +51,7 @@ def main(argv: list[str] | None = None) -> None:
                 expect(page.locator('html')).to_have_attribute('data-theme', 'light')
                 page.reload()
                 expect(page.get_by_label('Your group or organisation', exact=True)).to_have_value('Garden P&C')
+                expect(page.get_by_label('Model identifier', exact=True)).to_have_value(client.DENSE_MODEL)
                 page.get_by_role('link', name='Community tools', exact=True).click()
                 page.get_by_label('Plan name', exact=True).fill('School garden preparation')
                 page.get_by_label('Action', exact=True).fill('Ask for quotes')
@@ -68,7 +76,7 @@ def main(argv: list[str] | None = None) -> None:
                 page.get_by_label('What would you like to find out?', exact=True).fill('garden spending')
                 page.get_by_role('button', name='Find supporting material', exact=True).click()
                 expect(page.get_by_role('region', name='Knowledge results')).to_contain_text('Garden spending was not approved.')
-                page.get_by_role('button', name='Draft with Fracture', exact=True).click()
+                page.get_by_role('button', name='Draft with your model', exact=True).click()
                 expect(page.get_by_role('region', name='Knowledge results')).to_contain_text('approve the excerpt transfer')
                 page.get_by_role('link', name='Overview', exact=True).click()
                 expect(page.get_by_role('heading', name='Your next piece of work starts here.', exact=True)).to_be_visible()

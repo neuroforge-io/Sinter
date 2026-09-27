@@ -2,6 +2,13 @@
 
 ## Unreleased - user-testing quality and recovery
 
+- Discover the current official NeuroForge preview for new connections, preserve
+  saved/custom model choices, and reject mismatched JSON or streamed identities.
+  Start with 64 output tokens and cap automatic/dense requests at 512. Serialize
+  official hosted requests locally with cancellable admission while local tools
+  stay parallel. Use model-neutral labels and require explicit identities for
+  resumable reviews. Source changes require an updated package/install.
+
 - Bind inherited NeuroForge credentials to the official destination in both CLI
   and UI requests. Custom providers use an explicit session key or `SINTER_API_KEY`
   paired with `NEUROFORGE_BASE_URL`; URL overrides cannot redirect UI session keys.

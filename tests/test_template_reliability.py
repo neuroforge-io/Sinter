@@ -13,10 +13,17 @@ from sinter.templates import (Step, Template, TemplateStepError, _from_data,
                              get_builtin_template, template_events)
 
 
+
+@pytest.fixture(autouse=True)
+def explicit_legacy_model(monkeypatch):
+    """Legacy transport/recovery fixtures keep an explicit backend identity."""
+    monkeypatch.setenv("NEUROFORGE_MODEL", "erais-fracture-gemma")
+
+
 def stream_response(content="A useful answer.", reason="stop", *, done=True):
     chunks = [
-        {"choices": [{"delta": {"content": content}}]},
-        {"choices": [{"delta": {}, "finish_reason": reason}],
+        {"model": "erais-fracture-gemma", "choices": [{"delta": {"content": content}}]},
+        {"model": "erais-fracture-gemma", "choices": [{"delta": {}, "finish_reason": reason}],
          "usage": {"prompt_tokens": 12, "completion_tokens": 4, "total_tokens": 16}},
     ]
     raw = "".join("data: " + json.dumps(chunk) + "\n\n" for chunk in chunks)

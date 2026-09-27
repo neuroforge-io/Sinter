@@ -37,7 +37,7 @@ function help() {
       button('Open a local example', () => go('brief?example=1'), 'primary')),
     h('div', {class: 'card'}, h('h3', {}, 'Privacy and trust'),
       h('p', {}, 'The interface runs on your computer. Unsaved inputs live in this browser session; saved reports and watches live in ~/.sinter (or the configured data directory). Appearance and connection preferences are saved locally. API keys entered in Settings stay in memory for this session only.'),
-      h('p', {}, 'Search sends the exact query. Optional model ranking sends up to six excerpts and the project question. Explore Fracture sends conversation or template inputs. Atlas drafting sends selected excerpts and your question. Avoid private information in external requests.'),
+      h('p', {}, 'Search sends the exact query. Optional model ranking sends up to six excerpts and the project question. Explore AI sends conversation or template inputs. Atlas drafting sends selected excerpts and your question. Avoid private information in external requests.'),
       h('p', {}, 'Quotes, hashes and links establish traceability, not truth. Selection can miss material. Review official guidance, deadlines, eligibility, names, voting and decisions.'),
       h('p', {}, 'Installed apps run until you choose Quit Sinter. Source users keep the launcher window open; Ctrl+C stops it and watch checks. Unfinished jobs are not saved automatically.')),
     h('div', {class: 'card'}, h('h3', {}, 'Meeting audio: optional, local, honest'),
