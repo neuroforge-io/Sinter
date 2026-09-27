@@ -33,7 +33,7 @@ def run_tool(name, *args, cwd, commit=None):
 
 
 @pytest.mark.parametrize('name', BROWSER_TOOLS + [
-    'release_manifest.py', 'rkc_smoke.py', 'package_native.py',
+    'release_manifest.py', 'release_tag.py', 'rkc_smoke.py', 'package_native.py',
 ])
 def test_help_works_without_optional_dependencies_or_environment(name, tmp_path):
     result = run_tool(name, '--help', cwd=tmp_path)

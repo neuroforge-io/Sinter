@@ -1,13 +1,21 @@
 # Changelog
 
-## Unreleased - user-testing quality and recovery
+## 0.5.3 - community workflows, model access and recovery
+
+- Save reusable sender details locally, preview readable drafts, and export Word
+  documents from the current draft text. Original sources, model output and later
+  edits remain distinct in evidence packs; contact details are not API metadata.
+- Keep revisioned funding campaigns with opportunities, quotes, requirement
+  evidence and next actions. Unknown costs and unconfirmed requirements stay
+  visible; a prepared brief is not an eligibility decision or submitted application.
 
 - Discover the current official NeuroForge preview for new connections, preserve
   saved/custom model choices, and reject mismatched JSON or streamed identities.
   Start with 64 output tokens and cap automatic/dense requests at 512. Serialize
   official hosted requests locally with cancellable admission while local tools
   stay parallel. Use model-neutral labels and require explicit identities for
-  resumable reviews. Source changes require an updated package/install.
+  resumable reviews. Existing installations need the new package; saved explicit
+  model choices are retained rather than silently migrated.
 
 - Bind inherited NeuroForge credentials to the official destination in both CLI
   and UI requests. Custom providers use an explicit session key or `SINTER_API_KEY`

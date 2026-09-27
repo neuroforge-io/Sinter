@@ -16,9 +16,9 @@ Action plans and shared knowledge, with the evidence still in view.
 
 ---
 
-## Reliability update: 0.5.2
+## Community workflows and model access: 0.5.3
 
-### Latest source improvements
+### Clearer work and safer recovery
 
 Research now has a dedicated brief: source highlights, clickable citations, focus
 questions and gaps to investigate. **Find a tool** (`Ctrl+K` or `⌘K`) takes you straight
@@ -29,12 +29,19 @@ The `sinter` command now prints help when run without arguments; `sinter serve`
 opens the workbench. Reviews can discover a matching checkpoint or use an explicit
 `--checkpoint`, retain useful grounded prose findings and explain the next recovery
 step. Template steps keep their source context, preserve incomplete output and never
-silently replay a request. These changes are available from source; release downloads
-remain identified by their own version.
+silently replay a request. Funding campaigns keep opportunities, quotes and next
+actions in a revisioned local record. Readable drafts can be edited and exported
+to Word while their original sources remain in the evidence pack.
+
+New connections discover the current supported NeuroForge model. Saved explicit
+choices are preserved. Answers start at 64 tokens; automatic/dense requests are
+capped at 512. One hosted generation runs at a time in each Sinter process, with
+bounded, cancellable waiting. Install the new package to receive these changes;
+existing installations do not update themselves.
 
 [Testing findings and validation](docs/QUALITY_REVIEW_2026-09-12.md)
 
-### Released review quality changes
+### Earlier review quality changes in 0.5.2
 
 Collection review now shapes batches from a deterministic local analysis: each batch
 is cut at statement and line boundaries and asked targeted questions about the real
@@ -69,7 +76,7 @@ automatically replayed.
 
 ## Start with something useful
 
-Sinter is for P&Cs, clubs, associations, volunteer teams and anyone who has more useful work than spare time. It combines small, dependable local tools with optional assistance from the **NeuroForge Fracture API**. You do not need to learn prompt engineering to begin.
+Sinter is for P&Cs, clubs, associations, volunteer teams and anyone who has more useful work than spare time. It combines small, dependable local tools with optional assistance from the **NeuroForge API**. You do not need to learn prompt engineering to begin.
 
 | Bring this | Make this | Keep this visible |
 | --- | --- | --- |
@@ -78,7 +85,7 @@ Sinter is for P&Cs, clubs, associations, volunteer teams and anyone who has more
 | A meeting transcript or recording* | A reviewed transcript and draft minutes | Speaker labels, original wording, corrections and review flags |
 | Tasks and confirmed dates | An action plan, volunteer handover or event checklist | Stated owners and commitments, rather than invented ones |
 | Two document versions | A line-by-line wording comparison | Exactly which lines changed, not an AI judgement of their meaning |
-| An exported RKC atlas | A cited source packet and optional Fracture-assisted draft | Snapshot identity, source paths and citation identifiers |
+| An exported RKC atlas | A cited source packet and optional model-assisted draft | Snapshot identity, source paths and citation identifiers |
 
 \* Recording transcription requires the optional speech-enabled **source installation**. Core desktop installers support transcript import and review without downloading a speech model.
 
@@ -148,7 +155,7 @@ The helper asks before installing packages into `.venv`. Model-download permissi
 
 [RKC](https://github.com/neuroforge-io/RKC) is NeuroForge's open-source Repository Knowledge Compiler. Sinter can import an atlas, request cited context from its local HTTP service, and invoke an explicitly selected RKC executable to compile selected text files into a new atlas.
 
-Fracture assistance works **beside** RKC: Sinter sends a bounded, approved excerpt pack to its configured API and labels the result an unverified draft. It does not rewrite canonical atlas evidence or declare Fracture a qualified provider inside RKC's own model-execution system. Compilation does not need a language model.
+Model assistance works **beside** RKC: Sinter sends a bounded, approved excerpt pack to its configured API and labels the result an unverified draft. It does not rewrite canonical atlas evidence or qualify a provider inside RKC's own model-execution system. Compilation does not need a language model.
 
 [Connect an atlas and understand the boundary](docs/ATLAS.md).
 
@@ -163,7 +170,7 @@ Fracture assistance works **beside** RKC: Sinter sends a bounded, approved excer
 | Optional speech recognition | Audio remains local; authorised model downloads contact the model host |
 | Session key entered in Settings | Process memory only; not saved into preferences or exports |
 
-The default Fracture service is a public preview with capacity and availability limits, **not a 24/7 service guarantee**. Sinter itself is free; a different provider or private deployment can have its own terms and charges. Advanced connection settings are optional, and changing the destination requires confirmation.
+The default NeuroForge service is a public preview with capacity and availability limits, **not a 24/7 service guarantee**. Its selected backend may be dense or legacy Fracture; a dense response is not a sparse conversion result. Sinter itself is free; a different provider or private deployment can have its own terms and charges. Advanced connection settings are optional, and changing the destination requires confirmation.
 
 Exact quotations establish provenance, not truth, authority, currency or completeness. Sinter never sends official letters, approves minutes or submits grant applications automatically. The local server is for one trusted local user, not an internet-facing team service.
 
