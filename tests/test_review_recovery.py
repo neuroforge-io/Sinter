@@ -383,8 +383,15 @@ def test_platform_wrappers_preserve_arguments_from_another_directory(
         'print(json.dumps({"arguments": sys.argv[1:], "cwd": os.getcwd()}))\n',
         encoding='utf-8',
     )
-    command = (['cmd', '/c', str(launcher)] if windows else ['sh', str(launcher)])
-    result = subprocess.run(command + arguments, cwd=tmp_path, capture_output=True,
+    if windows:
+        # cmd /s removes one outer quote pair. Keep the quoted batch path and
+        # spaced arguments inside it, rather than applying argv escaping to cmd.
+        shell = subprocess.list2cmdline([os.environ['COMSPEC']])
+        invocation = subprocess.list2cmdline([str(launcher), *arguments])
+        command = f'{shell} /d /s /c "{invocation}"'
+    else:
+        command = ['sh', str(launcher), *arguments]
+    result = subprocess.run(command, cwd=tmp_path, capture_output=True,
                             text=True, timeout=5)
     assert result.returncode == 0, result.stderr
     recorded = json.loads(result.stdout)
