@@ -244,26 +244,35 @@ class QualityChecks:
         page.get_by_text('Advanced: API and optional RKC connection', exact=True).click()
         maximum = page.get_by_label('Maximum answer length', exact=True)
         address = page.get_by_label('API address', exact=True)
+        model = page.get_by_label('Model identifier', exact=True)
         address.fill('https://neuroforge.io/v1')
         expect(maximum).to_have_attribute('min', '32')
-        expect(maximum).to_have_attribute('max', '2048')
         posts = []
         page.on('request', lambda request: posts.append(request.url)
                 if request.method == 'POST' and request.url.endswith('/api/settings') else None)
-        for invalid in ('31', '2049', '8192', '32.5', ''):
-            maximum.fill(invalid)
-            assert not maximum.evaluate('(input) => input.checkValidity()'), invalid
-            page.get_by_role('button', name='Save my preferences', exact=True).click()
+        for identity, ceiling in (
+            ('auto', 512), ('erais-dense-gemma4-e4b', 512),
+            ('erais-fracture-gemma', 2048),
+        ):
+            model.fill(identity)
+            expect(maximum).to_have_attribute('max', str(ceiling))
+            for invalid in ('31', str(ceiling + 1), '8192', '32.5', ''):
+                maximum.fill(invalid)
+                assert not maximum.evaluate('(input) => input.checkValidity()'), (identity, invalid)
+                page.get_by_role('button', name='Save my preferences', exact=True).click()
+            for valid in ('32', str(ceiling)):
+                maximum.fill(valid)
+                assert maximum.evaluate('(input) => input.checkValidity()'), (identity, valid)
         assert not posts, 'Invalid token settings were submitted.'
-        for valid in ('32', '2048'):
-            maximum.fill(valid)
-            assert maximum.evaluate('(input) => input.checkValidity()'), valid
         address.fill('https://custom.example/v1')
+        model.fill('custom/model')
         expect(maximum).to_have_attribute('max', '8192')
         maximum.fill('8192')
         assert maximum.evaluate('(input) => input.checkValidity()')
         address.fill('https://neuroforge.io/v1')
-        maximum.fill('2048')
+        model.fill('auto')
+        expect(maximum).to_have_attribute('max', '512')
+        maximum.fill('512')
         page.get_by_label('Reading size', exact=True).select_option('large')
         page.get_by_label('Colour theme', exact=True).select_option('light')
         page.get_by_role('button', name='Save my preferences', exact=True).click()
