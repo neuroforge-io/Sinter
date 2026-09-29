@@ -44,8 +44,10 @@ def fixture():
                         'quantity': 2, 'unit_cost': None, 'quote_reference': ''},
                        {'item': 'Fictional equipment estimate', 'opportunity': 'Fictional equipment fund',
                         'quantity': 3, 'unit_cost': '12.35', 'quote_reference': 'Fictional supplier estimate; GST included; 2026-09-12'}],
-            'actions': [{'task': 'Ask a qualified provider for an itemised quote', 'owner': '', 'due': '2026-09-20', 'status': 'open'},
-                        {'task': 'Confirm applicant acceptance in writing', 'owner': 'Example coordinator', 'due': '', 'status': 'open'}],
+            'actions': [{'task': 'Ask a qualified provider for an itemised quote', 'owner': '', 'due': '2026-09-20', 'status': 'open',
+                         'opportunity': 'Fictional local sponsorship', 'scope_confirmed': True},
+                        {'task': 'Confirm applicant acceptance in writing', 'owner': 'Example coordinator', 'due': '', 'status': 'open',
+                         'opportunity': 'Fictional equipment fund', 'scope_confirmed': True}],
             'sources': [{'title': 'Fictional equipment fund guidance', 'url': 'https://example.invalid/fund',
                          'notes': 'Fictional fixture only. Costs must be incurred after approval.'}]}
 
@@ -60,15 +62,16 @@ class CampaignChecks(DeliverableChecks):
         if not page.get_by_label('Import campaign backup', exact=True).is_visible():
             page.get_by_text('Import or back up a campaign', exact=True).click()
 
-    def import_fixture(self, page):
+    def import_fixture(self, page, document=None):
         from playwright.sync_api import expect
+        document = document or fixture()
         self.goto(page, 'campaigns')
         self.transfers(page)
         page.get_by_label('Import campaign backup', exact=True).set_input_files({
             'name': 'fictional-campaign.json', 'mimeType': 'application/json',
-            'buffer': json.dumps(fixture()).encode()})
+            'buffer': json.dumps(document).encode()})
         expect(page.get_by_text('Campaign imported locally.', exact=False)).to_be_visible()
-        expect(page.get_by_label('Campaign name', exact=True)).to_have_value(fixture()['title'])
+        expect(page.get_by_label('Campaign name', exact=True)).to_have_value(document['title'])
 
     def save(self, page):
         from playwright.sync_api import expect
@@ -97,7 +100,7 @@ class CampaignChecks(DeliverableChecks):
             'https://example.invalid/fund/eligibility')
         page.get_by_label('Source wording (user-entered)', exact=True).fill(
             'Registered community associations may apply.')
-        page.get_by_label('Date checked (user-entered)', exact=True).fill('2026-09-12')
+        page.get_by_label('Date this excerpt was checked', exact=True).fill('2026-09-12')
         expect(requirement.locator('.campaign-check-state')).to_contain_text(
             'User-marked met · unverified')
         expect(requirement.locator('.campaign-proof-status')).to_contain_text(
@@ -107,6 +110,7 @@ class CampaignChecks(DeliverableChecks):
         page.get_by_role('tab', name='Application answers', exact=True).click()
         answer = page.get_by_role('article', name='Application answer')
         expect(answer.get_by_label('Draft answer', exact=True)).to_have_attribute('readonly', '')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_value('')
         expect(answer.get_by_role('button', name='Copy unavailable · inactive route', exact=True)).to_be_disabled()
         expect(page.get_by_role('button', name='Add application question', exact=True)).to_be_disabled()
         expect(page.locator('.notice.warning')).to_contain_text('not for submission')
@@ -115,7 +119,46 @@ class CampaignChecks(DeliverableChecks):
         page.get_by_label('Opportunity status', exact=True).select_option('open')
         page.get_by_role('tab', name='Application answers', exact=True).click()
         answer = page.get_by_role('article', name='Application answer')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_attribute('readonly', '')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_value('')
+        expect(answer.get_by_role('button', name='Copy unavailable · workflow not confirmed', exact=True)).to_be_disabled()
+        expect(page.get_by_role('button', name='Add application question', exact=True)).to_be_disabled()
+        expect(page.locator('.notice.warning')).to_contain_text('Confirm whether this route uses a formal application')
+        expect(page.locator('.campaign-summary>div').nth(1)).to_contain_text(
+            '0answers to shorten')
+        expect(page.locator('.campaign-summary>div').nth(2)).to_contain_text(
+            '1answer rows held')
+        page.get_by_role('tab', name='Opportunities', exact=True).click()
+        page.get_by_text('Edit opportunity details', exact=True).click()
+        page.get_by_label('Application workflow', exact=True).select_option('required')
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        answer = page.get_by_role('article', name='Application answer')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_attribute('readonly', '')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_value('')
+        expect(answer.get_by_role('button', name='Copy unavailable · applicant not recorded', exact=True)).to_be_disabled()
+        expect(page.locator('.notice.warning')).to_contain_text('an applicant or lead is not recorded')
+        page.get_by_role('tab', name='Opportunities', exact=True).click()
+        page.get_by_text('Edit opportunity details', exact=True).click()
+        page.get_by_label('Applicant / programme lead', exact=True).fill('Fictional Community Association')
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        answer = page.get_by_role('article', name='Application answer')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_attribute('readonly', '')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_value('')
+        expect(answer.get_by_role('button', name='Copy unavailable · applicant not confirmed', exact=True)).to_be_disabled()
+        expect(page.locator('.notice.warning')).to_contain_text('has not been explicitly confirmed')
+        page.get_by_role('tab', name='Opportunities', exact=True).click()
+        page.get_by_text('Edit opportunity details', exact=True).click()
+        page.get_by_label('Applicant confirmed directly', exact=True).check()
+        self.save(page)
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        answer = page.get_by_role('article', name='Application answer')
+        expect(answer.get_by_label('Application question', exact=True)).to_have_value(
+            'Describe the project')
         expect(answer.get_by_label('Draft answer', exact=True)).not_to_have_attribute('readonly', '')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_value(
+            'A fictional swimming project. Costs and approvals still need confirmation.')
+        expect(answer.locator('.campaign-character-count')).to_contain_text(
+            '/ 250 characters')
         answer.get_by_label('Draft answer', exact=True).fill('a' * 251)
         expect(answer.get_by_role('status')).to_have_text('251 / 250 characters · 1 over — shorten before using')
         answer.get_by_role('button', name='Copy this answer', exact=True).click()
@@ -194,7 +237,19 @@ class CampaignChecks(DeliverableChecks):
         expect(page.get_by_role('region', name='Your draft report')).to_be_visible(timeout=10000)
         expect(page.locator('#campaign-output')).not_to_have_attribute('data-stale', 'true')
         pack = self.pack(page)
-        assert pack['campaign']['answers'][0]['text'] == 'a' * 251
+        assert pack['campaign']['answers'][0]['text'] == ''
+        assert pack['campaign']['answers'][0]['label'] == 'Held answer details omitted from report'
+        assert pack['campaign']['answers'][0]['limit'] is None
+        assert pack['answer_metrics'] == []
+        stored_answer = page.evaluate('''async () => {
+            const {request} = await import('/static/api.js');
+            const list = await request('/api/campaigns');
+            const item = list.campaigns.find(row =>
+                row.title === 'Fictional swimming capacity campaign');
+            const saved = await request('/api/campaigns/' + item.id);
+            return saved.document.answers[0].text;
+        }''')
+        assert stored_answer == 'a' * 251
         assert pack['campaign']['budget'][0]['unit_cost'] == '2.55'
         assert pack['campaign']['requirements'][0]['status'] == 'met'
         assert pack['readiness']['claims_without_evidence'] == 0
@@ -221,7 +276,8 @@ class CampaignChecks(DeliverableChecks):
         expect(page.locator('.campaign-opportunity[aria-pressed="true"]')).to_contain_text('Fictional equipment fund')
         page.get_by_role('tab', name='Application answers', exact=True).click()
         historical = page.get_by_role('article', name='Application answer')
-        expect(historical.get_by_label('Draft answer', exact=True)).to_have_value('a' * 251)
+        expect(historical.get_by_label('Draft answer', exact=True)).to_have_value('')
+        expect(historical.get_by_text('not for submission', exact=False)).to_be_visible()
         expect(historical.get_by_role('button', name='Copy unavailable · inactive route', exact=True)).to_be_disabled()
         page.get_by_role('tab', name='Budget', exact=True).click()
         expect(page.get_by_label('Unit cost (AUD)', exact=True).first).to_have_value('2.55')
@@ -318,8 +374,13 @@ class CampaignChecks(DeliverableChecks):
             'No campaign signatory or contact details are recorded.')
         expect(page.locator('.sender-panel')).to_have_attribute('open', '')
         expect(page.get_by_label('Your notes and context', exact=True)).to_have_value('')
-        expect(page.get_by_label('Questions you need answered', exact=True)).to_have_value(
-            'Could you confirm the current requirement for “School portal application window” and what evidence we should provide?')
+        questions = page.get_by_label('Questions you need answered', exact=True).input_value()
+        assert questions.splitlines() == [
+            'Could you confirm the current requirement for “School portal application window” and what evidence we should provide?',
+            'Does this route require a formal application or registration, and which organisation or person is allowed to apply?',
+            'Please confirm whether this route has a fixed or rolling intake, its current dates and any next closing date.',
+            'Please direct us to the current official programme guidance and application or registration page.',
+        ], questions
         for label in ('Your name or role', 'Your role', 'Contact details'):
             expect(page.get_by_label(label, exact=True)).to_have_value('')
         expect(page.get_by_label('Organisation name', exact=True)).to_have_value(
@@ -535,12 +596,18 @@ class CampaignChecks(DeliverableChecks):
         expect(page.get_by_role('region', name='Your draft report')).to_be_visible(
             timeout=10000)
         draft_pack = self.pack(page)
-        assert draft_pack['campaign_link'] == {
+        campaign_link = draft_pack['campaign_link']
+        assert {key: campaign_link[key] for key in ('id', 'revision', 'opportunity', 'dirty')} == {
             **saved_identity, 'opportunity': 'Fictional local sponsorship renamed',
             'dirty': False,
-        }
+        }, campaign_link
+        assert campaign_link['evidence_links'] == [{
+            'title': 'Fictional local sponsorship renamed',
+            'url': 'https://example.invalid/sponsor', 'notes': '',
+            'source_id': '', 'checked_at': '',
+        }], campaign_link
         assert submitted and all(
-            'campaign_link' not in payload for payload in submitted)
+            'campaign_link' not in payload for payload in submitted), submitted
         draft_text = page.locator('.document-paper').inner_text()
         page.get_by_label('Draft channel for the campaign log', exact=True).select_option('email')
         page.get_by_role('button', name='Save draft to campaign log', exact=True).click()
@@ -551,13 +618,14 @@ class CampaignChecks(DeliverableChecks):
             return await request('/api/campaigns/' + id);
         }''', saved_identity['id'])
         logged = saved_draft['document']['communications'][-1]
-        assert logged['opportunity'] == 'Fictional local sponsorship renamed'
-        assert logged['direction'] == 'outgoing' and logged['status'] == 'draft'
-        assert logged['channel'] == 'email' and logged['counterparty'] == 'Example Business'
-        assert logged['date'] == ''
-        assert logged['content'].startswith('Dear Example Business,')
-        assert 'Could you confirm the current requirement for' in logged['content']
-        assert 'Could you confirm the current requirement for' in draft_text
+        assert logged['opportunity'] == 'Fictional local sponsorship renamed', logged
+        assert logged['direction'] == 'outgoing' and logged['status'] == 'draft', logged
+        assert logged['channel'] == 'email' and logged['counterparty'] == 'Example Business', logged
+        assert logged['date'] == '', logged
+        assert logged['content'].startswith('Dear Example Business,'), logged['content']
+        assert logged['evidence_links'] == campaign_link['evidence_links'], logged
+        assert 'Could you confirm the current requirement for' in logged['content'], logged['content']
+        assert 'Could you confirm the current requirement for' in draft_text, draft_text
 
         self.goto(page, 'campaigns')
         page.get_by_role('tab', name='Communications', exact=True).click()
@@ -576,7 +644,140 @@ class CampaignChecks(DeliverableChecks):
             return await request('/api/campaigns/' + id);
         }''', saved_identity['id'])
         assert current['document']['communications'][-1]['subject'] == \
-            'Clarification draft saved from the letter screen'
+            'Clarification draft saved from the letter screen', current['document']['communications'][-1]
+
+    def communication_source_snapshot(self, page):
+        from playwright.sync_api import expect
+
+        snapshot_campaign = fixture()
+        source_id = 'f' * 32
+        source = snapshot_campaign['sources'][0]
+        source.update(id=source_id, checked_at='2026-09-20')
+        original = {
+            'title': source['title'], 'url': source['url'],
+            'checked_at': source['checked_at'],
+        }
+        snapshot_campaign['communications'] = [{
+            'opportunity': 'Fictional equipment fund', 'date': '2026-09-18',
+            'direction': 'outgoing', 'status': 'draft', 'channel': 'email',
+            'counterparty': '', 'subject': 'Fictional source snapshot test',
+            'content': 'Fictional draft content; not sent.',
+            'evidence_links': [{
+                'source_id': source_id, **original,
+                'notes': 'Fictional snapshot fixture.',
+            }],
+        }]
+        self.import_fixture(page, snapshot_campaign)
+        self.save(page)
+        saved = page.evaluate('''async () => {
+            const {request} = await import('/static/api.js');
+            const list = await request('/api/campaigns');
+            const item = list.campaigns.find(row =>
+                row.title === 'Fictional swimming capacity campaign');
+            const current = await request('/api/campaigns/' + item.id);
+            return {id: item.id, document: current.document};
+        }''')
+        page.get_by_role('tab', name='Opportunities', exact=True).click()
+        closed_route = page.locator('.campaign-opportunity').filter(
+            has_text='Fictional equipment fund')
+        expect(closed_route).to_contain_text('Recorded closed · closing date 28 Sept 2026')
+        closed_route.click()
+        focus = page.get_by_role('region', name='Selected opportunity')
+        expect(focus.locator('.campaign-opportunity-facts')).to_contain_text(
+            'Recorded closing date')
+
+        page.locator('.campaign-opportunity').filter(
+            has_text='Fictional local sponsorship').click()
+        focus = page.get_by_role('region', name='Selected opportunity')
+        focus.get_by_text('Edit opportunity details', exact=True).click()
+        focus.get_by_label('Application workflow', exact=True).select_option('required')
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        expect(page.locator('.notice.warning')).to_contain_text(
+            'The application workflow is marked as required, but an applicant or lead is not recorded')
+        self.save(page)
+
+        page.get_by_role('tab', name='Communications', exact=True).click()
+        communication = page.get_by_role(
+            'article', name='Campaign communication').first
+        communication.locator('details').evaluate('(details) => { details.open = true; }')
+        evidence = communication.get_by_role(
+            'article', name='Communication evidence link')
+        expect(evidence.get_by_label('Evidence title', exact=True)).to_have_value(
+            original['title'])
+        expect(evidence.get_by_label('Evidence link', exact=True)).to_have_value(
+            original['url'])
+        expect(evidence.get_by_label(
+            'Source check date at link time · user-entered', exact=True)).to_have_value(
+                original['checked_at'])
+        self.save(page)
+
+        page.get_by_role('tab', name='Sources', exact=True).click()
+        source_card = page.locator(
+            f'.campaign-source-details[data-source-id="{source["id"]}"]')
+        source_card.locator('summary').click()
+        source_card.get_by_label('Source title (required)', exact=True).fill(
+            'Fictional updated equipment guidance')
+        source_card.get_by_label('Source link', exact=True).fill(
+            'https://example.invalid/fund/current')
+        source_card.get_by_label(
+            'Source checked date · user-entered', exact=True).fill('2026-09-30')
+        self.save(page)
+
+        page.get_by_role('tab', name='Communications', exact=True).click()
+        communication = page.get_by_role(
+            'article', name='Campaign communication').first
+        communication.locator('details').evaluate('(details) => { details.open = true; }')
+        evidence = communication.get_by_role(
+            'article', name='Communication evidence link')
+        expect(evidence.get_by_label('Evidence title', exact=True)).to_have_value(
+            original['title'])
+        expect(evidence.get_by_label('Evidence link', exact=True)).to_have_value(
+            original['url'])
+        expect(evidence.get_by_label(
+            'Source check date at link time · user-entered', exact=True)).to_have_value(
+                original['checked_at'])
+        expect(evidence.locator('.notice.warning')).to_contain_text(
+            'This saved evidence snapshot differs from the current source record')
+        self.save(page)
+
+        audited = page.evaluate('''async id => {
+            const {request} = await import('/static/api.js');
+            const current = await request('/api/campaigns/' + id);
+            const report = await request('/api/campaigns/prepare', {
+                data: {document: current.document},
+            });
+            return {document: current.document, markdown: report.markdown};
+        }''', saved['id'])
+        link = audited['document']['communications'][0]['evidence_links'][0]
+        assert link['title'] == original['title']
+        assert link['url'] == original['url']
+        assert link['checked_at'] == original['checked_at']
+        assert 'Saved source snapshot differs from the current source register; recheck before reuse.' \
+            in audited['markdown']
+        assert original['url'] in audited['markdown']
+        assert 'https://example.invalid/fund/current' in audited['markdown']
+
+        evidence.get_by_role('button', name='Clear link', exact=True).click()
+        picker = evidence.get_by_label('Link to a saved campaign source', exact=True)
+        picker.fill('Fictional updated equipment guidance · example.invalid')
+        picker.dispatch_event('change')
+        expect(evidence.get_by_label('Evidence title', exact=True)).to_have_value(
+            'Fictional updated equipment guidance')
+        expect(evidence.get_by_label('Evidence link', exact=True)).to_have_value(
+            'https://example.invalid/fund/current')
+        expect(evidence.get_by_label(
+            'Source check date at link time · user-entered', exact=True)).to_have_value(
+                '2026-09-30')
+        expect(evidence.locator('.notice.warning')).to_be_hidden()
+        self.save(page)
+        relinked = page.evaluate('''async id => {
+            const {request} = await import('/static/api.js');
+            return await request('/api/campaigns/' + id);
+        }''', saved['id'])
+        refreshed = relinked['document']['communications'][0]['evidence_links'][0]
+        assert refreshed['title'] == 'Fictional updated equipment guidance'
+        assert refreshed['url'] == 'https://example.invalid/fund/current'
+        assert refreshed['checked_at'] == '2026-09-30'
 
 
 def main(argv=None):
@@ -598,6 +799,7 @@ def main(argv=None):
                 checks.check('campaign-conflict-import-recovery', checks.conflict_and_import)
                 checks.check('campaign-clarification-signer-isolation', checks.clarification_signer_is_campaign_scoped)
                 checks.check('campaign-communications-and-clarification-link', checks.communications_and_clarification_link)
+                checks.check('campaign-communication-source-snapshot', checks.communication_source_snapshot)
                 receipt = {'schema': 'sinter-campaign-browser/v1', 'checks': checks.results,
                            'expected_rejections': ['A stale campaign revision returns HTTP 400 and preserves the user’s edits.'],
                            'screenshots': checks.screenshots, 'browser_errors': checks.errors, 'external_requests': checks.external,

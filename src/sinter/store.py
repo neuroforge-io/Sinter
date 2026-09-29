@@ -86,7 +86,12 @@ class Store:
             row = db.execute("SELECT document FROM reports WHERE id=?", (identifier,)).fetchone()
         if row is None:
             raise KeyError("Report not found.")
-        return json.loads(row[0])
+        report = json.loads(row[0])
+        # Import lazily: campaigns use Store for their own persistence helpers.
+        # The returned view protects legacy reports without rewriting the
+        # user's original local report or campaign data.
+        from .campaigns import saved_report_view
+        return saved_report_view(report)
 
     def delete_report(self, identifier: str) -> None:
         text(identifier, "Report ID", 100, True)

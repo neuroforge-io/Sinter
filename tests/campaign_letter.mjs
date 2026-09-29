@@ -22,8 +22,7 @@ test('clarification drafts contain only the selected opportunity and its open ch
   assert.equal(draft.openCount, 2);
   assert.equal(draft.recipient, 'Example Schools Programme');
   assert.equal(draft.title, 'Clarification: School-led swimming 2027');
-  assert.match(draft.notes, /Fictional School Community Association/);
-  assert.match(draft.notes, /School-led swimming sessions for 2027/);
+  assert.equal(draft.notes, '');
   assert.match(draft.questions, /Could you confirm the current requirement for “Registered school and portal access confirmed” and what evidence we should provide\?/);
   assert.match(draft.questions, /Could you confirm the current requirement for “Eligible costs and supporting quotes” and what evidence we should provide\?/);
   for (const excluded of ['CAMPAIGN_WIDE_SECRET_CONTEXT', 'OTHER_OPPORTUNITY_RULE', 'Unrelated venue grant', 'Already fully checked']) {
@@ -76,10 +75,7 @@ test('RUIC clarification drafts use only current campaign facts and attach stabl
     {id: 'c'.repeat(32), revision: 7, opportunity: opportunity.name, dirty: false});
   assert.equal(draft.recipient, 'CSIRO RUIC programme team');
   assert.equal(draft.title, 'Clarification: CSIRO RUIC — matched Digital Tech & AI research voucher');
-  assert.match(draft.notes, /NeuroforgeIO Pty Ltd/);
-  assert.match(draft.notes, /Possible language-only evaluation/);
-  assert.doesNotMatch(draft.notes, /PORTFOLIO_WIDE_PRIVATE_CONTEXT/);
-  assert.doesNotMatch(draft.notes, /model-conversion quality and hardware resource use/);
+  assert.equal(draft.notes, '');
   assert.match(draft.questions, /saved source notes differ.*operating or trading period/);
   assert.match(draft.questions, /financial thresholds or periods.*financial test and period.*regional status/);
   assert.match(draft.questions, /cash contribution is required.*matching ratio.*which costs qualify/);
@@ -101,6 +97,7 @@ test('a P&C route cannot receive NeuroForge names, products or campaign context'
   const opportunity = {name: 'CSIRO RUIC community education route', funder: 'CSIRO',
     url: 'https://example.invalid/route', fit: 'Explore school swimming safety resources.',
     application_mode: 'required', applicant: 'Warraburra State School P&C',
+    applicant_confirmed: true,
     application_window: 'rolling', window_source_quote: 'Accepts applications year round.',
     window_checked_at: '2026-09-29', status: 'open'};
   const campaign = {organisation: 'Warraburra State School P&C',
@@ -110,9 +107,45 @@ test('a P&C route cannot receive NeuroForge names, products or campaign context'
     '2026-09-30');
   const encoded = JSON.stringify(draft);
   assert.match(encoded, /Warraburra State School P&C/);
-  assert.match(encoded, /school swimming safety resources/);
-  for (const leaked of ['NeuroforgeIO', 'NeuroForge', 'model-conversion', 'hardware resource use']) {
+  for (const leaked of ['school swimming safety resources', 'NeuroforgeIO', 'NeuroForge',
+    'model-conversion', 'hardware resource use']) {
     assert.equal(encoded.includes(leaked), false, leaked);
+  }
+});
+
+test('nbn clarification groups related checks and excludes internal campaign notes', () => {
+  const name = 'nbn Grants Program — closing 12 Oct 2026';
+  const campaign = {organisation: 'NeuroforgeIO Pty Ltd', requirements: [
+    ['Applicant location is regional or remote for this programme', 'Public information identifies Queensland only.'],
+    ['Applicant is connected to the nbn', 'No current service/address evidence is confirmed.'],
+    ['Applicant holds an Australian business number (ABN)', 'ABN evidence is not independently checked.'],
+    ['Business holds an Australian bank account corresponding to its ABN', 'No approved confirmation is recorded.'],
+    ['Confirm registered business address is eligible regional/remote and nbn-connected.', 'Address intentionally not stored.'],
+    ['Confirm ABN-linked Australian bank account and company authority privately before any application.', 'Bank account and signatory authority are not recorded.'],
+    ['Director and lawyer review warranties, data sharing and the broad licence for application/reporting material.', 'No terms accepted or application submitted.'],
+  ].map(([rule, evidence]) => ({opportunity: name, rule, evidence, status: 'unknown'}))};
+  // The official excerpt also discusses regional service eligibility. That
+  // language must not swallow a separate unresolved licence/IP requirement.
+  campaign.requirements.at(-1).source_quote = 'Businesses must be located in regional or remote Australia and connected to nbn. The programme receives an exclusive, perpetual licence to use application and reporting material.';
+  const opportunity = {name, funder: 'nbn Grants Program (administrator to confirm)',
+    url: 'https://business.gov.au/grants-and-programs/nbn-grants-program',
+    application_mode: 'required', applicant: '', application_window: 'fixed',
+    status: 'clarification'};
+  const draft = letters.campaignClarificationDraft(campaign, opportunity, null, '2026-09-30');
+  const questions = draft.questions.split('\n');
+
+  assert.equal(draft.title, 'Clarification: nbn Grants Program');
+  assert.equal(draft.recipient, 'nbn Grants Program team');
+  assert.equal(draft.notes, '');
+  assert.equal(questions.length, 4);
+  assert.match(questions[0], /which address must meet the regional or remote test/);
+  assert.match(questions[1], /which legal entity types may apply/);
+  assert.match(questions[2], /how pre-existing or independently created project IP is treated/);
+  assert.match(questions[3], /current closing date/);
+  for (const internal of ['address intentionally not stored', 'accountant',
+    'director and lawyer', 'outstanding programme point recorded in our notes',
+    'we will not include an address']) {
+    assert.equal(JSON.stringify(draft).toLowerCase().includes(internal), false, internal);
   }
 });
 
@@ -154,14 +187,25 @@ test('a fully source-linked opportunity gets a selected-opportunity-only fallbac
     sources: [source]},
     {name: 'Example access grant', funder: 'Example Foundation',
       application_mode: 'required', applicant: 'Community Association',
+      applicant_confirmed: true,
       application_window: 'rolling', window_source_quote: 'Applications accepted year-round.',
       window_source_id: source.id, window_source_url: source.url,
       window_checked_at: '2026-09-29', url: 'https://example.invalid/fund'}, null, '2026-09-30');
   assert.equal(draft.openCount, 0);
   assert.match(draft.questions, /eligibility, permitted costs and application timetable for this opportunity/);
-  assert.match(draft.notes, /No route-specific project context is recorded/);
-  assert.doesNotMatch(draft.notes, /Do not include this/);
+  assert.equal(draft.notes, '');
+  assert.doesNotMatch(JSON.stringify(draft), /Do not include this/);
   assert.equal(draft.organisation, '');
+});
+
+test('clarification asks the funder to confirm a named but unconfirmed applicant', () => {
+  const draft = letters.campaignClarificationDraft({requirements: []}, {
+    name: 'Example local grant', funder: 'Example Foundation',
+    application_mode: 'required', applicant: 'Proposed Community Association',
+    applicant_confirmed: false, status: 'clarification',
+  }, null, '2026-09-30');
+  assert.match(draft.questions, /which legal entity types may apply/);
+  assert.equal(draft.recipient, 'Example Foundation');
 });
 
 test('same-page excerpts and their exact check dates remain separate in a draft', () => {
@@ -171,6 +215,9 @@ test('same-page excerpts and their exact check dates remain separate in a draft'
     title: 'Official rules', url, checked_at: '2026-09-29'}], requirements: [
     {opportunity: 'Example route', rule: 'Operating age', status: 'unknown',
       source_id: sourceId, source_url: url, source_quote: 'At least one year of trading.',
+      checked_at: '2026-09-28'},
+    {opportunity: 'Example route', rule: 'Financial proof', status: 'unknown',
+      source_id: sourceId, source_url: url, source_quote: 'Cash contribution rates vary by project.',
       checked_at: '2026-09-28'},
     {opportunity: 'Example route', rule: 'Match', status: 'unknown',
       source_id: sourceId, source_url: url, source_quote: 'Cash match is required.',
@@ -184,10 +231,32 @@ test('same-page excerpts and their exact check dates remain separate in a draft'
   const excerpts = draft.campaign_link.evidence_links.filter(link => link.source_id === sourceId);
   assert.equal(excerpts.length, 2);
   assert.match(excerpts[0].notes, /At least one year of trading/);
+  assert.match(excerpts[0].notes, /Cash contribution rates vary by project/);
   assert.match(excerpts[0].notes, /checked 2026-09-28.*now 2026-09-29/);
   assert.match(excerpts[1].notes, /Cash match is required/);
   assert.match(excerpts[1].notes, /checked 2026-09-27.*now 2026-09-29/);
   assert.deepEqual(excerpts.map(link => link.checked_at), ['2026-09-28', '2026-09-27']);
+});
+
+test('same-source citation merging respects the campaign note limit without wasting links', () => {
+  const sourceId = 'c'.repeat(32);
+  const url = 'https://example.invalid/long-guidance';
+  const quotes = ['A'.repeat(1750), 'B'.repeat(500), 'C'.repeat(150)];
+  const campaign = {sources: [{id: sourceId, title: 'Long guidance', url,
+    checked_at: '2026-09-29'}], requirements: quotes.map((source_quote, index) => ({
+    opportunity: 'Example route', rule: `Requirement ${index + 1}`, status: 'unknown',
+    source_id: sourceId, source_url: url, source_quote, checked_at: '2026-09-29',
+  }))};
+  const draft = letters.campaignClarificationDraft(campaign,
+    {name: 'Example route', url: 'https://example.invalid/programme'},
+    {id: 'f'.repeat(32), revision: 1, opportunity: 'Example route', dirty: false},
+    '2026-09-30');
+  const excerpts = draft.campaign_link.evidence_links.filter(link => link.source_id === sourceId);
+  assert.equal(excerpts.length, 2);
+  assert.ok(excerpts.every(link => link.notes.length <= 2000));
+  assert.match(excerpts[0].notes, /A{100}$/);
+  assert.match(excerpts[1].notes, /B{100}/);
+  assert.match(excerpts[1].notes, /C{100}$/);
 });
 
 test('long evidence excerpts are preserved instead of truncated in the campaign draft', () => {

@@ -82,8 +82,24 @@ def test_campaign_clarification_uses_scoped_context_without_claiming_authority()
     document = report["document_markdown"]
     assert "Re: CSIRO RUIC eligibility and project scope" in document
     assert "NeuroforgeIO Pty Ltd is assessing whether this programme could support a defined project" in document
-    assert "The partner, budget and eligibility are not confirmed." in document
+    assert "The partner, budget and eligibility are not confirmed." not in document
     assert "For context, our notes record" not in document
     assert "I am writing on behalf of" not in document
     assert "Kind regards," not in document
     assert {row["field"] for row in report["missing_fields"]} >= {"signatory", "contact_details"}
+
+
+def test_campaign_letter_never_copies_internal_notes_into_outbound_prose():
+    report = run({
+        "workflow": "brief", "title": "Clarification: Example programme",
+        "document_type": "enquiry", "recipient": "Example programme team",
+        "organisation": "Example Pty Ltd", "campaign_sender_review": True,
+        "notes": "INTERNAL ONLY: Do not disclose the address, account details or draft assumptions.",
+        "questions": "Which entity types may apply?", "use_search": False,
+        "use_model": False,
+    })
+
+    document = report["document_markdown"]
+    assert "Example Pty Ltd is assessing whether this programme could support a defined project" in document
+    assert "INTERNAL ONLY" not in document
+    assert "address, account details or draft assumptions" not in document

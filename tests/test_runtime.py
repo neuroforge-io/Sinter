@@ -13,12 +13,11 @@ from unittest.mock import patch
 
 import pytest
 
-from sinter import __version__, client
+from sinter import __version__, campaigns, client
 from sinter.jobs import Job, Jobs
 from sinter.server import make_server
 from sinter.store import Store, calendar
 from sinter.workbench import example, run
-
 
 
 @pytest.fixture(autouse=True)
@@ -113,6 +112,113 @@ def test_reports_persist_and_delete(tmp_path):
     assert reopened.reports()[0]['id'] == identifier
     reopened.delete_report(identifier)
     with pytest.raises(KeyError): reopened.report(identifier)
+
+
+def test_opening_legacy_campaign_report_redacts_held_answers_without_rewriting_source(tmp_path):
+    store = Store(tmp_path)
+    source_campaign = campaigns.validate({
+        "title": "Legacy campaign",
+        "opportunities": [{
+            "name": "Unconfirmed route",
+            "application_mode": "required",
+            "applicant": "Proposed applicant",
+        }],
+        "answers": [{
+            "opportunity": "Unconfirmed route",
+            "label": "Private purpose label",
+            "text": "PRIVATE LEGACY ANSWER MUST NOT APPEAR",
+            "limit": 500,
+            "status": "draft",
+        }],
+    })
+    legacy_report = {
+        "workflow": "campaign",
+        "title": source_campaign["title"],
+        "document_title": source_campaign["title"],
+        "created_at": "2026-01-02T03:04:05Z",
+        "campaign": source_campaign,
+        "readiness": {},
+        "answer_metrics": campaigns._answer_metrics(source_campaign["answers"]),
+        "budget_summary": {},
+        "portfolio_summary": {},
+        "document_markdown": "# Legacy brief\n\nPRIVATE LEGACY ANSWER MUST NOT APPEAR",
+        "markdown": "# Legacy audit\n\nPrivate purpose label\n\nPRIVATE LEGACY ANSWER MUST NOT APPEAR",
+        "document_edits": {
+            "markdown": "Edited copy: PRIVATE LEGACY ANSWER MUST NOT APPEAR",
+            "edited_at": "2026-01-02T03:04:05Z",
+            "author": "user",
+            "future_extension": "PRIVATE LEGACY ANSWER MUST NOT APPEAR",
+        },
+        "warnings": ["PRIVATE LEGACY ANSWER MUST NOT APPEAR"],
+    }
+    identifier = store.save_report(legacy_report)
+
+    opened = Store(tmp_path).report(identifier)
+    serialized = json.dumps(opened)
+    assert opened["created_at"] == legacy_report["created_at"]
+    assert opened["campaign"]["answers"][0]["text"] == ""
+    assert opened["campaign"]["answers"][0]["label"] == (
+        "Held answer details omitted from report")
+    assert opened["campaign"]["answers"][0]["limit"] is None
+    assert opened["answer_metrics"] == []
+    assert opened["document_edits"]["redacted_for_report_view"] is True
+    assert "PRIVATE LEGACY ANSWER MUST NOT APPEAR" not in serialized
+    assert "Private purpose label" not in serialized
+    # The source report remains intact locally; this is a safe read projection,
+    # not a destructive migration.
+    with store.connect() as db:
+        raw = json.loads(db.execute(
+            "SELECT document FROM reports WHERE id=?", (identifier,)).fetchone()[0])
+    assert raw["campaign"]["answers"][0]["text"] == (
+        "PRIVATE LEGACY ANSWER MUST NOT APPEAR")
+
+
+def test_legacy_campaign_report_projects_only_known_edit_fields(tmp_path):
+    store = Store(tmp_path)
+    source_campaign = campaigns.validate({
+        "title": "Confirmed campaign",
+        "opportunities": [{
+            "name": "Named route",
+            "application_mode": "required",
+            "applicant": "Example organisation",
+            "applicant_confirmed": True,
+        }],
+    })
+    report = campaigns.prepare(source_campaign)
+    report["document_edits"] = {
+        "markdown": "Human-edited campaign notes",
+        "edited_at": "2026-01-02T03:04:05Z",
+        "author": "reviewer",
+        "future_extension": "PRIVATE UNRECOGNIZED PAYLOAD",
+    }
+    identifier = store.save_report(report)
+
+    opened = store.report(identifier)
+    assert opened["document_edits"] == {
+        "markdown": "Human-edited campaign notes",
+        "edited_at": "2026-01-02T03:04:05Z",
+        "author": "reviewer",
+    }
+    assert "PRIVATE UNRECOGNIZED PAYLOAD" not in json.dumps(opened)
+
+
+def test_malformed_legacy_campaign_report_fails_closed(tmp_path):
+    store = Store(tmp_path)
+    identifier = store.save_report({
+        "workflow": "campaign",
+        "title": "Malformed campaign",
+        "campaign": {"opportunities": [{"unsupported": "PRIVATE PAYLOAD"}]},
+        "markdown": "PRIVATE PAYLOAD",
+        "document_markdown": "PRIVATE PAYLOAD",
+        "answer_metrics": [{"label": "PRIVATE PAYLOAD"}],
+        "document_edits": {"markdown": "PRIVATE PAYLOAD"},
+        "warnings": ["PRIVATE PAYLOAD"],
+    })
+
+    opened = store.report(identifier)
+    assert opened["campaign"] is None
+    assert opened["review_status"] == "needs_refresh"
+    assert "PRIVATE PAYLOAD" not in json.dumps(opened)
 
 
 def test_watch_lease_is_exclusive(tmp_path):

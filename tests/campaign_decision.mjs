@@ -17,6 +17,7 @@ const readyRoute = {
   window_source_quote: 'Applications close at 5pm on 30 October 2026.',
   window_checked_at: '2026-09-29', status: 'open',
   application_mode: 'required', applicant: 'School P&C association',
+  applicant_confirmed: true,
 };
 const windowSource = {id: readyRoute.window_source_id,
   url: readyRoute.window_source_url, checked_at: '2026-09-29'};
@@ -127,6 +128,16 @@ test('a required application without an identified applicant stays blocked', () 
   assert.match(result.detail, /Record which organisation or person must submit the application/);
 });
 
+test('a named but unconfirmed applicant stays blocked with an explicit next step', () => {
+  const result = decide({
+    opportunities: [{...readyRoute, applicant_confirmed: false}],
+    requirements: [goodCheck],
+  }, '2026-09-29');
+  assert.equal(result.state, 'not_ready');
+  assert.match(result.detail, /Confirm the named applicant directly/);
+  assert.match(result.action.task, /Confirm the named applicant directly/);
+});
+
 test('a past date on a route still marked open requires status confirmation', () => {
   const result = decide({
     opportunities: [{...readyRoute, deadline: '2026-09-28'}],
@@ -206,7 +217,8 @@ test('eligibility evidence checked in the future cannot qualify as current', () 
 });
 
 test('eligibility evidence becomes stale after 90 days but remains current on day 90', () => {
-  const route = {...readyRoute, application_mode: 'required', applicant: 'Applicant'};
+  const route = {...readyRoute, application_mode: 'required', applicant: 'Applicant',
+    applicant_confirmed: true};
   const current = decide({opportunities: [route],
     requirements: [{...goodCheck, checked_at: '2026-07-01'}]}, '2026-09-29');
   assert.equal(current.state, 'ready_for_review');

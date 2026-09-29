@@ -33,6 +33,9 @@ export function clarificationQuestion(requirement, context = {}) {
   if (/public disclosure|publicity|publish.*(name|logo|project|amount)|name.*logo/i.test(record)) {
     return 'Please explain any publication or publicity conditions, including what may be disclosed, the approval process and when consent is required, so the applicant can review those terms before applying.';
   }
+  if (/exclusive|perpetual|application\/reporting material|background ip|project ip|licen[cs]/i.test(record)) {
+    return 'Could you clarify which application and reporting materials are covered by the licence, and how pre-existing or independently created project IP is treated? We will obtain independent legal review before deciding whether to proceed.';
+  }
   // A pasted source passage is not a useful question title. Keep the user's
   // requirement recognizable while bounding the generated form input.
   const label = topic.length > 240 ? topic.slice(0, 237).trimEnd() + '…' : topic;
@@ -42,6 +45,7 @@ export function clarificationQuestion(requirement, context = {}) {
 function campaignRecipient(opportunity) {
   const name = String(opportunity?.name || '').trim();
   const funder = String(opportunity?.funder || '').trim();
+  if (/^nbn Grants Program\b/i.test(name)) return 'nbn Grants Program team';
   if (/CSIRO/i.test(name) && /\bRUIC\b/i.test(name)) return 'CSIRO RUIC programme team';
   if (/CSIRO/i.test(name) && /Kick-Start/i.test(name)) return 'CSIRO Kick-Start programme team';
   if (/CSIRO/i.test(name) && /Innovate to Grow/i.test(name)) return 'CSIRO Innovate to Grow team';
@@ -56,23 +60,34 @@ function campaignEvidenceLinks(campaign, opportunity) {
   const sources = Array.isArray(campaign?.sources) ? campaign.sources : [];
   const sourceById = new Map(sources.map(source => [source.id, source]));
   const links = [];
-  const seen = new Set();
   const add = (title, url, notes = '', source = null, checkedAt = source?.checked_at || '') => {
     if (typeof url !== 'string' || !url.trim()) return;
     let parsed;
     try { parsed = new URL(url); } catch { return; }
     if (!['http:', 'https:'].includes(parsed.protocol)) return;
     const noteText = String(notes || '');
-    const key = `${source?.id || parsed.href}\n${noteText}\n${checkedAt}`;
-    if (seen.has(key)) return;
+    const cleanTitle = String(title || 'Campaign source').trim().slice(0, 500);
+    const key = `${source?.id || parsed.href}\n${parsed.href}\n${cleanTitle}\n${checkedAt || ''}`;
+    const previousLinks = links.filter(item => item._key === key);
+    if (previousLinks.length && !noteText) {
+      return;
+    }
+    const previous = noteText && previousLinks.find(item =>
+      item.notes.split('\n\n').includes(noteText)
+        || [item.notes, noteText].filter(Boolean).join('\n\n').length <= 2000);
+    if (previous) {
+      if (!previous.notes.split('\n\n').includes(noteText)) {
+        previous.notes = [previous.notes, noteText].filter(Boolean).join('\n\n');
+      }
+      return;
+    }
     if (links.length >= 10) {
       throw new Error('This route has more than 10 source excerpts. Split the clarification into smaller drafts so every excerpt stays attached.');
     }
     if (noteText.length > 5000) {
       throw new Error('A linked source excerpt is too long to preserve in the draft. Use a shorter exact passage.');
     }
-    seen.add(key);
-    links.push({title: String(title || 'Campaign source').trim().slice(0, 500),
+    links.push({_key: key, title: cleanTitle,
       url: parsed.href, notes: noteText,
       source_id: source?.id || '', checked_at: checkedAt || ''});
   };
@@ -108,13 +123,40 @@ function campaignEvidenceLinks(campaign, opportunity) {
     add(source?.title || `Requirement: ${row.rule}`, row.source_url || source?.url,
       notes, source, row.checked_at || '');
   }
-  return links;
+  return links.map(({_key, ...link}) => link);
 }
 
 function localToday() {
   const today = new Date();
   return [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'),
     String(today.getDate()).padStart(2, '0')].join('-');
+}
+
+function opportunityLabel(opportunity) {
+  return String(opportunity?.name || '').replace(
+    /\s+[—–-]\s+(?:closing|closes|closed|programme closes)\s+.+$/i, '').trim();
+}
+
+function groupedQuestion(row) {
+  const record = `${row.rule || ''} ${row.evidence || ''} ${row.source_quote || ''}`;
+  // Classify rights before location: long official quotes can mention regional
+  // eligibility even when the actual unresolved item is an IP licence.
+  if (/exclusive|perpetual|application\/reporting material|background ip|project ip|licen[cs]/i.test(record)) {
+    return ['rights', 'Could you clarify which application and reporting materials are covered by the licence, and how pre-existing or independently created project IP is treated? We need to understand the scope of these terms before deciding whether to proceed.'];
+  }
+  if (/regional|remote|postcode|registered.{0,24}address|\bnbn\b|connection/i.test(record)) {
+    return ['location', 'Could you clarify which address must meet the regional or remote test and whether the nbn connection must be active at that same address? Please confirm what evidence is required and whether address or service details should be provided only through the secure application portal.'];
+  }
+  if (/operating age|minimum operating|trading period|financial threshold|turnover|operating expenditure/i.test(record)) {
+    return ['eligibility', clarificationQuestion(row.rule, row)];
+  }
+  if (/\babn\b|bank account|financial account|signatory authority|company authority/i.test(record)) {
+    return ['entity', 'Could you confirm which legal entity types may apply and what evidence is required for its ABN, ABN-linked Australian bank account and signatory authority? Please also confirm whether account details should only be provided through the secure application process.'];
+  }
+  if (/privately|private|director.{0,24}lawyer|lawyer|counsel|accountant|store only|do not (?:include|place|share)/i.test(record)) {
+    return ['', ''];
+  }
+  return null;
 }
 
 function currentCheckDate(value, today) {
@@ -138,14 +180,27 @@ export function campaignClarificationDraft(campaign, opportunity, campaignLink =
       })())
   ));
   const routeQuestions = [];
+  const questionGroups = new Set();
   const addRouteQuestion = question => { if (question && !routeQuestions.includes(question)) routeQuestions.push(question); };
+  for (const row of open) {
+    const grouped = groupedQuestion(row);
+    if (grouped) {
+      const [key, question] = grouped;
+      if (question && !questionGroups.has(key)) {
+        questionGroups.add(key);
+        addRouteQuestion(question);
+      }
+      continue;
+    }
+    addRouteQuestion(clarificationQuestion(row.rule, row));
+  }
   if ((opportunity.application_mode || 'unknown') === 'unknown') {
     addRouteQuestion('Does this route require a formal application or registration, and which organisation or person is allowed to apply?');
-  } else if (opportunity.application_mode === 'required' && !String(opportunity.applicant || '').trim()) {
-    addRouteQuestion('Which organisation or person should be the applicant or programme lead, and what evidence is needed to confirm that role?');
-  }
-  if (opportunity.status === 'clarification') {
-    addRouteQuestion('Please confirm the outstanding programme point recorded in our notes and the current rule that should guide the next step.');
+  } else if (opportunity.application_mode === 'required'
+      && (!String(opportunity.applicant || '').trim()
+        || opportunity.applicant_confirmed !== true)
+      && !questionGroups.has('entity')) {
+    addRouteQuestion('Could you confirm which legal entity types may apply and what evidence is needed to confirm signatory authority?');
   }
   const windowKind = opportunity.application_window
     || (opportunity.deadline ? 'fixed' : 'unknown');
@@ -160,25 +215,18 @@ export function campaignClarificationDraft(campaign, opportunity, campaignLink =
   if (!String(opportunity.url || '').trim()) {
     addRouteQuestion('Please direct us to the current official programme guidance and application or registration page.');
   }
-  const questions = [
-    ...open.map(row => clarificationQuestion(row.rule, row)).filter(Boolean),
-    ...routeQuestions,
-  ];
+  const questions = [...new Set(routeQuestions.filter(Boolean))];
   const hasQuestions = questions.length > 0;
-  const routeFit = String(opportunity.fit || '').trim();
-  const organisation = String(campaign.organisation || '').trim();
+  const label = opportunityLabel(opportunity) || String(opportunity.name || 'Selected opportunity');
   const draft = {
     openCount: open.length,
-    routeGapCount: routeQuestions.length,
+    routeGapCount: questions.length,
     workflow: 'brief',
-    title: 'Clarification: ' + opportunity.name,
+    title: 'Clarification: ' + label,
     recipient: campaignRecipient(opportunity),
-    notes: [
-      `Prepare an unsent clarification for ${organisation || 'the organisation named in the campaign'} about the selected route “${opportunity.name}”.`,
-      routeFit ? `Route-specific context recorded by the campaign (unverified): ${routeFit}`
-        : 'No route-specific project context is recorded; do not invent one.',
-      'Use only this route and its linked evidence. Do not claim eligibility, secured funds, approved scope, prior contact or authority to apply unless a person has confirmed it.',
-    ].join(' '),
+    // Campaign fit notes and actions are internal evidence, not approved prose.
+    // Keep them out of the letter; source snapshots remain in the linked log.
+    notes: '',
     questions: hasQuestions ? questions.join('\n')
       : 'Could you confirm the current applicant eligibility, permitted costs and application timetable for this opportunity?',
     organisation: campaign.organisation || '',

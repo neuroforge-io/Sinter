@@ -163,6 +163,9 @@ function routeGaps(opportunity, requirements, today, sources = []) {
     gaps.push('Confirm whether this route needs a formal application and who is allowed to apply.');
   } else if (applicationMode === 'required' && !hasText(opportunity.applicant)) {
     gaps.push('Record which organisation or person must submit the application.');
+  } else if (applicationMode === 'required'
+      && opportunity.applicant_confirmed !== true) {
+    gaps.push('Confirm the named applicant directly with the person responsible for applying; this does not establish programme eligibility or authority to submit.');
   }
   if (!hasText(opportunity.url)) gaps.push('Add the current official programme page.');
   gaps.push(...applicationWindowGaps(opportunity, today, sources));
@@ -243,6 +246,17 @@ function suggestedAction(state, active, document, today, focus) {
     }
     if (opportunity.status === 'researching') {
       return `Confirm that “${opportunity.name}” has a current round open on the official programme page.`;
+    }
+    if (!opportunity.application_mode || opportunity.application_mode === 'unknown') {
+      return `Confirm whether “${opportunity.name}” needs a formal application and who is allowed to apply.`;
+    }
+    if (opportunity.application_mode === 'required'
+        && !hasText(opportunity.applicant)) {
+      return `Record which organisation or person must submit the application for “${opportunity.name}”.`;
+    }
+    if (opportunity.application_mode === 'required'
+        && opportunity.applicant_confirmed !== true) {
+      return `Confirm the named applicant directly with the person responsible for applying for “${opportunity.name}”; this does not establish programme eligibility or authority to submit.`;
     }
     if (!hasText(opportunity.url)) {
       return `Add the current official programme page for “${opportunity.name}”.`;

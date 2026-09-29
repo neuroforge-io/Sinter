@@ -4,7 +4,7 @@ import {request} from './api.js';
 import {renderReport} from './reports.js';
 import {campaignClarificationDraft, campaignIdentityFromProfile} from './campaign-letter.js';
 import {defaultCampaignOpportunityIndex, isCampaignActionCurrent,
-  isOpportunityActionable, hasConfirmedApplicationRoute} from './campaign-state.js';
+  isOpportunityActionable, applicationAnswerAvailability} from './campaign-state.js';
 import {applicationWindowGaps, campaignDecision} from './campaign-decision.js';
 import {campaignActionRowsForCalendar, campaignActionRowsForPlan,
   normalizeCampaignActionScopes} from './campaign-plan.js';
@@ -105,6 +105,7 @@ function compatibleCampaign(value) {
     row.route_type ??= 'unknown';
     row.application_mode ??= 'unknown';
     row.applicant ??= '';
+    row.applicant_confirmed ??= false;
     if (!row.application_window) row.application_window = row.deadline ? 'fixed' : 'unknown';
     row.window_source_id ??= '';
     row.window_source_url ??= '';
@@ -126,15 +127,22 @@ const displayDate = value => {
     : new Intl.DateTimeFormat('en-AU', {day: 'numeric', month: 'short', year: 'numeric'}).format(parsed);
 };
 function opportunityTiming(row) {
-  if (row.status === 'closed') return row.deadline ? `Closed · ${displayDate(row.deadline)}` : 'Closed';
-  if (row.status === 'submitted') return row.deadline ? `Submitted · ${displayDate(row.deadline)}` : 'Submitted';
-  if (row.status === 'not_pursuing') return row.deadline ? `Not pursuing · programme closes ${displayDate(row.deadline)}` : 'Not pursuing this round';
+  if (row.status === 'closed') return row.deadline
+    ? `Recorded closed · closing date ${displayDate(row.deadline)}` : 'Recorded closed';
+  if (row.status === 'submitted') return row.deadline
+    ? `Submitted · recorded deadline ${displayDate(row.deadline)}` : 'Recorded submitted';
+  if (row.status === 'not_pursuing') return row.deadline
+    ? `Not pursuing · recorded programme closing date ${displayDate(row.deadline)}`
+    : 'Not pursuing this round';
   const kind = row.application_window || (row.deadline ? 'fixed' : 'unknown');
   if (kind === 'rolling') return row.window_checked_at
     ? `Rolling · checked ${displayDate(row.window_checked_at)}` : 'Rolling · source check needed';
   if (kind === 'fixed') {
-    if (row.deadline && row.deadline < localDate()) return `Date passed · check status (${row.deadline})`;
-    return row.deadline ? `Closes ${displayDate(row.deadline)}` : 'Closing date needed';
+    if (row.deadline && row.deadline < localDate()) {
+      return `Recorded closing date passed · confirm current status (${row.deadline})`;
+    }
+    return row.deadline ? `Recorded closing date · ${displayDate(row.deadline)}`
+      : 'Closing date needed';
   }
   return 'Application window not checked';
 }
@@ -335,22 +343,42 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       const candidate = JSON.parse(await file.text());
       const report = await request('/api/campaigns/prepare', {data: {document: candidate}});
       if (!canReplace()) return;
-      apply(report.campaign); dirty = true; changed();
+      // Preparation intentionally strips held and historical answer text from
+      // shareable report data. Restore text from this locally selected backup
+      // only after the server has validated and normalized its structure.
+      const backupAnswers = Array.isArray(candidate.answers) ? candidate.answers : [];
+      const importedCampaign = report.campaign;
+      importedCampaign.answers = importedCampaign.answers.map((answer, index) => ({
+        ...answer,
+        label: backupAnswers[index]?.label ?? answer.label,
+        text: backupAnswers[index]?.text ?? answer.text,
+        limit: backupAnswers[index]?.limit ?? answer.limit,
+        status: backupAnswers[index]?.status ?? answer.status,
+      }));
+      apply(importedCampaign); dirty = true; changed();
       feedback.replaceChildren(notice('Campaign imported locally. Save campaign to keep this copy.', 'success'));
     } catch (problem) { error(problem instanceof SyntaxError ? 'This file is not valid campaign JSON. Your current campaign is unchanged.' : problem.message); }
     finally { imported.input.value = ''; lock(false); }
   });
 
   function renderSummary() {
-    const actionable = new Set(document.opportunities
+    const actionable = new Map(document.opportunities
       .filter(row => isOpportunityActionable(row.status))
-      .map(row => row.name));
+      .map(row => [row.name, row]));
     const pending = document.requirements.filter(row => actionable.has(row.opportunity)
       && (!['met', 'not_met'].includes(row.status)
       || ![row.evidence, row.source_url, row.source_quote, row.checked_at].every(value => value?.trim())
       || !linkedSourceMatchesCheck(row, document.sources)));
-    const over = document.answers.filter(row => (!row.opportunity || actionable.has(row.opportunity))
-      && row.limit && countCharacters(row.text || '') > Number(row.limit));
+    const heldAnswers = document.answers.filter(row => row.opportunity
+      && actionable.has(row.opportunity)
+      && !applicationAnswerAvailability(actionable.get(row.opportunity)).allowed);
+    const over = document.answers.filter(row => {
+      const opportunity = actionable.get(row.opportunity);
+      const eligible = !row.opportunity || (opportunity
+        && applicationAnswerAvailability(opportunity).allowed);
+      return eligible && row.limit
+        && countCharacters(row.text || '') > Number(row.limit);
+    });
     const quotes = document.budget.filter(row => (!row.opportunity || actionable.has(row.opportunity))
       && (row.unit_cost == null || row.unit_cost === '' || !row.quote_reference?.trim()));
     const windows = document.opportunities.filter(row => isOpportunityActionable(row.status)
@@ -377,7 +405,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const actionReviewCount = actionScopesToConfirm + submittedActionsToReview
       + reopenedActionsToReview + inactiveRouteActionsToReview;
     shelf.replaceChildren(...(document.title ? [h('h3', {}, document.title), h('p', {class: 'fine'}, document.organisation)] : []));
-    summary.replaceChildren(...[[pending.length, 'requirements to check'], [over.length, 'answers over their limit'],
+    summary.replaceChildren(...[[pending.length, 'requirements to check'],
+      [over.length, 'answers to shorten'],
+      [heldAnswers.length, 'answer rows held'],
       [quotes.length, 'costs needing a quote'], [windows.length, 'application windows to verify'],
       [ownersToConfirm.length, 'owners to confirm'],
       [actionReviewCount, 'actions to review']].map(([count, label]) =>
@@ -530,6 +560,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const windowSourceInfo = h('p', {class: 'campaign-window-source', role: 'status'});
     const maximum = h('dd', {}), deadlineLabel = h('dt', {}), deadlineValue = h('dd', {});
     const decisionValue = h('dd', {}), statusValue = h('dd', {}), workflowValue = h('dd', {}), fitValue = h('p', {});
+    const applicantConfirmationStatus = h('small', {class: 'campaign-action-meta'});
     function updateOpportunityView() {
       const card = cards[selected];
       if (card) {
@@ -557,13 +588,13 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       maximum.textContent = routeAmountLabel(item);
       const windowKind = item.application_window || (item.deadline ? 'fixed' : 'unknown');
       if (item.status === 'closed' || item.status === 'submitted') {
-        deadlineLabel.textContent = item.status === 'closed' ? 'Closed on' : 'Application deadline';
+        deadlineLabel.textContent = 'Recorded closing date';
         deadlineValue.textContent = item.deadline || 'Not recorded';
       } else if (windowKind === 'rolling') {
         deadlineLabel.textContent = 'Application window';
         deadlineValue.textContent = `Rolling${item.window_checked_at ? ` · checked ${displayDate(item.window_checked_at)}` : ' · check date needed'}`;
       } else if (windowKind === 'fixed') {
-        deadlineLabel.textContent = 'Application closes';
+        deadlineLabel.textContent = 'Recorded closing date';
         deadlineValue.textContent = item.deadline ? displayDate(item.deadline) : 'Closing date needed';
       } else {
         deadlineLabel.textContent = 'Application window';
@@ -571,10 +602,28 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }
       decisionValue.textContent = item.decision_window || 'Not confirmed';
       statusValue.textContent = opportunityStates.find(([key]) => key === item.status)?.[1] || 'Researching';
-      workflowValue.textContent = item.application_mode === 'required'
-        ? item.applicant?.trim() ? `Application required · ${item.applicant.trim()}` : 'Application required · applicant needed'
-        : item.application_mode === 'not_required' ? 'No formal application recorded'
+      const applicantName = String(item.applicant || '').trim();
+      if (item.application_mode === 'required') {
+        workflowValue.textContent = !applicantName
+          ? 'Application required · applicant needed'
+          : item.applicant_confirmed === true
+            ? `Application required · applicant confirmed by operator: ${applicantName}`
+            : `Application required · applicant confirmation needed: ${applicantName}`;
+      } else {
+        workflowValue.textContent = item.application_mode === 'not_required'
+          ? 'No formal application recorded'
           : 'Application process not confirmed';
+      }
+      applicantConfirmation.input.disabled = item.application_mode !== 'required'
+        || !item.applicant?.trim();
+      applicantConfirmation.wrap.hidden = item.application_mode !== 'required';
+      if (!applicantName) {
+        applicantConfirmationStatus.textContent = 'Enter the named applicant first. Eligibility and authority to submit still need separate checks.';
+      } else if (item.applicant_confirmed === true) {
+        applicantConfirmationStatus.textContent = 'You recorded this applicant as confirmed directly. Sinter cannot verify the conversation, programme eligibility or authority to submit.';
+      } else {
+        applicantConfirmationStatus.textContent = 'Confirm the named applicant directly with the person responsible for applying. This does not establish programme eligibility or authority to submit.';
+      }
       fitValue.textContent = item.fit || 'Record which project option this opportunity could support and what needs checking.';
     }
     const name = input('Opportunity name', 'text', item, 'name', '', {required: true, maxLength: 200}, () => {
@@ -614,8 +663,30 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       });
     const decision = input('Decision timing', 'text', item, 'decision_window', 'For example, a decision several months after applications close.', {maxLength: 1000}, updateOpportunityView);
     const routeType = choice('Route type', opportunityTypes, item, 'route_type', updateOpportunityView);
-    const applicationMode = choice('Application workflow', applicationModes, item, 'application_mode', updateOpportunityView);
-    const applicant = input('Applicant / programme lead', 'text', item, 'applicant', 'Who must apply or register? For example, the school, P&C, or a partner. This entry is unverified.', {maxLength: 300}, updateOpportunityView);
+    let applicantConfirmation;
+    const applicationMode = choice('Application workflow', applicationModes, item, 'application_mode', () => {
+      if (item.application_mode !== 'required') {
+        item.applicant_confirmed = false;
+        applicantConfirmation.input.checked = false;
+        changed();
+      }
+      updateOpportunityView();
+    });
+    const applicant = input('Applicant / programme lead', 'text', item,
+      'applicant',
+      'Enter the exact person or legal entity that will apply. A name alone does not confirm identity, programme eligibility or authority.',
+      {maxLength: 300}, () => {
+        item.applicant_confirmed = false;
+        applicantConfirmation.input.checked = false;
+        updateOpportunityView();
+      });
+    applicantConfirmation = check('I have confirmed this named applicant directly with the person responsible for applying.', item.applicant_confirmed === true);
+    applicantConfirmation.input.setAttribute('aria-label', 'Applicant confirmed directly');
+    applicantConfirmation.input.addEventListener('change', () => {
+      item.applicant_confirmed = applicantConfirmation.input.checked;
+      changed(); updateOpportunityView();
+    });
+    applicantConfirmation.wrap.append(applicantConfirmationStatus);
     const ceiling = input('Maximum available (AUD)', 'number', item, 'ceiling', 'Leave blank when the programme publishes no cash award or the amount is not known. An offered ceiling is not an award or project budget.', {min: 0, step: '.01'}, element => { item.ceiling = element.value || null; updateOpportunityView(); });
     const state = choice('Opportunity status', opportunityStates, item, 'status', updateOpportunityView);
     const fit = input('Project fit and timing', 'textarea', item, 'fit', 'Which project option could this support? Record any exclusions or conditions before committing costs.', {rows: 3, maxLength: 6000}, updateOpportunityView);
@@ -623,6 +694,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       h('summary', {}, 'Edit opportunity details'), h('div', {class: 'form-grid'}, name.wrap, funder.wrap, routeType.wrap), url.wrap,
       windowSourceInfo, windowSource.wrap,
       h('div', {class: 'form-grid'}, applicationMode.wrap, applicant.wrap),
+      applicantConfirmation.wrap,
       h('div', {class: 'form-grid'}, windowKind.wrap, deadline.wrap, windowChecked.wrap, decision.wrap, ceiling.wrap, state.wrap), windowQuote.wrap, fit.wrap);
     focus.append(h('header', {class: 'campaign-focus-heading'}, headerFunder, headerName, programme),
       h('dl', {class: 'campaign-opportunity-facts'},
@@ -746,18 +818,10 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     selected = Math.min(selected, document.opportunities.length - 1);
     const selectedOpportunity = document.opportunities[selected];
     const opportunity = selectedOpportunity.name;
-    const active = isOpportunityActionable(selectedOpportunity.status);
-    const canPrepare = active && hasConfirmedApplicationRoute(selectedOpportunity);
+    const answerAccess = applicationAnswerAvailability(selectedOpportunity);
+    const canPrepare = answerAccess.allowed;
     panel.append(opportunityPicker(renderEditor));
-    if (!active) {
-      panel.append(notice('This route is inactive. Its saved answers are superseded historical drafts, may contain unconfirmed assumptions, and are not for submission. Copying is disabled. Their presence does not show whether anything was submitted; verify the original portal record separately.', 'warning'));
-    } else if (selectedOpportunity.application_mode === 'not_required') {
-      panel.append(notice('This route is recorded as having no formal application. Application answers and copying are disabled; record access, registration or delivery steps under Next actions.', 'warning'));
-    } else if (!canPrepare) {
-      panel.append(notice(selectedOpportunity.application_mode === 'required'
-        ? 'A formal application is recorded, but the applicant or lead is missing. Record who must apply in the route details before drafting or copying answers.'
-        : 'Confirm whether this route uses a formal application and who is allowed to apply in the route details. Drafting and copying stay locked until both are recorded.', 'warning'));
-    }
+    if (!canPrepare) panel.append(notice(answerAccess.message, 'warning'));
     const addQuestion = button('Add application question', () => {
       document.answers.push({opportunity, label: '', text: '', limit: null, status: 'draft'}); changed(); renderEditor();
     }, 'quiet');
@@ -774,12 +838,17 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }
       const limit = input('Character limit', 'number', row, 'limit', 'Keep this blank if the form does not specify a limit.', {min: 1, max: 20000, step: 1}, element => { row.limit = element.value ? Number(element.value) : null; update(); });
       limit.input.disabled = !canPrepare;
-      const answer = input('Draft answer', 'textarea', row, 'text', canPrepare ? '' : 'Locked until a formal application and applicant are confirmed.', {rows: 5, maxLength: 20000, readOnly: !canPrepare}, () => { row.status = 'draft'; reviewed.input.value = 'draft'; update(); });
+      const answer = input('Draft answer', 'textarea', row, 'text',
+        canPrepare ? '' : answerAccess.message,
+        {rows: 5, maxLength: 20000, readOnly: !canPrepare,
+          placeholder: canPrepare ? '' : 'Saved answer held until this route is confirmed.'},
+        () => { row.status = 'draft'; reviewed.input.value = 'draft'; update(); });
+      if (!canPrepare) answer.input.value = '';
       const reviewed = choice('Answer review', [['draft', 'Needs review'], ['reviewed', 'Reviewed by me']], row, 'status');
       reviewed.input.disabled = !canPrepare;
       const copied = h('p', {class: 'fine', 'aria-live': 'polite'});
       update();
-      const copy = button(canPrepare ? 'Copy this answer' : 'Copy unavailable · application route unconfirmed', async () => {
+      const copy = button(answerAccess.copyLabel, async () => {
         try { await navigator.clipboard.writeText(row.text); copied.textContent = row.limit && countCharacters(row.text) > row.limit ? 'Copied as written. Shorten this draft before pasting it into the application.' : 'Answer copied.'; }
         catch { error('Clipboard access is unavailable. Export the campaign brief instead.'); }
       }, 'quiet');
@@ -1054,12 +1123,27 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           'HTTP or HTTPS link only. Links are not opened or verified by Sinter.', {maxLength: 4000});
         const linkNotes = input('Evidence note', 'textarea', link, 'notes', '',
           {rows: 2, maxLength: 2000});
-        const linkChecked = input('Source check date · user-entered', 'date', link, 'checked_at',
-          'Inherited from a linked campaign source when one is selected. Sinter does not verify the date.', {});
         const savedSource = document.sources.find(source => source.id === link.source_id);
+        const linkChecked = input(savedSource
+          ? 'Source check date at link time · user-entered'
+          : 'Source check date · user-entered', 'date', link, 'checked_at',
+        savedSource
+          ? 'Preserved from when this evidence was linked. Sinter does not verify the date.'
+          : 'Record the source check date. Sinter does not verify it.', {});
+        const snapshotWarning = notice('', 'warning');
+        function updateSnapshotWarning(source) {
+          const differs = Boolean(source && (link.title !== source.title
+            || link.url !== source.url || link.checked_at !== source.checked_at));
+          snapshotWarning.hidden = !differs;
+          snapshotWarning.textContent = differs
+            ? 'This saved evidence snapshot differs from the current source record. Its original title, link and check date are preserved. Recheck the source before use; clear and select it again only to replace the snapshot.'
+            : '';
+        }
+        updateSnapshotWarning(savedSource);
         const sourceChoice = campaignSourcePicker('Link to a saved campaign source', link.source_id, source => {
+          const isNewLink = Boolean(source && source.id !== link.source_id);
           link.source_id = source?.id || '';
-          if (source) {
+          if (source && isNewLink) {
             link.title = source.title;
             link.url = source.url;
             link.checked_at = source.checked_at;
@@ -1071,22 +1155,15 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           linkUrl.input.disabled = Boolean(source);
           linkChecked.input.disabled = Boolean(source);
           linkChecked.wrap.querySelector('label').textContent = source
-            ? 'Source check date · inherited from linked source' : 'Source check date · user-entered';
+            ? 'Source check date at link time · user-entered'
+            : 'Source check date · user-entered';
+          updateSnapshotWarning(source);
         });
-        if (savedSource) {
-          link.title = savedSource.title;
-          link.url = savedSource.url;
-          link.checked_at = savedSource.checked_at;
-          linkTitle.input.value = savedSource.title;
-          linkUrl.input.value = savedSource.url;
-          linkChecked.input.value = savedSource.checked_at;
-        }
         linkTitle.input.disabled = Boolean(savedSource);
         linkUrl.input.disabled = Boolean(savedSource);
         linkChecked.input.disabled = Boolean(savedSource);
-        if (savedSource) linkChecked.wrap.querySelector('label').textContent = 'Source check date · inherited from linked source';
         evidence.append(h('article', {class: 'campaign-row', 'aria-label': 'Communication evidence link'},
-          sourceChoice.wrap, linkTitle.wrap, linkUrl.wrap, linkChecked.wrap, linkNotes.wrap,
+          sourceChoice.wrap, snapshotWarning, linkTitle.wrap, linkUrl.wrap, linkChecked.wrap, linkNotes.wrap,
           link.url ? safeLink(link.url, 'Open evidence link') : null,
           remove(evidenceLinks, link, 'Remove evidence link')));
       }

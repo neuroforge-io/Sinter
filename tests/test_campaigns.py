@@ -57,6 +57,9 @@ def campaign(**changes):
 
 def test_prepare_preserves_editable_input_and_generates_portable_pack_offline():
     document = campaign()
+    document["opportunities"][0].update(
+        application_mode="required", applicant="Banksia Volunteers",
+        applicant_confirmed=True)
     before = copy.deepcopy(document)
     with patch("sinter.client.chat") as model, patch("sinter.client.search") as search:
         report = campaigns.prepare(document)
@@ -156,6 +159,120 @@ def test_asset_register_preserves_unknowns_and_separates_research_from_eligibili
     assert "Product and IP research register" not in report["document_markdown"]
     assert "## Product and IP research register" in report["markdown"]
     assert campaigns.validate(report["campaign"]) == report["campaign"]
+
+
+def test_asset_evidence_keeps_its_source_snapshot_and_warns_after_source_refresh():
+    source_id = "f" * 32
+    old_url = "https://example.org/research/paper-v1"
+    current_url = "https://example.org/research/paper-v2"
+    document = campaign(
+        sources=[{"id": source_id, "title": "Updated research record",
+                  "url": current_url, "checked_at": "2026-09-30"}],
+        assets=[{"name": "Sinter", "references": [{
+            "kind": "prior_art", "source_id": source_id,
+            "title": "Original research paper", "url": old_url,
+            "excerpt": "The original passage assessed for this asset.",
+            "checked_at": "2026-09-12",
+        }]}],
+    )
+
+    report = campaigns.prepare(document)
+    reference = report["campaign"]["assets"][0]["references"][0]
+
+    assert reference == {
+        "kind": "prior_art", "source_id": source_id,
+        "title": "Original research paper", "url": old_url,
+        "excerpt": "The original passage assessed for this asset.",
+        "checked_at": "2026-09-12", "notes": "",
+    }
+    assert (
+        campaigns.validate(report["campaign"])["assets"][0]["references"][0]
+        == reference
+    )
+    assert "[Original research paper](<" + old_url + ">)" in report["markdown"]
+    assert "Checked date (campaign-entered): 2026-09-12" in report["markdown"]
+    assert (
+        "RECHECK RECOMMENDED — linked source title, URL, checked date changed"
+        in report["markdown"]
+    )
+    assert (
+        "Current source register: [Updated research record](<"
+        + current_url + ">)" in report["markdown"]
+    )
+    assert "checked: 2026-09-30" in report["markdown"]
+    assert (
+        "Re-open the saved passage, confirm it still applies, and update this reference"
+        in report["markdown"]
+    )
+
+
+def test_new_asset_evidence_link_captures_current_source_fields_once():
+    source_id = "e" * 32
+    source = {"id": source_id, "title": "Current guidance",
+              "url": "https://example.org/guidance", "checked_at": "2026-09-30"}
+
+    normalized = campaigns.validate(campaign(
+        sources=[source],
+        assets=[{"name": "Sinter", "references": [{
+            "kind": "other", "source_id": source_id,
+            "excerpt": "A passage newly checked against the linked source.",
+        }]}],
+    ))
+
+    reference = normalized["assets"][0]["references"][0]
+    assert reference["title"] == source["title"]
+    assert reference["url"] == source["url"]
+    assert reference["checked_at"] == source["checked_at"]
+    assert "RECHECK RECOMMENDED" not in campaigns.prepare(normalized)["markdown"]
+
+
+def test_blank_asset_snapshot_fields_remain_unknown_after_source_update():
+    source_id = "a" * 32
+    source = {"id": source_id, "title": "Saved source title",
+              "url": "https://example.org/current", "checked_at": "2026-09-30"}
+    asset = {"name": "Sinter", "references": [{
+        "kind": "other", "source_id": source_id,
+        "title": "Saved source title", "url": "", "excerpt": "Saved passage",
+        "checked_at": "",
+    }]}
+
+    report = campaigns.prepare(campaign(sources=[source], assets=[asset]))
+    reference = report["campaign"]["assets"][0]["references"][0]
+
+    assert reference["url"] == ""
+    assert reference["checked_at"] == ""
+    assert (
+        "RECHECK RECOMMENDED — linked source URL, checked date changed"
+        in report["markdown"]
+    )
+    assert (
+        "Current source register: [Saved source title](<"
+        + source["url"] + ">)" in report["markdown"]
+    )
+
+
+@pytest.mark.parametrize(("field", "value", "label"), [
+    ("title", "Renamed source", "title"),
+    ("url", "https://example.org/updated", "URL"),
+    ("checked_at", "2026-09-30", "checked date"),
+])
+def test_asset_evidence_source_metadata_drift_recommends_recheck(field, value, label):
+    source_id = "d" * 32
+    source = {"id": source_id, "title": "Original source",
+              "url": "https://example.org/original", "checked_at": "2026-09-12"}
+    updated_source = {**source, field: value}
+    asset = {"name": "Sinter", "references": [{
+        "kind": "other", "source_id": source_id,
+        "title": source["title"], "url": source["url"],
+        "excerpt": "Saved passage", "checked_at": source["checked_at"],
+    }]}
+
+    report = campaigns.prepare(campaign(sources=[updated_source], assets=[asset]))
+
+    assert (
+        "RECHECK RECOMMENDED — linked source " + label + " changed"
+        in report["markdown"]
+    )
 
 
 @pytest.mark.parametrize("field,value,match", [
@@ -264,6 +381,7 @@ def test_application_workflow_and_applicant_are_explicit_and_backward_compatible
     legacy = campaigns.validate(campaign())
     assert legacy["opportunities"][0]["application_mode"] == "unknown"
     assert legacy["opportunities"][0]["applicant"] == ""
+    assert legacy["opportunities"][0]["applicant_confirmed"] is False
 
     explicit = campaign()
     explicit["opportunities"][0].update(
@@ -271,6 +389,23 @@ def test_application_workflow_and_applicant_are_explicit_and_backward_compatible
     normalized = campaigns.validate(explicit)
     assert normalized["opportunities"][0]["application_mode"] == "required"
     assert normalized["opportunities"][0]["applicant"] == "Warraburra State School"
+    assert normalized["opportunities"][0]["applicant_confirmed"] is False
+    explicit["opportunities"][0]["applicant_confirmed"] = True
+    assert campaigns.validate(explicit)["opportunities"][0]["applicant_confirmed"] is True
+    with pytest.raises(ValueError, match="true or false"):
+        campaigns.validate(campaign(opportunities=[{
+            **campaign()["opportunities"][0], "applicant_confirmed": "yes",
+        }]))
+    with pytest.raises(ValueError, match="named applicant"):
+        campaigns.validate(campaign(opportunities=[{
+            **campaign()["opportunities"][0], "application_mode": "required",
+            "applicant_confirmed": True,
+        }]))
+    with pytest.raises(ValueError, match="required application"):
+        campaigns.validate(campaign(opportunities=[{
+            **campaign()["opportunities"][0], "application_mode": "not_required",
+            "applicant": "School", "applicant_confirmed": True,
+        }]))
     with pytest.raises(ValueError, match="valid application workflow"):
         campaigns.validate(campaign(opportunities=[{
             **campaign()["opportunities"][0], "application_mode": "maybe",
@@ -285,7 +420,7 @@ def test_only_routes_with_confirmed_application_and_applicant_need_answer_drafts
     report = campaigns.prepare(non_application)
     assert report["readiness"]["application_workflow_to_confirm"] == 0
     assert report["readiness"]["opportunities_without_answers"] == 0
-    assert "no application recorded" in report["document_markdown"]
+    assert "no formal application recorded" in report["document_markdown"]
 
     unknown = campaigns.prepare(campaign(answers=[]))
     assert unknown["readiness"]["application_workflow_to_confirm"] == 1
@@ -295,8 +430,48 @@ def test_only_routes_with_confirmed_application_and_applicant_need_answer_drafts
     required["opportunities"][0].update(
         application_mode="required", applicant="Banksia Volunteers")
     report = campaigns.prepare(required)
+    assert report["readiness"]["application_workflow_to_confirm"] == 1
+    assert report["readiness"]["opportunities_without_answers"] == 0
+
+    pending = campaign()
+    pending["answers"][0]["text"] = "PRIVATE HELD ANSWER MUST NOT APPEAR"
+    pending["answers"][0]["limit"] = 8
+    pending["opportunities"][0].update(
+        application_mode="required", applicant="Proposed Banksia Volunteers")
+    pending_report = campaigns.prepare(pending)
+    assert pending_report["readiness"]["answers_on_unconfirmed_application_routes"] == 1
+    assert pending_report["readiness"]["answers_over_limit"] == 0
+    assert pending_report["readiness"]["answers_empty"] == 0
+    assert pending_report["readiness"]["answers_unreviewed"] == 0
+    assert "named applicant is recorded but not directly confirmed" in pending_report["markdown"]
+    assert "PRIVATE HELD ANSWER MUST NOT APPEAR" not in pending_report["markdown"]
+    assert "Project purpose" not in pending_report["markdown"]
+    assert pending_report["campaign"]["answers"][0]["text"] == ""
+    assert pending_report["campaign"]["answers"][0]["label"] == (
+        "Held answer details omitted from report")
+    assert pending_report["campaign"]["answers"][0]["limit"] is None
+    assert pending_report["answer_metrics"] == []
+    assert "PRIVATE HELD ANSWER MUST NOT APPEAR" not in json.dumps(pending_report)
+    assert "Project purpose" not in json.dumps(pending_report)
+    assert pending["answers"][0]["text"] == "PRIVATE HELD ANSWER MUST NOT APPEAR"
+    assert "text omitted" in pending_report["markdown"]
+    pending["opportunities"][0]["applicant_confirmed"] = True
+    report = campaigns.prepare(pending)
     assert report["readiness"]["application_workflow_to_confirm"] == 0
-    assert report["readiness"]["opportunities_without_answers"] == 1
+    assert report["readiness"]["opportunities_without_answers"] == 0
+    assert report["readiness"]["answers_over_limit"] == 1
+    assert report["campaign"]["answers"][0]["text"] == "PRIVATE HELD ANSWER MUST NOT APPEAR"
+    assert report["answer_metrics"][0]["label"] == "Project purpose"
+    assert "PRIVATE HELD ANSWER MUST NOT APPEAR" in report["markdown"]
+
+    pending["opportunities"][0]["status"] = "closed"
+    historical = campaigns.prepare(pending)
+    assert historical["campaign"]["answers"][0]["text"] == ""
+    assert historical["campaign"]["answers"][0]["label"] == (
+        "Held answer details omitted from report")
+    assert historical["answer_metrics"] == []
+    assert "Project purpose" not in historical["markdown"]
+    assert "PRIVATE HELD ANSWER MUST NOT APPEAR" not in json.dumps(historical)
 
 
 def test_linked_communication_evidence_preserves_its_original_source_snapshot():
@@ -321,6 +496,33 @@ def test_linked_communication_evidence_preserves_its_original_source_snapshot():
     normalized_requirement = campaigns.validate(req_campaign)["requirements"][0]
     assert normalized_requirement["checked_at"] == "2026-01-01"
     assert normalized_requirement["source_url"] == "https://example.org/grants/access/eligibility"
+
+
+def test_changed_linked_source_keeps_communication_snapshot_and_warns_in_audit():
+    source = {"id": "c" * 32, "title": "Official guidance",
+              "url": "https://example.org/guidance", "checked_at": "2026-09-29"}
+    document = campaign(sources=[source], communications=[{
+        "direction": "outgoing", "status": "draft", "channel": "email",
+        "evidence_links": [{"source_id": source["id"],
+                            "title": source["title"], "url": source["url"],
+                            "checked_at": source["checked_at"]}],
+    }])
+    linked = campaigns.validate(document)
+    linked["sources"][0].update(
+        title="Updated official guidance",
+        url="https://example.org/guidance/current", checked_at="2026-09-30")
+    refreshed = campaigns.validate(linked)
+
+    saved_link = refreshed["communications"][0]["evidence_links"][0]
+    assert saved_link == {
+        "source_id": source["id"], "title": "Official guidance",
+        "url": "https://example.org/guidance", "checked_at": "2026-09-29",
+        "notes": "",
+    }
+    report = campaigns.prepare(refreshed)
+    assert "Saved source snapshot differs from the current source register; recheck before reuse." in report["markdown"]
+    assert "https://example.org/guidance" in report["markdown"]
+    assert "https://example.org/guidance/current" in report["markdown"]
 
 
 def test_blank_requirement_source_date_does_not_inherit_a_fresh_registry_date():
@@ -478,7 +680,9 @@ def test_default_brief_hides_source_and_inactive_detail_but_audit_retains_it():
 
     assert "Closed route" in audit and "Paused route" in audit
     assert "### Historical answer drafts · inactive route" in audit
-    assert "historical draft · draft" in audit
+    assert "1 historical answer row(s) retained; question labels and text omitted" in audit
+    assert "Historical answer label" not in audit
+    assert "HISTORICAL_ANSWER_TEXT" not in audit
     assert "PRIVATE\\_SOURCE\\_NOTE" in audit
     assert "## Source references" in audit
     # Legacy campaign fixtures omit newer optional signatory/owner fields;
@@ -610,6 +814,9 @@ def test_known_subtotal_can_exceed_ceiling_with_other_costs_still_unknown():
 
 def test_answer_count_measures_exact_untrimmed_text_and_keeps_overlimit_draft():
     document = campaign()
+    document["opportunities"][0].update(
+        application_mode="required", applicant="Banksia Volunteers",
+        applicant_confirmed=True)
     document["answers"][0].update(text=" A café 🏊\n", limit=9, status="reviewed")
     report = campaigns.prepare(document)
     metric = report["answer_metrics"][0]
@@ -623,6 +830,9 @@ def test_answer_count_measures_exact_untrimmed_text_and_keeps_overlimit_draft():
 
 def test_empty_reviewed_answer_and_missing_limits_still_need_attention():
     document = campaign()
+    document["opportunities"][0].update(
+        application_mode="required", applicant="Banksia Volunteers",
+        applicant_confirmed=True)
     document["answers"][0].update(text="  \n", limit=None, status="reviewed")
     report = campaigns.prepare(document)
     assert report["readiness"]["answers_empty"] == 1
@@ -701,9 +911,10 @@ def test_complete_entered_checks_never_become_an_eligibility_determination():
         deadline=closing.isoformat(), application_window="fixed",
         window_source_id=source_id,
         window_source_url=document["sources"][0]["url"],
-        window_source_quote=f"Applications close on {closing.isoformat()}.",
-        window_checked_at=date.today().isoformat(),
-        application_mode="required", applicant="Banksia Volunteers",
+            window_source_quote=f"Applications close on {closing.isoformat()}.",
+            window_checked_at=date.today().isoformat(),
+            application_mode="required", applicant="Banksia Volunteers",
+            applicant_confirmed=True,
     )
     document["requirements"][0]["status"] = "met"
     document["answers"][0]["status"] = "reviewed"
@@ -1085,8 +1296,8 @@ def test_closed_route_answer_drafts_are_clearly_archived_not_current_answers():
     assert "### Historical answer drafts · inactive route" in markdown
     assert "are not for submission" in markdown
     assert "does not show whether anything was submitted" in markdown
-    assert "historical draft · draft" in markdown
-    assert "Draft text omitted from this report." in markdown
+    assert "1 historical answer row(s) retained; question labels and text omitted" in markdown
+    assert "Project purpose" not in markdown
     assert "Provide shared swim equipment." not in markdown
     assert "### Application answers" not in markdown
 
@@ -1223,6 +1434,9 @@ def test_invalid_text_rejected_before_rendering_or_encoding(value):
 
 def test_campaign_text_preserves_tab_and_line_breaks():
     document = campaign()
+    document["opportunities"][0].update(
+        application_mode="required", applicant="Banksia Volunteers",
+        applicant_confirmed=True)
     document["answers"][0]["text"] = "First line\nSecond\tpart\rFinal line"
     report = campaigns.prepare(document)
     assert report["campaign"]["answers"][0]["text"] == document["answers"][0]["text"]
@@ -1230,6 +1444,9 @@ def test_campaign_text_preserves_tab_and_line_breaks():
 
 def test_benign_markdown_and_html_stay_literal_and_links_remain_portable():
     document = campaign(title="<img src=x> [Campaign](javascript:alert(1))")
+    document["opportunities"][0].update(
+        application_mode="required", applicant="Banksia Volunteers",
+        applicant_confirmed=True)
     document["answers"][0]["text"] = "<script>alert(1)</script>\n# New heading"
     document["opportunities"][0]["url"] = "https://example.org/grants/(access)"
     report = campaigns.prepare(document)

@@ -35,11 +35,43 @@ export function isOpportunityActionable(status) {
   return actionableOpportunityStates.has(status);
 }
 
-/** Application answers stay locked until both the workflow and applicant are explicit. */
+/** Require a named applicant and explicit operator confirmation before drafting. */
 export function hasConfirmedApplicationRoute(opportunity) {
   return opportunity?.application_mode === 'required'
     && typeof opportunity.applicant === 'string'
-    && opportunity.applicant.trim().length > 0;
+    && opportunity.applicant.trim().length > 0
+    && opportunity.applicant_confirmed === true;
+}
+
+/** Keep the answer lock, explanation and button label tied to one route state. */
+export function applicationAnswerAvailability(opportunity) {
+  if (!isOpportunityActionable(opportunity?.status)) {
+    return {allowed: false, reason: 'inactive',
+      message: 'This route is inactive. Its saved answers are superseded historical drafts, may contain unconfirmed assumptions, and are not for submission. Copying is disabled. Their presence does not show whether anything was submitted; verify the original portal record separately.',
+      copyLabel: 'Copy unavailable · inactive route'};
+  }
+  if (opportunity?.application_mode === 'not_required') {
+    return {allowed: false, reason: 'not_required',
+      message: 'This route is recorded as having no formal application. Application answers and copying are disabled; record access, registration or delivery steps under Next actions.',
+      copyLabel: 'Copy unavailable · no formal application'};
+  }
+  if (opportunity?.application_mode !== 'required') {
+    return {allowed: false, reason: 'workflow_unconfirmed',
+      message: 'Confirm whether this route uses a formal application and who is allowed to apply in the route details. Drafting and copying stay locked until both are recorded.',
+      copyLabel: 'Copy unavailable · workflow not confirmed'};
+  }
+  if (!hasConfirmedApplicationRoute(opportunity)) {
+    const recorded = typeof opportunity?.applicant === 'string'
+      && opportunity.applicant.trim().length > 0;
+    return {allowed: false, reason: 'applicant_unconfirmed',
+      message: recorded
+        ? 'An applicant name is recorded, but it has not been explicitly confirmed with the person responsible for applying. Confirm the named applicant in the route details before drafting or copying answers. This does not establish programme eligibility or authority to submit.'
+        : 'The application workflow is marked as required, but an applicant or lead is not recorded. Record who must apply in the route details before drafting or copying answers.',
+      copyLabel: recorded
+        ? 'Copy unavailable · applicant not confirmed'
+        : 'Copy unavailable · applicant not recorded'};
+  }
+  return {allowed: true, reason: '', message: '', copyLabel: 'Copy this answer'};
 }
 
 /**

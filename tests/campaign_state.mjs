@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {defaultCampaignOpportunityIndex, hasConfirmedApplicationRoute,
+import {applicationAnswerAvailability, defaultCampaignOpportunityIndex, hasConfirmedApplicationRoute,
   hasCurrentApplicationWindowEvidence} from '../src/sinter/web/campaign-state.js';
 
 const today = '2026-09-29';
@@ -12,10 +12,54 @@ const verified = (name, status, deadline) => ({name, status, deadline,
   window_checked_at: today});
 
 test('application answer controls require both a confirmed workflow and applicant', () => {
-  assert.equal(hasConfirmedApplicationRoute({application_mode: 'required', applicant: 'School'}), true);
+  assert.equal(hasConfirmedApplicationRoute({application_mode: 'required', applicant: 'School'}), false);
+  assert.equal(hasConfirmedApplicationRoute({application_mode: 'required', applicant: 'School', applicant_confirmed: true}), true);
   assert.equal(hasConfirmedApplicationRoute({application_mode: 'required', applicant: '  '}), false);
   assert.equal(hasConfirmedApplicationRoute({application_mode: 'unknown', applicant: 'School'}), false);
   assert.equal(hasConfirmedApplicationRoute({application_mode: 'not_required', applicant: 'School'}), false);
+});
+
+test('application answer availability gives a matching lock reason and copy label', () => {
+  const inactive = applicationAnswerAvailability({
+    status: 'closed', application_mode: 'required', applicant: 'School',
+  });
+  assert.equal(inactive.allowed, false);
+  assert.equal(inactive.reason, 'inactive');
+  assert.equal(inactive.copyLabel, 'Copy unavailable · inactive route');
+  assert.match(inactive.message, /historical drafts/);
+
+  const noFormalApplication = applicationAnswerAvailability({
+    status: 'open', application_mode: 'not_required', applicant: '',
+  });
+  assert.equal(noFormalApplication.reason, 'not_required');
+  assert.equal(noFormalApplication.copyLabel, 'Copy unavailable · no formal application');
+
+  const workflowUnknown = applicationAnswerAvailability({
+    status: 'clarification', application_mode: 'unknown', applicant: 'School',
+  });
+  assert.equal(workflowUnknown.reason, 'workflow_unconfirmed');
+  assert.equal(workflowUnknown.copyLabel, 'Copy unavailable · workflow not confirmed');
+
+  const applicantUnknown = applicationAnswerAvailability({
+    status: 'open', application_mode: 'required', applicant: '  ',
+  });
+  assert.equal(applicantUnknown.reason, 'applicant_unconfirmed');
+  assert.equal(applicantUnknown.copyLabel, 'Copy unavailable · applicant not recorded');
+
+  const applicantPending = applicationAnswerAvailability({
+    status: 'open', application_mode: 'required', applicant: 'Proposed School',
+  });
+  assert.equal(applicantPending.reason, 'applicant_unconfirmed');
+  assert.equal(applicantPending.copyLabel, 'Copy unavailable · applicant not confirmed');
+  assert.match(applicantPending.message, /does not establish programme eligibility/);
+
+  const confirmed = applicationAnswerAvailability({
+    status: 'upcoming', application_mode: 'required', applicant: 'School',
+    applicant_confirmed: true,
+  });
+  assert.deepEqual(confirmed, {
+    allowed: true, reason: '', message: '', copyLabel: 'Copy this answer',
+  });
 });
 
 test('a near closing date outranks a rolling route and source order', () => {

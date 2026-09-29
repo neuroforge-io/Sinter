@@ -70,9 +70,11 @@ def _context(payload: dict, sources: list[Source], selected: list[Excerpt],
              *, letter: bool) -> list[str]:
     """Keep short, exact source passages in the usable document, with plain attribution."""
     notes = text(payload.get("notes", ""), "Notes").strip()
+    if letter and payload.get("campaign_sender_review") is True:
+        # Campaign notes contain internal checks, actions and unverified fit.
+        # Keep them in the evidence view, never copy them into funder-facing prose.
+        return []
     if letter and notes:
-        if payload.get("campaign_sender_review") is True:
-            return [literal(notes).replace("\n", "\n\n")]
         if len(notes) <= 1600:
             return ["For context, our notes record:", _quote(notes)]
         # A long note belongs in the evidence pack; use an admitted exact passage here.

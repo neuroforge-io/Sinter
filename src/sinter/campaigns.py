@@ -267,6 +267,7 @@ def validate(data: object) -> dict:
         "window_source_id", "window_source_url", "window_source_quote",
         "window_checked_at", "decision_window",
         "ceiling", "fit", "status", "route_type", "application_mode", "applicant",
+        "applicant_confirmed",
     }):
         name = _text(row.get("name", ""), "Opportunity name", 200, True,
                      strip=True)
@@ -282,6 +283,17 @@ def validate(data: object) -> dict:
                                  "Application-window source ID", 32)
         if window_source_id and window_source_id not in source_by_id:
             raise ValueError("An application-window check points to a campaign source that no longer exists.")
+        applicant = _text(row.get("applicant", ""), "Route applicant", 300)
+        application_mode = _status(
+            row.get("application_mode", "unknown"), APPLICATION_MODES,
+            "application workflow")
+        applicant_confirmed = row.get("applicant_confirmed", False)
+        if type(applicant_confirmed) is not bool:
+            raise ValueError("Route applicant confirmation must be true or false.")
+        if applicant_confirmed and (
+                application_mode != "required"
+                or not applicant.strip()):
+            raise ValueError("Confirm an applicant only after recording a named applicant for a required application.")
         result["opportunities"].append({
             "name": name,
             "funder": _text(row.get("funder", ""), "Funder", 300),
@@ -307,10 +319,9 @@ def validate(data: object) -> dict:
             "fit": _text(row.get("fit", ""), "Project fit", 6000),
             "route_type": _status(row.get("route_type", "unknown"),
                                    OPPORTUNITY_TYPES, "route type"),
-            "application_mode": _status(
-                row.get("application_mode", "unknown"), APPLICATION_MODES,
-                "application workflow"),
-            "applicant": _text(row.get("applicant", ""), "Route applicant", 300),
+            "application_mode": application_mode,
+            "applicant": applicant,
+            "applicant_confirmed": applicant_confirmed,
             "status": _status(row.get("status", "researching"),
                               OPPORTUNITY_STATUSES, "opportunity status"),
         })
@@ -447,22 +458,30 @@ def validate(data: object) -> dict:
                 continue
             linked_source = next((source for source in result["sources"]
                                   if source["id"] == source_id), None)
-            title = (linked_source["title"] if linked_source else
-                     _text(reference.get("title", ""),
-                           "Asset evidence title", 500, True, strip=True))
+            # A linked reference is a snapshot of the source used for this
+            # passage. Keep populated snapshot fields when the source register
+            # is refreshed; fill them from the source only when first linking.
+            if linked_source and not str(reference.get("title", "")).strip():
+                title = linked_source["title"]
+            else:
+                title = _text(reference.get("title", ""),
+                              "Asset evidence title", 500, True, strip=True)
+            if "url" in reference:
+                url = _url(reference.get("url", ""), "Asset evidence URL")
+            else:
+                url = linked_source["url"] if linked_source else ""
+            checked_at = reference.get("checked_at", "")
+            if "checked_at" not in reference and linked_source:
+                checked_at = linked_source["checked_at"]
             normalized_references.append({
                 "kind": _status(reference.get("kind", "other"),
                                 ASSET_REFERENCE_KINDS, "asset evidence type"),
                 "source_id": source_id,
                 "title": title,
-                "url": (linked_source["url"] if linked_source else
-                        _url(reference.get("url", ""), "Asset evidence URL")),
+                "url": url,
                 "excerpt": _text(reference.get("excerpt", ""),
                                  "Relevant source passage", 3000),
-                "checked_at": _date(reference.get("checked_at", "")
-                                    or (linked_source["checked_at"]
-                                        if linked_source else ""),
-                                    "Asset reference check date"),
+                "checked_at": _date(checked_at, "Asset reference check date"),
                 "notes": _text(reference.get("notes", ""),
                                "Asset evidence note", 2000),
             })
@@ -724,16 +743,23 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
     active_answers = [row for row in document["answers"]
                       if not row["opportunity"] or row["opportunity"] in active_names]
     routes_requiring_answers = [row for row in active
-                                if row["application_mode"] == "required"
-                                and row["applicant"].strip()]
+                                if _application_route_confirmed(row)]
     active_by_name = {row["name"]: row for row in active}
     answers_on_unconfirmed_routes = sum(
         bool(row["opportunity"] in active_by_name)
-        and (active_by_name[row["opportunity"]]["application_mode"] != "required"
-             or not active_by_name[row["opportunity"]]["applicant"].strip())
+        and not _application_route_confirmed(
+            active_by_name[row["opportunity"]])
         for row in active_answers)
+    current_answer_indexes = {
+        index for index, row in enumerate(document["answers"])
+        if not row["opportunity"]
+        or (row["opportunity"] in active_by_name
+            and _application_route_confirmed(active_by_name[row["opportunity"]]))
+    }
+    current_answers = [row for index, row in enumerate(document["answers"])
+                       if index in current_answer_indexes]
     active_metrics = [metric for metric in metrics
-                      if not metric["opportunity"] or metric["opportunity"] in active_names]
+                      if metric["index"] in current_answer_indexes]
     active_budget_rows = [row for row in document["budget"]
                           if not row["opportunity"] or row["opportunity"] in active_names]
     active_budget = _budget_total(active_budget_rows)
@@ -760,7 +786,7 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
         "application_workflow_to_confirm": sum(
             row["application_mode"] == "unknown" or (
                 row["application_mode"] == "required"
-                and not row["applicant"].strip())
+                and not _application_route_confirmed(row))
             for row in active),
         "opportunities_without_sources": sum(not item["url"] for item in active),
         "application_windows_to_check": application_windows_to_check,
@@ -770,9 +796,9 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
             for item in routes_requiring_answers),
         "answers_on_unconfirmed_application_routes": answers_on_unconfirmed_routes,
         "answers_over_limit": sum(row["over_limit"] for row in active_metrics),
-        "answers_empty": sum(not row["text"].strip() for row in active_answers),
+        "answers_empty": sum(not row["text"].strip() for row in current_answers),
         "answers_unreviewed": sum(row["status"] != "reviewed"
-                                  for row in active_answers),
+                                  for row in current_answers),
         "answer_limits_unknown": sum(row["limit"] is None for row in active_metrics),
         "budget_incomplete": not active_budget["complete"],
         "unknown_costs": active_budget["unknown_costs"],
@@ -843,6 +869,79 @@ def _display_date(value: str) -> str:
     if parsed.month == 9:
         month = "Sept"
     return f"{parsed.day} {month} {parsed.year}"
+
+
+def _application_workflow_description(row: dict) -> str:
+    """Describe operator-entered workflow without implying eligibility."""
+    if row["application_mode"] == "not_required":
+        return "no formal application recorded (user-entered)"
+    if row["application_mode"] != "required":
+        return "application workflow not confirmed"
+    applicant = row["applicant"].strip()
+    if not applicant:
+        return "formal application required · applicant not recorded"
+    if not row["applicant_confirmed"]:
+        return ("formal application required · applicant recorded but not "
+                "confirmed: " + _inline(applicant))
+    return ("formal application required · applicant identity user-confirmed: "
+            + _inline(applicant)
+            + " (eligibility and signatory authority remain unverified)")
+
+
+def _application_route_confirmed(row: dict) -> bool:
+    return (row["application_mode"] == "required"
+            and bool(row["applicant"].strip())
+            and row["applicant_confirmed"] is True)
+
+
+def _answer_hold_reason(row: dict) -> str:
+    if row["application_mode"] == "not_required":
+        return ("This route is recorded as having no formal application. Saved "
+                "answer labels and drafts are held and omitted from this brief.")
+    if row["application_mode"] != "required":
+        return ("The formal application workflow is not confirmed. Saved answer "
+                "labels and drafts are held and omitted from this brief.")
+    if not row["applicant"].strip():
+        return ("No named applicant is recorded. Saved answer labels and "
+                "drafts are held and omitted from this brief.")
+    return ("A named applicant is recorded but not directly confirmed. Saved "
+            "answer labels and drafts are held and omitted from this brief. Confirm the "
+            "named applicant with the person responsible for applying. This "
+            "does not establish programme eligibility or authority to submit.")
+
+
+def _reportable_answer_indexes(document: dict) -> set[int]:
+    """Return answer rows safe to include in a shareable campaign report."""
+    routes = {row["name"]: row for row in document["opportunities"]}
+    return {
+        index for index, answer in enumerate(document["answers"])
+        if (route := routes.get(answer["opportunity"]))
+        and route["status"] in ACTIONABLE_OPPORTUNITY_STATES
+        and _application_route_confirmed(route)
+    }
+
+
+def _report_campaign_view(document: dict,
+                         reportable_answers: set[int]) -> dict:
+    """Keep held and historical answer content out of shareable report data.
+
+    The editable campaign and its explicit JSON backup retain the complete
+    labels and drafts. A report view only includes answer rows eligible to
+    appear in the active-route brief.
+    """
+    report = dict(document)
+    report["answers"] = []
+    for index, row in enumerate(document["answers"]):
+        if index in reportable_answers:
+            report["answers"].append(dict(row))
+        else:
+            report["answers"].append({
+                **row,
+                "label": "Held answer details omitted from report",
+                "text": "",
+                "limit": None,
+            })
+    return report
 
 
 def _application_window_is_current(row: dict, today: date,
@@ -1057,20 +1156,39 @@ def _render_portfolio_register(assets: list[dict], sources: list[dict]) -> list[
         if row["references"]:
             lines.append("Evidence references (campaign-entered; not opened or checked by Sinter):")
             for reference in row["references"]:
-                linked_source = next((source for source in sources
-                                      if source["id"] == reference["source_id"]), None)
-                title = _inline(linked_source["title"] if linked_source
-                                else reference["title"])
-                url = linked_source["url"] if linked_source else reference["url"]
+                linked_source = _source_for(sources, reference["source_id"])
+                title = _inline(reference["title"])
+                url = reference["url"]
                 kind = ASSET_REFERENCE_LABELS[reference["kind"]]
                 lines.append("- " + kind + ": "
                              + (_link(url, title) if url else title)
                              + (" · Source ID " + reference["source_id"][:8]
                                 if linked_source else ""))
-                checked_at = reference["checked_at"] or (
-                    linked_source["checked_at"] if linked_source else "")
+                checked_at = reference["checked_at"]
                 if checked_at:
                     lines.append("  Checked date (campaign-entered): " + checked_at)
+                if linked_source:
+                    changed = []
+                    if reference["title"] != linked_source["title"]:
+                        changed.append("title")
+                    if reference["url"] != linked_source["url"]:
+                        changed.append("URL")
+                    if reference["checked_at"] != linked_source["checked_at"]:
+                        changed.append("checked date")
+                    if changed:
+                        current = _inline(linked_source["title"])
+                        if linked_source["url"]:
+                            current = _link(linked_source["url"], current)
+                        current_date = (linked_source["checked_at"]
+                                        or "not recorded")
+                        lines.append(
+                            "  RECHECK RECOMMENDED — linked source "
+                            + ", ".join(changed)
+                            + " changed since this evidence snapshot was recorded. "
+                            + "Current source register: " + current
+                            + " · checked: " + current_date
+                            + ". Re-open the saved passage, confirm it still applies, "
+                            + "and update this reference before relying on it.")
                 if reference["excerpt"].strip():
                     lines.extend(["  Relevant passage (campaign-entered; quote or paraphrase):",
                                   literal(reference["excerpt"])])
@@ -1104,12 +1222,7 @@ def _render_decision_brief(document: dict, readiness: dict,
                       "**Route type (user-entered):** "
                       + row["route_type"].replace("_", " "),
             "**Application workflow (user-entered):** "
-            + ("application required · applicant: " + _inline(row["applicant"])
-               if row["application_mode"] == "required" and row["applicant"].strip()
-               else "application required · applicant not recorded"
-               if row["application_mode"] == "required"
-               else "no application recorded" if row["application_mode"] == "not_required"
-               else "not confirmed"),
+            + _application_workflow_description(row),
             "**Application window:** " + _brief_window_description(
                 row, document["sources"]),
             "**Cash award / ceiling:** " + _route_amount(row),
@@ -1134,8 +1247,8 @@ def _render_decision_brief(document: dict, readiness: dict,
     workflow_count = readiness["application_workflow_to_confirm"]
     if workflow_count:
         review_items.append(
-            f"{workflow_count} active route(s) need their application process "
-            "and applicant confirmed")
+            f"{workflow_count} active route(s) need their application process, "
+            "named applicant and explicit applicant confirmation recorded")
     missing_answers = readiness["opportunities_without_answers"]
     if missing_answers:
         review_items.append(
@@ -1253,7 +1366,7 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
     lines.extend(["## Work still to complete",
                   f"{readiness['requirements_unresolved']} requirements unresolved; "
                   f"{readiness['requirements_not_met']} marked not met; "
-                  f"{readiness['application_workflow_to_confirm']} route application workflows unconfirmed; "
+                  f"{readiness['application_workflow_to_confirm']} routes need workflow or applicant confirmation; "
                   f"{readiness['answers_over_limit']} answers over their limits; "
                   f"{budget_progress}; "
                   f"{readiness['open_actions']} open actions (confirmed current scope only).", NOTICE])
@@ -1296,14 +1409,7 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                       "Route type (user-entered): "
                       + item["route_type"].replace("_", " "),
                       "Application workflow (user-entered): "
-                      + ("required · applicant: " + _inline(item["applicant"])
-                         if item["application_mode"] == "required"
-                         and item["applicant"].strip()
-                         else "required · applicant not recorded"
-                         if item["application_mode"] == "required"
-                         else "no application recorded"
-                         if item["application_mode"] == "not_required"
-                         else "not confirmed"),
+                      + _application_workflow_description(item),
                       "Application window: " + _window_description(
                           item, document["sources"])
                       + " · Cash award / ceiling: " + _route_amount(item),
@@ -1356,29 +1462,31 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
             ])
             if not indexes:
                 lines.append("No historical answer drafts have been retained.")
+            else:
+                lines.append(
+                    f"{len(indexes)} historical answer row(s) retained; "
+                    "question labels and text omitted from this report.")
         else:
             lines.append("### Application answers")
-            if (item["application_mode"] != "required"
-                    or not item["applicant"].strip()):
-                lines.append("This route does not have a confirmed formal application and applicant. Retained answers are held and must not be copied into an application until the route workflow is confirmed.")
             if not indexes:
                 lines.append("No application answers have been recorded yet.")
-        for index in indexes:
-            row, count = document["answers"][index], metrics[index]
-            limit = ("limit not recorded" if count["limit"] is None
-                     else f"limit {count['limit']}")
-            status = ("historical draft · " + row["status"] if not active
-                      else row["status"])
-            details = (f"{count['characters']} characters · "
-                       f"{count['words']} words · "
-                       f"{limit} · {status}"
-                       + (" · OVER LIMIT" if count["over_limit"] else ""))
-            lines.extend(["#### " + _inline(row["label"]), details])
-            if active:
+        if active and not _application_route_confirmed(item):
+            lines.append(_answer_hold_reason(item))
+            if indexes:
+                lines.append(
+                    f"{len(indexes)} retained answer row(s); labels and text omitted.")
+        elif active:
+            for index in indexes:
+                row, count = document["answers"][index], metrics[index]
+                limit = ("limit not recorded" if count["limit"] is None
+                         else f"limit {count['limit']}")
+                details = (f"{count['characters']} characters · "
+                           f"{count['words']} words · "
+                           f"{limit} · {row['status']}"
+                           + (" · OVER LIMIT" if count["over_limit"] else ""))
+                lines.extend(["#### " + _inline(row["label"]), details])
                 lines.append(literal(row["text"]) if row["text"].strip()
                              else "Answer not drafted yet.")
-            else:
-                lines.append("Draft text omitted from this report. Inspect the saved campaign only for historical audit; it is not for submission.")
     active_names = {row["name"] for row in document["opportunities"]
                     if row["status"] in ACTIONABLE_OPPORTUNITY_STATES}
     active_budget_rows = [row for row in document["budget"]
@@ -1501,10 +1609,11 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                                      + " · linked source (user-entered)")
                         current_source = _source_for(document["sources"], link["source_id"])
                         if current_source and (
-                                link["url"] != current_source["url"]
+                                link["title"] != current_source["title"]
+                                or link["url"] != current_source["url"]
                                 or link["checked_at"] != current_source["checked_at"]):
-                            lines.append("  Source snapshot differs from the current register; "
-                                         "recheck before reuse.")
+                            lines.append("  Saved source snapshot differs from the current "
+                                         "source register; recheck before reuse.")
                     if link["checked_at"]:
                         lines.append("  Linked source check date (campaign-entered): "
                                      + link["checked_at"])
@@ -1550,13 +1659,115 @@ def prepare(data: object, focused_opportunity_name: object = "") -> dict:
     markdown = _render(campaign, readiness, metrics, budget)
     document_markdown = _render_decision_brief(
         campaign, readiness, budget, focused_opportunity)
+    reportable_answers = _reportable_answer_indexes(campaign)
+    report_campaign = _report_campaign_view(campaign, reportable_answers)
+    report_metrics = [metric for metric in metrics
+                      if metric["index"] in reportable_answers]
     return {"workflow": "campaign", "title": campaign["title"],
             "document_title": campaign["title"], "created_at": utc_now(),
-            "review_status": "user_entered", "campaign": campaign,
-            "readiness": readiness, "answer_metrics": metrics,
+            "review_status": "user_entered", "campaign": report_campaign,
+            "readiness": readiness, "answer_metrics": report_metrics,
             "budget_summary": budget, "portfolio_summary": portfolio,
             "document_markdown": document_markdown,
             "markdown": markdown}
+
+
+def saved_report_view(report: object) -> object:
+    """Return a privacy-safe view of a campaign report saved by older Sinter.
+
+    Older reports embed the full campaign and rendered answers. Rebuild their
+    derived fields through the current report policy at read time, leaving the
+    original local report untouched. The campaign remains the editable source
+    of truth in Campaigns.
+    """
+    if not isinstance(report, dict) or report.get("workflow") != "campaign":
+        return report
+
+    title = report.get("title") if isinstance(report.get("title"), str) else "Saved campaign"
+    refresh_notice = (
+        "This older campaign report could not be safely refreshed. Its campaign "
+        "content is omitted from this view. Open the saved campaign in Campaigns "
+        "and prepare a new report.")
+    try:
+        source_campaign = validate(report.get("campaign"))
+        focused = ""
+        document_markdown = report.get("document_markdown", "")
+        if isinstance(document_markdown, str):
+            focus_prefix = "Route in focus: "
+            focus_line = next((line for line in document_markdown.splitlines()
+                               if line.startswith(focus_prefix)), "")
+            entered_focus = focus_line[len(focus_prefix):].split(
+                " (selected in Sinter", 1)[0]
+            focused = next((row["name"] for row in source_campaign["opportunities"]
+                            if _inline(row["name"]) == entered_focus), "")
+        safe_report = prepare(source_campaign, focused)
+
+        reportable = _reportable_answer_indexes(source_campaign)
+        has_held_answers = any(index not in reportable
+                               for index in range(len(source_campaign["answers"])))
+
+        # Keep stable report metadata, but only expose fields whose contents
+        # are regenerated or explicitly safe. Future unrecognized fields must
+        # not accidentally become another copy of an answer.
+        view = {
+            "workflow": "campaign",
+            "title": title,
+            "document_title": (report.get("document_title")
+                               if isinstance(report.get("document_title"), str)
+                               else safe_report["document_title"]),
+            "created_at": report.get("created_at", safe_report["created_at"]),
+            "review_status": "user_entered",
+            "campaign": safe_report["campaign"],
+            "readiness": safe_report["readiness"],
+            "answer_metrics": safe_report["answer_metrics"],
+            "budget_summary": safe_report["budget_summary"],
+            "portfolio_summary": safe_report["portfolio_summary"],
+            "document_markdown": safe_report["document_markdown"],
+            "markdown": safe_report["markdown"],
+        }
+        edits = report.get("document_edits")
+        if isinstance(edits, dict) and isinstance(edits.get("markdown"), str):
+            edited_at = edits.get("edited_at", "")
+            author = edits.get("author", "user")
+            if not isinstance(edited_at, str):
+                edited_at = ""
+            if not isinstance(author, str):
+                author = "user"
+            if has_held_answers:
+                edit_markdown = (
+                    "[This older edited brief is omitted from the report view "
+                    "because it may include application answers held from this "
+                    "report. Your saved campaign remains available in Campaigns; "
+                    "confirm the route and applicant before preparing a new brief.]")
+            else:
+                edit_markdown = edits["markdown"]
+            # Project only the known edit fields. Older or future versions may
+            # attach other payloads here, which must not bypass report filtering.
+            view["document_edits"] = {
+                "markdown": edit_markdown,
+                "edited_at": edited_at[:100],
+                "author": author[:120],
+            }
+            if has_held_answers:
+                view["document_edits"]["redacted_for_report_view"] = True
+        return view
+    except Exception:
+        # Malformed old payloads fail closed rather than being returned raw.
+        return {
+            "workflow": "campaign",
+            "title": title,
+            "document_title": title,
+            "created_at": report.get("created_at", ""),
+            "review_status": "needs_refresh",
+            "campaign": None,
+            "readiness": {},
+            "answer_metrics": [],
+            "budget_summary": {},
+            "portfolio_summary": {},
+            "document_markdown": "# Campaign report needs refresh\n\n" + refresh_notice,
+            "markdown": "# Campaign report needs refresh\n\n" + refresh_notice,
+            "warnings": [refresh_notice],
+        }
 
 
 class CampaignStore:
