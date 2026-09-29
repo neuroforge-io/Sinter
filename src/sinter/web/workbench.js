@@ -89,7 +89,6 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     lastPayload = payload;
     try {
       const requestPayload = {...payload};
-      delete requestPayload.campaign_sender_review;
       delete requestPayload.campaign_link;
       const job = await request('/api/workbench', {data: requestPayload}); jobId = job.id;
       const report = await waitForJob(jobId, value => { status.textContent = value.message || 'Preparing...'; });

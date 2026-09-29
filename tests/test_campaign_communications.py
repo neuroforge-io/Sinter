@@ -35,6 +35,7 @@ def incoming(**changes):
         "evidence_links": [{
             "title": "Email record", "url": "https://example.invalid/mail/123",
             "notes": "Copied from the fictional test mailbox.",
+            "source_id": "", "checked_at": "",
         }],
     }
     row.update(changes)

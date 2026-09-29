@@ -3,54 +3,149 @@ import {h, field, selectField, button, notice, download, announce, safeLink, che
 import {request} from './api.js';
 import {renderReport} from './reports.js';
 import {campaignClarificationDraft, campaignIdentityFromProfile} from './campaign-letter.js';
-import {isOpportunityActionable} from './campaign-state.js';
-import {campaignDecision} from './campaign-decision.js';
+import {defaultCampaignOpportunityIndex, isCampaignActionCurrent,
+  isOpportunityActionable, hasConfirmedApplicationRoute} from './campaign-state.js';
+import {applicationWindowGaps, campaignDecision} from './campaign-decision.js';
+import {campaignActionRowsForCalendar, campaignActionRowsForPlan,
+  normalizeCampaignActionScopes} from './campaign-plan.js';
 
 const blank = () => ({schema: 'sinter-campaign/v1', title: '', organisation: '', objective: '',
   signatory: '', sender_role: '', contact_details: '',
-  opportunities: [], requirements: [], answers: [], budget: [], actions: [], sources: [], communications: []});
+  opportunities: [], requirements: [], answers: [], budget: [], actions: [], sources: [],
+  communications: [], assets: []});
+const linkedSourceMatchesCheck = (row, sources) => {
+  if (!row?.source_id) return true;
+  const linked = sources.find(source => source?.id === row.source_id);
+  return Boolean(linked && row.source_url === linked.url
+    && row.checked_at === linked.checked_at);
+};
 const opportunityStates = [['researching', 'Researching'], ['open', 'Open'], ['upcoming', 'Upcoming'],
   ['clarification', 'Needs clarification'], ['paused', 'Paused'],
   ['not_pursuing', 'Not pursuing this round'], ['submitted', 'Submitted'], ['closed', 'Closed']];
+const opportunityTypes = [['unknown', 'Not classified'], ['cash_grant', 'Cash grant'],
+  ['matched_voucher', 'Matched voucher'], ['tax_incentive', 'Tax incentive or rebate'],
+  ['equity', 'Equity investment'], ['non_cash_support', 'Non-cash programme or support'],
+  ['other', 'Other']];
+const applicationWindows = [['unknown', 'Not checked'], ['fixed', 'Fixed closing date'],
+  ['rolling', 'Rolling / accepts applications year-round']];
+const applicationModes = [['unknown', 'Not confirmed'], ['required', 'Formal application required'],
+  ['not_required', 'No formal application recorded']];
+const assetKinds = [['product', 'Product'], ['service', 'Service'], ['research', 'Research system'],
+  ['prototype', 'Prototype'], ['brand', 'Brand or name'], ['dataset', 'Dataset'],
+  ['model', 'Model or adapter'], ['other', 'Other']];
+const assetStages = [['unknown', 'Not recorded'], ['concept', 'Concept'], ['prototype', 'Prototype'],
+  ['pilot', 'Pilot'], ['released', 'Released'], ['retired', 'Retired']];
+const contributorStatuses = [['unknown', 'Not checked · user-entered'],
+  ['contributors_identified', 'Contributors identified · user-entered'],
+  ['records_to_check', 'Records still to check · user-entered'],
+  ['evidence_recorded', 'Reference recorded · unverified']];
+const rightsStatuses = [['unknown', 'Not checked · user-entered'],
+  ['records_to_check', 'Records still to check · user-entered'],
+  ['public_license_stated', 'Public licence stated · company title not established'],
+  ['evidence_recorded', 'Reference recorded · unverified']];
+const disclosureStatuses = [['unknown', 'Not checked · user-entered'],
+  ['records_to_check', 'Records still to check · user-entered'],
+  ['date_recorded', 'Date recorded · unverified']];
+const priorArtStatuses = [['not_started', 'Not started · user-entered'],
+  ['leads_recorded', 'Search leads recorded · unverified'],
+  ['preliminary_screen', 'Preliminary screen recorded · not a legal conclusion'],
+  ['specialist_review_pending', 'Specialist review pending · user-entered']];
+const assetReferenceKinds = [['public_claim', 'Public description'], ['prior_art', 'Prior-art lead'],
+  ['rights', 'Rights record'], ['contributors', 'Contributor record'],
+  ['disclosure', 'Disclosure record'], ['other', 'Other evidence']];
 const checkStates = [['unknown', 'Not checked · user-entered'],
   ['clarification', 'Needs clarification · user-entered'],
   ['met', 'User marked met · unverified'], ['not_met', 'User marked not met · unverified']];
-const campaignTabs = [['overview', 'Opportunities'], ['answers', 'Application answers'],
+const campaignTabs = [['overview', 'Opportunities'], ['assets', 'Products & IP'],
+  ['answers', 'Application answers'],
   ['budget', 'Budget'], ['actions', 'Next actions'], ['communications', 'Communications'],
   ['sources', 'Sources']];
 const countCharacters = value => [...value].length;
-const money = value => value == null || value === '' ? 'Not confirmed' : new Intl.NumberFormat('en-AU', {style: 'currency', currency: 'AUD'}).format(Number(value));
+const newRecordId = () => {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
+};
+const money = value => {
+  if (value == null || value === '') return 'Not confirmed';
+  const amount = Number(value);
+  const minimumFractionDigits = Number.isInteger(amount) ? 0 : 2;
+  return 'A$' + new Intl.NumberFormat('en-AU', {
+    minimumFractionDigits, maximumFractionDigits: 2,
+  }).format(amount);
+};
+const routeAmountLabel = row => row.route_type === 'non_cash_support'
+  ? 'No grant cash' : row.ceiling == null || row.ceiling === ''
+    ? 'Amount not recorded' : 'Up to ' + money(row.ceiling);
 function compatibleCampaign(value) {
   const next = structuredClone(value || blank());
   // Campaign v1 documents saved before correspondence logging have no such key.
   if (!Array.isArray(next.communications)) next.communications = [];
+  for (const row of next.communications) {
+    if (!Array.isArray(row.evidence_links)) row.evidence_links = [];
+    row.evidence_links = row.evidence_links.map(link => ({
+      ...link, source_id: link.source_id || '', checked_at: link.checked_at || '',
+    }));
+  }
+  // Older v1 campaign backups predate the product and IP research register.
+  if (!Array.isArray(next.assets)) next.assets = [];
+  if (!Array.isArray(next.sources)) next.sources = [];
+  next.sources = next.sources.map(row => ({...row,
+    id: /^[0-9a-f]{32}$/.test(row.id || '') ? row.id : newRecordId(),
+    checked_at: row.checked_at || '',
+  }));
+  next.assets = next.assets.map(row => ({...row,
+    id: /^[0-9a-f]{32}$/.test(row.id || '') ? row.id : newRecordId(),
+    references: (Array.isArray(row.references) ? row.references : []).map(reference => ({
+      ...reference, source_id: reference.source_id || '',
+      excerpt: reference.excerpt || '', checked_at: reference.checked_at || '',
+    })),
+  }));
+  for (const row of next.opportunities || []) {
+    row.route_type ??= 'unknown';
+    row.application_mode ??= 'unknown';
+    row.applicant ??= '';
+    if (!row.application_window) row.application_window = row.deadline ? 'fixed' : 'unknown';
+    row.window_source_id ??= '';
+    row.window_source_url ??= '';
+    row.window_source_quote ??= '';
+    row.window_checked_at ??= '';
+  }
+  for (const row of next.requirements || []) row.source_id ??= '';
+  next.actions = normalizeCampaignActionScopes(next.actions);
   return next;
 }
 const localDate = () => {
   const now = new Date();
   return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
 };
+const displayDate = value => {
+  if (!value) return 'Not confirmed';
+  const parsed = new Date(`${value}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? value
+    : new Intl.DateTimeFormat('en-AU', {day: 'numeric', month: 'short', year: 'numeric'}).format(parsed);
+};
 function opportunityTiming(row) {
-  if (row.status === 'closed') return row.deadline ? `Closed · ${row.deadline}` : 'Closed';
-  if (row.status === 'submitted') return row.deadline ? `Submitted · ${row.deadline}` : 'Submitted';
-  if (row.status === 'not_pursuing') return row.deadline ? `Not pursuing · programme closes ${row.deadline}` : 'Not pursuing this round';
-  if (row.deadline && row.deadline < localDate()) return `Date passed · check status (${row.deadline})`;
-  return row.deadline ? `Closes ${row.deadline}` : 'Deadline not confirmed';
-}
-function defaultOpportunityIndex(next) {
-  const rows = Array.isArray(next?.opportunities) ? next.opportunities : [];
-  for (const state of ['open', 'upcoming', 'researching', 'clarification']) {
-    const match = rows.findIndex(row => row.status === state
-      && (!row.deadline || row.deadline >= localDate()));
-    if (match >= 0) return match;
+  if (row.status === 'closed') return row.deadline ? `Closed · ${displayDate(row.deadline)}` : 'Closed';
+  if (row.status === 'submitted') return row.deadline ? `Submitted · ${displayDate(row.deadline)}` : 'Submitted';
+  if (row.status === 'not_pursuing') return row.deadline ? `Not pursuing · programme closes ${displayDate(row.deadline)}` : 'Not pursuing this round';
+  const kind = row.application_window || (row.deadline ? 'fixed' : 'unknown');
+  if (kind === 'rolling') return row.window_checked_at
+    ? `Rolling · checked ${displayDate(row.window_checked_at)}` : 'Rolling · source check needed';
+  if (kind === 'fixed') {
+    if (row.deadline && row.deadline < localDate()) return `Date passed · check status (${row.deadline})`;
+    return row.deadline ? `Closes ${displayDate(row.deadline)}` : 'Closing date needed';
   }
-  return rows.length ? 0 : 0;
+  return 'Application window not checked';
 }
-
 export async function campaignsPage({setBusy = () => {}, remember = () => {}, seed = {}} = {}) {
   let document = compatibleCampaign(seed.document || blank()), savedId = seed.id || null, revision = seed.revision || null;
   let dirty = Boolean(seed.dirty), selected = Number.isSafeInteger(seed.selected) && seed.selected >= 0 ? seed.selected : 0;
   let tab = campaignTabs.some(([id]) => id === seed.tab) ? seed.tab : 'overview', busy = false;
+  let sourceQuery = typeof seed.sourceQuery === 'string' ? seed.sourceQuery : '';
+  let assetQuery = typeof seed.assetQuery === 'string' ? seed.assetQuery : '';
+  let pendingAssetOpenId = '';
+  let pendingFocus = null;
   const root = h('div', {class: 'campaign-page'}), shelf = h('div', {class: 'campaign-shelf'});
   const feedback = h('div', {'aria-live': 'polite'}), status = h('span', {class: 'campaign-save-state', role: 'status'});
   const summary = h('div', {class: 'campaign-summary'}), editor = h('div'), output = h('div', {id: 'campaign-output', class: 'campaign-output'});
@@ -62,7 +157,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
 
   function rememberCampaign() {
     remember('campaigns', {document: structuredClone(document), id: savedId, revision,
-      dirty, selected, tab});
+      dirty, selected, tab, sourceQuery, assetQuery});
   }
   function changed() {
     dirty = true; status.textContent = 'Unsaved changes';
@@ -84,21 +179,88 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   function error(message) { feedback.replaceChildren(notice(message, 'error')); }
   function input(label, type, row, key, help = '', props = {}, callback = () => {}) {
     const entry = field(label, type, row[key] ?? '', help, props);
+    entry.input.dataset.campaignField = key;
     entry.input.addEventListener('input', () => { row[key] = entry.input.value; callback(entry.input); changed(); });
     return entry;
   }
   function choice(label, choices, row, key, callback = () => {}) {
     const entry = selectField(label, choices, row[key]);
+    entry.input.dataset.campaignField = key;
     entry.input.addEventListener('change', () => { row[key] = entry.input.value; changed(); callback(); });
     return entry;
+  }
+  let sourcePickerSequence = 0;
+  function campaignSourcePicker(label, selectedId, onSelect) {
+    const options = document.sources.filter(source => source.id && source.title).map(source => {
+      let host = '';
+      try { host = new URL(source.url).hostname.replace(/^www\./, ''); } catch {}
+      return {source, base: `${source.title}${host ? ` · ${host}` : ''}`};
+    });
+    const counts = new Map();
+    for (const option of options) counts.set(option.base, (counts.get(option.base) || 0) + 1);
+    for (const option of options) option.value = counts.get(option.base) > 1
+      ? `${option.base} · ${option.source.id.slice(0, 6)}` : option.base;
+    const selectedOption = options.find(option => option.source.id === selectedId);
+    const listId = `campaign-source-options-${++sourcePickerSequence}`;
+    const entry = field(label, 'search', selectedOption?.value || '',
+      'Search by title or website and choose a saved campaign source. Links stay unverified.', {
+        autocomplete: 'off', placeholder: 'Search saved sources…',
+      });
+    entry.input.setAttribute('list', listId);
+    const status = h('small', {class: 'campaign-source-picker-status', role: 'status'},
+      selectedOption ? `Linked to ${selectedOption.source.title} · user-entered, unverified.`
+        : options.length ? 'No campaign source linked.'
+          : 'Add a source in the Sources tab first.');
+    const clear = button('Clear link', () => {
+      entry.input.value = '';
+      status.textContent = options.length ? 'No campaign source linked.'
+        : 'Add a source in the Sources tab first.';
+      clear.hidden = true;
+      onSelect(null);
+      changed();
+    }, 'quiet');
+    clear.hidden = !selectedOption;
+    const datalist = h('datalist', {id: listId}, ...options.map(option =>
+      h('option', {value: option.value, label: option.source.url || option.source.title})));
+    entry.input.addEventListener('change', () => {
+      const selected = options.find(option => option.value === entry.input.value);
+      if (!selected && entry.input.value.trim()) {
+        entry.input.value = options.find(option => option.source.id === selectedId)?.value || '';
+        status.textContent = 'Choose a matching source from the suggestions, or clear the link.';
+        return;
+      }
+      const source = selected?.source || null;
+      entry.input.value = selected?.value || '';
+      status.textContent = source
+        ? `Linked to ${source.title} · user-entered, unverified.`
+        : options.length ? 'No campaign source linked.' : 'Add a source in the Sources tab first.';
+      clear.hidden = !source;
+      onSelect(source);
+      changed();
+    });
+    return {input: entry.input, wrap: h('div', {class: 'campaign-source-picker'},
+      entry.wrap, datalist, status, clear)};
   }
   function remove(rows, item, label) {
     return button(label, () => { rows.splice(rows.indexOf(item), 1); changed(); renderEditor(); }, 'quiet');
   }
   function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; editor.inert = value; transfers.inert = value; }
   function apply(next, id = null, rev = null, preferActionable = false) {
+    const resumeCurrentCampaign = Boolean(id && id === savedId);
+    const previousTab = tab;
+    const previousSelection = selected;
+    const previousOpportunityName = document.opportunities?.[previousSelection]?.name || '';
+    const previousSourceQuery = sourceQuery;
+    const previousAssetQuery = assetQuery;
     document = compatibleCampaign(next); savedId = id; revision = rev; dirty = false;
-    selected = preferActionable ? defaultOpportunityIndex(document) : 0; tab = 'overview';
+    const retainedSelection = resumeCurrentCampaign && previousOpportunityName
+      ? document.opportunities.findIndex(row => row.name === previousOpportunityName) : -1;
+    selected = retainedSelection >= 0 ? retainedSelection : preferActionable
+      ? defaultCampaignOpportunityIndex(document.opportunities, localDate(), document.sources) : 0;
+    tab = resumeCurrentCampaign && campaignTabs.some(([key]) => key === previousTab)
+      ? previousTab : 'overview';
+    sourceQuery = resumeCurrentCampaign ? previousSourceQuery : '';
+    assetQuery = resumeCurrentCampaign ? previousAssetQuery : '';
     status.textContent = id ? 'Saved on this computer' : 'Not saved yet'; output.replaceChildren();
     delete output.dataset.stale; output.classList.remove('campaign-output-stale');
     editor.replaceChildren();
@@ -148,7 +310,11 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     if (busy) return;
     lock(true); feedback.replaceChildren();
     try {
-      const report = await request('/api/campaigns/prepare', {data: {document}});
+      const decision = campaignDecision(document, undefined,
+        document.opportunities[selected]?.name || '');
+      const report = await request('/api/campaigns/prepare', {data: {
+        document, focused_opportunity: decision.focusOpportunity,
+      }});
       output.replaceChildren(renderReport(report));
       delete output.dataset.stale; output.classList.remove('campaign-output-stale');
       output.scrollIntoView({block: 'start'});
@@ -181,16 +347,40 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       .map(row => row.name));
     const pending = document.requirements.filter(row => actionable.has(row.opportunity)
       && (!['met', 'not_met'].includes(row.status)
-      || ![row.evidence, row.source_url, row.source_quote, row.checked_at].every(value => value?.trim())));
+      || ![row.evidence, row.source_url, row.source_quote, row.checked_at].every(value => value?.trim())
+      || !linkedSourceMatchesCheck(row, document.sources)));
     const over = document.answers.filter(row => (!row.opportunity || actionable.has(row.opportunity))
       && row.limit && countCharacters(row.text || '') > Number(row.limit));
     const quotes = document.budget.filter(row => (!row.opportunity || actionable.has(row.opportunity))
       && (row.unit_cost == null || row.unit_cost === '' || !row.quote_reference?.trim()));
+    const windows = document.opportunities.filter(row => isOpportunityActionable(row.status)
+      && applicationWindowGaps(row, localDate(), document.sources).length > 0);
+    const actionScopesToConfirm = document.actions.filter(row => row.status !== 'done'
+      && row.scope_confirmed !== true).length;
+    const submittedActionsToReview = document.actions.filter(row => row.status !== 'done'
+      && row.scope_confirmed === true && row.opportunity
+      && row.submission_phase !== 'post_submission'
+      && document.opportunities.some(item => item.name === row.opportunity
+        && item.status === 'submitted')).length;
+    const reopenedActionsToReview = document.actions.filter(row => row.status !== 'done'
+      && row.scope_confirmed === true && row.opportunity
+      && row.submission_phase === 'post_submission'
+      && document.opportunities.some(item => item.name === row.opportunity
+        && isOpportunityActionable(item.status))).length;
+    const inactiveRouteActionsToReview = document.actions.filter(row => row.status !== 'done'
+      && row.scope_confirmed === true && row.opportunity
+      && document.opportunities.some(item => item.name === row.opportunity
+        && ['closed', 'paused', 'not_pursuing'].includes(item.status))).length;
     const ownersToConfirm = document.actions.filter(row => row.status !== 'done'
+      && isCampaignActionCurrent(row, document.opportunities)
       && (!row.owner_confirmed || !String(row.owner || '').trim() || /\bunassigned\b/i.test(row.owner)));
+    const actionReviewCount = actionScopesToConfirm + submittedActionsToReview
+      + reopenedActionsToReview + inactiveRouteActionsToReview;
     shelf.replaceChildren(...(document.title ? [h('h3', {}, document.title), h('p', {class: 'fine'}, document.organisation)] : []));
     summary.replaceChildren(...[[pending.length, 'requirements to check'], [over.length, 'answers over their limit'],
-      [quotes.length, 'costs needing a quote'], [ownersToConfirm.length, 'owners to confirm']].map(([count, label]) =>
+      [quotes.length, 'costs needing a quote'], [windows.length, 'application windows to verify'],
+      [ownersToConfirm.length, 'owners to confirm'],
+      [actionReviewCount, 'actions to review']].map(([count, label]) =>
       h('div', {}, h('strong', {}, count), h('span', {}, label))));
     renderDecisionCard();
   }
@@ -199,21 +389,37 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const state = h('span', {class: 'campaign-decision-state', 'data-state': result.state}, result.label);
     const targetDate = result.action.due ? new Date(result.action.due + 'T12:00:00') : null;
     const targetDatePast = Boolean(result.action.due && result.action.due < localDate());
+    const taskPreview = result.action.task.length > 260
+      ? result.action.task.slice(0, 257).trimEnd() + '…' : result.action.task;
     const action = h('div', {class: 'campaign-decision-action'},
-      h('span', {class: 'eyebrow'}, result.action.source === 'recorded' ? 'NEXT CAMPAIGN ACTION' : 'SUGGESTED ROUTE STEP'),
-      h('p', {class: 'campaign-decision-task'}, result.action.task),
+      h('span', {class: 'eyebrow'}, result.action.source === 'recorded'
+        ? result.action.opportunity ? `NEXT ACTION · ${result.action.opportunity}` : 'NEXT CAMPAIGN ACTION'
+        : 'SUGGESTED ROUTE STEP'),
+      h('p', {class: 'campaign-decision-task'}, taskPreview),
+      taskPreview !== result.action.task
+        ? h('p', {class: 'campaign-action-meta'}, 'The full recorded steps stay in the action list.') : null,
       h('p', {class: 'campaign-decision-owner'}, result.action.ownerStatus),
       result.action.due ? h('p', {class: 'campaign-decision-date' + (targetDatePast ? ' is-overdue' : '')},
         'Proposed target: ' + new Intl.DateTimeFormat('en-AU', {dateStyle: 'medium'}).format(targetDate)
           + (targetDatePast ? ' · past — confirm or reset' : '')) : null,
-      button('Open next actions', () => {
-        tab = 'actions'; rememberCampaign(); renderEditor(); editor.scrollIntoView({block: 'start'});
+      button(result.action.actionIndex === undefined ? 'Open next actions' : 'Open full action', () => {
+        tab = 'actions'; rememberCampaign(); renderEditor();
+        const recordedAction = result.action.actionIndex === undefined ? null
+          : editor.querySelector(`[data-action-index="${result.action.actionIndex}"]`);
+        (recordedAction || editor).scrollIntoView({block: 'start'});
+        recordedAction?.querySelector('textarea')?.focus();
       }, 'quiet'));
+    const otherActiveRoutes = document.opportunities.filter(row =>
+      isOpportunityActionable(row.status) && row.name !== result.focusOpportunity);
+    const otherRoutesNeedReview = otherActiveRoutes.filter(row =>
+      campaignDecision(document, undefined, row.name).state !== 'ready_for_review').length;
     decisionCard.replaceChildren(h('div', {class: 'campaign-decision-main'},
-      h('h3', {}, 'Decision at a glance'), state,
+      h('h3', {}, 'Selected route status'), state,
       h('p', {class: 'campaign-decision-campaign'}, document.title || 'New campaign'),
       result.focusOpportunity ? h('p', {class: 'campaign-decision-focus'},
-        'Route in focus: ' + result.focusOpportunity) : null,
+        'Selected route: ' + result.focusOpportunity) : null,
+      otherRoutesNeedReview ? h('p', {class: 'campaign-decision-meta'},
+        `${otherRoutesNeedReview} other active route${otherRoutesNeedReview === 1 ? '' : 's'} also need review.`) : null,
       h('p', {class: 'campaign-decision-detail'}, result.detail)), action,
       h('div', {class: 'campaign-decision-reopen'},
         h('strong', {}, 'Reopen or progress when'),
@@ -224,7 +430,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   function addOpportunity() {
     let number = document.opportunities.length + 1;
     while (document.opportunities.some(row => row.name === 'Opportunity ' + number)) number++;
-    document.opportunities.push({name: 'Opportunity ' + number, funder: '', url: '', deadline: '', decision_window: '', ceiling: null, fit: '', status: 'researching'});
+    document.opportunities.push({name: 'Opportunity ' + number, funder: '', url: '', deadline: '', decision_window: '', ceiling: null, fit: '', route_type: 'unknown', status: 'researching'});
     selected = document.opportunities.length - 1; changed(); renderEditor();
   }
   function renderEditor() {
@@ -275,8 +481,20 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     else if (tab === 'budget') renderBudget(panel);
     else if (tab === 'actions') renderActions(panel);
     else if (tab === 'communications') renderCommunications(panel);
+    else if (tab === 'assets') renderAssets(panel);
     else renderSources(panel);
     editor.replaceChildren(details, tabs, panel);
+    if (pendingFocus) {
+      const referenceScope = pendingFocus.referenceIndex === undefined ? ''
+        : ` .campaign-asset-reference[data-reference-index="${pendingFocus.referenceIndex}"]`;
+      const target = editor.querySelector(`.campaign-asset[data-asset-id="${pendingFocus.assetId}"]${referenceScope} [data-campaign-field="${pendingFocus.field}"]`);
+      pendingFocus = null;
+      if (target) {
+        target.focus({preventScroll: true});
+        target.scrollIntoView({block: 'center'});
+      }
+    }
+    pendingAssetOpenId = '';
   }
   function opportunityPicker(change) {
     const pick = selectField('Working on opportunity', document.opportunities.map((row, index) => [String(index), row.name]), String(selected));
@@ -286,12 +504,12 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     return pick.wrap;
   }
   function renderOpportunities(panel) {
-    panel.append(h('div', {class: 'campaign-section-heading'}, h('div', {}, h('h3', {}, 'Funding opportunities in this campaign'),
-      h('p', {class: 'muted'}, 'Compare timing, project fit and checks. Closed and paused routes stay visible as historical context.')), button('Add opportunity', addOpportunity, 'quiet')));
+    panel.append(h('div', {class: 'campaign-section-heading'}, h('div', {}, h('h3', {}, 'Funding and support routes'),
+      h('p', {class: 'muted'}, 'Compare cash funding, non-cash programmes, timing, fit and open checks. Closed and paused routes stay visible as historical context.')), button('Add opportunity', addOpportunity, 'quiet')));
     if (!document.opportunities.length) {
       panel.append(h('div', {class: 'campaign-empty'}, h('h4', {}, 'Start with one opportunity'), h('p', {}, 'Add a funder or programme, then record what you know and what needs checking. No eligibility is assumed.'))); return;
     }
-    const rail = h('div', {class: 'campaign-opportunities', 'aria-label': 'Funding opportunities'});
+    const rail = h('div', {class: 'campaign-opportunities', 'aria-label': 'Funding and support routes'});
     const cards = [];
     document.opportunities.forEach((row, index) => {
       const choose = button('', () => {
@@ -299,68 +517,125 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }, 'campaign-opportunity');
       choose.setAttribute('aria-pressed', String(index === selected));
       const cardName = h('strong', {}, row.name), cardFunder = h('span', {}, row.funder || 'Funder to confirm');
-      const cardAmount = h('small', {}, row.ceiling == null || row.ceiling === '' ? 'Amount to confirm' : 'Up to ' + money(row.ceiling));
+      const cardType = h('small', {}, opportunityTypes.find(([key]) => key === row.route_type)?.[1] || 'Not classified');
+      const cardAmount = h('small', {}, routeAmountLabel(row));
       const cardTiming = h('small', {}, opportunityTiming(row));
-      choose.append(cardName, cardFunder, cardAmount, cardTiming);
-      cards.push({choose, cardName, cardFunder, cardAmount, cardTiming});
+      choose.append(cardName, cardFunder, cardType, cardAmount, cardTiming);
+      cards.push({choose, cardName, cardFunder, cardType, cardAmount, cardTiming});
       rail.append(choose);
     });
     selected = Math.min(selected, document.opportunities.length - 1);
     const item = document.opportunities[selected], focus = h('section', {class: 'campaign-focus', 'aria-label': 'Selected opportunity'});
     const headerFunder = h('span', {class: 'eyebrow'}), headerName = h('h3', {}), programme = h('div');
+    const windowSourceInfo = h('p', {class: 'campaign-window-source', role: 'status'});
     const maximum = h('dd', {}), deadlineLabel = h('dt', {}), deadlineValue = h('dd', {});
-    const decisionValue = h('dd', {}), statusValue = h('dd', {}), fitValue = h('p', {});
+    const decisionValue = h('dd', {}), statusValue = h('dd', {}), workflowValue = h('dd', {}), fitValue = h('p', {});
     function updateOpportunityView() {
       const card = cards[selected];
       if (card) {
         card.cardName.textContent = item.name || 'Untitled opportunity';
         card.cardFunder.textContent = item.funder || 'Funder to confirm';
-        card.cardAmount.textContent = item.ceiling == null || item.ceiling === ''
-          ? 'Amount to confirm' : 'Up to ' + money(item.ceiling);
+        card.cardType.textContent = opportunityTypes.find(([key]) => key === item.route_type)?.[1] || 'Not classified';
+        card.cardAmount.textContent = routeAmountLabel(item);
         card.cardTiming.textContent = opportunityTiming(item);
       }
       headerFunder.textContent = item.funder || 'FUNDER TO CONFIRM';
       headerName.textContent = item.name || 'Untitled opportunity';
       programme.replaceChildren(item.url ? safeLink(item.url, 'Open programme guidance')
         : h('p', {class: 'fine'}, 'Programme link not added yet.'));
-      maximum.textContent = money(item.ceiling);
-      deadlineLabel.textContent = item.status === 'closed' || item.status === 'submitted'
-        ? (item.status === 'closed' ? 'Closed on' : 'Application deadline') : 'Application closes';
-      deadlineValue.textContent = item.deadline || 'Not confirmed';
+      const linkedWindowSource = document.sources.find(source =>
+        source.id === item.window_source_id);
+      windowSourceInfo.replaceChildren(linkedWindowSource
+        ? h('span', {}, 'Application-window source · user-entered, unverified: ',
+          linkedWindowSource.url ? safeLink(linkedWindowSource.url, linkedWindowSource.title)
+            : linkedWindowSource.title,
+          item.window_source_url !== linkedWindowSource.url
+            || item.window_checked_at !== linkedWindowSource.checked_at
+            ? ' · source changed or wording not rechecked; refresh the quote and date'
+            : ` · quote checked ${displayDate(item.window_checked_at)}`)
+        : 'No registered application-window source linked; link an official page and recheck the wording.');
+      maximum.textContent = routeAmountLabel(item);
+      const windowKind = item.application_window || (item.deadline ? 'fixed' : 'unknown');
+      if (item.status === 'closed' || item.status === 'submitted') {
+        deadlineLabel.textContent = item.status === 'closed' ? 'Closed on' : 'Application deadline';
+        deadlineValue.textContent = item.deadline || 'Not recorded';
+      } else if (windowKind === 'rolling') {
+        deadlineLabel.textContent = 'Application window';
+        deadlineValue.textContent = `Rolling${item.window_checked_at ? ` · checked ${displayDate(item.window_checked_at)}` : ' · check date needed'}`;
+      } else if (windowKind === 'fixed') {
+        deadlineLabel.textContent = 'Application closes';
+        deadlineValue.textContent = item.deadline ? displayDate(item.deadline) : 'Closing date needed';
+      } else {
+        deadlineLabel.textContent = 'Application window';
+        deadlineValue.textContent = 'Not checked';
+      }
       decisionValue.textContent = item.decision_window || 'Not confirmed';
       statusValue.textContent = opportunityStates.find(([key]) => key === item.status)?.[1] || 'Researching';
+      workflowValue.textContent = item.application_mode === 'required'
+        ? item.applicant?.trim() ? `Application required · ${item.applicant.trim()}` : 'Application required · applicant needed'
+        : item.application_mode === 'not_required' ? 'No formal application recorded'
+          : 'Application process not confirmed';
       fitValue.textContent = item.fit || 'Record which project option this opportunity could support and what needs checking.';
     }
     const name = input('Opportunity name', 'text', item, 'name', '', {required: true, maxLength: 200}, () => {
-      for (const collection of ['requirements', 'answers', 'budget', 'communications']) {
+      for (const collection of ['requirements', 'answers', 'budget', 'actions', 'communications']) {
         for (const row of document[collection]) {
           if (row.opportunity === previousName) row.opportunity = item.name;
         }
+      }
+      for (const asset of document.assets) {
+        asset.funding_opportunities = (asset.funding_opportunities || []).map(
+          name => name === previousName ? item.name : name);
       }
       previousName = item.name; updateOpportunityView();
     });
     let previousName = item.name;
     const funder = input('Funder', 'text', item, 'funder', '', {maxLength: 300}, updateOpportunityView);
     const url = input('Programme page', 'url', item, 'url', '', {maxLength: 2000}, updateOpportunityView);
-    const deadline = input('Confirmed closing date', 'date', item, 'deadline', 'Leave blank if the date has not been checked.', {}, updateOpportunityView);
+    const windowKind = choice('Application window', applicationWindows, item, 'application_window', updateOpportunityView);
+    const deadline = input('Recorded closing date', 'date', item, 'deadline', 'User-entered only. Link and recheck the official wording; leave blank for rolling applications.', {}, updateOpportunityView);
+    const windowQuote = input('Exact official wording for this window', 'textarea', item, 'window_source_quote', 'Copy the short sentence that confirms the closing date or rolling window. Sinter does not verify the quote.', {rows: 2, maxLength: 2000}, updateOpportunityView);
+    const windowChecked = input('Window wording checked on', 'date', item,
+      'window_checked_at', 'Use the date you checked the official programme page. '
+      + 'Recheck within 90 days and before an application.', {}, updateOpportunityView);
+    const windowSource = campaignSourcePicker('Registered source for the application window',
+      item.window_source_id, source => {
+        const nextId = source?.id || '';
+        if (item.window_source_id !== nextId
+            || item.window_source_url !== (source?.url || '')) {
+          item.window_source_id = nextId;
+          item.window_source_url = source?.url || '';
+          item.window_source_quote = '';
+          item.window_checked_at = '';
+          windowQuote.input.value = '';
+          windowChecked.input.value = '';
+        }
+        updateOpportunityView();
+      });
     const decision = input('Decision timing', 'text', item, 'decision_window', 'For example, a decision several months after applications close.', {maxLength: 1000}, updateOpportunityView);
-    const ceiling = input('Maximum available (AUD)', 'number', item, 'ceiling', 'An amount offered is not an award or project budget.', {min: 0, step: '.01'}, element => { item.ceiling = element.value || null; updateOpportunityView(); });
+    const routeType = choice('Route type', opportunityTypes, item, 'route_type', updateOpportunityView);
+    const applicationMode = choice('Application workflow', applicationModes, item, 'application_mode', updateOpportunityView);
+    const applicant = input('Applicant / programme lead', 'text', item, 'applicant', 'Who must apply or register? For example, the school, P&C, or a partner. This entry is unverified.', {maxLength: 300}, updateOpportunityView);
+    const ceiling = input('Maximum available (AUD)', 'number', item, 'ceiling', 'Leave blank when the programme publishes no cash award or the amount is not known. An offered ceiling is not an award or project budget.', {min: 0, step: '.01'}, element => { item.ceiling = element.value || null; updateOpportunityView(); });
     const state = choice('Opportunity status', opportunityStates, item, 'status', updateOpportunityView);
     const fit = input('Project fit and timing', 'textarea', item, 'fit', 'Which project option could this support? Record any exclusions or conditions before committing costs.', {rows: 3, maxLength: 6000}, updateOpportunityView);
     const opportunityEditor = h('details', {class: 'campaign-opportunity-editor', open: !item.funder && !item.fit},
-      h('summary', {}, 'Edit opportunity details'), h('div', {class: 'form-grid'}, name.wrap, funder.wrap), url.wrap,
-      h('div', {class: 'form-grid'}, deadline.wrap, decision.wrap, ceiling.wrap, state.wrap), fit.wrap);
+      h('summary', {}, 'Edit opportunity details'), h('div', {class: 'form-grid'}, name.wrap, funder.wrap, routeType.wrap), url.wrap,
+      windowSourceInfo, windowSource.wrap,
+      h('div', {class: 'form-grid'}, applicationMode.wrap, applicant.wrap),
+      h('div', {class: 'form-grid'}, windowKind.wrap, deadline.wrap, windowChecked.wrap, decision.wrap, ceiling.wrap, state.wrap), windowQuote.wrap, fit.wrap);
     focus.append(h('header', {class: 'campaign-focus-heading'}, headerFunder, headerName, programme),
       h('dl', {class: 'campaign-opportunity-facts'},
-        h('div', {}, h('dt', {}, 'Maximum available'), maximum),
+        h('div', {}, h('dt', {}, 'Cash award / ceiling'), maximum),
         h('div', {}, deadlineLabel, deadlineValue),
+        h('div', {}, h('dt', {}, 'Application lead'), workflowValue),
         h('div', {}, h('dt', {}, 'Decision timing'), decisionValue),
         h('div', {}, h('dt', {}, 'Status'), statusValue)),
       h('div', {class: 'campaign-fit'}, h('strong', {}, 'Project fit and timing'), fitValue),
       opportunityEditor);
     updateOpportunityView();
     const requirements = h('div', {class: 'campaign-checks'});
-    function addRequirement() { document.requirements.push({opportunity: item.name, rule: '', status: 'unknown', evidence: '', source_url: '', source_quote: '', checked_at: ''}); changed(); renderEditor(); }
+    function addRequirement() { document.requirements.push({opportunity: item.name, rule: '', status: 'unknown', evidence: '', source_id: '', source_url: '', source_quote: '', checked_at: ''}); changed(); renderEditor(); }
     requirements.append(h('div', {class: 'campaign-section-heading'}, h('h4', {}, 'What must be true?'), button('Add requirement', addRequirement, 'quiet')),
       h('p', {class: 'fine'}, 'Check each condition against current official guidance. These records do not determine overall eligibility.'));
     for (const row of document.requirements.filter(row => row.opportunity === item.name)) {
@@ -368,7 +643,10 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       const stateLabel = h('span', {class: 'campaign-check-state'}), preview = h('span', {class: 'campaign-check-preview'});
       function updateProof() {
         const asserted = ['met', 'not_met'].includes(row.status);
-        const complete = [row.evidence, row.source_url, row.source_quote, row.checked_at].every(value => value?.trim());
+        const complete = [row.evidence, row.source_url, row.source_quote, row.checked_at].every(value => value?.trim())
+          && linkedSourceMatchesCheck(row, document.sources);
+        const linked = document.sources.find(candidate => candidate.id === row.source_id);
+        const sourceOutdated = Boolean(row.source_id && !linkedSourceMatchesCheck(row, document.sources));
         const historical = !isOpportunityActionable(item.status);
         stateLabel.textContent = historical ? 'Historical record · ' : '';
         stateLabel.textContent += row.status === 'met' ? 'User-marked met · unverified'
@@ -380,27 +658,77 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         stateLabel.dataset.state = 'unverified';
         const note = row.evidence?.trim() || '';
         preview.textContent = note ? note.length > 180 ? note.slice(0, 180) + '… Open for the full note.' : note : 'No evidence note added yet.';
-        proof.textContent = `${historical ? 'This route is not active in this campaign; the check is retained for historical reference. ' : ''}Status and source details are user-entered. Sinter has not verified the link, wording, date or assessment.${asserted && !complete ? ' The source record is also incomplete.' : ''}`;
+        proof.textContent = `${historical ? 'This route is not active in this campaign; the check is retained for historical reference. ' : ''}Status and source details are user-entered. Sinter has not verified the link, wording, date or assessment.${sourceOutdated ? ` The linked source record is now dated ${linked?.checked_at || 'unknown'}, but this excerpt was checked ${row.checked_at || 'on an unrecorded date'}; re-read the exact wording and update the check date.` : asserted && !complete ? ' The source record is also incomplete.' : ''}`;
       }
       const rule = input('Requirement', 'text', row, 'rule', '', {maxLength: 4000});
       const status = choice('Requirement status', checkStates, row, 'status', updateProof);
       const reason = input('What the evidence establishes or leaves unclear', 'textarea', row, 'evidence', 'This note is user-entered and is not independently verified by Sinter.', {rows: 2, maxLength: 6000}, updateProof);
       const source = input('Source link (user-entered)', 'url', row, 'source_url', 'Sinter does not open or verify this link.', {maxLength: 2000}, updateProof);
-      const quote = input('Source wording (user-entered)', 'textarea', row, 'source_quote', 'Paste the exact wording yourself. Sinter does not check it against the source.', {rows: 3, maxLength: 4000}, updateProof);
-      const date = input('Date checked (user-entered)', 'date', row, 'checked_at', 'Sinter cannot verify when this source was checked.', {}, updateProof);
+      const quote = input('Source wording (user-entered)', 'textarea', row, 'source_quote', 'Paste the exact wording yourself. If the registered source changed, re-read and replace this excerpt.', {rows: 3, maxLength: 4000}, updateProof);
+      const date = input('Date this excerpt was checked', 'date', row, 'checked_at', 'Record when you re-read this exact wording. For a registered source, match its current check date.', {}, updateProof);
+      const sourcePreview = h('p', {class: 'campaign-window-source'});
+      function updateSourcePreview(linked) {
+        sourcePreview.hidden = !linked;
+        sourcePreview.replaceChildren(linked
+          ? h('span', {}, 'Linked campaign source · user-entered, unverified: ',
+            linked.url ? safeLink(linked.url, linked.title) : linked.title)
+          : '');
+      }
+      const linkedSource = document.sources.find(candidate => candidate.id === row.source_id);
+      updateSourcePreview(linkedSource);
+      const sourcePicker = campaignSourcePicker('Registered campaign source (optional)',
+        row.source_id, linked => {
+        const changedSource = row.source_id !== (linked?.id || '');
+        row.source_id = linked?.id || '';
+        source.input.disabled = Boolean(linked);
+        date.wrap.querySelector('label').textContent = linked
+          ? 'Date checked for this excerpt · must match linked source' : 'Date checked for this excerpt (user-entered)';
+        updateSourcePreview(linked);
+        if (linked) {
+          row.source_url = linked.url;
+          source.input.value = linked.url;
+          if (changedSource) {
+            row.status = 'unknown'; row.evidence = ''; row.source_quote = ''; row.checked_at = '';
+            reason.input.value = ''; quote.input.value = ''; date.input.value = '';
+            status.input.value = 'unknown';
+          }
+          if (!row.checked_at && linked.checked_at) {
+            row.checked_at = linked.checked_at;
+            date.input.value = linked.checked_at;
+          }
+        } else if (changedSource) {
+          row.status = 'unknown'; row.evidence = ''; row.source_url = '';
+          row.source_quote = ''; row.checked_at = '';
+          status.input.value = 'unknown'; reason.input.value = ''; source.input.value = '';
+          quote.input.value = ''; date.input.value = '';
+        }
+          updateProof();
+        });
+      source.input.disabled = Boolean(row.source_id);
+      if (row.source_id) date.wrap.querySelector('label').textContent = 'Date checked for this excerpt · must match linked source';
       updateProof();
       const heading = h('summary', {}, h('span', {class: 'campaign-check-title'}, row.rule || 'New requirement'), stateLabel, preview);
       rule.input.addEventListener('input', () => { heading.querySelector('.campaign-check-title').textContent = row.rule || 'New requirement'; });
       requirements.append(h('details', {class: 'campaign-requirement', open: !row.rule}, heading,
         h('article', {class: 'campaign-check-editor', 'aria-label': 'Requirement check'}, rule.wrap, status.wrap, proof, reason.wrap,
-        h('details', {open: Boolean(row.source_url || row.source_quote)}, h('summary', {}, 'Supporting source · user-entered, unverified'), source.wrap, quote.wrap, date.wrap),
+        h('details', {open: Boolean(row.source_id || row.source_url || row.source_quote)},
+          h('summary', {}, 'Supporting source · user-entered, unverified'),
+          sourcePicker.wrap, sourcePreview, source.wrap, quote.wrap, date.wrap),
         remove(document.requirements, row, 'Remove requirement'))));
     }
     if (!document.requirements.some(row => row.opportunity === item.name)) requirements.append(h('p', {class: 'fine'}, 'No requirements checked yet. Start with applicant type, timing and permitted costs.'));
-    requirements.append(button('Draft clarification letter', () => {
+    const existingDraftCount = document.communications.filter(row =>
+      row.opportunity === item.name && row.direction === 'outgoing' && row.status === 'draft').length;
+    if (existingDraftCount) {
+      requirements.append(h('p', {class: 'campaign-draft-existing'},
+        `${existingDraftCount} unsent clarification draft${existingDraftCount === 1 ? '' : 's'} already recorded for this route. Review them in Communications before creating another; a new draft will be saved as a separate record.`));
+    }
+    requirements.append(button(existingDraftCount ? 'Create another clarification letter' : 'Draft clarification letter', () => {
       const campaignLink = {id: savedId, revision, opportunity: item.name,
         dirty: dirty || !savedId};
-      const draft = campaignClarificationDraft(document, item, campaignLink);
+      let draft;
+      try { draft = campaignClarificationDraft(document, item, campaignLink); }
+      catch (exception) { error(exception.message || 'Could not prepare the clarification draft.'); return; }
       if (draft.openCount > 30) {
         error('This opportunity has more than 30 open checks. Split them across clarification letters before continuing.');
         return;
@@ -413,23 +741,31 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     panel.append(h('div', {class: 'campaign-opportunity-layout'}, rail, focus));
   }
   function renderAnswers(panel) {
-    panel.append(h('h3', {}, 'Prepare answers for the funder’s form'), h('p', {class: 'muted'}, 'Keep the exact question and its limit together. Drafts can be saved over the limit; they still need shortening before use.'));
-    if (!document.opportunities.length) { panel.append(notice('Add an opportunity first so each answer belongs to the right application.')); return; }
+    panel.append(h('h3', {}, 'Prepare application answers'), h('p', {class: 'muted'}, 'Keep the exact form question and its limit together. Drafts can be saved over the limit; they still need shortening before use.'));
+    if (!document.opportunities.length) { panel.append(notice('Add a route first so each answer belongs to the right application.')); return; }
     selected = Math.min(selected, document.opportunities.length - 1);
     const selectedOpportunity = document.opportunities[selected];
     const opportunity = selectedOpportunity.name;
     const active = isOpportunityActionable(selectedOpportunity.status);
+    const canPrepare = active && hasConfirmedApplicationRoute(selectedOpportunity);
     panel.append(opportunityPicker(renderEditor));
     if (!active) {
       panel.append(notice('This route is inactive. Its saved answers are superseded historical drafts, may contain unconfirmed assumptions, and are not for submission. Copying is disabled. Their presence does not show whether anything was submitted; verify the original portal record separately.', 'warning'));
+    } else if (selectedOpportunity.application_mode === 'not_required') {
+      panel.append(notice('This route is recorded as having no formal application. Application answers and copying are disabled; record access, registration or delivery steps under Next actions.', 'warning'));
+    } else if (!canPrepare) {
+      panel.append(notice(selectedOpportunity.application_mode === 'required'
+        ? 'A formal application is recorded, but the applicant or lead is missing. Record who must apply in the route details before drafting or copying answers.'
+        : 'Confirm whether this route uses a formal application and who is allowed to apply in the route details. Drafting and copying stay locked until both are recorded.', 'warning'));
     }
     const addQuestion = button('Add application question', () => {
       document.answers.push({opportunity, label: '', text: '', limit: null, status: 'draft'}); changed(); renderEditor();
     }, 'quiet');
-    addQuestion.disabled = !active;
+    addQuestion.disabled = !canPrepare;
     panel.append(addQuestion);
     for (const row of document.answers.filter(row => row.opportunity === opportunity)) {
       const label = input('Application question', 'textarea', row, 'label', 'Copy the actual wording from the application form.', {rows: 2, maxLength: 300});
+      label.input.disabled = !canPrepare;
       const counter = h('p', {class: 'campaign-character-count', role: 'status'});
       function update() {
         const used = countCharacters(row.text || ''), limit = Number(row.limit);
@@ -437,15 +773,17 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         counter.classList.toggle('over-limit', limit > 0 && used > limit);
       }
       const limit = input('Character limit', 'number', row, 'limit', 'Keep this blank if the form does not specify a limit.', {min: 1, max: 20000, step: 1}, element => { row.limit = element.value ? Number(element.value) : null; update(); });
-      const answer = input('Draft answer', 'textarea', row, 'text', active ? '' : 'Historical draft · reopen the route to edit.', {rows: 5, maxLength: 20000, readOnly: !active}, () => { row.status = 'draft'; reviewed.input.value = 'draft'; update(); });
+      limit.input.disabled = !canPrepare;
+      const answer = input('Draft answer', 'textarea', row, 'text', canPrepare ? '' : 'Locked until a formal application and applicant are confirmed.', {rows: 5, maxLength: 20000, readOnly: !canPrepare}, () => { row.status = 'draft'; reviewed.input.value = 'draft'; update(); });
       const reviewed = choice('Answer review', [['draft', 'Needs review'], ['reviewed', 'Reviewed by me']], row, 'status');
+      reviewed.input.disabled = !canPrepare;
       const copied = h('p', {class: 'fine', 'aria-live': 'polite'});
       update();
-      const copy = button(active ? 'Copy this answer' : 'Copy unavailable · inactive route', async () => {
+      const copy = button(canPrepare ? 'Copy this answer' : 'Copy unavailable · application route unconfirmed', async () => {
         try { await navigator.clipboard.writeText(row.text); copied.textContent = row.limit && countCharacters(row.text) > row.limit ? 'Copied as written. Shorten this draft before pasting it into the application.' : 'Answer copied.'; }
         catch { error('Clipboard access is unavailable. Export the campaign brief instead.'); }
       }, 'quiet');
-      copy.disabled = !active;
+      copy.disabled = !canPrepare;
       panel.append(h('article', {class: 'campaign-row', 'aria-label': 'Application answer'}, label.wrap, h('div', {class: 'form-grid'}, limit.wrap, reviewed.wrap), answer.wrap, counter,
         h('div', {class: 'button-row'}, copy, remove(document.answers, row, 'Remove question')), copied));
     }
@@ -491,10 +829,71 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     updateTotal();
   }
   function renderActions(panel) {
-    panel.append(h('h3', {}, 'The next useful step'), h('p', {class: 'muted'}, 'Turn missing quotes, approvals and unanswered conditions into actions. A name or date is a planning note until the person agrees and the timing is confirmed.'),
-      button('Add next action', () => { document.actions.push({task: '', owner: '', owner_confirmed: false, due: '', status: 'open'}); changed(); renderEditor(); }, 'quiet'));
-    for (const row of document.actions) {
-      const task = input('Next action', 'text', row, 'task', '', {maxLength: 2000});
+    panel.append(h('h3', {}, 'The next useful step'), h('p', {class: 'muted'}, 'Turn missing quotes, approvals and unanswered conditions into actions. New actions use the selected active route by default; change the scope for campaign-wide work. Submitted-route tasks only return to current work when marked as after-submission follow-up. A name or date is a planning note until the person agrees and timing is confirmed.'),
+      button('Add next action', () => {
+        const selectedRoute = document.opportunities[selected];
+        const scopedRoute = selectedRoute && (isOpportunityActionable(selectedRoute.status)
+          || selectedRoute.status === 'submitted');
+        document.actions.push({opportunity: scopedRoute ? selectedRoute.name : '',
+          scope_confirmed: Boolean(scopedRoute),
+          submission_phase: selectedRoute?.status === 'submitted'
+            ? 'post_submission' : 'pre_submission',
+          task: '', owner: '', owner_confirmed: false, due: '', status: 'open'});
+        changed(); renderEditor();
+      }, 'quiet'));
+    document.actions.forEach((row, actionIndex) => {
+      const task = input('Next action', 'textarea', row, 'task',
+        'Write the next step in plain language, including what to check and where to record the result.',
+        {rows: 3, maxLength: 2000});
+      const scopeChoices = [
+        ...(row.scope_confirmed === true ? [] : [['__confirm_scope__', 'Choose scope · not confirmed']]),
+        ['', 'Campaign-wide'], ...document.opportunities.map((item, index) => [`route:${index}`, item.name])];
+      const selectedScope = row.scope_confirmed === true
+        ? row.opportunity ? `route:${document.opportunities.findIndex(item => item.name === row.opportunity)}` : ''
+        : '__confirm_scope__';
+      const scope = selectField('Programme or scope', scopeChoices,
+        selectedScope);
+      scope.input.addEventListener('change', () => {
+        if (scope.input.value === '__confirm_scope__') return;
+        row.opportunity = scope.input.value.startsWith('route:')
+          ? document.opportunities[Number(scope.input.value.slice(6))]?.name || ''
+          : '';
+        row.scope_confirmed = true;
+        changed(); renderEditor();
+      });
+      if (row.scope_confirmed !== true) {
+        scope.wrap.append(notice('This older action has no recorded scope. Confirm whether it belongs to the whole campaign or a specific opportunity before using it as current work.', 'warning'));
+      }
+      const scopedOpportunity = document.opportunities.find(item => item.name === row.opportunity);
+      const inactiveRoute = ['closed', 'paused', 'not_pursuing'].includes(scopedOpportunity?.status);
+      const phaseReviewable = scopedOpportunity?.status === 'submitted'
+        || row.submission_phase === 'post_submission';
+      const phaseStatus = h('div', {class: 'campaign-action-phase-status', role: 'status', 'aria-live': 'polite'});
+      function updatePhaseStatus() {
+        phaseStatus.replaceChildren();
+        if (row.status === 'done') return;
+        if (inactiveRoute) {
+          const routeStatus = opportunityStates.find(([key]) => key === scopedOpportunity.status)?.[1]
+            || 'inactive';
+          phaseStatus.append(notice(`This route is ${routeStatus.toLowerCase()}. The action is held out of current work. Move it to a current route or campaign-wide scope if it still applies, or mark it done if obsolete.`, 'warning'));
+        } else if (!phaseReviewable) return;
+        else if (scopedOpportunity?.status === 'submitted'
+            && row.submission_phase !== 'post_submission') {
+          phaseStatus.append(notice('This route is submitted. Mark an action as after-submission follow-up only when it is genuinely still needed.', 'warning'));
+        } else if (isOpportunityActionable(scopedOpportunity?.status)
+            && row.submission_phase === 'post_submission') {
+          phaseStatus.append(notice('This action is still marked as after-submission follow-up, but the route is active again. It stays out of current work until you reclassify it as before submission.', 'warning'));
+        }
+      }
+      const phase = phaseReviewable
+        ? choice('Action phase', [['pre_submission', 'Before submission · held'],
+          ['post_submission', 'After-submission follow-up']], row, 'submission_phase', updatePhaseStatus)
+        : null;
+      if (phase) {
+        phase.wrap.append(phaseStatus);
+      }
+      if (!phase) scope.wrap.append(phaseStatus);
+      updatePhaseStatus();
       const ownerStatus = h('small', {class: 'campaign-action-meta', 'aria-live': 'polite'});
       function updateOwnerStatus() {
         const ownerText = String(row.owner || '').trim();
@@ -528,26 +927,43 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           dateStatus.textContent = 'No target date set. Confirm timing with the owner.';
           dateStatus.dataset.state = 'unset';
         } else if (row.due < localDate()) {
-          dateStatus.textContent = `Past proposed target (${row.due}). Confirm whether this is still needed and agree a new date.`;
+          dateStatus.textContent = `Past proposed target (${displayDate(row.due)}). Confirm whether this is still needed and agree a new date.`;
           dateStatus.dataset.state = 'overdue';
         } else {
-          dateStatus.textContent = `Proposed target: ${row.due}. Confirm timing with the owner.`;
+          dateStatus.textContent = `Proposed target: ${displayDate(row.due)}. Confirm timing with the owner.`;
           dateStatus.dataset.state = 'target';
         }
       }
       const due = input('Proposed target date', 'date', row, 'due', 'Planning target only, not a confirmed due date. Agree the timing with the owner.', {}, updateDateStatus);
       due.wrap.append(dateStatus);
-      const state = choice('Action status', [['open', 'To do'], ['done', 'Done']], row, 'status', updateDateStatus);
-      panel.append(h('article', {class: 'campaign-row campaign-action', 'aria-label': 'Campaign action'}, task.wrap, h('div', {class: 'form-grid'}, owner.wrap, due.wrap, state.wrap), remove(document.actions, row, 'Remove action')));
+      const state = choice('Action status', [['open', 'To do'], ['done', 'Done']], row, 'status', () => {
+        updateDateStatus(); updatePhaseStatus();
+      });
+      panel.append(h('article', {class: 'campaign-row campaign-action',
+        'aria-label': 'Campaign action', 'data-action-index': String(actionIndex)},
+        task.wrap, scope.wrap, h('div', {class: 'form-grid'}, owner.wrap, due.wrap, state.wrap, phase?.wrap),
+        remove(document.actions, row, 'Remove action')));
       updateOwnerStatus(); updateDateStatus();
-    }
+    });
     async function exportPlan(format) {
       try {
-        const plan = await request('/api/community/plan', {data: {title: document.title, actions: document.actions.map(row => ({action: row.task, owner: row.owner_confirmed ? `${row.owner} (user-marked accepted; verify directly)` : row.owner ? `${row.owner} (acceptance not recorded)` : 'Unassigned', due: row.due, status: row.status === 'done' ? 'done' : 'not_started'}))}});
+        const actions = format === 'calendar'
+          ? campaignActionRowsForCalendar(document.actions, document.opportunities)
+          : campaignActionRowsForPlan(document.actions, document.opportunities);
+        if (format === 'calendar' && !actions.length) {
+          feedback.replaceChildren(notice('No current, scoped, open actions with proposed dates are available for the calendar.', 'warning'));
+          return;
+        }
+        const plan = await request('/api/community/plan', {
+          data: {title: document.title,
+            actions},
+        });
         download('sinter-campaign-actions.' + (format === 'calendar' ? 'ics' : 'csv'), plan[format], format === 'calendar' ? 'text/calendar' : 'text/csv');
       } catch (problem) { error(problem.message); }
     }
-    if (document.actions.length) panel.append(h('div', {class: 'button-row'}, button('Download actions CSV', () => exportPlan('csv'), 'quiet'), button('Download action dates', () => exportPlan('calendar'), 'quiet')));
+    if (document.actions.length) panel.append(
+      h('p', {class: 'fine'}, 'CSV keeps closed-route and unconfirmed-scope actions clearly labelled for audit. The calendar includes only dated, unfinished actions with a confirmed current scope.'),
+      h('div', {class: 'button-row'}, button('Download actions CSV', () => exportPlan('csv'), 'quiet'), button('Download action dates', () => exportPlan('calendar'), 'quiet')));
   }
   function renderCommunications(panel) {
     const previouslyOpen = [...editor.querySelectorAll('.campaign-communication > details')]
@@ -616,22 +1032,61 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       const content = input('Message text or summary', 'textarea', row, 'content',
         'Paste the relevant message or a useful summary. Stored with this campaign on this computer; include only details the campaign needs.',
         {rows: 6, maxLength: 20000});
+      const contentCount = h('small', {class: 'campaign-character-count'},
+        `${countCharacters(row.content || '')} characters · destination limits vary; check before copying.`);
+      content.input.addEventListener('input', () => {
+        contentCount.textContent = `${countCharacters(content.input.value)} characters · destination limits vary; check before copying.`;
+      });
+      content.wrap.append(contentCount);
       const evidence = h('div', {class: 'campaign-communication-evidence'},
         h('h4', {}, 'Evidence links · user-entered, unverified'),
         h('p', {class: 'fine'}, 'For example, a link to a message, attachment or portal record. Sinter does not open or check it.'),
-        button('Add evidence link', () => {
-          if (evidenceLinks.length >= 10) { error('A communication can have up to 10 evidence links.'); return; }
-          evidenceLinks.push({title: '', url: '', notes: ''}); changed(); renderEditor();
+      button('Add evidence link', () => {
+        if (evidenceLinks.length >= 10) { error('A communication can have up to 10 evidence links.'); return; }
+          evidenceLinks.push({source_id: '', title: '', url: '', notes: '', checked_at: ''}); changed(); renderEditor();
         }, 'quiet'));
       for (const link of evidenceLinks) {
+        link.source_id ??= '';
+        link.checked_at ??= '';
         const linkTitle = input('Evidence title', 'text', link, 'title',
           'For example, “Email from programme officer” or “Application portal receipt”.', {maxLength: 500});
         const linkUrl = input('Evidence link', 'url', link, 'url',
           'HTTP or HTTPS link only. Links are not opened or verified by Sinter.', {maxLength: 4000});
         const linkNotes = input('Evidence note', 'textarea', link, 'notes', '',
           {rows: 2, maxLength: 2000});
+        const linkChecked = input('Source check date · user-entered', 'date', link, 'checked_at',
+          'Inherited from a linked campaign source when one is selected. Sinter does not verify the date.', {});
+        const savedSource = document.sources.find(source => source.id === link.source_id);
+        const sourceChoice = campaignSourcePicker('Link to a saved campaign source', link.source_id, source => {
+          link.source_id = source?.id || '';
+          if (source) {
+            link.title = source.title;
+            link.url = source.url;
+            link.checked_at = source.checked_at;
+            linkTitle.input.value = source.title;
+            linkUrl.input.value = source.url;
+            linkChecked.input.value = source.checked_at;
+          }
+          linkTitle.input.disabled = Boolean(source);
+          linkUrl.input.disabled = Boolean(source);
+          linkChecked.input.disabled = Boolean(source);
+          linkChecked.wrap.querySelector('label').textContent = source
+            ? 'Source check date · inherited from linked source' : 'Source check date · user-entered';
+        });
+        if (savedSource) {
+          link.title = savedSource.title;
+          link.url = savedSource.url;
+          link.checked_at = savedSource.checked_at;
+          linkTitle.input.value = savedSource.title;
+          linkUrl.input.value = savedSource.url;
+          linkChecked.input.value = savedSource.checked_at;
+        }
+        linkTitle.input.disabled = Boolean(savedSource);
+        linkUrl.input.disabled = Boolean(savedSource);
+        linkChecked.input.disabled = Boolean(savedSource);
+        if (savedSource) linkChecked.wrap.querySelector('label').textContent = 'Source check date · inherited from linked source';
         evidence.append(h('article', {class: 'campaign-row', 'aria-label': 'Communication evidence link'},
-          linkTitle.wrap, linkUrl.wrap, linkNotes.wrap,
+          sourceChoice.wrap, linkTitle.wrap, linkUrl.wrap, linkChecked.wrap, linkNotes.wrap,
           link.url ? safeLink(link.url, 'Open evidence link') : null,
           remove(evidenceLinks, link, 'Remove evidence link')));
       }
@@ -645,16 +1100,325 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       updateSummary();
     }
   }
+  function renderAssets(panel) {
+    const previouslyOpen = new Map([...editor.querySelectorAll('.campaign-asset[data-asset-id]')]
+      .map(card => [card.dataset.assetId, card.firstElementChild?.open || false]));
+    const previouslyOpenWorkstreams = new Map([...editor.querySelectorAll(
+      '.campaign-asset-workstream[data-workstream-key]')]
+      .map(details => [details.dataset.workstreamKey, details.open]));
+    const heading = h('div', {class: 'campaign-section-heading'}, h('div', {},
+      h('h3', {}, 'Products, research and IP records'),
+      h('p', {class: 'muted'}, 'Keep each product or research asset separate. This register is independent of grant eligibility and does not decide who owns an asset, whether it is novel, or whether it can be commercialised.')),
+    button('Add product or asset', () => {
+      const asset = {id: newRecordId(), name: '', kind: 'product', stage: 'unknown',
+        public_summary: '', public_url: '', differentiation_question: '',
+        contributors_status: 'unknown', contributor_notes: '',
+        rights_status: 'unknown', rights_notes: '', disclosure_status: 'unknown',
+        first_public_date: '', disclosure_notes: '', prior_art_status: 'not_started',
+        prior_art_notes: '', prior_art_checked_at: '', funding_opportunities: [],
+        references: []};
+      document.assets.push(asset);
+      pendingAssetOpenId = asset.id;
+      pendingFocus = {assetId: asset.id, field: 'name'};
+      changed(); renderEditor();
+    }, 'quiet'));
+    panel.append(heading,
+      notice('Do not paste confidential invention details, contracts, legal advice, credentials or local file paths here. Add only a short status and a non-sensitive reference. Sinter does not open or verify links.', 'warning'));
+      if (!document.assets.length) {
+      panel.append(h('div', {class: 'campaign-empty'}, h('h4', {}, 'No products or research assets recorded'),
+        h('p', {}, 'Start with the public name and current stage. Leave rights, contributor and disclosure records as not checked until you have supporting evidence.')));
+      return;
+    }
+    const search = field('Find a product or asset', 'search', assetQuery,
+      'Search names, types, recorded statuses, route links and non-sensitive notes. Filtering does not change campaign data.',
+      {placeholder: 'Try a product name, research topic or funder', maxLength: 200});
+    search.input.className = 'campaign-asset-filter';
+    const resultCount = h('p', {class: 'campaign-filter-status', 'aria-live': 'polite'});
+    const empty = h('p', {class: 'campaign-filter-empty', hidden: true},
+      'No products or assets match. Clear the search to see the full register.');
+    const clearFilter = button('Clear search', () => {
+      search.input.value = '';
+      updateAssetFilter(); rememberCampaign(); search.input.focus();
+    }, 'quiet');
+    clearFilter.hidden = !assetQuery;
+    const assetList = h('div', {class: 'campaign-asset-list'});
+    panel.append(search.wrap, clearFilter, resultCount, empty, assetList);
+    const assetCards = [];
+    for (const [index, row] of document.assets.entries()) {
+      const workstreamOwner = row.id || row.name || `asset-${index}`;
+      const workstream = (key, title, statusOptions, value, ...content) => {
+        const selected = statusOptions.find(([option]) => option === value)?.[1]
+          || 'Not recorded';
+        const state = selected.split(' · ')[0];
+        return h('details', {
+        class: 'campaign-asset-workstream',
+        'data-workstream-key': `${workstreamOwner}:${key}`,
+        open: previouslyOpenWorkstreams.get(`${workstreamOwner}:${key}`) || false,
+      }, h('summary', {}, h('strong', {}, title), h('span', {class: 'fine'}, state)),
+      ...content);
+      };
+      const refs = Array.isArray(row.references) ? row.references : (row.references = []);
+      const name = input('Product or asset name', 'text', row, 'name',
+        'Use one row per distinct product, research system, model, dataset or name.',
+        {required: true, maxLength: 250});
+      const heading = h('strong', {}, row.name || 'Untitled product or asset');
+      const meta = h('small', {class: 'campaign-asset-meta'}, '');
+      function updateHeading() {
+        heading.textContent = row.name || 'Untitled product or asset';
+        const rightsLabel = rightsStatuses.find(([key]) => key === row.rights_status)?.[1]
+          || 'Rights not checked';
+        const priorArtLabel = priorArtStatuses.find(([key]) => key === row.prior_art_status)?.[1]
+          || 'Prior art not started';
+        meta.textContent = `${assetKinds.find(([key]) => key === row.kind)?.[1] || 'Other'} · ${assetStages.find(([key]) => key === row.stage)?.[1] || 'Not recorded'} · ${rightsLabel} · ${priorArtLabel}`;
+      }
+      name.input.addEventListener('input', updateHeading);
+      const kind = choice('Asset type', assetKinds, row, 'kind', updateHeading);
+      const stage = choice('Current stage', assetStages, row, 'stage', updateHeading);
+      const publicSummary = input('Public description · user-entered', 'textarea', row,
+        'public_summary', 'Summarise what a public page says. Keep it separate from internal technical detail and claims about novelty.', {rows: 3, maxLength: 3000});
+      const publicUrl = input('Public description link', 'url', row, 'public_url',
+        'HTTP or HTTPS only. Sinter will not open or verify this link.', {maxLength: 4000});
+      const differentiation = input('What difference should the research test?', 'textarea', row,
+        'differentiation_question', 'Write a question about the exact technical contribution, not an unsupported novelty or patentability claim.', {rows: 3, maxLength: 3000});
+
+      const contributorStatus = choice('Contributor record status', contributorStatuses,
+        row, 'contributors_status');
+      const contributorNotes = input('Contributor record note', 'textarea', row,
+        'contributor_notes', 'Use a short, non-sensitive status. Record names only when needed for an authorised internal register.', {rows: 2, maxLength: 2000});
+      const rightsStatus = choice('Rights and title record status', rightsStatuses,
+        row, 'rights_status');
+      const rightsNotes = input('Rights record note', 'textarea', row, 'rights_notes',
+        'A public licence is not proof that the company owns every contribution. Do not paste contract terms or legal advice.', {rows: 2, maxLength: 2000});
+      const disclosureStatus = choice('First disclosure record status', disclosureStatuses,
+        row, 'disclosure_status');
+      const disclosureDate = input('First public disclosure date · if known', 'date', row,
+        'first_public_date', 'Enter a date only when supported by a record. This field does not verify it.', {});
+      const disclosureNotes = input('Disclosure record note', 'textarea', row,
+        'disclosure_notes', 'For example, identify the kind of dated source to locate. Avoid confidential invention detail.', {rows: 2, maxLength: 2000});
+      const priorArtStatus = choice('Prior-art research stage', priorArtStatuses,
+        row, 'prior_art_status');
+      const priorArtChecked = input('Prior-art check date · user-entered', 'date', row,
+        'prior_art_checked_at', 'A recorded date is not evidence that a search was comprehensive.', {});
+      const priorArtNotes = input('Prior-art research question or note', 'textarea', row,
+        'prior_art_notes', 'Record the search scope, unresolved questions and closest leads. This is not a legal opinion.', {rows: 3, maxLength: 3000});
+      const funding = h('fieldset', {class: 'campaign-asset-funding'},
+        h('legend', {}, 'Funding routes to assess'),
+        h('p', {class: 'fine'}, 'Selecting a route records a research link only; it does not imply fit or eligibility.'));
+      row.funding_opportunities = Array.isArray(row.funding_opportunities)
+        ? row.funding_opportunities : [];
+      const fundingChecks = [];
+      const fundingLimit = h('p', {class: 'fine', 'aria-live': 'polite'});
+      function updateFundingLimit() {
+        const limitReached = row.funding_opportunities.length >= 10;
+        for (const item of fundingChecks) {
+          item.input.disabled = limitReached && !item.input.checked;
+        }
+        fundingLimit.textContent = limitReached
+          ? '10 routes selected. Remove one before adding another.'
+          : `${row.funding_opportunities.length} of 10 route links selected.`;
+      }
+      if (!document.opportunities.length) {
+        funding.append(h('p', {class: 'fine'}, 'Add a funding opportunity before linking this asset to a route.'));
+      } else {
+        for (const opportunity of document.opportunities) {
+          const linked = check(opportunity.name,
+            row.funding_opportunities.includes(opportunity.name));
+          linked.input.setAttribute('aria-label',
+            `Assess ${row.name || 'this asset'} under ${opportunity.name}`);
+          fundingChecks.push(linked);
+          linked.input.addEventListener('change', () => {
+            const values = new Set(row.funding_opportunities);
+            if (linked.input.checked) values.add(opportunity.name);
+            else values.delete(opportunity.name);
+            row.funding_opportunities = [...values];
+            updateFundingLimit();
+            changed();
+          });
+          funding.append(linked.wrap);
+        }
+        funding.append(fundingLimit);
+        updateFundingLimit();
+      }
+      const references = h('div', {class: 'campaign-asset-references'},
+        h('h4', {}, 'Non-sensitive evidence references'),
+        h('p', {class: 'fine'}, 'Add a public source, repository record or opaque internal reference you are authorised to use. Links remain unverified; do not add uploads or local paths.'),
+        button('Add evidence reference', () => {
+          if (refs.length >= 20) { error('Each product or asset can have up to 20 evidence references.'); return; }
+          refs.push({kind: 'other', source_id: '', title: '', url: '',
+            excerpt: '', checked_at: '', notes: ''});
+          pendingFocus = {assetId: row.id, field: 'source_id', referenceIndex: refs.length - 1};
+          changed(); renderEditor();
+        }, 'quiet'));
+      for (const [referenceIndex, reference] of refs.entries()) {
+        const referenceKind = choice('Evidence type', assetReferenceKinds,
+          reference, 'kind');
+        const sourceChoice = campaignSourcePicker('Link a campaign source (optional)',
+          reference.source_id, source => {
+            if (reference.source_id !== (source?.id || '')) {
+              reference.excerpt = '';
+              reference.checked_at = source?.checked_at || '';
+            }
+            reference.source_id = source?.id || '';
+            if (source) {
+              reference.title = source.title;
+              reference.url = source.url;
+            }
+            pendingFocus = {assetId: row.id, field: 'excerpt', referenceIndex};
+            renderEditor();
+          });
+        sourceChoice.input.dataset.campaignField = 'source_id';
+        const linkedSource = document.sources.find(item => item.id === reference.source_id);
+        const title = linkedSource ? h('p', {class: 'fine'},
+          `Campaign source: ${linkedSource.title}`)
+          : input('Reference title (required)', 'text', reference, 'title',
+            'Use a clear name for the evidence; no file will be uploaded.',
+            {required: true, maxLength: 500});
+        const url = linkedSource ? (linkedSource.url
+          ? safeLink(linkedSource.url, 'Open linked campaign source')
+          : h('span', {class: 'fine'}, 'No source link recorded'))
+          : input('HTTP or HTTPS link · optional', 'url', reference, 'url',
+            'Sinter does not open or verify the link. Do not use local file paths.', {maxLength: 4000});
+        const excerpt = input('Relevant passage · quote or short paraphrase',
+          'textarea', reference, 'excerpt',
+          'Copy only the short passage that supports this specific record; clearly paraphrase rather than using quotation marks if it is not verbatim.',
+          {rows: 2, maxLength: 3000});
+        const checkedAt = input('Reference checked date · user-entered',
+          'date', reference, 'checked_at',
+          'This records when you reviewed the reference. Sinter does not verify it.', {});
+        const notes = input('Non-sensitive reference note', 'textarea', reference,
+          'notes', '', {rows: 2, maxLength: 2000});
+        references.append(h('div', {class: 'campaign-asset-reference',
+          'data-reference-index': referenceIndex},
+          h('div', {class: 'form-grid'}, referenceKind.wrap, sourceChoice.wrap),
+          title.wrap || title, url.wrap || url, excerpt.wrap, checkedAt.wrap, notes.wrap,
+          remove(refs, reference, 'Remove reference')));
+      }
+      const summary = h('summary', {}, heading, meta);
+      const opened = previouslyOpen.get(row.id) ?? pendingAssetOpenId === row.id;
+      const card = h('article', {class: 'campaign-row campaign-asset',
+        'data-asset-id': row.id,
+        'aria-label': `${row.name || 'Untitled product or asset'} record`},
+      h('details', {open: opened}, summary,
+        h('div', {class: 'form-grid'}, name.wrap, kind.wrap, stage.wrap),
+        h('div', {class: 'campaign-asset-public'}, publicSummary.wrap, publicUrl.wrap,
+          differentiation.wrap),
+        funding,
+        h('div', {class: 'campaign-asset-workstreams'},
+          workstream('contributors', 'Contributors', contributorStatuses, row.contributors_status,
+            contributorStatus.wrap, contributorNotes.wrap),
+          workstream('rights', 'Rights and title', rightsStatuses, row.rights_status,
+            rightsStatus.wrap, rightsNotes.wrap),
+          workstream('disclosure', 'Disclosure', disclosureStatuses, row.disclosure_status,
+            disclosureStatus.wrap, disclosureDate.wrap, disclosureNotes.wrap),
+          workstream('prior-art', 'Prior art', priorArtStatuses, row.prior_art_status,
+            priorArtStatus.wrap, priorArtChecked.wrap, priorArtNotes.wrap)),
+        references,
+        remove(document.assets, row, 'Remove product or asset')));
+      card.dataset.search = [row.name, row.kind, row.stage, row.public_summary,
+        row.differentiation_question, row.contributors_status, row.contributor_notes,
+        row.rights_status, row.rights_notes, row.disclosure_status, row.disclosure_notes,
+        row.prior_art_status, row.prior_art_notes, ...(row.funding_opportunities || []),
+        ...refs.flatMap(reference => [reference.kind, reference.title, reference.url,
+          reference.excerpt, reference.notes])].join(' ').toLocaleLowerCase();
+      assetCards.push(card);
+      assetList.append(card);
+      updateHeading();
+    }
+    function updateAssetFilter() {
+      assetQuery = search.input.value.trim();
+      const query = assetQuery.toLocaleLowerCase();
+      let shown = 0;
+      for (const card of assetCards) {
+        card.hidden = Boolean(query && !card.dataset.search.includes(query));
+        if (!card.hidden) shown++;
+      }
+      empty.hidden = shown !== 0;
+      clearFilter.hidden = !query;
+      resultCount.textContent = query
+        ? `${shown} of ${assetCards.length} products and assets match “${assetQuery}”.`
+        : `${assetCards.length} products and assets · search names, notes or routes.`;
+    }
+    search.input.addEventListener('input', () => {
+      updateAssetFilter(); rememberCampaign();
+    });
+    updateAssetFilter();
+  }
   function renderSources(panel) {
-    panel.append(h('h3', {}, 'Keep the original guidance close'), h('p', {class: 'muted'}, 'Keep source links and the supplied wording used for your checks. Links are not fetched automatically.'),
-      button('Add source', () => { document.sources.push({title: '', url: '', notes: ''}); changed(); renderEditor(); }, 'quiet'));
+    const previouslyOpen = new Map([...editor.querySelectorAll(
+      '.campaign-source-details[data-source-id]')]
+      .map(details => [details.dataset.sourceId, details.open]));
+    const heading = h('div', {class: 'campaign-section-heading'}, h('div', {},
+      h('h3', {}, 'Keep the original guidance close'),
+      h('p', {class: 'muted'}, 'Links stay as entered; Sinter does not fetch or verify them. Search the register and open only the records you need.')),
+      button('Add source', () => { document.sources.push({id: newRecordId(),
+        title: '', url: '', notes: '', checked_at: ''}); changed(); renderEditor(); }, 'quiet'));
+    const search = field('Search sources', 'search', sourceQuery,
+      'Search titles, links and notes. This filter does not change campaign data.',
+      {placeholder: 'Try a product, funder or source title', maxLength: 200});
+    search.input.className = 'campaign-source-filter';
+    const resultCount = h('p', {class: 'campaign-filter-status', 'aria-live': 'polite'});
+    const empty = h('p', {class: 'campaign-filter-empty', hidden: true},
+      'No sources match. Clear the search or add a source.');
+    const sourceList = h('div', {class: 'campaign-source-list'});
+    function updateSourceFilter() {
+      sourceQuery = search.input.value.trim();
+      const query = sourceQuery.toLocaleLowerCase();
+      let shown = 0;
+      for (const card of sourceList.children) {
+        card.hidden = Boolean(query && !card.dataset.search.includes(query));
+        if (!card.hidden) shown++;
+      }
+      empty.hidden = shown !== 0;
+      resultCount.textContent = query
+        ? `${shown} of ${sourceList.children.length} sources match “${sourceQuery}”.`
+        : `${sourceList.children.length} sources · search by title, link or notes.`;
+    }
     for (const row of document.sources) {
-      const title = input('Source title', 'text', row, 'title', '', {maxLength: 500});
+      const title = input('Source title (required)', 'text', row, 'title', '',
+        {required: true, maxLength: 500});
       const url = input('Source link', 'url', row, 'url', '', {maxLength: 2000});
       const notes = input('Source wording and notes', 'textarea', row, 'notes', 'Preserve wording that supports a requirement, deadline or exclusion.', {rows: 5, maxLength: 6000});
-      panel.append(h('article', {class: 'campaign-row', 'aria-label': 'Campaign source'}, title.wrap, url.wrap, notes.wrap,
-        row.url ? safeLink(row.url, 'Open source') : h('span'), remove(document.sources, row, 'Remove source')));
+      const checkedAt = input('Source checked date · user-entered', 'date', row,
+        'checked_at', 'Record the date you checked the source. Sinter does not fetch it.', {});
+      const summaryTitle = h('strong', {}, row.title || 'Untitled source');
+      const summaryDate = h('span', {class: 'fine'}, row.checked_at
+        ? `Checked ${row.checked_at}` : 'Check date not recorded');
+      const card = h('article', {class: 'campaign-row campaign-source-record',
+        'aria-label': `Campaign source: ${row.title || 'Untitled source'}`},
+        h('details', {class: 'campaign-source-details', 'data-source-id': row.id,
+          open: previouslyOpen.get(row.id) ?? !row.title},
+        h('summary', {}, summaryTitle, summaryDate),
+        h('div', {class: 'campaign-source-fields'}, title.wrap, url.wrap, notes.wrap,
+          checkedAt.wrap, row.url ? safeLink(row.url, 'Open source') : h('span'),
+          button('Remove source', () => {
+          const linked = document.assets.some(asset => asset.references?.some(
+            reference => reference.source_id === row.id))
+            || document.requirements.some(requirement => requirement.source_id === row.id)
+            || document.opportunities.some(opportunity => opportunity.window_source_id === row.id)
+            || document.communications.some(communication =>
+              communication.evidence_links?.some(link => link.source_id === row.id));
+          if (linked) {
+            error('This source is linked to a product, eligibility check, route window or communication. Unlink or replace those references before removing the source.');
+            return;
+          }
+          document.sources.splice(document.sources.indexOf(row), 1);
+          changed(); renderEditor();
+          }, 'quiet'))));
+      function updateCardSearch() {
+        summaryTitle.textContent = row.title || 'Untitled source';
+        card.dataset.search = [row.title || '', row.url || '', row.notes || '']
+          .join(' ').toLocaleLowerCase();
+        updateSourceFilter();
+      }
+      title.input.addEventListener('input', updateCardSearch);
+      url.input.addEventListener('input', updateCardSearch);
+      notes.input.addEventListener('input', updateCardSearch);
+      updateCardSearch();
+      sourceList.append(card);
     }
+    search.input.addEventListener('input', updateSourceFilter);
+    panel.append(heading, search.wrap, resultCount, empty, sourceList);
+    updateSourceFilter();
   }
 
   function newCampaign() { if (canReplace()) { apply(blank()); feedback.replaceChildren(); } }
@@ -670,8 +1434,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         try { await request('/api/campaigns/delete', {data: {id: savedId, revision}}); apply(blank()); await refreshShelf(); }
         catch (problem) { error(problem.message); }
       }, 'danger')));
-  root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'FUNDING CAMPAIGNS'), h('h2', {}, 'Keep the whole application together.'),
-    h('p', {}, 'Compare opportunities, prepare answers and turn missing details into next actions. Saved locally, with your sources beside the work.')),
+  root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'CAMPAIGNS'), h('h2', {}, 'Keep the whole application together.'),
+    h('p', {}, 'Compare opportunities, map products and IP questions to funding routes, prepare answers and turn missing details into next actions. Saved locally, with your sources beside the work.')),
     decisionCard, savedPanel, shelf, summary, editor, h('div', {class: 'campaign-save-bar'}, h('div', {class: 'button-row'}, saveButton, prepareButton), status), feedback, transfers, output);
   status.textContent = dirty ? 'Unsaved changes' : savedId ? 'Saved on this computer' : 'Not saved yet';
   renderEditor(); renderSummary();

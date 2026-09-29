@@ -17,15 +17,23 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
-from . import __version__, atlas, casebooks, client, community, speech, workbench
-from .preferences import Preferences
-from .operations import budget
-from . import campaigns
+from . import (
+    __version__,
+    atlas,
+    campaigns,
+    casebooks,
+    client,
+    community,
+    speech,
+    workbench,
+)
+from .docx_export import export_docx
 from .evidence import collect, text
 from .grants import screen
-from .docx_export import export_docx
 from .jobs import Jobs
 from .meetings import parse_transcript
+from .operations import budget
+from .preferences import Preferences
 from .store import Store, calendar
 from .templates import available_templates, resolve_template, template_events
 
@@ -282,7 +290,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/casebooks/validate":
             self._json({"document": casebooks.validate(body.get("document"))})
         elif path == "/api/campaigns/prepare":
-            self._json(campaigns.prepare(body.get("document")))
+            self._json(campaigns.prepare(
+                body.get("document"), body.get("focused_opportunity", "")))
         elif path == "/api/campaigns/save":
             self._json(self.app.campaigns.save(body.get("document"), body.get("id"), body.get("revision")))
         elif path == "/api/campaigns/delete":

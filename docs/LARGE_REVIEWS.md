@@ -104,15 +104,16 @@ repeated `--resume` cannot reset the limit or establish completion.
 Interrupted follow-ups retain the count and earlier received commentary; explicitly
 retrying an uncertain request cannot reset the follow-up budget.
 No run automatically retries generation or continues issuing requests after
-a provider failure. Failed, uncertain and partial results return exit code 2,
-retain earlier work, and distinguish complete, failed, partial, uncertain and
-not-attempted batches. These five counts are disjoint. `not_reviewed` is the
+a provider failure. Partial results that need follow-up return exit code 3;
+failed or uncertain provider outcomes return 1, while invalid command-line usage
+remains 2. All incomplete results retain earlier work and distinguish complete,
+failed, partial, uncertain and not-attempted batches. These five counts are disjoint. `not_reviewed` is the
 aggregate of the last four, not a sixth state. A run limited by `--max-parts` can
 return 0 while leaving batches unattempted, provided every received answer passed
 the commentary gate. Inspect the coverage ledger rather than interpreting that
 exit code as exhaustive review.
 For work left outside `--max-parts`, Sinter prints a ready-to-run continuation
-command. Failed or partial results retain an honest exit code 2 and their output;
+command. Failed or partial results retain their output and distinct exit status;
 ordinary progress is never confused with a transport failure or silently promoted
 to a verified review.
 

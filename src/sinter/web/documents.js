@@ -107,21 +107,38 @@ function escape(value) {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 }
 
-export function downloadDocument(report) {
-  const body = markdown(documentMarkdown(report));
-  const title = report.document_title || report.title || 'Sinter draft';
-  // Only nodes constructed by our safe renderer enter this self-contained document.
-  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
-    + '<title>' + escape(title) + '</title><style>'
-    + 'body{margin:0;background:#f3f2ed;color:#202a35;font:17px/1.65 Georgia,serif}.sheet{max-width:720px;margin:40px auto;padding:55px 64px;background:white;border:1px solid #deded6}'
-    + 'h1,h2,h3,h4{font-family:system-ui,sans-serif;line-height:1.25}h1{font-size:30px}h2{font-size:23px;margin-top:1.6em}h3{font-size:18px}p{margin:0 0 1em}li{margin:.35em 0}'
+export function documentExportStyles(report) {
+  const shared = 'h1,h2,h3,h4{font-family:system-ui,sans-serif;line-height:1.25}h1{font-size:30px}h2{font-size:23px;margin-top:1.6em}h3{font-size:18px}p{margin:0 0 1em}li{margin:.35em 0}'
     + 'blockquote{margin:1em 0;padding-left:18px;border-left:3px solid #b59a54}pre{white-space:pre-wrap;background:#f5f5f1;padding:18px}code{font-size:.9em}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;text-align:left}.align-center{text-align:center}.align-right{text-align:right}.table-scroll{overflow-x:auto;margin:1em 0}li>p{margin:.35em 0}a{color:#245989}'
     + '.status{font:11px system-ui,sans-serif;letter-spacing:.08em;color:#626b72;text-transform:uppercase;margin-bottom:28px}.document{overflow-wrap:anywhere}'
-    + '@media(max-width:650px){.sheet{margin:0;padding:28px 22px;border:0}}@media print{body{background:white}.sheet{margin:0;padding:0;border:0}.status{font-size:9px}.table-scroll{overflow:visible}h1,h2,h3,h4{break-after:avoid}tr{break-inside:avoid}}'
+    + '@media(max-width:650px){.sheet{margin:0;padding:28px 22px;border:0}}@media print{body{background:white}.sheet{margin:0;padding:0;border:0}.status{font-size:9px}.table-scroll{overflow:visible}h1,h2,h3,h4{break-after:avoid}tr{break-inside:avoid}}';
+  if (report.workflow !== 'campaign') {
+    return 'body{margin:0;background:#f3f2ed;color:#202a35;font:17px/1.65 Georgia,serif}.sheet{max-width:720px;margin:40px auto;padding:55px 64px;background:white;border:1px solid #deded6}'
+      + shared;
+  }
+  return 'body{margin:0;background:#f3f2ed;color:#202a35;font:14.56px/1.62 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.sheet{max-width:820px;margin:40px auto;padding:0;background:white;border:1px solid #deded6}'
+    + shared
+    + '.status{padding:28px 40px 0;margin:0;font-size:10px;letter-spacing:.14em;font-weight:700}.campaign-decision-document{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14.56px;line-height:1.62;padding:26px clamp(22px,4vw,40px) 36px}.campaign-decision-document h1{font-size:24.8px;line-height:1.24;margin:0 0 1em}.campaign-decision-document h2{font-size:18px;margin:1.5em 0 .55em}.campaign-decision-document h3{font-size:15.7px;margin:1.3em 0 .45em}.campaign-decision-document p{margin:0 0 .75em}.campaign-decision-document ul,.campaign-decision-document ol{margin:.5em 0 .9em}.campaign-decision-document li{margin:.24em 0}'
+    + '@media(max-width:650px){.sheet{padding:0}.status{padding:20px 22px 0}.campaign-decision-document{padding:20px 22px 28px}}'
+    + '@media print{body{font:11pt/1.55 Georgia,"Times New Roman",serif}.sheet{max-width:none;margin:0;padding:0;border:0}.status{display:none}.campaign-decision-document{font:11pt/1.55 Georgia,"Times New Roman",serif;padding:0}}';
+}
+
+export function documentHtml(report) {
+  const body = markdown(documentMarkdown(report));
+  if (report.workflow === 'campaign') body.classList.add('campaign-decision-document');
+  const title = report.document_title || report.title || 'Sinter draft';
+  // Only nodes constructed by our safe renderer enter this self-contained document.
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+    + '<title>' + escape(title) + '</title><style>' + documentExportStyles(report)
     + '</style></head><body><article class="sheet"><div class="status">' + (report.demo ? 'Fictional example · ' : '')
-    + (report.workflow === 'campaign' ? 'Internal decision brief · Review before sharing'
+    + (report.workflow === 'campaign' ? 'Campaign decision record'
       : report.model_draft ? 'Model-generated draft · Review before use' : 'Draft · Review before use') + '</div>'
     + body.outerHTML + '</article></body></html>';
+}
+
+export function downloadDocument(report) {
+  const html = documentHtml(report);
+  const title = report.document_title || report.title || 'Sinter draft';
   download(reportName(title) + '.html', html, 'text/html;charset=utf-8');
 }
 

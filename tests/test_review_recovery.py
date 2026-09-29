@@ -354,6 +354,34 @@ def test_folder_cli_accepts_specific_line_numbered_findings_without_follow_up(tm
     assert 'batches_complete": 2' in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ('outcome', 'expected_exit', 'expected_message'),
+    [
+        ('partial', 3, 'Review needs follow-up'),
+        ('failed', 1, 'Review incomplete'),
+        ('uncertain', 1, 'Review incomplete'),
+    ],
+)
+def test_cli_exit_codes_distinguish_follow_up_from_hard_failures(
+    tmp_path, capsys, outcome, expected_exit, expected_message
+):
+    source = tmp_path / 'source.txt'
+    source.write_text(SOURCE, encoding='utf-8')
+    if outcome == 'partial':
+        response = client.ChatResult('The supplied material appears broadly consistent with expectations.')
+        patcher = patch('sinter.client.chat', return_value=response)
+    elif outcome == 'failed':
+        patcher = patch('sinter.client.chat', return_value=client.ChatResult('Truncated', finish_reason='length'))
+    else:
+        patcher = patch('sinter.client.chat', side_effect=client.APIError('Connection interrupted'))
+
+    with patcher, pytest.raises(SystemExit) as exited:
+        cli.main(['review', str(source), '-o', str(tmp_path / 'review.md')])
+
+    assert exited.value.code == expected_exit
+    assert expected_message in capsys.readouterr().err
+
+
 def test_uncertain_follow_up_preserves_its_budget_and_received_commentary():
     vague = 'The supplied material appears broadly consistent with expectations.'
     with patch('sinter.client.chat', return_value=client.ChatResult(vague)):
@@ -574,7 +602,7 @@ def test_cli_explicit_checkpoint_and_exhausted_answer_have_actionable_output(tmp
     review.atomic_save(checkpoint, old)
     with patch('sinter.client.chat') as model, pytest.raises(SystemExit) as exited:
         cli.main(['review', str(source), '--resume', '--checkpoint', str(checkpoint), '-o', 'recovered.md'])
-    assert exited.value.code == 2
+    assert exited.value.code == 3
     model.assert_not_called()
     error = capsys.readouterr().err
     assert 'manual review' in error and 'narrower --question' in error

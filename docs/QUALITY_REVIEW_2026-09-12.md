@@ -97,6 +97,7 @@ resolution; the consent test was retained.
 These are engineering assessments, not representative end-user research. No 10/10
 claim is made. Remaining limits include lexical rather than semantic retrieval,
 model adherence variability, temporary in-process job retention, and long evidence
-documents. Partial review coverage deliberately remains exit 2. Source links and
-hashes establish provenance, not truth; official decisions and communications stay
-with the user.
+documents. Partial reviews now return exit 3, failed or uncertain provider outcomes
+return 1, and invalid CLI usage retains exit 2, so automation can separate follow-up
+from failure. Source links and hashes establish provenance, not truth; official
+decisions and communications stay with the user.

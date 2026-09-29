@@ -149,9 +149,22 @@ def _dispatch(args) -> None:
         print(json.dumps(result['coverage'], indent=2))
         if not args.offline:
             _review_next_steps(args, output, result)
-        if (result['coverage']['batches_failed'] or result['coverage']['batches_uncertain']
-                or result['coverage']['batches_partial']):
-            raise SystemExit(2)
+        coverage = result['coverage']
+        if coverage['batches_failed'] or coverage['batches_uncertain']:
+            print(
+                "Review incomplete: one or more batches failed or have an uncertain "
+                "provider outcome. Check the saved coverage ledger before resuming.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        if coverage['batches_partial']:
+            print(
+                "Review needs follow-up: one or more answers did not meet the "
+                "evidence gate. The saved coverage ledger preserves them for review.",
+                file=sys.stderr,
+            )
+            # Keep argparse's exit 2 available for invalid command-line usage.
+            raise SystemExit(3)
     elif args.command == "template":
         output = validate_output(args.output) if args.output is not None else None
         template, variables = resolve_template(args.name), {}

@@ -126,7 +126,7 @@ def run(payload: dict, progress=lambda message: None) -> dict:
     notes = text(payload.get("notes", ""), "Notes", 1000000 if kind == "meeting" else MAX_CONTEXT)
     query = text(payload.get("query", ""), "Search query", 1024)
     questions = text(payload.get("questions", ""), "Questions", 12000)
-    for flag in ("use_search", "use_model", "demo"):
+    for flag in ("use_search", "use_model", "demo", "campaign_sender_review"):
         if flag in payload and type(payload[flag]) is not bool:
             raise ValueError(f"{flag} must be a boolean.")
     demo = payload.get("demo", False)

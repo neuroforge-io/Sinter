@@ -67,3 +67,23 @@ def test_explicit_campaign_signer_and_contact_render_in_the_closing():
         "campaign@example.invalid",
     ))
     assert report["document_ready"]
+
+
+def test_campaign_clarification_uses_scoped_context_without_claiming_authority():
+    report = run({
+        "workflow": "brief", "title": "Clarification: CSIRO RUIC eligibility and project scope",
+        "document_type": "enquiry", "recipient": "CSIRO RUIC programme team",
+        "organisation": "NeuroforgeIO Pty Ltd",
+        "campaign_sender_review": True,
+        "notes": "NeuroforgeIO Pty Ltd is assessing a possible under-12-month Queensland university collaboration. The partner, budget and eligibility are not confirmed.",
+        "questions": "Which operating-age rule applies?\nWhat cash-match evidence is required?",
+        "use_search": False, "use_model": False,
+    })
+    document = report["document_markdown"]
+    assert "Re: CSIRO RUIC eligibility and project scope" in document
+    assert "NeuroforgeIO Pty Ltd is assessing whether this programme could support a defined project" in document
+    assert "The partner, budget and eligibility are not confirmed." in document
+    assert "For context, our notes record" not in document
+    assert "I am writing on behalf of" not in document
+    assert "Kind regards," not in document
+    assert {row["field"] for row in report["missing_fields"]} >= {"signatory", "contact_details"}

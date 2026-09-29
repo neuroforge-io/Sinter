@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {evidencePackForDownload} from '../src/sinter/web/documents.js';
+import {documentExportStyles, documentHtml, evidencePackForDownload} from '../src/sinter/web/documents.js';
 
 function campaignReport() {
   const messageBody = 'Private communication body with identifying details.\n\n'
@@ -94,4 +94,60 @@ test('campaign private fields appear only after explicit per-download opt-in', (
 test('non-campaign evidence packs retain their existing contents', () => {
   const report = {workflow: 'brief', title: 'Example', sources: [{title: 'Source'}]};
   assert.deepEqual(evidencePackForDownload(report), report);
+});
+
+test('campaign HTML exports use the same compact decision-record presentation', () => {
+  const styles = documentExportStyles({workflow: 'campaign'});
+  assert.match(styles, /max-width:820px/);
+  assert.match(styles, /font:14\.56px\/1\.62 system-ui/);
+  assert.match(styles, /\.campaign-decision-document\{font-family:system-ui/);
+  assert.match(styles, /@media\(max-width:650px\)/);
+  assert.match(styles, /@media print/);
+  assert.match(documentExportStyles({workflow: 'brief'}), /max-width:720px/);
+});
+
+test('downloaded campaign HTML applies the decision-record class to the rendered article', () => {
+  class TestNode {
+    constructor(tagName, text = '') {
+      this.tagName = tagName.toUpperCase(); this.text = text; this.children = [];
+      this.attributes = {}; this.nodeType = text ? 3 : 1; this.className = '';
+      this.classList = {add: name => {
+        if (!this.className.split(/\s+/).includes(name)) {
+          this.className = [this.className, name].filter(Boolean).join(' ');
+        }
+      }};
+    }
+    append(...children) { this.children.push(...children); }
+    setAttribute(key, value) { this.attributes[key] = String(value); }
+    get outerHTML() {
+      const escapeText = value => String(value).replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+      if (this.nodeType === 3) return escapeText(this.text);
+      const attrs = {...this.attributes};
+      if (this.className) attrs.class = this.className;
+      const serialized = Object.entries(attrs).map(([key, value]) =>
+        ` ${key}="${escapeText(value)}"`).join('');
+      return `<${this.tagName.toLowerCase()}${serialized}>`
+        + this.children.map(child => child.outerHTML).join('')
+        + `</${this.tagName.toLowerCase()}>`;
+    }
+  }
+  const previousDocument = globalThis.document, previousNode = globalThis.Node;
+  globalThis.Node = TestNode;
+  globalThis.document = {
+    createElement: tag => new TestNode(tag),
+    createTextNode: value => new TestNode('#text', String(value)),
+  };
+  try {
+    const html = documentHtml({workflow: 'campaign', title: 'A campaign',
+      document_markdown: '# Decision brief\n\n## Current status\n\nReady for review.'});
+    assert.match(html, /<div class="document campaign-decision-document">/);
+    assert.match(html, /<h1>Decision brief<\/h1>/);
+    assert.match(html, /\.campaign-decision-document h1\{font-size:24\.8px/);
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    if (previousNode === undefined) delete globalThis.Node;
+    else globalThis.Node = previousNode;
+  }
 });

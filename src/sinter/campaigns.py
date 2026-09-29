@@ -23,19 +23,44 @@ ACTIONABLE_OPPORTUNITY_STATES = frozenset({"researching", "open", "upcoming", "c
 MAX_DOCUMENT_BYTES = 1_000_000
 MAX_TEXT_CHARACTERS = 200_000
 MAX_CAMPAIGNS = 50
+WINDOW_CHECK_MAX_AGE_DAYS = 90
 ROW_LIMITS = {"opportunities": 30, "requirements": 200, "answers": 100,
               "budget": 200, "actions": 200, "sources": 100,
-              "communications": 200}
+              "communications": 200, "assets": 60}
 OPPORTUNITY_STATUSES = frozenset({
     "researching", "open", "closed", "upcoming", "submitted", "paused",
     "clarification", "not_pursuing",
 })
+OPPORTUNITY_TYPES = frozenset({
+    "unknown", "cash_grant", "matched_voucher", "tax_incentive",
+    "equity", "non_cash_support", "other",
+})
+APPLICATION_MODES = frozenset({"unknown", "required", "not_required"})
 REQUIREMENT_STATUSES = frozenset({"unknown", "met", "not_met", "clarification"})
 COMMUNICATION_DIRECTIONS = frozenset({"incoming", "outgoing"})
 COMMUNICATION_STATUSES = frozenset({"draft", "received", "sent"})
 COMMUNICATION_CHANNELS = frozenset({"email", "letter", "phone", "meeting",
                                     "portal", "other"})
+ACTION_SUBMISSION_PHASES = frozenset({"pre_submission", "post_submission"})
 MAX_COMMUNICATION_EVIDENCE_LINKS = 10
+MAX_ASSET_REFERENCES = 20
+ASSET_KINDS = frozenset({"product", "service", "research", "prototype",
+                         "brand", "dataset", "model", "other"})
+ASSET_STAGES = frozenset({"unknown", "concept", "prototype", "pilot",
+                          "released", "retired"})
+ASSET_CONTRIBUTOR_STATUSES = frozenset({
+    "unknown", "contributors_identified", "records_to_check", "evidence_recorded",
+})
+ASSET_RIGHTS_STATUSES = frozenset({
+    "unknown", "records_to_check", "public_license_stated", "evidence_recorded",
+})
+ASSET_DISCLOSURE_STATUSES = frozenset({"unknown", "records_to_check", "date_recorded"})
+ASSET_PRIOR_ART_STATUSES = frozenset({
+    "not_started", "leads_recorded", "preliminary_screen", "specialist_review_pending",
+})
+ASSET_REFERENCE_KINDS = frozenset({
+    "public_claim", "prior_art", "rights", "contributors", "disclosure", "other",
+})
 INVALID_TEXT_CHARACTERS = re.compile(
     r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\ud800-\udfff]"
 )
@@ -44,6 +69,38 @@ NOTICE = (
     "have not been independently verified. Confirm the current rules and final "
     "application with the funder; this pack does not determine eligibility."
 )
+ASSET_KIND_LABELS = {
+    "product": "Product", "service": "Service", "research": "Research",
+    "prototype": "Prototype", "brand": "Brand", "dataset": "Dataset",
+    "model": "Model", "other": "Other",
+}
+ASSET_STAGE_LABELS = {
+    "unknown": "Not recorded", "concept": "Concept", "prototype": "Prototype",
+    "pilot": "Pilot", "released": "Released", "retired": "Retired",
+}
+ASSET_CONTRIBUTOR_LABELS = {
+    "unknown": "Not checked", "contributors_identified": "Contributors identified",
+    "records_to_check": "Records to check", "evidence_recorded": "Reference recorded",
+}
+ASSET_RIGHTS_LABELS = {
+    "unknown": "Not checked", "records_to_check": "Records to check",
+    "public_license_stated": "Public licence stated; title not established",
+    "evidence_recorded": "Reference recorded; unverified",
+}
+ASSET_DISCLOSURE_LABELS = {
+    "unknown": "Not checked", "records_to_check": "Records to check",
+    "date_recorded": "Date recorded; unverified",
+}
+ASSET_PRIOR_ART_LABELS = {
+    "not_started": "Not started", "leads_recorded": "Leads recorded",
+    "preliminary_screen": "Preliminary screen recorded; no legal conclusion",
+    "specialist_review_pending": "Specialist review pending",
+}
+ASSET_REFERENCE_LABELS = {
+    "public_claim": "Public description", "prior_art": "Prior-art lead",
+    "rights": "Rights record", "contributors": "Contributor record",
+    "disclosure": "Disclosure record", "other": "Other evidence",
+}
 
 
 def _object(value: object, fields: set[str], label: str) -> dict:
@@ -137,6 +194,22 @@ def _reference(row: dict, names: set[str], optional: bool = False) -> str:
     return name
 
 
+def _action_is_current(row: dict, opportunities: list[dict]) -> bool:
+    """Only show actions whose confirmed scope and submission phase match now."""
+    if not row["scope_confirmed"]:
+        return False
+    if not row["opportunity"]:
+        return True
+    route = next((item for item in opportunities
+                  if item["name"] == row["opportunity"]), None)
+    if route is None:
+        return False
+    if route["status"] in ACTIONABLE_OPPORTUNITY_STATES:
+        return row["submission_phase"] != "post_submission"
+    return (route["status"] == "submitted"
+            and row["submission_phase"] == "post_submission")
+
+
 def validate(data: object) -> dict:
     """Return a bounded, JSON-safe document, preserving incomplete work.
 
@@ -162,38 +235,103 @@ def validate(data: object) -> dict:
                                        "Campaign contact details", 4096, strip=True)}
     for key in ROW_LIMITS:
         result[key] = []
+    source_ids: set[str] = set()
+    for row in _rows(data, "sources", {
+        "id", "title", "url", "notes", "checked_at",
+    }):
+        if not any(str(row.get(key, "")).strip()
+                   for key in ("title", "url", "notes")):
+            # Empty Add-source rows are editor placeholders, not source records.
+            continue
+        title = _text(row.get("title", ""), "Source title", 500, True, strip=True)
+        url = _url(row.get("url", ""), "Source URL")
+        source_id = row.get("id") or uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            f"sinter-campaign-source:{title.casefold()}\x1f{url.casefold()}").hex
+        if not isinstance(source_id, str) or not re.fullmatch(r"[0-9a-f]{32}", source_id):
+            raise ValueError("Each campaign source needs a valid stable record ID.")
+        if source_id in source_ids:
+            raise ValueError("Give each campaign source a distinct record ID.")
+        source_ids.add(source_id)
+        result["sources"].append({
+            "id": source_id,
+            "title": title,
+            "url": url,
+            "notes": _text(row.get("notes", ""), "Source notes", 6000),
+            "checked_at": _date(row.get("checked_at", ""), "Source check date"),
+        })
+    source_by_id = {source["id"]: source for source in result["sources"]}
     names: set[str] = set()
     for row in _rows(data, "opportunities", {
-        "name", "funder", "url", "deadline", "decision_window", "ceiling",
-        "fit", "status",
+        "name", "funder", "url", "deadline", "application_window",
+        "window_source_id", "window_source_url", "window_source_quote",
+        "window_checked_at", "decision_window",
+        "ceiling", "fit", "status", "route_type", "application_mode", "applicant",
     }):
         name = _text(row.get("name", ""), "Opportunity name", 200, True,
                      strip=True)
         if name.casefold() in {existing.casefold() for existing in names}:
             raise ValueError("Give each opportunity a distinct name.")
         names.add(name)
+        deadline = _date(row.get("deadline", ""), "Application deadline")
+        # Documents saved before application-window tracking infer a fixed
+        # window from their existing deadline; blank legacy dates remain unknown.
+        window = row.get("application_window",
+                         "fixed" if deadline else "unknown")
+        window_source_id = _text(row.get("window_source_id", ""),
+                                 "Application-window source ID", 32)
+        if window_source_id and window_source_id not in source_by_id:
+            raise ValueError("An application-window check points to a campaign source that no longer exists.")
         result["opportunities"].append({
             "name": name,
             "funder": _text(row.get("funder", ""), "Funder", 300),
             "url": _url(row.get("url", ""), "Opportunity URL"),
-            "deadline": _date(row.get("deadline", ""), "Application deadline"),
+            "deadline": deadline,
+            "application_window": _status(
+                window, frozenset({"unknown", "fixed", "rolling"}),
+                "application window"),
+            "window_source_id": window_source_id,
+            # Keep the exact page URL beside the quote. A later edit to the
+            # source register must not silently refresh an older window claim.
+            "window_source_url": _url(row.get("window_source_url", ""),
+                                       "Application-window source URL"),
+            "window_source_quote": _text(
+                row.get("window_source_quote", ""),
+                "Application-window source wording", 2000),
+            "window_checked_at": _date(
+                row.get("window_checked_at", ""),
+                "Application-window date checked"),
             "decision_window": _text(row.get("decision_window", ""),
                                      "Decision window", 1000),
             "ceiling": _money(row.get("ceiling"), "Funding ceiling"),
             "fit": _text(row.get("fit", ""), "Project fit", 6000),
+            "route_type": _status(row.get("route_type", "unknown"),
+                                   OPPORTUNITY_TYPES, "route type"),
+            "application_mode": _status(
+                row.get("application_mode", "unknown"), APPLICATION_MODES,
+                "application workflow"),
+            "applicant": _text(row.get("applicant", ""), "Route applicant", 300),
             "status": _status(row.get("status", "researching"),
                               OPPORTUNITY_STATUSES, "opportunity status"),
         })
     for row in _rows(data, "requirements", {
-        "opportunity", "rule", "status", "evidence", "source_url",
+        "opportunity", "rule", "status", "evidence", "source_id", "source_url",
         "source_quote", "checked_at",
     }):
+        source_id = _text(row.get("source_id", ""),
+                          "Requirement campaign source ID", 32)
+        if source_id and source_id not in source_by_id:
+            raise ValueError("A requirement points to a campaign source that no longer exists.")
+        linked_source = source_by_id.get(source_id)
         result["requirements"].append({
             "opportunity": _reference(row, names),
             "rule": _text(row.get("rule", ""), "Requirement", 4000, True),
             "status": _status(row.get("status", "unknown"),
                               REQUIREMENT_STATUSES, "requirement status"),
             "evidence": _text(row.get("evidence", ""), "Applicant evidence", 6000),
+            "source_id": source_id,
+            # Keep the URL and date captured with this exact excerpt. A refreshed
+            # registry record must not silently rewrite or date old evidence.
             "source_url": _url(row.get("source_url", ""), "Requirement source URL"),
             "source_quote": _text(row.get("source_quote", ""),
                                   "Source wording", 4000),
@@ -224,16 +362,25 @@ def validate(data: object) -> dict:
                                      "Quote reference", 2000),
         })
     for row in _rows(data, "actions", {
-        "task", "owner", "owner_confirmed", "due", "status",
+        "opportunity", "scope_confirmed", "submission_phase", "task", "owner",
+        "owner_confirmed", "due", "status",
     }):
         owner = _text(row.get("owner", ""), "Action owner", 300)
         owner_confirmed = row.get("owner_confirmed", False)
         if type(owner_confirmed) is not bool:
             raise ValueError("Action owner confirmation must be true or false.")
+        scope_confirmed = row.get("scope_confirmed", "opportunity" in row)
+        if type(scope_confirmed) is not bool:
+            raise ValueError("Action scope confirmation must be true or false.")
         if owner_confirmed and (not owner.strip()
                                 or re.search(r"(?i)\bunassigned\b", owner)):
             raise ValueError("Confirm an action owner only after recording the person's name.")
         result["actions"].append({
+            "opportunity": _reference(row, names, optional=True),
+            "scope_confirmed": scope_confirmed,
+            "submission_phase": _status(
+                row.get("submission_phase", "pre_submission"),
+                ACTION_SUBMISSION_PHASES, "action submission phase"),
             "task": _text(row.get("task", ""), "Action", 4000, True),
             "owner": owner,
             "owner_confirmed": owner_confirmed,
@@ -241,11 +388,150 @@ def validate(data: object) -> dict:
             "status": _status(row.get("status", "open"),
                               frozenset({"open", "done"}), "action status"),
         })
-    for row in _rows(data, "sources", {"title", "url", "notes"}):
-        result["sources"].append({
-            "title": _text(row.get("title", ""), "Source title", 500, True),
-            "url": _url(row.get("url", ""), "Source URL"),
-            "notes": _text(row.get("notes", ""), "Source notes", 6000),
+    asset_names: set[str] = set()
+    asset_ids: set[str] = set()
+    for row in _rows(data, "assets", {
+        "id", "name", "kind", "stage", "public_summary", "public_url",
+        "differentiation_question", "contributors_status", "contributor_notes",
+        "rights_status", "rights_notes", "disclosure_status",
+        "first_public_date", "disclosure_notes", "prior_art_status",
+        "prior_art_notes", "prior_art_checked_at", "funding_opportunities",
+        "references",
+    }):
+        name = _text(row.get("name", ""), "Product or asset name", 250, True,
+                     strip=True)
+        if name.casefold() in {existing.casefold() for existing in asset_names}:
+            raise ValueError("Give each product or asset a distinct name.")
+        asset_names.add(name)
+        asset_id = row.get("id") or uuid.uuid5(
+            uuid.NAMESPACE_URL, f"sinter-campaign-asset:{name.casefold()}").hex
+        if not isinstance(asset_id, str) or not re.fullmatch(r"[0-9a-f]{32}", asset_id):
+            raise ValueError("Each product or asset needs a valid stable record ID.")
+        if asset_id in asset_ids:
+            raise ValueError("Give each product or asset a distinct record ID.")
+        asset_ids.add(asset_id)
+        funding_opportunities = row.get("funding_opportunities", [])
+        if (not isinstance(funding_opportunities, list)
+                or len(funding_opportunities) > 10):
+            raise ValueError("Choose at most 10 funding routes to assess for each "
+                             "product or asset.")
+        normalized_funding_opportunities = []
+        for reference in funding_opportunities:
+            opportunity = _text(reference, "Funding route reference", 200,
+                                True, strip=True)
+            if opportunity not in names:
+                raise ValueError("An asset funding route does not match an "
+                                 "opportunity name. Use the exact name.")
+            if opportunity in normalized_funding_opportunities:
+                raise ValueError("Choose each funding route only once per asset.")
+            normalized_funding_opportunities.append(opportunity)
+        references = row.get("references", [])
+        if not isinstance(references, list) or len(references) > MAX_ASSET_REFERENCES:
+            raise ValueError(f"Use at most {MAX_ASSET_REFERENCES} evidence references "
+                             "for each product or asset.")
+        normalized_references = []
+        for index, reference in enumerate(references, 1):
+            reference = _object(reference, {
+                "kind", "source_id", "title", "url", "excerpt", "checked_at",
+                "notes",
+            },
+                                f"Asset evidence reference {index}")
+            source_id = _text(reference.get("source_id", ""),
+                              "Linked campaign source ID", 32)
+            if source_id and source_id not in source_ids:
+                raise ValueError("An asset evidence reference points to a campaign source that no longer exists.")
+            if not source_id and not any(str(reference.get(key, "")).strip()
+                                         for key in ("title", "url", "excerpt", "notes")):
+                # An untouched Add-reference row is an editor placeholder, not
+                # evidence. Ignore it so a user can back out without a save error.
+                continue
+            linked_source = next((source for source in result["sources"]
+                                  if source["id"] == source_id), None)
+            title = (linked_source["title"] if linked_source else
+                     _text(reference.get("title", ""),
+                           "Asset evidence title", 500, True, strip=True))
+            normalized_references.append({
+                "kind": _status(reference.get("kind", "other"),
+                                ASSET_REFERENCE_KINDS, "asset evidence type"),
+                "source_id": source_id,
+                "title": title,
+                "url": (linked_source["url"] if linked_source else
+                        _url(reference.get("url", ""), "Asset evidence URL")),
+                "excerpt": _text(reference.get("excerpt", ""),
+                                 "Relevant source passage", 3000),
+                "checked_at": _date(reference.get("checked_at", "")
+                                    or (linked_source["checked_at"]
+                                        if linked_source else ""),
+                                    "Asset reference check date"),
+                "notes": _text(reference.get("notes", ""),
+                               "Asset evidence note", 2000),
+            })
+        reference_kinds = {reference["kind"] for reference in normalized_references}
+        if (row.get("contributors_status") == "evidence_recorded"
+                and "contributors" not in reference_kinds):
+            raise ValueError("Add a contributor evidence reference or mark the record as not checked.")
+        if (row.get("rights_status") in {"public_license_stated", "evidence_recorded"}
+                and "rights" not in reference_kinds):
+            raise ValueError("Add a rights evidence reference or mark the record as not checked.")
+        if (row.get("prior_art_status") in {"leads_recorded", "preliminary_screen"}
+                and not any(reference["kind"] == "prior_art"
+                            and (reference["source_id"] or reference["url"])
+                            for reference in normalized_references)):
+            raise ValueError("Add a prior-art evidence reference with a public link or mark the research as not started.")
+        if row.get("prior_art_status") == "preliminary_screen" and not any(
+                reference["kind"] == "prior_art" and reference["source_id"]
+                and reference["excerpt"].strip() and reference["checked_at"]
+                for reference in normalized_references):
+            raise ValueError("Record a checked source, date and relevant passage before marking a preliminary screen.")
+        disclosure_date = _date(row.get("first_public_date", ""),
+                                "First public disclosure date")
+        disclosure_status = _status(
+            row.get("disclosure_status", "unknown"), ASSET_DISCLOSURE_STATUSES,
+            "disclosure record status")
+        if disclosure_status == "date_recorded" and not disclosure_date:
+            raise ValueError("Record a first public disclosure date or mark it not checked.")
+        if disclosure_status == "date_recorded" and not any(
+                reference["kind"] == "disclosure" and reference["source_id"]
+                and reference["excerpt"].strip() and reference["checked_at"]
+                for reference in normalized_references):
+            raise ValueError("Add a checked disclosure source, date and relevant passage before recording a disclosure date.")
+        result["assets"].append({
+            "id": asset_id,
+            "name": name,
+            "kind": _status(row.get("kind", "other"), ASSET_KINDS,
+                            "product or asset type"),
+            "stage": _status(row.get("stage", "unknown"), ASSET_STAGES,
+                             "product or asset stage"),
+            "public_summary": _text(row.get("public_summary", ""),
+                                     "Public description", 3000),
+            "public_url": _url(row.get("public_url", ""),
+                                "Public description URL"),
+            "differentiation_question": _text(
+                row.get("differentiation_question", ""),
+                "Differentiation research question", 3000),
+            "contributors_status": _status(
+                row.get("contributors_status", "unknown"),
+                ASSET_CONTRIBUTOR_STATUSES, "contributor record status"),
+            "contributor_notes": _text(row.get("contributor_notes", ""),
+                                        "Contributor record note", 2000),
+            "rights_status": _status(row.get("rights_status", "unknown"),
+                                      ASSET_RIGHTS_STATUSES,
+                                      "rights record status"),
+            "rights_notes": _text(row.get("rights_notes", ""),
+                                   "Rights record note", 2000),
+            "disclosure_status": disclosure_status,
+            "first_public_date": disclosure_date,
+            "disclosure_notes": _text(row.get("disclosure_notes", ""),
+                                       "Disclosure note", 2000),
+            "prior_art_status": _status(
+                row.get("prior_art_status", "not_started"),
+                ASSET_PRIOR_ART_STATUSES, "prior-art research status"),
+            "prior_art_notes": _text(row.get("prior_art_notes", ""),
+                                      "Prior-art research note", 3000),
+            "prior_art_checked_at": _date(row.get("prior_art_checked_at", ""),
+                                           "Prior-art research date"),
+            "funding_opportunities": normalized_funding_opportunities,
+            "references": normalized_references,
         })
     for row in _rows(data, "communications", {
         "opportunity", "date", "direction", "status", "channel",
@@ -265,12 +551,21 @@ def validate(data: object) -> dict:
             raise ValueError("Use at most 10 evidence links for each communication.")
         evidence_links = []
         for index, link in enumerate(links, 1):
-            link = _object(link, {"title", "url", "notes"},
+            link = _object(link, {"source_id", "title", "url", "notes", "checked_at"},
                            f"Communication evidence link {index}")
+            source_id = _text(link.get("source_id", ""),
+                               "Communication campaign source ID", 32)
+            if source_id and source_id not in source_by_id:
+                raise ValueError("A communication evidence link points to a campaign source that no longer exists.")
             evidence_links.append({
+                "source_id": source_id,
+                # Communication links are snapshots: changing the source
+                # register must not rewrite what an old draft cited.
                 "title": _text(link.get("title", ""), "Evidence link title", 500),
                 "url": _url(link.get("url", ""), "Communication evidence URL"),
-                "notes": _text(link.get("notes", ""), "Evidence link notes", 2000),
+                "notes": _text(link.get("notes", ""), "Evidence link notes", 5000),
+                "checked_at": _date(link.get("checked_at", ""),
+                                    "Evidence link checked date"),
             })
         result["communications"].append({
             "opportunity": _reference(row, names, optional=True),
@@ -292,6 +587,12 @@ def validate(data: object) -> dict:
     strings.extend(value for row in result["communications"]
                    for link in row["evidence_links"]
                    for value in link.values() if isinstance(value, str))
+    strings.extend(value for row in result["assets"] for value in row.values()
+                   if isinstance(value, str))
+    strings.extend(value for row in result["assets"] for reference in row["references"]
+                   for value in reference.values() if isinstance(value, str))
+    strings.extend(opportunity for row in result["assets"]
+                   for opportunity in row["funding_opportunities"])
     if sum(map(len, strings)) > MAX_TEXT_CHARACTERS:
         raise ValueError("The campaign exceeds 200,000 text characters. "
                          "Split it into smaller campaigns.")
@@ -301,10 +602,28 @@ def validate(data: object) -> dict:
     return result
 
 
-def _supported(row: dict) -> bool:
-    return all(row[key].strip() for key in (
+def _check_date_is_current(value: str, today: date) -> bool:
+    if not value:
+        return False
+    checked = date.fromisoformat(value)
+    age_days = (today - checked).days
+    return 0 <= age_days <= WINDOW_CHECK_MAX_AGE_DAYS
+
+
+def _supported(row: dict, today: date | None = None,
+               sources: list[dict] | None = None) -> bool:
+    current = today or date.today()
+    if not all(row[key].strip() for key in (
         "evidence", "source_url", "source_quote", "checked_at",
-    ))
+    )) or not _check_date_is_current(row["checked_at"], current):
+        return False
+    if row.get("source_id") and sources is not None:
+        linked = next((source for source in sources
+                       if source["id"] == row["source_id"]), None)
+        if (linked is None or row["source_url"] != linked["url"]
+                or row["checked_at"] != linked["checked_at"]):
+            return False
+    return True
 
 
 def _answer_metrics(rows: list[dict]) -> list[dict]:
@@ -367,17 +686,59 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
     active = [row for row in document["opportunities"]
               if row["status"] in ACTIONABLE_OPPORTUNITY_STATES]
     active_names = {row["name"] for row in active}
+    application_windows_to_check = sum(
+        not _application_window_is_current(row, date.today(), document["sources"])
+        for row in active)
+    current_actions = [row for row in document["actions"]
+                       if row["status"] == "open"
+                       and _action_is_current(row, document["opportunities"])]
+    actions_scope_unconfirmed = sum(
+        row["status"] == "open" and not row["scope_confirmed"]
+        for row in document["actions"])
+    actions_submission_phase_review = sum(
+        1 for row in document["actions"]
+        if row["status"] == "open" and row["scope_confirmed"]
+        and row["opportunity"]
+        and row["submission_phase"] != "post_submission"
+        and any(item["name"] == row["opportunity"]
+                and item["status"] == "submitted"
+                for item in document["opportunities"]))
+    actions_phase_reclassification = sum(
+        1 for row in document["actions"]
+        if row["status"] == "open" and row["scope_confirmed"]
+        and row["opportunity"] and row["submission_phase"] == "post_submission"
+        and any(item["name"] == row["opportunity"]
+                and item["status"] in ACTIONABLE_OPPORTUNITY_STATES
+                for item in document["opportunities"]))
+    actions_inactive_route_review = sum(
+        1 for row in document["actions"]
+        if row["status"] == "open" and row["scope_confirmed"]
+        and row["opportunity"]
+        and any(item["name"] == row["opportunity"]
+                and item["status"] in {"closed", "paused", "not_pursuing"}
+                for item in document["opportunities"]))
     checks = [row for row in document["requirements"]
               if row["opportunity"] in active_names]
+    sources = document["sources"]
     archived_checks = len(document["requirements"]) - len(checks)
     active_answers = [row for row in document["answers"]
                       if not row["opportunity"] or row["opportunity"] in active_names]
+    routes_requiring_answers = [row for row in active
+                                if row["application_mode"] == "required"
+                                and row["applicant"].strip()]
+    active_by_name = {row["name"]: row for row in active}
+    answers_on_unconfirmed_routes = sum(
+        bool(row["opportunity"] in active_by_name)
+        and (active_by_name[row["opportunity"]]["application_mode"] != "required"
+             or not active_by_name[row["opportunity"]]["applicant"].strip())
+        for row in active_answers)
     active_metrics = [metric for metric in metrics
                       if not metric["opportunity"] or metric["opportunity"] in active_names]
     active_budget_rows = [row for row in document["budget"]
                           if not row["opportunity"] or row["opportunity"] in active_names]
     active_budget = _budget_total(active_budget_rows)
-    unsupported = sum(row["status"] in {"met", "not_met"} and not _supported(row)
+    unsupported = sum(row["status"] in {"met", "not_met"}
+                      and not _supported(row, date.today(), sources)
                       for row in checks)
     core_missing = [key for key in ("organisation", "objective", "opportunities")
                     if not document[key] or (isinstance(document[key], str)
@@ -388,18 +749,26 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
         "requirements_total": len(checks),
         "requirements_archived": archived_checks,
         "requirements_unresolved": sum(
-            row["status"] in {"unknown", "clarification"} or not _supported(row)
+            row["status"] in {"unknown", "clarification"}
+            or not _supported(row, date.today(), sources)
             for row in checks),
         "requirements_not_met": sum(row["status"] == "not_met" for row in checks),
         "claims_without_evidence": unsupported,
         "opportunities_without_checks": sum(
             not any(row["opportunity"] == item["name"] for row in checks)
             for item in active),
+        "application_workflow_to_confirm": sum(
+            row["application_mode"] == "unknown" or (
+                row["application_mode"] == "required"
+                and not row["applicant"].strip())
+            for row in active),
         "opportunities_without_sources": sum(not item["url"] for item in active),
+        "application_windows_to_check": application_windows_to_check,
         "opportunities_without_answers": sum(
             not any(row["opportunity"] == item["name"]
                     for row in active_answers)
-            for item in active),
+            for item in routes_requiring_answers),
+        "answers_on_unconfirmed_application_routes": answers_on_unconfirmed_routes,
         "answers_over_limit": sum(row["over_limit"] for row in active_metrics),
         "answers_empty": sum(not row["text"].strip() for row in active_answers),
         "answers_unreviewed": sum(row["status"] != "reviewed"
@@ -413,12 +782,20 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
         "budgets_over_ceiling": sum(row["over_ceiling"] is True
                                     for row in budget["by_opportunity"]
                                     if row["opportunity"] in active_names),
-        "open_actions": sum(row["status"] == "open" for row in document["actions"]),
+        "open_actions": len(current_actions),
+        "actions_scope_unconfirmed": actions_scope_unconfirmed,
+        "actions_submission_phase_review": actions_submission_phase_review,
+        "actions_phase_reclassification": actions_phase_reclassification,
+        "actions_inactive_route_review": actions_inactive_route_review,
+        "actions_to_classify": (actions_scope_unconfirmed
+                                 + actions_submission_phase_review
+                                 + actions_phase_reclassification
+                                 + actions_inactive_route_review),
         "actions_without_owner": sum(
-            row["status"] == "open" and (
+            (
                 not row["owner_confirmed"] or not row["owner"].strip()
                 or re.search(r"(?i)\bunassigned\b", row["owner"]) is not None)
-            for row in document["actions"]),
+            for row in current_actions),
     }
     if core_missing or any(value for key, value in result.items()
                            if key not in {"status", "notice", "missing_sections",
@@ -437,7 +814,130 @@ def _link(url: str, label: str = "Source") -> str:
 
 
 def _amount(value: str | None) -> str:
-    return "Not yet costed" if value is None else format(Decimal(value), ",.2f")
+    return "Not yet costed" if value is None else "A$" + format(Decimal(value), ",.2f")
+
+
+def _brief_amount(value: str | None) -> str:
+    """Keep the concise decision brief readable without hiding real cents."""
+    if value is None:
+        return "Not yet costed"
+    amount = Decimal(value)
+    rendered = (format(amount, ",.0f") if amount == amount.to_integral_value()
+                else format(amount, ",.2f"))
+    return "A$" + rendered
+
+
+def _route_amount(row: dict) -> str:
+    """Keep a known non-cash route distinct from a missing amount."""
+    if row["route_type"] == "non_cash_support":
+        return "No grant cash (non-cash support)"
+    if row["ceiling"] is None:
+        return "Not recorded"
+    return _brief_amount(row["ceiling"])
+
+
+def _display_date(value: str) -> str:
+    """Render an ISO campaign date for people while keeping audit dates stable."""
+    parsed = date.fromisoformat(value)
+    month = parsed.strftime("%b")
+    if parsed.month == 9:
+        month = "Sept"
+    return f"{parsed.day} {month} {parsed.year}"
+
+
+def _application_window_is_current(row: dict, today: date,
+                                   sources: list[dict] = ()) -> bool:
+    if row["application_window"] not in {"fixed", "rolling"}:
+        return False
+    if (not row["url"] or not row["window_source_id"]
+            or not row["window_source_url"] or not row["window_source_quote"]
+            or not row["window_checked_at"]):
+        return False
+    source = _source_for(sources, row["window_source_id"])
+    if (source is None or row["window_source_url"] != source["url"]
+            or row["window_checked_at"] != source["checked_at"]):
+        return False
+    checked = date.fromisoformat(row["window_checked_at"])
+    age_days = (today - checked).days
+    if age_days < 0 or age_days > WINDOW_CHECK_MAX_AGE_DAYS:
+        return False
+    return row["application_window"] == "rolling" or bool(row["deadline"]
+        and date.fromisoformat(row["deadline"]) >= today)
+
+
+def _source_for(sources: list[dict], source_id: str) -> dict | None:
+    return next((source for source in sources if source["id"] == source_id), None)
+
+
+def _window_description(row: dict, sources: list[dict] = ()) -> str:
+    """Describe the user-entered application window without implying verification."""
+    kind = row["application_window"]
+    if kind == "rolling":
+        label = "Rolling / year-round"
+    elif kind == "fixed":
+        label = "Fixed closing date: " + (row["deadline"] or "Not recorded")
+    else:
+        label = "Not checked"
+    if row["window_source_quote"]:
+        label += ' · wording: “' + _inline(row["window_source_quote"]) + '”'
+    source = _source_for(sources, row["window_source_id"])
+    if source:
+        label += " · linked source: " + (
+            _link(source["url"], source["title"])
+            if source["url"] else _inline(source["title"]))
+        label += " · Source ID " + source["id"][:8]
+        if (row["window_source_url"] != source["url"]
+                or row["window_checked_at"] != source["checked_at"]):
+            label += " · source changed since wording was checked; recheck before use"
+    elif row["window_source_quote"]:
+        label += " · no registered source linked; link and recheck before use"
+    if row["window_checked_at"]:
+        checked = date.fromisoformat(row["window_checked_at"])
+        age_days = (date.today() - checked).days
+        if age_days < 0:
+            freshness = " · future-dated check; correct before use"
+        elif age_days > WINDOW_CHECK_MAX_AGE_DAYS:
+            freshness = (f" · last checked {age_days} days ago; recheck before use")
+        else:
+            freshness = ""
+        label += " · checked: " + row["window_checked_at"] + freshness
+    return label + " (user-entered; unverified)"
+
+
+def _brief_window_description(row: dict, sources: list[dict] = ()) -> str:
+    """Format the concise brief for people; retain the ISO audit form elsewhere."""
+    kind = row["application_window"]
+    if kind == "rolling":
+        label = "Rolling / year-round"
+    elif kind == "fixed":
+        label = "Fixed closing date: " + (
+            _display_date(row["deadline"]) if row["deadline"] else "Not recorded")
+    else:
+        label = "Not checked"
+    if row["window_source_quote"]:
+        label += ' · wording: “' + _inline(row["window_source_quote"]) + '”'
+    source = _source_for(sources, row["window_source_id"])
+    if source:
+        label += " · linked source: " + (
+            _link(source["url"], source["title"])
+            if source["url"] else _inline(source["title"]))
+        label += " · Source ID " + source["id"][:8]
+        if (row["window_source_url"] != source["url"]
+                or row["window_checked_at"] != source["checked_at"]):
+            label += " · source changed since wording was checked; recheck before use"
+    elif row["window_source_quote"]:
+        label += " · no registered source linked; link and recheck before use"
+    if row["window_checked_at"]:
+        checked = date.fromisoformat(row["window_checked_at"])
+        age_days = (date.today() - checked).days
+        if age_days < 0:
+            freshness = " · future-dated check; correct before use"
+        elif age_days > WINDOW_CHECK_MAX_AGE_DAYS:
+            freshness = (f" · last checked {age_days} days ago; recheck before use")
+        else:
+            freshness = ""
+        label += " · checked: " + _display_date(row["window_checked_at"]) + freshness
+    return label + " (user-entered; unverified)"
 
 
 def _objective_markdown(value: str) -> str:
@@ -457,65 +957,280 @@ def _objective_markdown(value: str) -> str:
     return "\n\n".join(rendered)
 
 
+def _next_open_action(document: dict, focused_opportunity: str) -> dict | None:
+    """Select the same route-aware action shown in the campaign decision card."""
+    open_actions = [(index, row) for index, row in enumerate(document["actions"])
+                    if row["status"] == "open" and row["task"].strip()
+                    and _action_is_current(row, document["opportunities"])]
+
+    def by_urgency(rows: list[tuple[int, dict]]) -> dict | None:
+        overdue = [(index, row) for index, row in rows
+                   if row["due"] and row["due"] < date.today().isoformat()]
+        if overdue:
+            return min(overdue, key=lambda pair: (pair[1]["due"], pair[0]))[1]
+        upcoming = [(index, row) for index, row in rows
+                    if row["due"] and row["due"] >= date.today().isoformat()]
+        if upcoming:
+            return min(upcoming, key=lambda pair: (pair[1]["due"], pair[0]))[1]
+        undated = next((row for _, row in rows if not row["due"]), None)
+        return undated or (rows[0][1] if rows else None)
+
+    route_actions = [(index, row) for index, row in open_actions
+                     if focused_opportunity and row["opportunity"] == focused_opportunity]
+    campaign_actions = [(index, row) for index, row in open_actions
+                        if not row["opportunity"]]
+    other_route_actions = [(index, row) for index, row in open_actions
+                           if row["opportunity"]
+                           and row["opportunity"] != focused_opportunity]
+    return (by_urgency(route_actions) or by_urgency(campaign_actions)
+            or by_urgency(other_route_actions))
+
+
+def _portfolio_summary(assets: list[dict]) -> dict:
+    """Summarise open record work without treating it as an IP conclusion."""
+    return {
+        "assets_total": len(assets),
+        "assets_without_funding_routes": sum(
+            not row["funding_opportunities"] for row in assets),
+        # No field in this register proves legal title or contributor clearance.
+        # A recorded reference remains unverified until reviewed outside Sinter.
+        "contributor_records_unverified": len(assets),
+        "rights_records_unverified": len(assets),
+        "disclosure_dates_unknown": sum(not row["first_public_date"]
+                                        for row in assets),
+        "prior_art_not_started": sum(row["prior_art_status"] == "not_started"
+                                      for row in assets),
+        "prior_art_leads_recorded": sum(
+            row["prior_art_status"] in {"leads_recorded", "preliminary_screen"}
+            for row in assets),
+        "evidence_references": sum(len(row["references"]) for row in assets),
+    }
+
+
+def _render_portfolio_register(assets: list[dict], sources: list[dict]) -> list[str]:
+    if not assets:
+        return []
+    lines = [
+        "## Product and IP research register",
+        "Separate from funding eligibility. All classifications, dates, statuses "
+        "and references below are campaign entries and have not been independently "
+        "verified. A public licence statement is not proof of company title; a "
+        "preliminary prior-art screen is not a novelty, patentability or "
+        "freedom-to-operate conclusion. No asset-level state in this register "
+        "confirms company ownership, contributor clearance or a legal result.",
+    ]
+    for row in assets:
+        lines.extend([
+            "### " + _inline(row["name"]),
+            "Type: " + ASSET_KIND_LABELS[row["kind"]]
+            + " · Stage: " + ASSET_STAGE_LABELS[row["stage"]],
+            "Funding routes to assess: "
+            + (", ".join(_inline(name) for name in row["funding_opportunities"])
+               if row["funding_opportunities"] else "Not linked"),
+            "Contributor record: " + ASSET_CONTRIBUTOR_LABELS[row["contributors_status"]]
+            + " · Rights record: " + ASSET_RIGHTS_LABELS[row["rights_status"]],
+            "First public disclosure: "
+            + (row["first_public_date"] or "Not recorded")
+            + " · Disclosure record: "
+            + ASSET_DISCLOSURE_LABELS[row["disclosure_status"]],
+            "Prior-art research: " + ASSET_PRIOR_ART_LABELS[row["prior_art_status"]]
+            + (" · Checked: " + row["prior_art_checked_at"]
+               if row["prior_art_checked_at"] else ""),
+        ])
+        if row["public_summary"].strip():
+            lines.extend(["Public description (user-entered):",
+                          literal(row["public_summary"])])
+        if row["public_url"]:
+            lines.append("Public description link (user-entered): "
+                         + _link(row["public_url"]))
+        if row["differentiation_question"].strip():
+            lines.extend(["Differentiation research question (not a conclusion):",
+                          literal(row["differentiation_question"])])
+        for label, value in (
+            ("Contributor record note", row["contributor_notes"]),
+            ("Rights record note", row["rights_notes"]),
+            ("Disclosure record note", row["disclosure_notes"]),
+            ("Prior-art research note", row["prior_art_notes"]),
+        ):
+            if value.strip():
+                lines.extend([label + " (user-entered):", literal(value)])
+        if row["references"]:
+            lines.append("Evidence references (campaign-entered; not opened or checked by Sinter):")
+            for reference in row["references"]:
+                linked_source = next((source for source in sources
+                                      if source["id"] == reference["source_id"]), None)
+                title = _inline(linked_source["title"] if linked_source
+                                else reference["title"])
+                url = linked_source["url"] if linked_source else reference["url"]
+                kind = ASSET_REFERENCE_LABELS[reference["kind"]]
+                lines.append("- " + kind + ": "
+                             + (_link(url, title) if url else title)
+                             + (" · Source ID " + reference["source_id"][:8]
+                                if linked_source else ""))
+                checked_at = reference["checked_at"] or (
+                    linked_source["checked_at"] if linked_source else "")
+                if checked_at:
+                    lines.append("  Checked date (campaign-entered): " + checked_at)
+                if reference["excerpt"].strip():
+                    lines.extend(["  Relevant passage (campaign-entered; quote or paraphrase):",
+                                  literal(reference["excerpt"])])
+                if reference["notes"].strip():
+                    lines.append("  " + literal(reference["notes"]))
+    return lines
+
+
 def _render_decision_brief(document: dict, readiness: dict,
-                           budget: dict) -> str:
+                           budget: dict, focused_opportunity: str) -> str:
     """Render a share-reviewable summary without answer or source content."""
     active = [row for row in document["opportunities"]
               if row["status"] in ACTIONABLE_OPPORTUNITY_STATES]
+    submitted = [row for row in document["opportunities"]
+                 if row["status"] == "submitted"]
     lines = ["# " + _inline(document["title"]),
              "**INTERNAL · REVIEW BEFORE SHARING**",
              "## Current recorded status"]
+    if focused_opportunity:
+        lines.append("Route in focus: " + _inline(focused_opportunity)
+                     + " (selected in Sinter; not an eligibility decision).")
     if not active:
-        lines.append("No opportunity is recorded as active.")
+        lines.append("No application route is currently recorded as active.")
     for row in active:
         status = {"not_pursuing": "not pursuing this round"}.get(
             row["status"], row["status"])
-        details = ["Status entered: " + _inline(status),
-                   "Funder: " + _inline(row["funder"] or "Not recorded"),
-                   "Deadline: " + (row["deadline"] or "Not confirmed"),
-                   "Recorded funding ceiling: " + _amount(row["ceiling"])]
-        lines.append("- **" + _inline(row["name"]) + "** — "
-                     + " · ".join(details))
+        lines.extend([
+            "### " + _inline(row["name"]),
+            "**Status entered:** " + _inline(status)
+            + " · **Funder:** " + _inline(row["funder"] or "Not recorded"),
+                      "**Route type (user-entered):** "
+                      + row["route_type"].replace("_", " "),
+            "**Application workflow (user-entered):** "
+            + ("application required · applicant: " + _inline(row["applicant"])
+               if row["application_mode"] == "required" and row["applicant"].strip()
+               else "application required · applicant not recorded"
+               if row["application_mode"] == "required"
+               else "no application recorded" if row["application_mode"] == "not_required"
+               else "not confirmed"),
+            "**Application window:** " + _brief_window_description(
+                row, document["sources"]),
+            "**Cash award / ceiling:** " + _route_amount(row),
+        ])
+    if submitted:
+        lines.extend(["### Submitted routes",
+                      "These user-entered statuses are not independently verified."])
+        lines.extend("- **" + _inline(row["name"])
+                     + "** — status entered: submitted"
+                     for row in submitted)
     lines.append("Statuses, dates and ceilings are campaign entries; Sinter has "
                  "not verified them.")
 
     unresolved = readiness["requirements_unresolved"]
     check_label = "requirement check" if unresolved == 1 else "requirement checks"
-    lines.extend(["## Open review items",
-                  f"{unresolved} {check_label} unresolved; "
-                  f"{readiness['requirements_not_met']} marked not met; "
-                  f"{readiness['claims_without_evidence']} marked checks have "
-                  "incomplete evidence; "
-                  f"{readiness['open_actions']} open actions."])
+    review_items = [
+        f"{unresolved} {check_label} unresolved",
+        f"{readiness['requirements_not_met']} marked not met",
+        f"{readiness['claims_without_evidence']} marked checks have incomplete or stale evidence",
+        f"{readiness['open_actions']} open actions (confirmed current scope only)",
+    ]
+    workflow_count = readiness["application_workflow_to_confirm"]
+    if workflow_count:
+        review_items.append(
+            f"{workflow_count} active route(s) need their application process "
+            "and applicant confirmed")
+    missing_answers = readiness["opportunities_without_answers"]
+    if missing_answers:
+        review_items.append(
+            f"{missing_answers} route(s) with a confirmed formal application have no answer drafts")
+    unconfirmed_answer_routes = readiness["answers_on_unconfirmed_application_routes"]
+    if unconfirmed_answer_routes:
+        review_items.append(
+            f"{unconfirmed_answer_routes} answer draft(s) are held because their "
+            "route application and applicant are unconfirmed")
+    unconfirmed_scopes = readiness["actions_scope_unconfirmed"]
+    if unconfirmed_scopes:
+        review_items.append(
+            f"{unconfirmed_scopes} open action(s) need scope confirmation; "
+            "they are not current work until classified as campaign-wide or route-specific")
+    phase_reviews = readiness["actions_submission_phase_review"]
+    if phase_reviews:
+        review_items.append(
+            f"{phase_reviews} unfinished pre-submission action(s) on submitted route(s) need review; "
+            "only a person-marked after-submission follow-up counts as current")
+    phase_reclassification = readiness["actions_phase_reclassification"]
+    if phase_reclassification:
+        review_items.append(
+            f"{phase_reclassification} post-submission action(s) on active route(s) need reclassification "
+            "before they can return to current work")
+    inactive_route_actions = readiness["actions_inactive_route_review"]
+    if inactive_route_actions:
+        review_items.append(
+            f"{inactive_route_actions} open action(s) are held on closed, paused or not-pursued routes; "
+            "move continuing work to a current scope or mark obsolete work complete")
+    window_count = readiness["application_windows_to_check"]
+    if window_count:
+        review_items.append(
+            f"{window_count} active application window(s) need current official wording "
+            "and a dated check within 90 days")
     if not budget["items"]:
-        lines.append("No costs are linked to active opportunities; the current "
-                     "project total is unknown.")
+        review_items.append("No costs are linked to active opportunities; the current project total is unknown")
     elif not budget["complete"]:
         count = budget["unknown_costs"]
         cost_label = "cost remains" if count == 1 else "costs remain"
-        lines.append(f"{count} {cost_label} unknown; known "
-                     f"subtotal {_amount(budget['known_total'])}; total unknown.")
+        review_items.append(
+            f"{count} {cost_label} unknown; known subtotal {_brief_amount(budget['known_total'])}; total unknown")
     else:
-        lines.append("Recorded cost total: " + _amount(budget["total"]) + ".")
+        review_items.append("Recorded cost total: " + _brief_amount(budget["total"]))
+    lines.extend(["## Open review items",
+                  *["- " + item for item in review_items]])
 
-    next_action = next((row for row in document["actions"]
-                        if row["status"] == "open"), None)
+    if document["assets"]:
+        portfolio = _portfolio_summary(document["assets"])
+        lines.extend([
+            "## Portfolio IP workstream · separate from funding eligibility",
+            f"{portfolio['assets_total']} assets recorded · "
+            f"{portfolio['rights_records_unverified']} rights records unverified · "
+            f"{portfolio['contributor_records_unverified']} contributor records unverified · "
+            f"{portfolio['prior_art_not_started']} prior-art screens not started · "
+            f"{portfolio['disclosure_dates_unknown']} disclosure dates unknown · "
+            f"{portfolio['assets_without_funding_routes']} assets not linked to a funding route.",
+            "These are planning records. Public pages and preliminary searches do "
+            "not establish ownership, novelty, patentability or freedom to operate.",
+        ])
+        for asset in document["assets"]:
+            lines.append(
+                "- " + _inline(asset["name"])
+                + " · Rights: " + ASSET_RIGHTS_LABELS[asset["rights_status"]]
+                + " · Prior art: " + ASSET_PRIOR_ART_LABELS[asset["prior_art_status"]]
+                + " · First public date: "
+                + (asset["first_public_date"] or "Not recorded"))
+
+    next_action = _next_open_action(document, focused_opportunity)
     if next_action:
         owner = _inline(next_action["owner"].strip() or "Not recorded")
+        route = next((item for item in document["opportunities"]
+                      if item["name"] == next_action["opportunity"]), None)
+        scope = (_inline(next_action["opportunity"])
+                 + (" (submitted route)" if route and route["status"] == "submitted" else "")
+                 if next_action["opportunity"] else "Campaign-wide")
+        phase = (" · Phase: After-submission follow-up"
+                 if next_action["submission_phase"] == "post_submission" else "")
         if next_action["owner_confirmed"]:
             acceptance = ("acceptance not independently verified; the record is "
                           "user-marked accepted")
         else:
             acceptance = "acceptance unconfirmed"
-        target = (next_action["due"] + " (proposed, not confirmed)"
+        target = (_display_date(next_action["due"]) + " (proposed, not confirmed)"
                   if next_action["due"] else "not set")
         lines.extend(["## Next recorded open action",
                       "- " + _inline(next_action["task"])
+                      + " · Scope: " + scope
+                      + phase
                       + " · Owner: " + owner + " (" + acceptance + ")"
                       + " · Proposed date: " + target])
     else:
         lines.extend(["## Next recorded open action",
-                      "No open action is recorded."])
+                      ("No current open action is recorded. Review held tasks above before treating them as current."
+                       if readiness["actions_to_classify"] else
+                       "No current open action is recorded.")])
 
     lines.extend(["## Review notice", NOTICE])
     return "\n\n".join(lines) + "\n"
@@ -538,9 +1253,10 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
     lines.extend(["## Work still to complete",
                   f"{readiness['requirements_unresolved']} requirements unresolved; "
                   f"{readiness['requirements_not_met']} marked not met; "
+                  f"{readiness['application_workflow_to_confirm']} route application workflows unconfirmed; "
                   f"{readiness['answers_over_limit']} answers over their limits; "
                   f"{budget_progress}; "
-                  f"{readiness['open_actions']} open actions.", NOTICE])
+                  f"{readiness['open_actions']} open actions (confirmed current scope only).", NOTICE])
     if readiness["requirements_archived"]:
         count = readiness["requirements_archived"]
         noun, verb, route = ("check is", "does", "opportunity") if count == 1 else ("checks are", "do", "opportunities")
@@ -550,13 +1266,25 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
     if readiness["claims_without_evidence"]:
         lines.append(f"{readiness['claims_without_evidence']} marked checks need "
                      "applicant evidence, source wording, a source link "
-                     "or a date checked.")
+                     "or a current date checked.")
     if readiness["opportunities_without_checks"]:
         lines.append(f"{readiness['opportunities_without_checks']} opportunities have "
                      "no recorded requirements yet.")
     if readiness["actions_without_owner"]:
         lines.append(f"{readiness['actions_without_owner']} open actions have no user-confirmed owner; "
                      "names and role suggestions without recorded acceptance remain unconfirmed.")
+    if readiness["actions_scope_unconfirmed"]:
+        count = readiness["actions_scope_unconfirmed"]
+        lines.append(f"{count} open action(s) need scope confirmation and do not count as current work until classified.")
+    if readiness["actions_submission_phase_review"]:
+        count = readiness["actions_submission_phase_review"]
+        lines.append(f"{count} unfinished pre-submission action(s) on submitted route(s) need review; only after-submission follow-ups count as current.")
+    if readiness["actions_phase_reclassification"]:
+        count = readiness["actions_phase_reclassification"]
+        lines.append(f"{count} post-submission action(s) on active route(s) need reclassification before returning to current work.")
+    if readiness["actions_inactive_route_review"]:
+        count = readiness["actions_inactive_route_review"]
+        lines.append(f"{count} open action(s) belong to closed, paused or not-pursued routes; move continuing work to a current scope or mark obsolete work complete.")
     for item in document["opportunities"]:
         name = item["name"]
         active = item["status"] in ACTIONABLE_OPPORTUNITY_STATES
@@ -565,8 +1293,20 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
         lines.extend(["## " + _inline(name),
                       "Funder: " + _inline(item["funder"] or "Not recorded")
                       + " · Campaign status entered: " + status_label,
-                      "Application deadline: " + (item["deadline"] or "Not confirmed")
-                      + " · Funding ceiling: " + _amount(item["ceiling"]),
+                      "Route type (user-entered): "
+                      + item["route_type"].replace("_", " "),
+                      "Application workflow (user-entered): "
+                      + ("required · applicant: " + _inline(item["applicant"])
+                         if item["application_mode"] == "required"
+                         and item["applicant"].strip()
+                         else "required · applicant not recorded"
+                         if item["application_mode"] == "required"
+                         else "no application recorded"
+                         if item["application_mode"] == "not_required"
+                         else "not confirmed"),
+                      "Application window: " + _window_description(
+                          item, document["sources"])
+                      + " · Cash award / ceiling: " + _route_amount(item),
                       "Decision window: " + _inline(item["decision_window"]
                                                     or "Not confirmed"),
                       _link(item["url"], "Programme details")])
@@ -584,14 +1324,22 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
             state = label[row["status"]]
             if not active:
                 state = "Historical record · " + state
-            if row["status"] in {"met", "not_met"} and not _supported(row):
-                state += " — source record incomplete"
+            if row["status"] in {"met", "not_met"} and not _supported(
+                    row, sources=document["sources"]):
+                state += " — source record incomplete or stale"
             evidence = literal(row["evidence"] or "Not recorded")
             wording = literal(row["source_quote"] or "Not recorded")
+            linked_source = _source_for(document["sources"], row["source_id"])
             source_link = _link(
                 row["source_url"],
-                "User-entered source link; not checked by Sinter",
-            )
+                linked_source["title"] if linked_source else
+                "User-entered source link; not checked by Sinter")
+            if linked_source:
+                source_link += " · Source ID " + linked_source["id"][:8]
+                if (row["source_url"] != linked_source["url"]
+                        or row["checked_at"] != linked_source["checked_at"]):
+                    source_link += (" · linked source record changed after this excerpt; "
+                                    "recheck before use")
             checked_at = row["checked_at"] or "Not recorded"
             lines.extend([
                 "**" + state + ":** " + literal(row["rule"]),
@@ -610,6 +1358,9 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                 lines.append("No historical answer drafts have been retained.")
         else:
             lines.append("### Application answers")
+            if (item["application_mode"] != "required"
+                    or not item["applicant"].strip()):
+                lines.append("This route does not have a confirmed formal application and applicant. Retained answers are held and must not be copied into an application until the route workflow is confirmed.")
             if not indexes:
                 lines.append("No application answers have been recorded yet.")
         for index in indexes:
@@ -697,14 +1448,26 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
             owner += " (acceptance not recorded)"
         target = (row["due"] + " · proposed target, not confirmed"
                   if row["due"] else "not set")
-        lines.append("- " + _inline(row["task"]) + " · Owner: " + owner
+        scope = ("Not confirmed" if not row["scope_confirmed"] else
+                 _inline(row["opportunity"]) if row["opportunity"] else
+                 "Campaign-wide")
+        phase = (" · Phase: " + ("After-submission follow-up"
+                                 if row["submission_phase"] == "post_submission"
+                                 else "Before submission")
+                 if row["scope_confirmed"] else "")
+        lines.append("- " + _inline(row["task"]) + " · Scope: " + scope + phase
+                     + " · Owner: " + owner
                      + " · Proposed target: " + target + " · " + row["status"])
+    lines.extend(_render_portfolio_register(document["assets"], document["sources"]))
     if document["communications"]:
         lines.extend([
             "## Communications log · user-entered, unverified",
             "These entries are records supplied by you. Sinter did not send, "
             "receive, open or independently verify any communication or link. "
             "A draft is not sent.",
+            "This report includes message text and may include personal information. "
+            "Review it before sharing; use the redacted evidence-pack export for "
+            "external review.",
         ])
         for row in document["communications"]:
             direction = "Incoming" if row["direction"] == "incoming" else "Outgoing"
@@ -732,13 +1495,28 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                 for link in row["evidence_links"]:
                     label = link["title"].strip() or "Open evidence link"
                     lines.append("- " + _link(link["url"], label))
+                    if link["source_id"]:
+                        lines.append("  Campaign source ID: "
+                                     + link["source_id"][:8]
+                                     + " · linked source (user-entered)")
+                        current_source = _source_for(document["sources"], link["source_id"])
+                        if current_source and (
+                                link["url"] != current_source["url"]
+                                or link["checked_at"] != current_source["checked_at"]):
+                            lines.append("  Source snapshot differs from the current register; "
+                                         "recheck before reuse.")
+                    if link["checked_at"]:
+                        lines.append("  Linked source check date (campaign-entered): "
+                                     + link["checked_at"])
                     if link["notes"].strip():
                         lines.append("  " + literal(link["notes"]))
     if document["sources"]:
         lines.append("## Source references")
         for row in document["sources"]:
             lines.append("### " + _inline(row["title"]))
-            lines.append(_link(row["url"]))
+            lines.append("Source ID: " + row["id"][:8] + " · " + _link(row["url"]))
+            lines.append("Date checked (campaign-entered): "
+                         + (row["checked_at"] or "Not recorded"))
             if row["notes"].strip():
                 lines.append(literal(row["notes"]))
     lines.append("Character counts use Unicode code points, including whitespace. "
@@ -753,19 +1531,31 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
     return output.lstrip() + "\n"
 
 
-def prepare(data: object) -> dict:
+def prepare(data: object, focused_opportunity_name: object = "") -> dict:
     """Prepare a readable campaign pack and derived checks without network access."""
     campaign = validate(data)
+    if not isinstance(focused_opportunity_name, str):
+        raise ValueError("The focused opportunity must be text.")
+    active = [row for row in campaign["opportunities"]
+              if row["status"] in ACTIONABLE_OPPORTUNITY_STATES]
+    requested_focus = focused_opportunity_name.strip()
+    focused_opportunity = next(
+        (row["name"] for row in active if row["name"] == requested_focus),
+        active[0]["name"] if active else "",
+    )
     metrics = _answer_metrics(campaign["answers"])
     budget = _budget_summary(campaign)
     readiness = _readiness(campaign, metrics, budget)
+    portfolio = _portfolio_summary(campaign["assets"])
     markdown = _render(campaign, readiness, metrics, budget)
-    document_markdown = _render_decision_brief(campaign, readiness, budget)
+    document_markdown = _render_decision_brief(
+        campaign, readiness, budget, focused_opportunity)
     return {"workflow": "campaign", "title": campaign["title"],
             "document_title": campaign["title"], "created_at": utc_now(),
             "review_status": "user_entered", "campaign": campaign,
             "readiness": readiness, "answer_metrics": metrics,
-            "budget_summary": budget, "document_markdown": document_markdown,
+            "budget_summary": budget, "portfolio_summary": portfolio,
+            "document_markdown": document_markdown,
             "markdown": markdown}
 
 

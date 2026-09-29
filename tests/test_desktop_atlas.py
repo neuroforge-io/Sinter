@@ -121,11 +121,20 @@ def test_compile_rejects_traversal_before_starting(tmp_path):
 
 
 def test_plan_preserves_values_and_neutralises_csv_formulas():
-    result = community.plan('Volunteers', [{'action': '=DANGEROUS()', 'owner': '@NAME', 'due': '2026-09-30'}])
+    result = community.plan('Volunteers', [{'action': '=DANGEROUS()',
+        'scope': '=NeuroForge route', 'owner': '@NAME', 'due': '2026-09-30'}])
     assert result['actions'][0]['action'] == '=DANGEROUS()'
-    assert "'=DANGEROUS()" in result['csv'] and "'@NAME" in result['csv']
+    assert result['actions'][0]['scope'] == '=NeuroForge route'
+    assert result['csv'].splitlines()[0] == 'Action,Scope,Owner,Proposed target date (unconfirmed),Status'
+    assert "'=DANGEROUS()" in result['csv'] and "'=NeuroForge route" in result['csv']
+    assert "'@NAME" in result['csv']
+    assert 'Scope: =NeuroForge route' in result['markdown']
     assert 'DTSTART;VALUE=DATE:20260930' in result['calendar']
     assert 'DTEND;VALUE=DATE:20261001' in result['calendar']
+    calendar_text = result['calendar'].replace('\r\n ', '')
+    assert ('DESCRIPTION:Scope: =NeuroForge route\\; Owner: @NAME\\; '
+            'Proposed target date · unconfirmed') in calendar_text
+    assert 'Proposed target (not confirmed): 2026-09-30' in result['markdown']
 
 
 def test_plan_accepts_campaign_owner_annotation_after_maximum_name():
@@ -133,6 +142,19 @@ def test_plan_accepts_campaign_owner_annotation_after_maximum_name():
     result = community.plan('Campaign', [{'action': 'Confirm owner', 'owner': owner}])
     assert owner in result['csv']
     assert owner in result['markdown']
+
+
+def test_campaign_plan_exports_action_phase_in_csv_markdown_and_calendar():
+    result = community.plan('Portfolio', [{
+        'action': 'Check the submission receipt', 'scope': 'CSIRO Kick-Start',
+        'phase': 'After-submission follow-up', 'owner': 'Director',
+        'due': '2026-10-12',
+    }])
+    assert result['actions'][0]['phase'] == 'After-submission follow-up'
+    assert result['csv'].splitlines()[0] == 'Action,Scope,Phase,Owner,Proposed target date (unconfirmed),Status'
+    assert 'Phase: After-submission follow-up' in result['markdown']
+    calendar_text = result['calendar'].replace('\r\n ', '')
+    assert 'Phase: After-submission follow-up' in calendar_text
 
 
 @pytest.mark.parametrize('value', ['9999-12-31', '2026-02-30', '30/09/2026'])
@@ -143,6 +165,15 @@ def test_plan_dates_fail_closed(value):
 def test_plan_missing_dates_remain_missing():
     result = community.plan('Test', [{'action': 'Discuss options'}])
     assert 'BEGIN:VEVENT' not in result['calendar'] and 'Not set' in result['markdown']
+
+
+def test_completed_dated_plan_actions_do_not_become_calendar_events():
+    result = community.plan('Test', [{
+        'action': 'Already completed', 'due': '2026-09-30', 'status': 'done',
+    }])
+    assert result['actions'][0]['status'] == 'done'
+    assert 'Already completed' in result['csv']
+    assert 'BEGIN:VEVENT' not in result['calendar']
 
 
 def test_compare_exact_changes():

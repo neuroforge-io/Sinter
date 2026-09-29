@@ -71,6 +71,8 @@ def _context(payload: dict, sources: list[Source], selected: list[Excerpt],
     """Keep short, exact source passages in the usable document, with plain attribution."""
     notes = text(payload.get("notes", ""), "Notes").strip()
     if letter and notes:
+        if payload.get("campaign_sender_review") is True:
+            return [literal(notes).replace("\n", "\n\n")]
         if len(notes) <= 1600:
             return ["For context, our notes record:", _quote(notes)]
         # A long note belongs in the evidence pack; use an admitted exact passage here.
@@ -122,9 +124,17 @@ def prepare_document(payload: dict, sources: list[Source],
         if not details["contact_details"]:
             missing.append({"field": "contact_details", "label": "Your reply contact details"})
         greeting = "Dear " + literal(details["recipient"]) + "," if details["recipient"] else "Hello,"
-        opening = ("I am writing on behalf of " + literal(details["organisation"]) + " about "
-                   if details["organisation"] else "I am writing about ") + literal(title) + "."
-        lines = [greeting, "Re: " + literal(title), opening, *context]
+        if payload.get("campaign_sender_review") is True:
+            organisation = literal(details["organisation"])
+            opening = ((organisation + " is assessing whether this programme could support a defined project. ")
+                       if organisation else "We are assessing whether this programme could support a defined project. ")
+            opening += "We would appreciate guidance before deciding whether to proceed."
+            reference_title = re.sub(r"^Clarification:\s*", "", title, flags=re.I)
+        else:
+            opening = ("I am writing on behalf of " + literal(details["organisation"]) + " about "
+                       if details["organisation"] else "I am writing about ") + literal(title) + "."
+            reference_title = title
+        lines = [greeting, "Re: " + literal(reference_title), opening, *context]
         if questions:
             lines.extend(["Could you please clarify the following?", question_list,
                           "Please include any relevant details or links in your response."])

@@ -48,8 +48,9 @@ is cut at statement and line boundaries and asked targeted questions about the r
 symbols, imports and risk-shaped lines in its own excerpt. A received but unsupported
 answer is recorded as a defined partial batch that an explicit resume may re-review
 with a bounded follow-up question. Coverage reports partials separately and returns
-exit code 2 while any partial, failed or uncertain batch remains. Checkpoints embed
-the review engine so older plans are rejected cleanly.
+exit code 3 when follow-up is needed; failed or uncertain provider outcomes return
+1, and invalid command-line usage remains 2. Checkpoints embed the review engine so
+older plans are rejected cleanly.
 
 ## Reliability update: 0.5.1
 

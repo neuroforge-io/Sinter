@@ -3,15 +3,16 @@ from __future__ import annotations
 
 import csv
 import difflib
+import hashlib
 import io
 from datetime import date, datetime, timedelta, timezone
-import hashlib
 
 from .evidence import literal, text, utc_now
 
 
 def compare(before, after):
-    text(before, 'Earlier version', 60000); text(after, 'New version', 60000)
+    text(before, 'Earlier version', 60000)
+    text(after, 'New version', 60000)
     # Keep both inputs unchanged. Line-oriented comparison bounds expensive matching.
     left, right = before.splitlines(), after.splitlines()
     if max(len(left), len(right)) > 1500:
@@ -33,6 +34,8 @@ def plan(title, rows):
         if not isinstance(row, dict):
             raise ValueError('Each action must be an object.')
         action = text(row.get('action', ''), 'Action', 2000, True)
+        scope = text(row.get('scope', ''), 'Scope', 300)
+        phase = text(row.get('phase', ''), 'Phase', 100)
         # Campaign exports append a short acceptance-state note to an owner
         # field whose own validated maximum is 300 characters.
         owner = text(row.get('owner', ''), 'Owner', 400)
@@ -48,36 +51,60 @@ def plan(title, rows):
                 parsed + timedelta(days=1)
             except (ValueError, OverflowError) as exc:
                 raise ValueError('Use a valid YYYY-MM-DD deadline before 9999-12-31.') from exc
-        output.append({'action': action, 'owner': owner, 'due': due, 'status': status})
-    stream = io.StringIO(newline=''); writer = csv.writer(stream)
-    writer.writerow(['Action', 'Owner', 'Due date', 'Status'])
+        normalized = {'action': action, 'scope': scope, 'owner': owner,
+                      'due': due, 'status': status}
+        if phase:
+            normalized['phase'] = phase
+        output.append(normalized)
+    stream = io.StringIO(newline='')
+    writer = csv.writer(stream)
+    has_phase = any(row.get('phase') for row in output)
+    headings = ['Action', 'Scope'] + (['Phase'] if has_phase else [])
+    headings += ['Owner', 'Proposed target date (unconfirmed)', 'Status']
+    writer.writerow(headings)
     def cell(value):
         # Defend against spreadsheet formula interpretation, including leading whitespace.
         return "'" + value if value.lstrip().startswith(('=', '+', '-', '@', '\t', '\r', '\n')) or value.startswith(('\t', '\r', '\n')) else value
     for row in output:
-        writer.writerow([cell(row[k]) for k in ('action', 'owner', 'due', 'status')])
+        values = [row['action'], row['scope']]
+        if has_phase:
+            values.append(row.get('phase', ''))
+        values.extend([row['owner'], row['due'], row['status']])
+        writer.writerow([cell(value) for value in values])
     lines = ['# '+literal(title), 'USER-ENTERED PLAN - CONFIRM OWNERS AND DATES']
     for row in output:
-        lines.append('- '+literal(row['action'])+' | Owner: '+literal(row['owner'] or 'Unassigned')+' | Due: '+(row['due'] or 'Not set')+' | '+row['status'])
+        lines.append('- '+literal(row['action'])+' | Scope: '
+                     + literal(row['scope'] or 'Not specified')
+                     + (' | Phase: '+literal(row['phase']) if row.get('phase') else '')
+                     + ' | Owner: '
+                     + literal(row['owner'] or 'Unassigned')+' | Proposed target (not confirmed): '
+                     + (row['due'] or 'Not set')+' | '+row['status'])
     def escape(value):
         return value.replace('\\','\\\\').replace('\r','').replace('\n','\\n').replace(';','\\;').replace(',','\\,')
     def daystamp(value):
         return f'{value.year:04d}{value.month:02d}{value.day:02d}'
     cal = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//NeuroForge//Sinter user plan//EN', 'CALSCALE:GREGORIAN']
     for index, row in enumerate(output):
-        if row['due']:
+        if row['due'] and row['status'] != 'done':
             day = date.fromisoformat(row['due'])
             identity = hashlib.sha256((title+'\0'+str(index)+'\0'+row['action']).encode()).hexdigest()
+            description = ['Scope: '+(row['scope'] or 'Not specified')]
+            if row.get('phase'):
+                description.append('Phase: '+row['phase'])
+            description.extend(['Owner: '+(row['owner'] or 'Unassigned'),
+                                'Proposed target date · unconfirmed'])
             cal += ['BEGIN:VEVENT', 'UID:'+identity+'@sinter.local', 'DTSTAMP:'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'),
                     'DTSTART;VALUE=DATE:'+daystamp(day), 'DTEND;VALUE=DATE:'+daystamp(day+timedelta(days=1)),
-                    'SUMMARY:'+escape(row['action']), 'DESCRIPTION:'+escape('Owner: '+(row['owner'] or 'Unassigned')+'; user-entered deadline'), 'END:VEVENT']
+                    'SUMMARY:'+escape(row['action']), 'DESCRIPTION:'+escape('; '.join(description)),
+                    'END:VEVENT']
     cal.append('END:VCALENDAR')
     folded = []
     for line in cal:
         chunk = ''
         for character in line:
             if len((chunk+character).encode('utf-8')) > 73:
-                folded.append(chunk); chunk = ' '
+                folded.append(chunk)
+                chunk = ' '
             chunk += character
         folded.append(chunk)
     return {'title': title, 'workflow': 'community-plan', 'created_at': utc_now(), 'review_status': 'user_entered', 'actions': output,

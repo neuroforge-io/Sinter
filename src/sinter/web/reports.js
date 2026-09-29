@@ -37,19 +37,41 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     tabs.append(tab);
   }
   const sources = h('aside', {class: 'sources-panel', 'aria-label': 'Source register'},
-    h('h3', {}, 'Original sources'), h('p', {class: 'muted'}, 'Open a source to check its full supplied wording.'));
-  for (const source of report.sources || []) {
-    sources.append(h('details', {class: 'source source-jump', 'data-source-id': source.id}, h('summary', {}, source.title),
-      source.url ? safeLink(source.url, 'Open the source') : h('p', {class: 'fine'}, 'Added on this computer'),
-      h('pre', {}, source.content), h('details', {class: 'source-metadata'}, h('summary', {}, 'Source record'),
-        h('p', {class: 'source-id'}, (source.id || '') + ' / ' + (source.kind || 'source')), h('p', {class: 'fine'}, 'Retrieved / imported: ' + (source.retrieved_at || 'Not supplied')),
-        source.sha256 ? h('p', {class: 'source-id'}, 'SHA-256: ' + source.sha256) : null)));
+    h('h3', {}, isCampaign ? 'Registered campaign sources' : 'Original sources'),
+    h('p', {class: 'muted'}, isCampaign
+      ? 'These titles, links, notes and dates were entered in the campaign. Sinter has not opened or verified them.'
+      : 'Open a source to check its full supplied wording.'));
+  if (isCampaign) {
+    for (const source of report.campaign?.sources || []) {
+      const usageCount = (report.campaign?.opportunities || []).filter(row =>
+        row.window_source_id === source.id).length
+        + (report.campaign?.requirements || []).filter(row => row.source_id === source.id).length
+        + (report.campaign?.assets || []).reduce((total, asset) => total
+          + (asset.references || []).filter(reference => reference.source_id === source.id).length, 0);
+      sources.append(h('details', {class: 'source source-jump', 'data-source-id': source.id},
+        h('summary', {}, source.title || 'Untitled source',
+          h('span', {class: 'source-usage-count'}, `${usageCount} linked record${usageCount === 1 ? '' : 's'}`)),
+        source.url ? safeLink(source.url, 'Open campaign source')
+          : h('p', {class: 'fine'}, 'No source link recorded.'),
+        h('p', {class: 'campaign-source-notes'}, source.notes || 'No source notes recorded.'),
+        h('p', {class: 'source-id'}, 'Checked date (user-entered): '
+          + (source.checked_at || 'Not recorded'))));
+    }
+  } else {
+    for (const source of report.sources || []) {
+      sources.append(h('details', {class: 'source source-jump', 'data-source-id': source.id}, h('summary', {}, source.title),
+        source.url ? safeLink(source.url, 'Open the source') : h('p', {class: 'fine'}, 'Added on this computer'),
+        h('pre', {}, source.content), h('details', {class: 'source-metadata'}, h('summary', {}, 'Source record'),
+          h('p', {class: 'source-id'}, (source.id || '') + ' / ' + (source.kind || 'source')), h('p', {class: 'fine'}, 'Retrieved / imported: ' + (source.retrieved_at || 'Not supplied')),
+          source.sha256 ? h('p', {class: 'source-id'}, 'SHA-256: ' + source.sha256) : null)));
+    }
   }
   function updateDocument() {
     const article = markdown(documentMarkdown(report));
+    if (isCampaign) article.classList.add('campaign-decision-document');
     connectCitations(article, report, sources, () => select('evidence'));
     paper.replaceChildren(h('div', {class: 'paper-label'}, report.workflow === 'campaign'
-      ? 'INTERNAL DECISION BRIEF · REVIEW BEFORE SHARING'
+      ? 'CAMPAIGN DECISION RECORD'
       : report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'), article);
     completion.replaceChildren(h('div', {}, h('strong', {}, report.document_edits ? 'Check these details' : 'Finish the details'),
       h('p', {}, (report.document_edits ? 'Originally missing: ' : '') + (report.missing_fields || []).map(item => item.label).join(' · '))),
@@ -58,15 +80,21 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   }
   let evidenceArticle = markdown(report.markdown);
   connectCitations(evidenceArticle, report, sources);
+  const campaignEvidence = campaignEvidenceCounts(report.campaign);
   evidencePanel.append(...[h('div', {class: 'evidence-overview'},
-    h('div', {}, h('h3', {}, 'What supports this draft'), h('p', {class: 'muted'}, `${(report.sources || []).length} sources · ${(report.segments || report.excerpts || []).length} ${report.segments ? 'transcript passages' : 'selected excerpts'}`)),
-    h('p', {class: 'fine'}, 'Source records establish provenance, not truth.')),
+    h('div', {}, h('h3', {}, isCampaign ? 'Campaign evidence at a glance' : 'What supports this draft'),
+      h('p', {class: 'muted'}, isCampaign
+        ? `${campaignEvidence.sources} linked campaign sources · ${campaignEvidence.excerpts} recorded wording excerpts`
+        : `${(report.sources || []).length} sources · ${(report.segments || report.excerpts || []).length} ${report.segments ? 'transcript passages' : 'selected excerpts'}`)),
+    h('p', {class: 'fine'}, isCampaign
+      ? 'Links and excerpts are campaign entries; source records establish provenance, not truth.'
+      : 'Source records establish provenance, not truth.')),
     (report.warnings || []).length ? h('details', {class: 'report-notes'}, h('summary', {}, 'Source limits and review notes'), h('ul', {}, report.warnings.map(item => h('li', {}, item)))) : null,
     h('div', {class: 'report-layout'}, evidenceArticle, sources)].filter(Boolean));
   const actions = documentActions(report, {save, onChange: () => { updateDocument(); select('document'); }});
   const missing = report.missing_fields || [];
-  result.append(...[h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'INTERNAL DECISION RECORD' : 'YOUR DOCUMENT'),
-    h('h2', {}, report.document_title || report.title), h('p', {class: 'muted'}, isCampaign
+  result.append(...[h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'CAMPAIGN PREVIEW' : 'YOUR DOCUMENT'),
+    h('h2', {}, isCampaign ? 'Decision brief' : (report.document_title || report.title)), h('p', {class: 'muted'}, isCampaign
       ? 'Review the decision and privacy before sharing. The full audit trail and source notes are in Audit & evidence.'
       : 'Review the wording, make it yours, then copy or download.'))),
     missing.length ? completion : null,
@@ -84,6 +112,30 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   }
   if (onCorrect && report.segments?.length) documentPanel.append(correctionForm(report, onCorrect));
   return result;
+}
+
+export function campaignEvidenceCounts(campaign) {
+  if (!campaign || typeof campaign !== 'object') return {sources: 0, excerpts: 0};
+  const sourceIds = new Set();
+  const excerpts = [];
+  for (const row of Array.isArray(campaign.opportunities) ? campaign.opportunities : []) {
+    if (row.window_source_id) {
+      sourceIds.add(row.window_source_id);
+      excerpts.push(row.window_source_quote);
+    }
+  }
+  for (const row of Array.isArray(campaign.requirements) ? campaign.requirements : []) {
+    if (row.source_id) sourceIds.add(row.source_id);
+    if (row.source_id || row.source_url) excerpts.push(row.source_quote);
+  }
+  for (const asset of Array.isArray(campaign.assets) ? campaign.assets : []) {
+    for (const reference of Array.isArray(asset.references) ? asset.references : []) {
+      if (reference.source_id) sourceIds.add(reference.source_id);
+      if (reference.source_id || reference.url) excerpts.push(reference.excerpt);
+    }
+  }
+  return {sources: sourceIds.size,
+    excerpts: excerpts.filter(value => typeof value === 'string' && value.trim()).length};
 }
 
 function campaignDraftLog(report, feedback, onCampaignUpdated) {
@@ -124,8 +176,18 @@ function campaignDraftLog(report, feedback, onCampaignUpdated) {
   }, 'quiet');
   const blocked = campaignDraftLogBlockReason(report.campaign_link);
   if (blocked) control.disabled = true;
+  const evidenceLinks = Array.isArray(report.campaign_link?.evidence_links)
+    ? report.campaign_link.evidence_links : [];
   return h('section', {class: 'campaign-draft-log non-print', 'aria-label': 'Campaign communication log'},
     h('p', {class: 'muted'}, 'Keep a copy of this exact draft in the linked campaign. Saving it marks it as not sent; Sinter will not contact anyone.'),
+    evidenceLinks.length ? h('div', {class: 'campaign-draft-source-preview'},
+      h('p', {class: 'fine'}, 'These selected campaign source links will be attached to the communication record. They remain user-entered and unverified.'),
+      h('ul', {}, evidenceLinks.map(link => h('li', {}, safeLink(link.url, link.title || link.url),
+        h('small', {class: 'fine'}, [
+          link.source_id ? `Source ID ${link.source_id.slice(0, 8)}` : 'Manual link',
+          link.checked_at ? `checked ${link.checked_at} · user-entered` : 'check date not recorded',
+        ].join(' · '))))))
+      : h('p', {class: 'fine'}, 'No linked campaign source is recorded for this route’s open checks. You can add references to the communication record after saving.'),
     channel.wrap, control, blocked ? h('p', {class: 'fine'}, blocked) : null);
 }
 
