@@ -30,12 +30,14 @@ def fixture():
             'opportunities': [
                 {'name': 'Fictional equipment fund', 'funder': 'Example Foundation', 'url': 'https://example.invalid/fund',
                  'deadline': '2026-09-28', 'decision_window': 'Four to five months after closing', 'ceiling': '35000.00',
-                 'fit': 'Future equipment only. Costs must be incurred after approval.', 'status': 'open'},
+                 'fit': 'Future equipment only. Costs must be incurred after approval.', 'status': 'closed'},
                 {'name': 'Fictional local sponsorship', 'funder': 'Example Business', 'url': 'https://example.invalid/sponsor',
                  'deadline': '', 'decision_window': 'Ask the sponsor', 'ceiling': '1000.00',
                  'fit': 'Ask whether this applicant type is accepted.', 'status': 'clarification'}],
             'requirements': [{'opportunity': 'Fictional equipment fund', 'rule': 'Applicant type accepted', 'status': 'met',
-                              'evidence': '', 'source_url': '', 'source_quote': '', 'checked_at': ''}],
+                              'evidence': '', 'source_url': '', 'source_quote': '', 'checked_at': ''},
+                             {'opportunity': 'Fictional local sponsorship', 'rule': 'A distinct project is confirmed',
+                              'status': 'unknown', 'evidence': '', 'source_url': '', 'source_quote': '', 'checked_at': ''}],
             'answers': [{'opportunity': 'Fictional equipment fund', 'label': 'Describe the project',
                          'text': 'A fictional swimming project. Costs and approvals still need confirmation.', 'limit': 250, 'status': 'draft'}],
             'budget': [{'item': 'Qualified training quote pending', 'opportunity': 'Fictional equipment fund',
@@ -56,7 +58,7 @@ class CampaignChecks(DeliverableChecks):
 
     def transfers(self, page):
         if not page.get_by_label('Import campaign backup', exact=True).is_visible():
-            page.get_by_text('Open, import or back up a campaign', exact=True).click()
+            page.get_by_text('Import or back up a campaign', exact=True).click()
 
     def import_fixture(self, page):
         from playwright.sync_api import expect
@@ -78,10 +80,42 @@ class CampaignChecks(DeliverableChecks):
         self.import_fixture(page)
         expect(page.locator('.campaign-summary')).to_contain_text('1requirements to check')
         expect(page.get_by_role('region', name='Selected opportunity')).to_contain_text('What must be true?')
+        decision = page.get_by_role('region', name='Campaign decision and next move')
+        expect(decision.locator('.campaign-decision-state')).to_have_text('NOT READY')
+        expect(decision).to_contain_text('Ask a qualified provider for an itemised quote')
+        expect(decision).to_contain_text('Owner needed')
+        expect(decision).to_contain_text('Proposed target:')
+        expect(decision).to_contain_text('current official wording')
+        requirement = page.locator('.campaign-requirement').first
+        expect(requirement.locator('.campaign-check-state')).to_contain_text(
+            'User-marked met · unverified')
+        requirement.locator('summary').first.click()
+        requirement.get_by_text('Supporting source · user-entered, unverified').click()
+        page.get_by_label('What the evidence establishes or leaves unclear', exact=True).fill(
+            'The user-entered excerpt describes accepted applicant types.')
+        page.get_by_label('Source link (user-entered)', exact=True).fill(
+            'https://example.invalid/fund/eligibility')
+        page.get_by_label('Source wording (user-entered)', exact=True).fill(
+            'Registered community associations may apply.')
+        page.get_by_label('Date checked (user-entered)', exact=True).fill('2026-09-12')
+        expect(requirement.locator('.campaign-check-state')).to_contain_text(
+            'User-marked met · unverified')
+        expect(requirement.locator('.campaign-proof-status')).to_contain_text(
+            'Sinter has not verified the link, wording, date or assessment.')
         self.save(page)
         self.screenshot(page, 'opportunities-desktop', full_page=True)
         page.get_by_role('tab', name='Application answers', exact=True).click()
         answer = page.get_by_role('article', name='Application answer')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_attribute('readonly', '')
+        expect(answer.get_by_role('button', name='Copy unavailable · inactive route', exact=True)).to_be_disabled()
+        expect(page.get_by_role('button', name='Add application question', exact=True)).to_be_disabled()
+        expect(page.locator('.notice.warning')).to_contain_text('not for submission')
+        page.get_by_role('tab', name='Opportunities', exact=True).click()
+        page.get_by_text('Edit opportunity details', exact=True).click()
+        page.get_by_label('Opportunity status', exact=True).select_option('open')
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        answer = page.get_by_role('article', name='Application answer')
+        expect(answer.get_by_label('Draft answer', exact=True)).not_to_have_attribute('readonly', '')
         answer.get_by_label('Draft answer', exact=True).fill('a' * 251)
         expect(answer.get_by_role('status')).to_have_text('251 / 250 characters · 1 over — shorten before using')
         answer.get_by_role('button', name='Copy this answer', exact=True).click()
@@ -99,24 +133,96 @@ class CampaignChecks(DeliverableChecks):
         self.save(page)
         self.screenshot(page, 'budget-editable', full_page=True)
         page.get_by_role('tab', name='Next actions', exact=True).click()
+        actions = page.get_by_role('article', name='Campaign action', exact=True)
+        first_action = actions.nth(0)
+        second_action = actions.nth(1)
+        expect(first_action.get_by_label('Person or suggested role', exact=True)).to_have_value('')
+        expect(first_action).to_contain_text('Unassigned — no person is recorded.')
+        expect(second_action).to_contain_text('Name recorded — acceptance not recorded.')
+        acceptance = second_action.get_by_label('This person has accepted this action', exact=True)
+        expect(acceptance).to_be_enabled()
+        expect(acceptance).not_to_be_checked()
+        acceptance.check()
+        expect(second_action).to_contain_text('User marked accepted — confirm directly with this person.')
+        second_action.get_by_label('Person or suggested role', exact=True).fill('Example coordinator alternate')
+        expect(acceptance).not_to_be_checked()
+        expect(second_action).to_contain_text('Name recorded — acceptance not recorded.')
+        target = first_action.get_by_label('Proposed target date', exact=True)
+        overdue_date = page.evaluate('''() => {
+            const day = new Date(); day.setDate(day.getDate() - 1);
+            return [day.getFullYear(), String(day.getMonth() + 1).padStart(2, '0'), String(day.getDate()).padStart(2, '0')].join('-');
+        }''')
+        target.fill(overdue_date)
+        overdue_status = first_action.locator('.campaign-action-date-status')
+        expect(overdue_status).to_have_attribute('data-state', 'overdue')
+        expect(overdue_status).to_contain_text('Past proposed target')
+        first_action.get_by_label('Action status', exact=True).select_option('done')
+        expect(overdue_status).to_have_text('Completed — proposed target kept for reference.')
+        first_action.get_by_label('Action status', exact=True).select_option('open')
+        expect(overdue_status).to_have_attribute('data-state', 'overdue')
         filename, csv = self.download(page, 'Download actions CSV')
         assert filename.endswith('.csv') and 'Ask a qualified provider' in csv
+        assert 'Example coordinator alternate (acceptance not recorded)' in csv
+        long_owner = 'A' * 200
+        second_action.get_by_label('Person or suggested role', exact=True).fill(long_owner)
+        second_action.get_by_label('This person has accepted this action', exact=True).check()
+        filename, long_owner_csv = self.download(page, 'Download actions CSV')
+        assert filename.endswith('.csv')
+        assert long_owner + ' (user-marked accepted; verify directly)' in long_owner_csv
         filename, calendar = self.download(page, 'Download action dates')
-        assert filename.endswith('.ics') and 'BEGIN:VCALENDAR' in calendar and '20260920' in calendar
+        assert filename.endswith('.ics') and 'BEGIN:VCALENDAR' in calendar and overdue_date.replace('-', '') in calendar
+        page.get_by_role('tab', name='Opportunities', exact=True).click()
+        page.get_by_text('Edit opportunity details', exact=True).click()
         page.get_by_role('button', name='Prepare campaign brief', exact=True).click()
         expect(page.get_by_role('region', name='Your draft report')).to_be_visible(timeout=10000)
+        page.get_by_label('Opportunity status', exact=True).select_option('closed')
+        expect(page.locator('#campaign-output')).to_have_attribute('data-stale', 'true')
+        expect(page.get_by_text('This brief reflects an earlier campaign version.', exact=False)).to_be_visible()
+        expect(page.locator('#campaign-output .report-area')).to_have_attribute('inert', '')
+        expect(page.locator('#campaign-output .report-area button').first).to_be_disabled()
+        self.save(page)
+        page.get_by_role('tab', name='Budget', exact=True).click()
+        expect(page.get_by_role('heading', name='Current project costs', exact=True)).to_be_visible()
+        expect(page.locator('.campaign-budget-total')).to_contain_text(
+            'No costs recorded for active opportunities. The current project total is unknown.')
+        expect(page.get_by_role('heading', name='Historical costs · inactive routes', exact=True)).to_be_visible()
+        expect(page.locator('.campaign-section .notice.warning')).to_contain_text(
+            'They do not contribute to the current project total.')
+        self.screenshot(page, 'budget-historical', full_page=True)
+        page.get_by_role('tab', name='Opportunities', exact=True).click()
+        page.get_by_role('button', name='Prepare campaign brief', exact=True).click()
+        expect(page.get_by_role('region', name='Your draft report')).to_be_visible(timeout=10000)
+        expect(page.locator('#campaign-output')).not_to_have_attribute('data-stale', 'true')
         pack = self.pack(page)
         assert pack['campaign']['answers'][0]['text'] == 'a' * 251
         assert pack['campaign']['budget'][0]['unit_cost'] == '2.55'
         assert pack['campaign']['requirements'][0]['status'] == 'met'
-        assert pack['readiness']['claims_without_evidence'] >= 1
+        assert pack['readiness']['claims_without_evidence'] == 0
+        assert pack['readiness']['requirements_total'] == 1
+        assert pack['readiness']['requirements_archived'] == 1
+        assert 'retained for paused, not-pursued, submitted or closed opportunity' in pack['markdown']
+        assert 'Historical answer drafts · inactive route' in pack['markdown']
+        assert 'are not for submission' in pack['markdown']
+        assert 'User-marked met · unverified' in pack['markdown']
+        assert 'Supported · human checked' not in pack['markdown']
+        assert 'Historical answer drafts · inactive route' not in pack['document_markdown']
+        assert 'not for submission' not in pack['document_markdown']
         self.screenshot(page, 'prepared-campaign', full_page=True)
         page.reload()
         self.transfers(page)
+        page.get_by_role('button', name='Start a new campaign', exact=True).click()
+        expect(page.locator('.campaign-saved-item.is-current')).to_have_count(0)
+        expect(page.get_by_role('button', name='Open ' + fixture()['title'], exact=True)).to_be_visible()
         page.get_by_role('button', name='Open ' + fixture()['title'], exact=True).click()
         expect(page.get_by_text('Campaign opened.', exact=False)).to_be_visible()
+        expect(page.locator('.campaign-saved-item.is-current')).to_have_count(1)
+        expect(page.locator('.campaign-opportunity[aria-pressed="true"]')).to_contain_text('Fictional local sponsorship')
+        page.locator('.campaign-opportunity').first.click()
+        expect(page.locator('.campaign-opportunity[aria-pressed="true"]')).to_contain_text('Fictional equipment fund')
         page.get_by_role('tab', name='Application answers', exact=True).click()
-        expect(page.get_by_label('Draft answer', exact=True)).to_have_value('a' * 251)
+        historical = page.get_by_role('article', name='Application answer')
+        expect(historical.get_by_label('Draft answer', exact=True)).to_have_value('a' * 251)
+        expect(historical.get_by_role('button', name='Copy unavailable · inactive route', exact=True)).to_be_disabled()
         page.get_by_role('tab', name='Budget', exact=True).click()
         expect(page.get_by_label('Unit cost (AUD)', exact=True).first).to_have_value('2.55')
         for width in (390, 320):
@@ -126,6 +232,16 @@ class CampaignChecks(DeliverableChecks):
                 applyAppearance({theme:'light',text_size:'large',density:'comfortable',reduce_motion:true});
             }''')
             assert page.evaluate('() => document.documentElement.scrollWidth <= innerWidth + 1'), width
+            current_card = page.locator('.campaign-saved-item.is-current')
+            expect(current_card.get_by_role('button')).to_have_text('Continue')
+            expect(current_card.get_by_role('button')).to_have_attribute(
+                'aria-label', 'Continue Fictional swimming capacity campaign')
+            assert page.evaluate('''() => {
+                const card = document.querySelector('.campaign-saved-item.is-current');
+                const content = card.querySelector(':scope > div').getBoundingClientRect();
+                const action = card.querySelector(':scope > button').getBoundingClientRect();
+                return Math.abs((content.top + content.height / 2) - (action.top + action.height / 2)) < 4;
+            }'''), width
             self.screenshot(page, f'budget-mobile-{width}', full_page=True)
 
     def conflict_and_import(self, page):
@@ -162,22 +278,326 @@ class CampaignChecks(DeliverableChecks):
             and row.get('url') == self.base + '/api/campaigns/save'
             and row['error'] == 'Failed to load resource: the server responded with a status of 400 (Bad Request)')]
 
+    def clarification_signer_is_campaign_scoped(self, page):
+        from playwright.sync_api import expect
+        personal = {
+            'full_name': 'Personal Profile Owner', 'role': 'Personal role',
+            'organisation': 'Personal organisation', 'email': 'personal@example.invalid',
+            'phone': '0400 111 222', 'website': 'https://personal.example.invalid',
+        }
+        self.set_profile(page, personal)
+        self.goto(page, 'campaigns')
+        self.transfers(page)
+        page.get_by_role('button', name='Start a new campaign', exact=True).click()
+        page.get_by_label('Campaign name', exact=True).fill('Fictional signatory scope test')
+        page.get_by_label('Applicant organisation', exact=True).fill(
+            'Fictional School Community Association')
+        page.get_by_label('What will this campaign make possible?', exact=True).fill(
+            'CAMPAIGN_WIDE_CONTEXT_MUST_NOT_APPEAR in this unrelated project overview.')
+        page.get_by_role('button', name='Add opportunity', exact=True).click()
+        page.get_by_label('Opportunity name', exact=True).fill('School-led swimming 2027')
+        page.get_by_label('Funder', exact=True).fill('Example Schools Programme')
+        page.get_by_label('Project fit and timing', exact=True).fill(
+            'SELECTED_OPPORTUNITY_FIT_NOTE_NOT_NEEDED_IN_THIS_LETTER')
+        page.get_by_role('button', name='Add requirement', exact=True).click()
+        page.get_by_label('Requirement', exact=True).fill('School portal application window')
+        page.get_by_role('button', name='Add opportunity', exact=True).click()
+        page.get_by_label('Opportunity name', exact=True).fill('Unrelated venue grant')
+        page.get_by_label('Funder', exact=True).fill('Other Funder')
+        page.get_by_label('Project fit and timing', exact=True).fill(
+            'UNRELATED_OPPORTUNITY_CONTEXT_MUST_NOT_APPEAR')
+        page.get_by_role('button', name='Add requirement', exact=True).click()
+        page.get_by_label('Requirement', exact=True).fill('UNRELATED_REQUIREMENT_MUST_NOT_APPEAR')
+        page.locator('.campaign-opportunity').filter(has_text='School-led swimming 2027').click()
+        page.get_by_role('button', name='Draft clarification letter', exact=True).click()
+        expect(page.locator('#view .page-intro h2')).to_have_text(
+            'Prepare a campaign letter for review.')
+        expect(page.locator('#view .page-intro p')).to_contain_text(
+            'No authorised signatory or reply contact is recorded')
+        expect(page.locator('#view')).to_contain_text(
+            'No campaign signatory or contact details are recorded.')
+        expect(page.locator('.sender-panel')).to_have_attribute('open', '')
+        expect(page.get_by_label('Your notes and context', exact=True)).to_have_value('')
+        expect(page.get_by_label('Questions you need answered', exact=True)).to_have_value(
+            'Could you confirm the current requirement for “School portal application window” and what evidence we should provide?')
+        for label in ('Your name or role', 'Your role', 'Contact details'):
+            expect(page.get_by_label(label, exact=True)).to_have_value('')
+        expect(page.get_by_label('Organisation name', exact=True)).to_have_value(
+            'Fictional School Community Association')
+        page.get_by_role('button', name='Prepare my draft', exact=True).click()
+        unsigned = self.document(page).inner_text()
+        expect(page.locator('.progress')).to_contain_text('It has not been sent')
+        assert 'Kind regards' not in unsigned, unsigned
+        assert not any(value in unsigned for value in personal.values()), unsigned
+        assert 'School portal application window' in unsigned, unsigned
+        assert 'CAMPAIGN_WIDE_CONTEXT_MUST_NOT_APPEAR' not in unsigned, unsigned
+        assert 'SELECTED_OPPORTUNITY_FIT_NOTE_NOT_NEEDED_IN_THIS_LETTER' not in unsigned, unsigned
+        assert 'UNRELATED_OPPORTUNITY_CONTEXT_MUST_NOT_APPEAR' not in unsigned, unsigned
+        assert 'UNRELATED_REQUIREMENT_MUST_NOT_APPEAR' not in unsigned, unsigned
+        assert 'Unrelated venue grant' not in unsigned and 'Other Funder' not in unsigned, unsigned
+        expect(page.locator('.completion-panel')).to_contain_text('Your name or sign-off')
+        expect(page.locator('.completion-panel')).to_contain_text('Your reply contact details')
+
+        self.goto(page, 'campaigns')
+        page.get_by_text('Campaign details', exact=True).click()
+        page.get_by_label('Authorised campaign signatory', exact=True).fill('Casey Example')
+        page.get_by_label('Signatory role', exact=True).fill('P&C President')
+        page.get_by_label('Campaign contact details', exact=True).fill(
+            'campaign@example.invalid\n0400 222 333')
+        page.get_by_role('button', name='Draft clarification letter', exact=True).click()
+        expect(page.locator('#view')).to_contain_text('approved for this letter')
+        expect(page.locator('#view .page-intro h2')).to_have_text(
+            'Prepare a campaign letter for review.')
+        expect(page.get_by_label('Your name or role', exact=True)).to_have_value('Casey Example')
+        expect(page.get_by_label('Your role', exact=True)).to_have_value('P&C President')
+        expect(page.get_by_label('Contact details', exact=True)).to_have_value(
+            'campaign@example.invalid\n0400 222 333')
+        page.get_by_role('button', name='Prepare my draft', exact=True).click()
+        letter = self.document(page).inner_text()
+        assert all(value in letter for value in (
+            'Casey Example', 'P&C President', 'campaign@example.invalid',
+        )), letter
+        assert not any(value in letter for value in personal.values()), letter
+
+    def communications_and_clarification_link(self, page):
+        from playwright.sync_api import expect
+        submitted = []
+
+        def track_workbench_request(request):
+            if request.url.endswith('/api/workbench') and request.method == 'POST':
+                submitted.append(json.loads(request.post_data or '{}'))
+
+        page.on('request', track_workbench_request)
+        self.import_fixture(page)
+        page.get_by_text('Campaign details', exact=True).click()
+        page.get_by_label('Authorised campaign signatory', exact=True).fill(
+            'Casey Example')
+        page.get_by_label('Signatory role', exact=True).fill('P&C President')
+        page.get_by_label('Campaign contact details', exact=True).fill(
+            'campaign@example.invalid\n0400 222 333')
+        self.save(page)
+        saved_identity = page.evaluate('''async () => {
+            const {request} = await import('/static/api.js');
+            const result = await request('/api/campaigns');
+            const saved = result.campaigns.find(item =>
+                item.title === 'Fictional swimming capacity campaign');
+            return {id: saved.id, revision: saved.revision};
+        }''')
+
+        page.get_by_role('tab', name='Communications', exact=True).click()
+        page.get_by_role('button', name='Add communication', exact=True).click()
+        message = page.get_by_role('article', name='Campaign communication').first
+        message.get_by_label('Direction', exact=True).select_option('incoming')
+        message = page.get_by_role('article', name='Campaign communication').first
+        expect(message.get_by_label('Communication status', exact=True)).to_have_value(
+            'received')
+        message.get_by_label('Communication date (user-entered)', exact=True).fill(
+            '2026-09-25')
+        message.get_by_label('Channel', exact=True).select_option('email')
+        message.get_by_label('Person or organisation', exact=True).fill(
+            'Jordan Private Contact')
+        message.get_by_label('Subject or short title', exact=True).fill(
+            'Fictional sponsorship reply')
+        message.get_by_label('Message text or summary', exact=True).fill(
+            'IncomingMessageBodyFictional: a fictional reply about a '
+            'community project.')
+        message.get_by_label('Related opportunity', exact=True).select_option(
+            'Fictional local sponsorship')
+        message.get_by_role('button', name='Add evidence link', exact=True).click()
+        message = page.get_by_role('article', name='Campaign communication').first
+        link = message.get_by_role('article', name='Communication evidence link')
+        link.get_by_label('Evidence title', exact=True).fill('Fictional message record')
+        link.get_by_label('Evidence link', exact=True).fill(
+            'https://example.invalid/message/42')
+        link.get_by_label('Evidence note', exact=True).fill(
+            'Fictional browser journey evidence.')
+        expect(message).to_contain_text(
+            'Recorded as received · user-entered, unverified')
+        expect(message).to_contain_text(
+            'Evidence links · user-entered, unverified')
+        self.save(page)
+
+        page.get_by_role('button', name='Add communication', exact=True).click()
+        outgoing = page.get_by_role('article', name='Campaign communication').nth(1)
+        expect(outgoing.get_by_label('Communication status', exact=True)).to_have_value(
+            'draft')
+        outgoing.get_by_label('Communication date (user-entered)', exact=True).fill(
+            '2026-09-29')
+        outgoing.get_by_label('Person or organisation', exact=True).fill(
+            'Riley Private Contact')
+        outgoing.get_by_label('Subject or short title', exact=True).fill(
+            'Fictional draft question')
+        outgoing.get_by_label('Message text or summary', exact=True).fill(
+            'OutgoingDraftBodyFictional: not sent.')
+        expect(outgoing).to_contain_text('Draft · not sent · user-entered')
+        self.save(page)
+        communication_rows = page.get_by_role(
+            'article', name='Campaign communication')
+        expect(communication_rows).to_have_count(2)
+        page.get_by_role('tab', name='Opportunities', exact=True).click()
+        page.locator('.campaign-opportunity').filter(
+            has_text='Fictional local sponsorship').click()
+        page.get_by_text('Edit opportunity details', exact=True).click()
+        page.get_by_label('Opportunity name', exact=True).fill(
+            'Fictional local sponsorship renamed')
+        self.save(page)
+        saved_identity = page.evaluate('''async () => {
+            const {request} = await import('/static/api.js');
+            const result = await request('/api/campaigns');
+            const saved = result.campaigns.find(item =>
+                item.title === 'Fictional swimming capacity campaign');
+            const current = await request('/api/campaigns/' + saved.id);
+            return {id: saved.id, revision: saved.revision,
+                communications: current.document.communications};
+        }''')
+        assert saved_identity['communications'][0]['opportunity'] == \
+            'Fictional local sponsorship renamed'
+        saved_identity = {key: saved_identity[key] for key in ('id', 'revision')}
+
+        page.reload()
+        page.locator('#view .page-intro').first.wait_for()
+        page.get_by_role('tab', name='Communications', exact=True).click()
+        entries = page.get_by_role('article', name='Campaign communication')
+        expect(entries).to_have_count(2)
+        entries.nth(0).locator('summary').click()
+        expect(entries.nth(0)).to_contain_text(
+            'Recorded as received · user-entered, unverified')
+        expect(entries.nth(0).get_by_label(
+            'Message text or summary', exact=True)).to_have_value(
+                'IncomingMessageBodyFictional: a fictional reply about a '
+                'community project.')
+        entries.nth(1).locator('summary').click()
+        expect(entries.nth(1)).to_contain_text('Draft · not sent · user-entered')
+        expect(entries.nth(1).get_by_label(
+            'Message text or summary', exact=True)).to_have_value(
+                'OutgoingDraftBodyFictional: not sent.')
+        for width in (390, 320):
+            page.set_viewport_size({'width': width, 'height': 844})
+            assert page.evaluate(
+                '() => document.documentElement.scrollWidth <= innerWidth + 1'), width
+        page.set_viewport_size({'width': 1440, 'height': 1000})
+
+        page.get_by_role('button', name='Prepare campaign brief', exact=True).click()
+        expect(page.get_by_role('region', name='Your draft report')).to_be_visible(
+            timeout=10000)
+        export_choice = page.get_by_label(
+            'Include full communication records and personal contact details '
+            'in this download',
+            exact=True)
+        assert not export_choice.is_checked()
+        filename, redacted_text = self.download(page, 'Download redacted evidence pack')
+        assert filename.endswith('.json'), filename
+        redacted = json.loads(redacted_text)
+        assert redacted['campaign']['communications'][0]['date'] == '2026-09-25'
+        assert redacted['campaign']['communications'][1]['status'] == 'draft'
+        redacted_json = json.dumps(redacted)
+        for private_value in ('IncomingMessageBodyFictional',
+                              'OutgoingDraftBodyFictional', 'Jordan Private Contact',
+                              'Riley Private Contact',
+                              'Casey Example',
+                              'campaign@example.invalid', '0400 222 333'):
+            assert private_value not in redacted_json, private_value
+        assert redacted['export_privacy']['campaign_private_details'] == 'redacted'
+        assert 'https://example.invalid/message/42' not in redacted_json
+
+        page.get_by_text('More options', exact=True).click()
+        export_choice.check()
+        expect(page.get_by_role(
+            'button', name='Download evidence pack with private details',
+            exact=True)).to_be_visible()
+        filename, full_text = self.download(
+            page, 'Download evidence pack with private details')
+        assert filename.endswith('.json'), filename
+        full = json.loads(full_text)
+        assert 'IncomingMessageBodyFictional' in full['markdown']
+        assert 'OutgoingDraftBodyFictional' in full['markdown']
+        assert full['campaign']['communications'][0]['evidence_links'][0]['url'] == \
+            'https://example.invalid/message/42'
+        assert full['export_privacy']['campaign_private_details'] == \
+            'included_by_user_choice'
+        assert not export_choice.is_checked()
+
+        stored = page.evaluate('''async id => {
+            const {request} = await import('/static/api.js');
+            return await request('/api/campaigns/' + id);
+        }''', saved_identity['id'])
+        assert stored['document']['communications'][0]['content'].startswith(
+            'IncomingMessageBodyFictional')
+        assert stored['document']['communications'][0]['evidence_links'][0]['url'] == \
+            'https://example.invalid/message/42'
+
+        page.get_by_role('tab', name='Opportunities', exact=True).click()
+        page.locator('.campaign-opportunity').filter(
+            has_text='Fictional local sponsorship renamed').click()
+        page.get_by_role('button', name='Draft clarification letter',
+                         exact=True).click()
+        page.get_by_role('button', name='Prepare my draft', exact=True).click()
+        expect(page.get_by_role('region', name='Your draft report')).to_be_visible(
+            timeout=10000)
+        draft_pack = self.pack(page)
+        assert draft_pack['campaign_link'] == {
+            **saved_identity, 'opportunity': 'Fictional local sponsorship renamed',
+            'dirty': False,
+        }
+        assert submitted and all(
+            'campaign_link' not in payload for payload in submitted)
+        draft_text = page.locator('.document-paper').inner_text()
+        page.get_by_label('Draft channel for the campaign log', exact=True).select_option('email')
+        page.get_by_role('button', name='Save draft to campaign log', exact=True).click()
+        expect(page.get_by_role('button', name='Saved as a draft · not sent', exact=True)).to_be_disabled()
+        expect(page.get_by_role('note').filter(has_text='It has not been sent.')).to_be_visible()
+        saved_draft = page.evaluate('''async id => {
+            const {request} = await import('/static/api.js');
+            return await request('/api/campaigns/' + id);
+        }''', saved_identity['id'])
+        logged = saved_draft['document']['communications'][-1]
+        assert logged['opportunity'] == 'Fictional local sponsorship renamed'
+        assert logged['direction'] == 'outgoing' and logged['status'] == 'draft'
+        assert logged['channel'] == 'email' and logged['counterparty'] == 'Example Business'
+        assert logged['date'] == ''
+        assert logged['content'].startswith('Dear Example Business,')
+        assert 'Could you confirm the current requirement for' in logged['content']
+        assert 'Could you confirm the current requirement for' in draft_text
+
+        self.goto(page, 'campaigns')
+        page.get_by_role('tab', name='Communications', exact=True).click()
+        entries = page.get_by_role('article', name='Campaign communication')
+        expect(entries).to_have_count(3)
+        latest = entries.nth(2)
+        latest.locator('summary').click()
+        expect(latest).to_contain_text('Draft · not sent · user-entered')
+        expect(latest.get_by_label(
+            'Communication date (user-entered)', exact=True)).to_have_value('')
+        latest.get_by_label('Subject or short title', exact=True).fill(
+            'Clarification draft saved from the letter screen')
+        self.save(page)
+        current = page.evaluate('''async id => {
+            const {request} = await import('/static/api.js');
+            return await request('/api/campaigns/' + id);
+        }''', saved_identity['id'])
+        assert current['document']['communications'][-1]['subject'] == \
+            'Clarification draft saved from the letter screen'
+
 
 def main(argv=None):
     args = browser_arguments(__doc__, argv)
     from playwright.sync_api import sync_playwright
-    artifacts = ROOT / 'browser-artifacts'; artifacts.mkdir(exist_ok=True)
+    artifacts = ROOT / 'browser-artifacts'
+    artifacts.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='sinter-campaign-browser-') as temporary, ExitStack() as guard:
         for name in ('chat', 'search', '_post', '_get'):
             guard.enter_context(patch.object(client, name, side_effect=AssertionError('Unexpected remote ' + name)))
         server = make_server(port=0, directory=temporary)
-        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
         try:
             with sync_playwright() as playwright:
                 browser = launch_chromium(playwright, args.chromium)
                 checks = CampaignChecks(browser, f'http://127.0.0.1:{server.server_port}', artifacts)
                 checks.check('campaign-application-budget-roundtrip', checks.workflow)
                 checks.check('campaign-conflict-import-recovery', checks.conflict_and_import)
+                checks.check('campaign-clarification-signer-isolation', checks.clarification_signer_is_campaign_scoped)
+                checks.check('campaign-communications-and-clarification-link', checks.communications_and_clarification_link)
                 receipt = {'schema': 'sinter-campaign-browser/v1', 'checks': checks.results,
                            'expected_rejections': ['A stale campaign revision returns HTTP 400 and preserves the user’s edits.'],
                            'screenshots': checks.screenshots, 'browser_errors': checks.errors, 'external_requests': checks.external,
@@ -185,7 +605,10 @@ def main(argv=None):
                 (artifacts / 'campaign-summary.json').write_text(json.dumps(receipt, indent=2), encoding='utf-8')
                 browser.close()
         finally:
-            server.shutdown(); server.app.close(); server.server_close(); thread.join(timeout=5)
+            server.shutdown()
+            server.app.close()
+            server.server_close()
+            thread.join(timeout=5)
     if not receipt['passed']:
         raise SystemExit('FAIL: inspect browser-artifacts/campaign-summary.json.')
     print('PASS: campaign answers, quote-aware costs, actions, save/reopen, conflict recovery and mobile layout. No external requests.')

@@ -33,7 +33,9 @@ def plan(title, rows):
         if not isinstance(row, dict):
             raise ValueError('Each action must be an object.')
         action = text(row.get('action', ''), 'Action', 2000, True)
-        owner = text(row.get('owner', ''), 'Owner', 200)
+        # Campaign exports append a short acceptance-state note to an owner
+        # field whose own validated maximum is 300 characters.
+        owner = text(row.get('owner', ''), 'Owner', 400)
         due = text(row.get('due', ''), 'Due date', 10)
         status = text(row.get('status', 'not_started'), 'Status', 20)
         if status not in {'not_started', 'in_progress', 'done'}:

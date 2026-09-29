@@ -1,6 +1,74 @@
 /** A usable document is separate from the immutable evidence that produced it. */
-import {h, button, field, markdown, download, reportName, notice, announce} from './ui.js';
+import {
+  h, button, check, field, markdown, download, reportName, notice, announce,
+} from './ui.js';
 import {request} from './api.js';
+
+const REDACTED = '[Redacted from this export]';
+const PRIVATE_PACK_NOTICE = 'This export omits communication bodies, subjects, '
+  + 'contact names and links, plus campaign signatory and contact details. '
+  + 'Edited document text is omitted to prevent hidden copies. This is not a '
+  + 'complete privacy scrub: applicant evidence, objectives, answers, budget, '
+  + 'action owners and source notes may still contain user-entered personal or '
+  + 'sensitive details. Review the whole file before sharing. The saved campaign '
+  + 'is unchanged.';
+
+function redactCommunicationMarkdown(value) {
+  const heading = '## Communications log · user-entered, unverified';
+  const start = value.indexOf(heading);
+  if (start < 0) return null;
+  // Never locate a suffix using headings from this Markdown: user-pasted
+  // correspondence can contain the same heading and create a false boundary.
+  // Source records remain available as structured campaign data in the pack.
+  return value.slice(0, start) + heading
+    + '\n\nCommunication bodies, subject lines, contact names and evidence links '
+    + 'are redacted from this export.'
+    + '\n\nCharacter counts use Unicode code points, including whitespace.\n';
+}
+
+/** Build a detached campaign evidence-pack snapshot with private fields
+ * redacted by default.
+ */
+export function evidencePackForDownload(report, {includePrivate = false} = {}) {
+  const pack = JSON.parse(JSON.stringify(report));
+  if (pack.workflow !== 'campaign') return pack;
+  if (includePrivate) {
+    pack.export_privacy = {
+      campaign_private_details: 'included_by_user_choice',
+      notice: 'Private campaign details were included by explicit choice. '
+        + 'Keep this file private.',
+    };
+    return pack;
+  }
+
+  const campaign = pack.campaign;
+  if (campaign && typeof campaign === 'object') {
+    for (const key of ['signatory', 'contact_details']) {
+      if (typeof campaign[key] === 'string' && campaign[key]) campaign[key] = REDACTED;
+    }
+    if (Array.isArray(campaign.communications)) {
+      campaign.communications = campaign.communications.map(row => ({
+        ...row,
+        counterparty: row.counterparty ? REDACTED : row.counterparty,
+        subject: row.subject ? REDACTED : row.subject,
+        content: row.content ? REDACTED : row.content,
+        evidence_links: [],
+      }));
+    }
+  }
+
+  if (typeof pack.markdown === 'string' && campaign?.communications?.length) {
+    pack.markdown = redactCommunicationMarkdown(pack.markdown) ?? PRIVATE_PACK_NOTICE;
+  }
+  if (typeof pack.document_edits?.markdown === 'string') {
+    pack.document_edits.markdown = '[Edited document text omitted from this redacted export.]';
+  }
+  pack.export_privacy = {
+    campaign_private_details: 'redacted',
+    notice: PRIVATE_PACK_NOTICE,
+  };
+  return pack;
+}
 
 export function documentMarkdown(report) {
   return report.document_edits?.markdown ?? report.document_markdown ?? report.markdown ?? '';
@@ -51,16 +119,22 @@ export function downloadDocument(report) {
     + '.status{font:11px system-ui,sans-serif;letter-spacing:.08em;color:#626b72;text-transform:uppercase;margin-bottom:28px}.document{overflow-wrap:anywhere}'
     + '@media(max-width:650px){.sheet{margin:0;padding:28px 22px;border:0}}@media print{body{background:white}.sheet{margin:0;padding:0;border:0}.status{font-size:9px}.table-scroll{overflow:visible}h1,h2,h3,h4{break-after:avoid}tr{break-inside:avoid}}'
     + '</style></head><body><article class="sheet"><div class="status">' + (report.demo ? 'Fictional example · ' : '')
-    + (report.model_draft ? 'Model-generated draft · Review before use' : 'Draft · Review before use') + '</div>'
+    + (report.workflow === 'campaign' ? 'Internal decision brief · Review before sharing'
+      : report.model_draft ? 'Model-generated draft · Review before use' : 'Draft · Review before use') + '</div>'
     + body.outerHTML + '</article></body></html>';
   download(reportName(title) + '.html', html, 'text/html;charset=utf-8');
 }
 
 /** Shared copy, readable export and explicit editing for every kind of document. */
 export function documentActions(report, {onChange = () => {}, save} = {}) {
+  const isCampaign = report.workflow === 'campaign';
   const feedback = h('div', {class: 'document-feedback', 'aria-live': 'polite'});
   const editor = h('div', {class: 'document-editor non-print', hidden: true});
-  const word = button('Download Word (.docx)', async () => {
+  const privateExport = isCampaign
+    ? check('Include full communication records and personal contact details '
+      + 'in this download', false)
+    : null;
+  const word = button(isCampaign ? 'Download Word brief (.docx)' : 'Download Word (.docx)', async () => {
     word.disabled = true;
     try {
       const content = await request('/api/documents/docx', {data: {title: report.document_title || report.title || 'Sinter draft', markdown: documentMarkdown(report)}, responseType: 'blob'});
@@ -69,8 +143,8 @@ export function documentActions(report, {onChange = () => {}, save} = {}) {
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
     finally { word.disabled = false; }
   });
-  const input = field('Edit your draft', 'textarea', '', 'Changes are saved with the draft. The original output and source evidence are retained.', {rows: 18, maxLength: 500000});
-  const edit = button('Edit draft', () => { input.input.value = documentMarkdown(report); editor.hidden = false; input.input.focus(); }, 'quiet');
+  const input = field(isCampaign ? 'Edit the decision brief' : 'Edit your draft', 'textarea', '', 'Changes are saved with the draft. The original output and source evidence are retained.', {rows: 18, maxLength: 500000});
+  const edit = button(isCampaign ? 'Edit decision brief' : 'Edit draft', () => { input.input.value = documentMarkdown(report); editor.hidden = false; input.input.focus(); }, 'quiet');
   const apply = button('Apply edits', () => {
     if (!input.input.value.trim()) { feedback.replaceChildren(notice('Keep some document text, or cancel to retain the current draft.', 'error')); return; }
     if (input.input.value.length > input.input.maxLength) { feedback.replaceChildren(notice('Keep this draft under 500,000 characters before applying edits.', 'error')); return; }
@@ -78,19 +152,47 @@ export function documentActions(report, {onChange = () => {}, save} = {}) {
     editor.hidden = true; onChange(); feedback.replaceChildren(notice('Edits applied. Save this draft to keep them.', 'success')); announce('Draft updated. Original evidence retained.'); exports.querySelector('summary').focus();
   }, 'primary');
   editor.append(input.wrap, h('div', {class: 'button-row'}, apply, button('Cancel edits', () => { editor.hidden = true; exports.querySelector('summary').focus(); })));
+  const evidencePack = button(
+    isCampaign ? 'Download redacted evidence pack' : 'Download evidence pack', () => {
+    const includedPrivate = Boolean(privateExport?.input.checked);
+    const content = evidencePackForDownload(report, {includePrivate: includedPrivate});
+    download(reportName(report.title) + '.json',
+      JSON.stringify(content, null, 2), 'application/json');
+    if (includedPrivate && privateExport) {
+      privateExport.input.checked = false;
+      evidencePack.textContent = 'Download redacted evidence pack';
+      feedback.replaceChildren(notice(
+        'Downloaded with private campaign details. Keep this file private; '
+          + 'Sinter did not transmit it.', 'warning'));
+    }
+  });
+  if (privateExport) privateExport.input.addEventListener('change', () => {
+    evidencePack.textContent = privateExport.input.checked
+      ? 'Download evidence pack with private details' : 'Download redacted evidence pack';
+  });
   const exports = h('details', {class: 'export-menu'}, h('summary', {class: 'button'}, 'More options'),
     h('div', {class: 'export-options'},
-      button('Download document', () => downloadDocument(report)),
-      button('Download Markdown', () => download(reportName(report.title) + '.md', documentMarkdown(report), 'text/markdown;charset=utf-8')),
-      button('Download evidence pack', () => download(reportName(report.title) + '.json', JSON.stringify(report, null, 2), 'application/json')),
+      privateExport ? h('div', {class: 'private-export-choice'}, privateExport.wrap,
+        h('small', {}, 'Off by default. The redacted file omits message text, subjects, '
+          + 'contact names and evidence links, plus signatory and contact details. '
+          + 'Edited document text is also omitted. Applicant evidence, objectives, '
+          + 'answers, budget, action owners and source notes may still contain '
+          + 'user-entered personal or sensitive details. Review the whole file '
+          + 'before sharing. Sinter downloads it to your device and does not '
+          + 'transmit it; the saved campaign is unchanged.')) : null,
+      button(isCampaign ? 'Download decision brief' : 'Download document', () => downloadDocument(report)),
+      button(isCampaign ? 'Download Markdown brief' : 'Download Markdown', () => download(reportName(report.title) + '.md', documentMarkdown(report), 'text/markdown;charset=utf-8')),
+      evidencePack,
       button('Print / save PDF', () => window.print()), edit));
   exports.addEventListener('click', event => { if (event.target.closest('button')) exports.open = false; });
   exports.addEventListener('keydown', event => {
     if (event.key === 'Escape' && exports.open) { event.preventDefault(); exports.open = false; exports.querySelector('summary').focus(); }
   });
   const controls = h('div', {class: 'document-toolbar non-print'},
-    h('div', {class: 'button-row'}, button('Copy draft text', async () => {
-      try { await navigator.clipboard.writeText(plainDocument(documentMarkdown(report))); feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, 'Copied. Ready to paste into your email or document.')); announce('Draft text copied.'); }
+    h('div', {class: 'button-row'}, button(isCampaign ? 'Copy decision brief' : 'Copy draft text', async () => {
+      try { await navigator.clipboard.writeText(plainDocument(documentMarkdown(report))); feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, isCampaign
+        ? 'Copied. Review the internal decision brief for accuracy and privacy before sharing.'
+        : 'Copied. Ready to paste into your email or document.')); announce(isCampaign ? 'Decision brief copied.' : 'Draft text copied.'); }
       catch { feedback.replaceChildren(notice('Clipboard access is unavailable. Download the document instead.', 'error')); }
     }, 'primary'), word, save || null, exports));
   return {controls, feedback, editor};

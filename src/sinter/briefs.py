@@ -113,6 +113,8 @@ def prepare_document(payload: dict, sources: list[Source],
                               for index, question in enumerate(questions, 1))
     missing = []
     if kind == "enquiry":
+        if not details["recipient"]:
+            missing.append({"field": "recipient", "label": "Recipient or funder contact"})
         if not questions:
             missing.append({"field": "questions", "label": "Questions you want answered"})
         if not details["signatory"]:
@@ -129,7 +131,10 @@ def prepare_document(payload: dict, sources: list[Source],
         lines.append("Thank you for your help.")
         signature = [details[key] for key in ("signatory", "sender_role", "organisation", "contact_details")
                      if details[key]]
-        if signature:
+        # A group name alone describes whom the letter concerns; it does not
+        # establish who is signing it. Do not manufacture a sign-off from the
+        # campaign's organisation name when there is no named signer or contact.
+        if details["signatory"] or details["contact_details"]:
             lines.extend(["Kind regards,", "\n".join(literal(value) for value in dict.fromkeys(signature))])
     elif kind == "agenda":
         lines = ["# " + literal(title), "## Purpose", "Discuss the supplied background and agree the next steps."]

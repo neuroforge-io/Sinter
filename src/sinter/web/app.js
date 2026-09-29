@@ -11,9 +11,11 @@ import {workbench} from './workbench.js';
 import {library, watches} from './library.js';
 import {playground} from './playground.js';
 import {tools, buildNavigation, installToolFinder} from './navigation.js';
+import {rememberDraft, shouldWarnBeforeExit} from './draft-state.js';
 
 const view = document.getElementById('view');
 const drafts = new Map();
+const dirtyDrafts = new Set();
 let busy = false, current = '#home', routeSequence = 0;
 const routes = tools.map(({id, label}) => [id, label]);
 const navigation = document.getElementById('navigation');
@@ -23,7 +25,7 @@ function setBusy(value) {
   busy = value;
   for (const link of navigation.querySelectorAll('a')) link.setAttribute('aria-disabled', String(value));
 }
-function remember(kind, value) { if (!value.demo) drafts.set(kind, value); }
+function remember(kind, value, options) { rememberDraft(drafts, dirtyDrafts, kind, value, options); }
 function go(route) { if (!busy) location.hash = route; }
 
 function help() {
@@ -71,7 +73,7 @@ async function route() {
   try {
     const options = {setBusy, remember, seed: drafts.get(id) || {}, example: new URLSearchParams(query || '').get('example') === '1',
       onDraftWithModel: payload => {
-        drafts.set('explore', {mode: 'templates', template: 'enquiry-letter', signatory: payload.signatory,
+        remember('explore', {mode: 'templates', template: 'enquiry-letter', signatory: payload.signatory,
           sender_role: payload.sender_role, organisation: payload.organisation, contact_details: payload.contact_details,
           variables: {recipient: payload.recipient, questions: payload.questions,
             context: [payload.title, payload.notes, ...(payload.sources || []).map(source => `${source.title}\n${source.content}\n${source.url || ''}`)].filter(Boolean).join('\n\n')}});
@@ -82,7 +84,7 @@ async function route() {
     else if (id === 'casebooks') content = await casebooksPage(options);
     else if (id === 'campaigns') content = await campaignsPage(options);
     else if (id === 'activity') content = await activityPage();
-    else if (id === 'library') content = await library({onEditProject: payload => { drafts.set(payload.workflow, payload); go(payload.workflow); }});
+    else if (id === 'library') content = await library({onEditProject: payload => { remember(payload.workflow, payload, {dirty: true}); go(payload.workflow); }});
     else if (id === 'watches') content = await watches(options);
     else if (id === 'explore') content = await playground(options);
     else if (id === 'atlas') content = atlasPage(options);
@@ -111,12 +113,12 @@ document.querySelector('.skip-link').addEventListener('click', event => {
   event.preventDefault(); document.getElementById('content').focus();
 });
 window.addEventListener('hashchange', route);
-window.addEventListener('beforeunload', event => { if (busy || drafts.size) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (shouldWarnBeforeExit(dirtyDrafts, busy)) { event.preventDefault(); event.returnValue = ''; } });
 session().then(value => {
   document.getElementById('version').textContent = `v${value.version} / Apache 2.0`;
   if (value.desktop) navigation.append(button('Quit Sinter', async () => {
-    if ((busy || drafts.size) && !confirm('Quit Sinter? Download or save your work first. Unsaved work will be lost.')) return;
-    try { await request('/api/desktop/quit', {data: {}}); busy = false; drafts.clear(); view.replaceChildren(notice('Sinter has stopped. You can close this window.')); }
+    if (shouldWarnBeforeExit(dirtyDrafts, busy) && !confirm('Quit Sinter? Download or save your work first. Unsaved work will be lost.')) return;
+    try { await request('/api/desktop/quit', {data: {}}); busy = false; drafts.clear(); dirtyDrafts.clear(); view.replaceChildren(notice('Sinter has stopped. You can close this window.')); }
     catch (error) { announce(error.message); }
   }, 'quiet'));
 }).catch(() => {});

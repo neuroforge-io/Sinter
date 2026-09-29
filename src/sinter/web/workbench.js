@@ -3,6 +3,7 @@ import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
 import {audioForm} from './audio.js';
 import {senderFields} from './profile.js';
+import {campaignLetterReviewCopy} from './campaign-letter.js';
 
 const titles = {research: 'Research a topic.', grants: 'Find funding for good ideas.', brief: 'Write a letter that is ready to use.', meeting: 'Prepare a clear meeting record.'};
 const descriptions = {
@@ -43,10 +44,25 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     use_model: kind !== 'meeting' && !demo && ranking.input.checked,
     demo, sources: [...sources], speaker_map: {...speakerMap}, corrections,
     document_type: documentType.input.value, recipient: recipient.input.value, ...sender.values(),
+    campaign_sender_review: campaignSenderReview,
+    campaign_link: data.campaign_link || null,
     profile: {organisation_type: org.input.value, location: location.input.value, budget: budget.input.value}});
   const documentType = selectField('What are you preparing?', [['enquiry', 'Enquiry letter'], ['briefing', 'Briefing note'], ['agenda', 'Agenda item for discussion']], data.document_type || 'enquiry');
   const recipient = field('Recipient or audience', 'text', data.recipient || '', '', {maxLength: 200});
   const sender = senderFields(data, settings);
+  const campaignSenderReview = data.campaign_sender_review === true;
+  const campaignCopy = campaignSenderReview ? campaignLetterReviewCopy(data) : null;
+  if (campaignSenderReview) sender.panel.open = true;
+  const missingCampaignSigner = !data.signatory?.trim();
+  const missingCampaignContact = !data.contact_details?.trim();
+  const campaignSenderPrompt = !campaignSenderReview ? null : notice(
+    missingCampaignSigner && missingCampaignContact
+      ? 'No campaign signatory or contact details are recorded. This draft will have no sign-off. Add only approved details before using it.'
+      : missingCampaignSigner
+        ? 'No authorised campaign signatory is recorded. Confirm who may sign this letter before using it.'
+        : missingCampaignContact
+          ? 'No campaign reply contact is recorded. Add approved contact details before using this letter.'
+          : 'Confirm that the campaign signatory and contact details below are approved for this letter before using it.');
   const form = h('form', {class: 'form-panel non-print'});
   const inputSummary = h('summary', {hidden: true}, 'Review or edit project inputs');
   const inputPanel = h('details', {class: 'project-inputs non-print', open: true}, inputSummary, form);
@@ -72,16 +88,35 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     status.textContent = 'Starting your evidence pack...'; cancel.hidden = false;
     lastPayload = payload;
     try {
-      const job = await request('/api/workbench', {data: payload}); jobId = job.id;
+      const requestPayload = {...payload};
+      delete requestPayload.campaign_sender_review;
+      delete requestPayload.campaign_link;
+      const job = await request('/api/workbench', {data: requestPayload}); jobId = job.id;
       const report = await waitForJob(jobId, value => { status.textContent = value.message || 'Preparing...'; });
       report.input_snapshot = payload;
       report.profile = payload.profile;
-      results.replaceChildren(renderReport(report, {onEditInputs: () => { inputPanel.open = true; inputPanel.scrollIntoView({block: 'start'}); }, onCorrect: async changes => {
-        corrections = changes; await perform({...lastPayload, corrections});
-      }}));
-      status.textContent = 'Draft ready. Review sources before using it.';
+      if (payload.campaign_link) report.campaign_link = {...payload.campaign_link};
+      results.replaceChildren(renderReport(report, {
+        onEditInputs: () => { inputPanel.open = true; inputPanel.scrollIntoView({block: 'start'}); },
+        onCorrect: async changes => {
+          corrections = changes; await perform({...lastPayload, corrections});
+        },
+        onCampaignUpdated: saved => {
+          if (!payload.campaign_link || !saved?.document) return;
+          const selected = saved.document.opportunities.findIndex(
+            row => row.name === payload.campaign_link.opportunity);
+          remember('campaigns', {
+            document: saved.document, id: saved.id, revision: saved.revision,
+            dirty: false, selected: Math.max(0, selected), tab: 'communications',
+          });
+        },
+      }));
+      const reviewCopy = payload.campaign_sender_review
+        ? campaignLetterReviewCopy(payload) : null;
+      status.textContent = reviewCopy?.status || 'Draft ready. Review sources before using it.';
       inputSummary.hidden = false; inputPanel.open = false;
-      announce('Your draft is ready for review.'); results.scrollIntoView({block: 'start'});
+      announce(reviewCopy?.announcement || 'Your draft is ready for review.');
+      results.scrollIntoView({block: 'start'});
     } catch (error) {
       feedback.replaceChildren(notice(error.message, 'error'));
       if (payload.use_search) feedback.append(h('p', {}, 'Your inputs are safe. You can retry, or add official reference text and prepare without web search.'),
@@ -99,7 +134,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   if (kind === 'brief') fields.append(documentType.wrap);
   fields.append(title.wrap);
   if (kind === 'research' && !demo) fields.append(search.wrap, query.wrap);
-  if (kind === 'brief') fields.append(recipient.wrap, sender.panel);
+  if (kind === 'brief') fields.append(recipient.wrap, campaignSenderPrompt, sender.panel);
   if (kind === 'grants') fields.append(h('details', {}, h('summary', {}, 'About your organisation (optional)'),
     h('div', {class: 'form-grid'}, org.wrap, location.wrap, budget.wrap)));
   fields.append(kind === 'research' ? h('details', {}, h('summary', {}, 'Add your notes (optional)'), notes.wrap) : notes.wrap);
@@ -175,9 +210,12 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   fields.append(h('h3', {class: 'form-section-title'}, 'Review and prepare'), prepare);
   form.append(fields, status, h('div', {class: 'button-row'}, cancel), feedback);
   root.append(h('header', {class: 'page-intro non-print'}, h('span', {class: 'eyebrow'}, 'COMMUNITY WORKBENCH'),
-    h('h2', {}, titles[kind]), h('p', {}, descriptions[kind])),
+    h('h2', {}, campaignCopy?.title || titles[kind]),
+    h('p', {}, campaignCopy?.description || descriptions[kind])),
     h('div', {class: 'non-print'}, demo ? notice('OFFLINE EXAMPLE / All people, programmes and details are fictional. Start a new project from Home for real data.') :
-      h('p', {class: 'workspace-hint'}, 'Save your finished draft to keep it in My workspace. ', h('a', {href: '#settings'}, 'Set up your details'))), inputPanel, results);
+      h('p', {class: 'workspace-hint'}, campaignSenderReview
+        ? 'Save this unsent draft to My workspace or record it in the linked campaign log. Sinter will not contact the recipient. '
+        : 'Save your finished draft to keep it in My workspace. ', h('a', {href: '#settings'}, 'Set up your details'))), inputPanel, results);
   root.dispose = () => root.querySelectorAll('[data-audio-panel]').forEach(panel => panel.dispose?.());
   return root;
 }

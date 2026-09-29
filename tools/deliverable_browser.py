@@ -107,8 +107,11 @@ class DeliverableChecks:
         }''', profile)
 
     def options(self, page):
-        option = page.get_by_role('button', name='Download evidence pack', exact=True)
-        if not option.is_visible():
+        options = (
+            page.get_by_role('button', name='Download redacted evidence pack', exact=True),
+            page.get_by_role('button', name='Download evidence pack', exact=True),
+        )
+        if not any(option.is_visible() for option in options):
             page.get_by_text('More options', exact=True).click()
 
     def download(self, page, label):
@@ -120,7 +123,11 @@ class DeliverableChecks:
         return item.suggested_filename, Path(item.path()).read_text(encoding='utf-8')
 
     def pack(self, page):
-        name, content = self.download(page, 'Download evidence pack')
+        self.options(page)
+        label = 'Download redacted evidence pack'
+        if not page.get_by_role('button', name=label, exact=True).is_visible():
+            label = 'Download evidence pack'
+        name, content = self.download(page, label)
         assert name.endswith('.json'), name
         return json.loads(content)
 

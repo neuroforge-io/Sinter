@@ -128,6 +128,13 @@ def test_plan_preserves_values_and_neutralises_csv_formulas():
     assert 'DTEND;VALUE=DATE:20261001' in result['calendar']
 
 
+def test_plan_accepts_campaign_owner_annotation_after_maximum_name():
+    owner = 'A' * 300 + ' (user-marked accepted; verify directly)'
+    result = community.plan('Campaign', [{'action': 'Confirm owner', 'owner': owner}])
+    assert owner in result['csv']
+    assert owner in result['markdown']
+
+
 @pytest.mark.parametrize('value', ['9999-12-31', '2026-02-30', '30/09/2026'])
 def test_plan_dates_fail_closed(value):
     with pytest.raises(ValueError): community.plan('Test', [{'action': 'Call', 'due': value}])

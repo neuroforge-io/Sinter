@@ -72,7 +72,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   async function save() {
     const result = await request('/api/casebooks/save', {data: {document: value(), id: savedId, revision}});
     savedId = result.id; revision = result.revision; docs = result.document.documents;
-    remember?.('casebooks', {book: value(), savedId, revision});
+    remember?.('casebooks', {book: value(), savedId, revision}, {dirty: false});
     await refresh(); drawSources(); return result;
   }
   function lock(active) { busy = active; editor.disabled = active; setBusy?.(active); }

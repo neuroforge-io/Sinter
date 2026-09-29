@@ -1,11 +1,13 @@
 import {h, button, notice, markdown, safeLink, download, reportName, field, selectField, check, announce} from './ui.js';
 import {request} from './api.js';
-import {documentActions, documentMarkdown} from './documents.js';
+import {documentActions, documentMarkdown, plainDocument} from './documents.js';
+import {campaignCommunicationFromDraft, campaignDraftLogBlockReason} from './campaign-letter.js';
 
 /** The document is the default view; provenance remains one click away. */
-export function renderReport(report, {onCorrect, onEditInputs} = {}) {
+export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated} = {}) {
   const result = h('section', {class: 'report-area', 'aria-label': 'Your draft report'});
   const message = h('div', {class: 'non-print', 'aria-live': 'polite'});
+  const campaignLog = report.campaign_link ? campaignDraftLog(report, message, onCampaignUpdated) : null;
   const save = button('Save to this computer', async () => {
     save.disabled = true;
     try {
@@ -15,15 +17,18 @@ export function renderReport(report, {onCorrect, onEditInputs} = {}) {
     } catch (error) { message.replaceChildren(notice(error.message, 'error')); save.disabled = false; }
   }, 'quiet');
   const paper = h('div', {class: 'document-paper'});
-  const documentPanel = h('section', {class: 'document-panel', role: 'tabpanel', 'aria-label': 'Document'}, paper);
-  const evidencePanel = h('section', {class: 'evidence-panel non-print', role: 'tabpanel', 'aria-label': 'Evidence', hidden: true});
-  const tabs = h('div', {class: 'report-tabs non-print', role: 'tablist', 'aria-label': 'Draft views'});
+  const isCampaign = report.workflow === 'campaign';
+  const documentLabel = isCampaign ? 'Decision brief' : 'Document';
+  const evidenceLabel = isCampaign ? 'Audit & evidence' : 'Evidence';
+  const documentPanel = h('section', {class: 'document-panel', role: 'tabpanel', 'aria-label': documentLabel}, paper);
+  const evidencePanel = h('section', {class: 'evidence-panel non-print', role: 'tabpanel', 'aria-label': evidenceLabel, hidden: true});
+  const tabs = h('div', {class: 'report-tabs non-print', role: 'tablist', 'aria-label': isCampaign ? 'Campaign views' : 'Draft views'});
   const completion = h('div', {class: 'completion-panel non-print'});
   function select(view) {
     documentPanel.hidden = view !== 'document'; evidencePanel.hidden = view !== 'evidence';
     for (const tab of tabs.children) { const selected = tab.dataset.view === view; tab.setAttribute('aria-selected', String(selected)); tab.tabIndex = selected ? 0 : -1; }
   }
-  for (const [id, label] of [['document', 'Document'], ['evidence', 'Evidence']]) {
+  for (const [id, label] of [['document', documentLabel], ['evidence', evidenceLabel]]) {
     const tab = button(label, () => select(id), 'report-tab');
     tab.setAttribute('role', 'tab'); tab.dataset.view = id;
     tab.addEventListener('keydown', event => {
@@ -43,7 +48,9 @@ export function renderReport(report, {onCorrect, onEditInputs} = {}) {
   function updateDocument() {
     const article = markdown(documentMarkdown(report));
     connectCitations(article, report, sources, () => select('evidence'));
-    paper.replaceChildren(h('div', {class: 'paper-label'}, report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'), article);
+    paper.replaceChildren(h('div', {class: 'paper-label'}, report.workflow === 'campaign'
+      ? 'INTERNAL DECISION BRIEF · REVIEW BEFORE SHARING'
+      : report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'), article);
     completion.replaceChildren(h('div', {}, h('strong', {}, report.document_edits ? 'Check these details' : 'Finish the details'),
       h('p', {}, (report.document_edits ? 'Originally missing: ' : '') + (report.missing_fields || []).map(item => item.label).join(' · '))),
       onEditInputs ? button('Add missing details', onEditInputs) : h('span', {class: 'fine'}, 'Use More options → Edit draft to complete these.'));
@@ -58,10 +65,12 @@ export function renderReport(report, {onCorrect, onEditInputs} = {}) {
     h('div', {class: 'report-layout'}, evidenceArticle, sources)].filter(Boolean));
   const actions = documentActions(report, {save, onChange: () => { updateDocument(); select('document'); }});
   const missing = report.missing_fields || [];
-  result.append(...[h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, 'YOUR DOCUMENT'),
-    h('h2', {}, report.document_title || report.title), h('p', {class: 'muted'}, 'Review the wording, make it yours, then copy or download.'))),
+  result.append(...[h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'INTERNAL DECISION RECORD' : 'YOUR DOCUMENT'),
+    h('h2', {}, report.document_title || report.title), h('p', {class: 'muted'}, isCampaign
+      ? 'Review the decision and privacy before sharing. The full audit trail and source notes are in Audit & evidence.'
+      : 'Review the wording, make it yours, then copy or download.'))),
     missing.length ? completion : null,
-    actions.controls, message, actions.feedback, actions.editor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel].filter(Boolean));
+    actions.controls, campaignLog, message, actions.feedback, actions.editor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel].filter(Boolean));
   select('document'); updateDocument();
   if (report.workflow === 'grants' && report.sources?.length) {
     documentPanel.append(grantChecks(report, () => {
@@ -75,6 +84,49 @@ export function renderReport(report, {onCorrect, onEditInputs} = {}) {
   }
   if (onCorrect && report.segments?.length) documentPanel.append(correctionForm(report, onCorrect));
   return result;
+}
+
+function campaignDraftLog(report, feedback, onCampaignUpdated) {
+  const channel = selectField('Draft channel for the campaign log', [
+    ['email', 'Email'], ['letter', 'Letter'], ['portal', 'Application portal'], ['other', 'Other'],
+  ], 'email');
+  const control = button('Save draft to campaign log', async () => {
+    const link = report.campaign_link;
+    const blocked = campaignDraftLogBlockReason(link);
+    if (blocked) { feedback.replaceChildren(notice(blocked, 'error')); return; }
+    control.disabled = true;
+    try {
+      const current = await request('/api/campaigns/' + encodeURIComponent(link.id));
+      if (current.revision !== link.revision) {
+        throw new Error('The campaign changed after this letter was prepared. Nothing was saved. Open the latest campaign, review its changes, then create a fresh clarification draft.');
+      }
+      const document = structuredClone(current.document);
+      if (!document.opportunities?.some(row => row.name === link.opportunity)) {
+        throw new Error('This opportunity is no longer in the saved campaign. Nothing was saved. Open the campaign and create a fresh clarification draft.');
+      }
+      const communication = campaignCommunicationFromDraft({report,
+        content: plainDocument(documentMarkdown(report)), channel: channel.input.value, date: ''});
+      document.communications = Array.isArray(document.communications) ? document.communications : [];
+      if (document.communications.length >= 200) throw new Error('This campaign log already has 200 communications. Export or archive a copy before adding another.');
+      document.communications.push(communication);
+      const saved = await request('/api/campaigns/save', {data: {
+        document, id: link.id, revision: link.revision,
+      }});
+      onCampaignUpdated?.(saved);
+      report.campaign_link = {...link, revision: saved.revision, logged: true};
+      control.textContent = 'Saved as a draft · not sent';
+      feedback.replaceChildren(notice('Saved to this computer in the campaign communications log as a draft. It has not been sent.', 'success'));
+      announce('Campaign draft saved locally and marked not sent.');
+    } catch (error) {
+      feedback.replaceChildren(notice(error.message, 'error'));
+      control.disabled = false;
+    }
+  }, 'quiet');
+  const blocked = campaignDraftLogBlockReason(report.campaign_link);
+  if (blocked) control.disabled = true;
+  return h('section', {class: 'campaign-draft-log non-print', 'aria-label': 'Campaign communication log'},
+    h('p', {class: 'muted'}, 'Keep a copy of this exact draft in the linked campaign. Saving it marks it as not sent; Sinter will not contact anyone.'),
+    channel.wrap, control, blocked ? h('p', {class: 'fine'}, blocked) : null);
 }
 
 /** Source IDs become local disclosure controls; no navigation or HTML parsing. */
