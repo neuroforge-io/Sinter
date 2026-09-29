@@ -1056,6 +1056,36 @@ def test_application_window_can_link_a_registered_source_in_reports():
     assert "Source ID " + source_id[:8] in report["document_markdown"]
 
 
+@pytest.mark.parametrize("snapshot_field,snapshot_value", [
+    ("window_source_url", ""),
+    ("window_source_url", "https://example.org/older-guidance"),
+    ("window_checked_at", "2026-09-28"),
+])
+def test_window_reports_describe_stale_source_snapshots_without_claiming_the_source_changed(
+    snapshot_field, snapshot_value,
+):
+    document = campaign()
+    normalized = campaigns.validate(document)
+    source = normalized["sources"][0]
+    source["checked_at"] = "2026-09-29"
+    route = normalized["opportunities"][0]
+    route.update(
+        application_window="rolling",
+        window_source_id=source["id"],
+        window_source_url=source["url"],
+        window_source_quote="Expressions of interest are accepted year-round.",
+        window_checked_at=source["checked_at"],
+    )
+    route[snapshot_field] = snapshot_value
+
+    report = campaigns.prepare(normalized)
+
+    for output in (report["markdown"], report["document_markdown"]):
+        assert "saved source snapshot is missing or out of date" in output
+        assert "recheck against the linked source before use" in output
+        assert "source changed since wording was checked" not in output
+
+
 @pytest.mark.parametrize("collection,key", [
     ("requirements", "source_id"),
     ("opportunities", "window_source_id"),

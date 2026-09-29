@@ -968,6 +968,17 @@ def _source_for(sources: list[dict], source_id: str) -> dict | None:
     return next((source for source in sources if source["id"] == source_id), None)
 
 
+def _window_source_notice(row: dict, source: dict | None) -> str:
+    if source is None:
+        return (" · no registered source linked; link and recheck before use"
+                if row["window_source_quote"] else "")
+    if (row["window_source_url"] != source["url"]
+            or row["window_checked_at"] != source["checked_at"]):
+        return (" · saved source snapshot is missing or out of date; "
+                "recheck against the linked source before use")
+    return ""
+
+
 def _window_description(row: dict, sources: list[dict] = ()) -> str:
     """Describe the user-entered application window without implying verification."""
     kind = row["application_window"]
@@ -985,11 +996,7 @@ def _window_description(row: dict, sources: list[dict] = ()) -> str:
             _link(source["url"], source["title"])
             if source["url"] else _inline(source["title"]))
         label += " · Source ID " + source["id"][:8]
-        if (row["window_source_url"] != source["url"]
-                or row["window_checked_at"] != source["checked_at"]):
-            label += " · source changed since wording was checked; recheck before use"
-    elif row["window_source_quote"]:
-        label += " · no registered source linked; link and recheck before use"
+    label += _window_source_notice(row, source)
     if row["window_checked_at"]:
         checked = date.fromisoformat(row["window_checked_at"])
         age_days = (date.today() - checked).days
@@ -1021,11 +1028,7 @@ def _brief_window_description(row: dict, sources: list[dict] = ()) -> str:
             _link(source["url"], source["title"])
             if source["url"] else _inline(source["title"]))
         label += " · Source ID " + source["id"][:8]
-        if (row["window_source_url"] != source["url"]
-                or row["window_checked_at"] != source["checked_at"]):
-            label += " · source changed since wording was checked; recheck before use"
-    elif row["window_source_quote"]:
-        label += " · no registered source linked; link and recheck before use"
+    label += _window_source_notice(row, source)
     if row["window_checked_at"]:
         checked = date.fromisoformat(row["window_checked_at"])
         age_days = (date.today() - checked).days
