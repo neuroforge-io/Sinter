@@ -39,6 +39,10 @@ def saved_review():
     'DEMONSTRATED: The booking deadline conflicts with Thursday in the earlier instruction; choose one deadline.',
     'SUSPECTED: The coordinator confirms available spaces, but no confirmation method is stated.',
     'Lines 1–2: The booking deadline appears inconsistent between Thursday and Friday.',
+    'Line 2: One instruction gives Friday at noon and the earlier instruction gives Thursday.',
+    'Line 2: The date differs from the earlier booking instruction.',
+    'Line 2: The deadline does not match the earlier date.',
+    'Line 2: The stated due date contradicts the earlier Thursday deadline.',
     'L2: The booking deadline conflicts with Thursday in the earlier instruction; choose one deadline.',
     'The statement “The booking deadline is Friday at noon.” conflicts with the previous deadline.',
     'No demonstrated issues. I checked the date consistency and responsibilities in the supplied excerpt.',
@@ -46,6 +50,21 @@ def saved_review():
 ])
 def test_grounded_prose_findings_are_usable_without_literal_quotes(text):
     assert review._substantive(text, SOURCE)
+
+
+def test_grounded_absence_can_be_paraphrased_without_a_verbatim_quote():
+    source = 'No contact method for the coordinator is listed.\n'
+    assert review._substantive(
+        'Line 1: The contact method for the coordinator is absent.', source)
+
+
+@pytest.mark.parametrize('finding', [
+    'Line 1: There is no contact method for the coordinator.',
+    'Line 1: The contact method for the coordinator is not available.',
+])
+def test_common_grounded_absence_phrasings_are_substantive(finding):
+    source = 'The contact method for the coordinator is not listed.\n'
+    assert review._substantive(finding, source)
 
 
 @pytest.mark.parametrize('text', [
@@ -74,6 +93,265 @@ def test_live_observed_unquoted_specific_gap_is_grounded():
     answer = 'Mistakes, gaps, and inconsistencies:\n1. No contact method for the coordinator is listed.'
     assert review._substantive(answer, source)
     assert not review._substantive(answer, 'Different notes without any coordinator.')
+
+
+@pytest.mark.parametrize(('answer', 'source'), [
+    ('Line 1: Exporting member accommodation details risks information disclosure to public readers; '
+     'restrict the export to authorised committee users.',
+     'The public export includes member names and accommodation details.\n'),
+    ('Line 1: An authorization bypass could allow an unauthenticated request to update a record; '
+     'authorize the caller role in this request handler.',
+     'The request handler updates access permissions before checking the user role.\n'),
+    ('Line 1: This path traversal can overwrite files outside the workspace; constrain the user path '
+     'to the workspace root.',
+     'The export handler joins a request-provided filename onto the workspace root and writes it '
+     'without checking the resolved destination.\n'),
+])
+def test_specific_line_findings_require_matching_source_evidence(answer, source):
+    # A line number and a vulnerability label are insufficient by themselves.
+    assert review._substantive(answer, source)
+
+
+def test_safe_path_resolution_is_not_reported_as_path_traversal():
+    answer = ('Line 1: This path traversal can overwrite files outside the workspace; '
+              'resolve the user path before writing the destination.')
+    source = 'Resolve the user-supplied file path under the workspace before writing the destination.\n'
+    assert not review._substantive(answer, source)
+
+
+@pytest.mark.parametrize('answer', [
+    'Line 1: This is an information disclosure concern. Please review.',
+    'Line 1: This looks bad and should be fixed to make the document better.',
+    'Line 1: This creates an information disclosure risk that could expose private contact details; '
+    'please provide the source document before I can review it.',
+])
+def test_line_location_does_not_admit_vague_or_unavailable_findings(answer):
+    source = 'Member names and accommodation details are included in this export.\n'
+    assert not review._substantive(answer, source)
+
+
+@pytest.mark.parametrize(('answer', 'source'), [
+    ('Line 1: This creates SQL injection because students update attendance records; '
+     'validate input.', 'Students update attendance records each morning.\n'),
+    ('Line 1: This authorization bypass lets attendees access the newsletter; '
+     'check permissions.', 'Picnic attendees receive the newsletter each Friday.\n'),
+    ('Line 1: Member accommodation details appear in this export; improve the document.',
+     'Member names and accommodation details are included in this export.\n'),
+])
+def test_line_numbers_and_shared_words_do_not_support_an_unrelated_failure(answer, source):
+    assert not review._substantive(answer, source)
+
+
+def test_single_shared_word_does_not_ground_a_line_numbered_finding():
+    answer = 'Line 1: The coordinator deadline is inconsistent and should be updated.'
+    assert not review._substantive(answer, 'The coordinator confirms available garden spaces.\n')
+
+
+@pytest.mark.parametrize('answer', [
+    'Line 1: Applicant eligibility evidence is not provided.',
+    'The source says “No applicant email is listed.” Applicant eligibility evidence is not provided.',
+])
+def test_a_generic_omission_cannot_borrow_one_unrelated_source_word(answer):
+    assert not review._substantive(answer, 'No applicant email is listed.\n')
+
+
+def test_a_matching_quote_does_not_ground_an_unrelated_security_claim():
+    answer = ('The statement “The booking deadline is Friday at noon.” is a path traversal '
+              'vulnerability. Please fix it.')
+    assert not review._substantive(answer, SOURCE)
+
+
+def test_a_matching_quote_does_not_launder_an_unrelated_deadline_claim():
+    answer = ('The statement “The booking deadline is Friday at noon.” is inconsistent '
+              'with the school pool depth; change the deadline.')
+    assert not review._substantive(answer, SOURCE)
+
+
+@pytest.mark.parametrize('answer', [
+    '“No contact method for the coordinator is listed.”',
+    'Line 1: “No contact method for the coordinator is listed.”',
+])
+def test_a_source_quote_without_a_finding_does_not_complete_a_review(answer):
+    assert not review._substantive(
+        answer, 'No contact method for the coordinator is listed.\n')
+
+
+def test_repeating_quoted_nouns_does_not_support_an_unrelated_claim():
+    answer = ('The statement “The booking deadline is Friday at noon.” shows that the '
+              'booking deadline is inconsistent with the school pool depth.')
+    assert not review._substantive(answer, SOURCE)
+
+
+def test_a_quote_can_support_a_grounded_absence_paraphrase():
+    source = 'No contact method for the coordinator is listed.\n'
+    answer = 'The source says “No contact method for the coordinator is listed.” That contact method is absent.'
+    assert review._substantive(answer, source)
+
+
+def test_a_supplied_wording_can_paraphrase_a_quoted_absence():
+    source = 'No contact method for the coordinator is listed.\n'
+    answer = 'The source says “No contact method for the coordinator is listed.” No coordinator contact details are supplied.'
+    assert review._substantive(answer, source)
+
+
+def test_unrelated_weekday_events_cannot_be_joined_into_a_false_conflict():
+    source = 'The school pool is open Thursday.\nThe library room is bookable Friday.\n'
+    answer = ('Line 1: The Friday booking deadline conflicts with Thursday pool access; '
+              'correct the deadline.')
+    assert not review._substantive(answer, source)
+
+
+def test_two_dates_on_one_line_can_support_a_specific_deadline_conflict():
+    source = 'The deadline is Thursday, while the summary says Friday.\n'
+    answer = 'Line 1: The deadline conflicts: Thursday versus Friday.'
+    assert review._substantive(answer, source)
+
+
+@pytest.mark.parametrize(('source', 'answer'), [
+    ('The booking deadline is 3 October.\n',
+     'Line 1: The booking deadline conflicts: 3 October versus 4 October.'),
+    ('The application closes on 3 October.\n',
+     'Line 1: The application deadline conflicts with the portal date of 4 October.'),
+    ('The school meeting is 3 October; the grant deadline is 4 October.\n',
+     'Line 1: The application deadline conflicts: 3 October versus 4 October.'),
+])
+def test_unsupported_or_unrelated_numeric_dates_cannot_certify_a_conflict(source, answer):
+    assert not review._substantive(answer, source)
+
+
+def test_two_same_subject_calendar_dates_can_support_a_conflict():
+    source = 'The application deadline is 3 October; the portal says 4 October.\n'
+    answer = 'Line 1: The application deadline conflicts: 3 October versus 4 October.'
+    assert review._substantive(answer, source)
+
+
+def test_calendar_conflict_can_omit_year_when_source_dates_include_it():
+    source = 'The application deadline is 3 October 2026; the portal says 4 October 2026.\n'
+    answer = 'Line 1: The application deadline conflicts: 3 October versus 4 October.'
+    assert review._substantive(answer, source)
+
+
+@pytest.mark.parametrize(('source', 'answer'), [
+    ('The meeting starts Thursday; the form about meal delivery is due Friday.\n',
+     'Line 1: The meeting schedule conflicts: Thursday versus Friday.'),
+    ('The booking check is Thursday; the performance summary will be delivered Friday.\n',
+     'Line 1: The booking deadline conflicts: Thursday versus Friday.'),
+])
+def test_unrelated_context_in_a_form_or_summary_cannot_inherit_a_date_topic(source, answer):
+    assert not review._substantive(answer, source)
+
+
+def test_two_unrelated_events_on_one_line_are_not_a_date_conflict():
+    source = 'Pool access is available Thursday; the library booking deadline is Friday.\n'
+    answer = ('Line 1: The Friday booking deadline conflicts with Thursday pool access; '
+              'correct the deadline.')
+    assert not review._substantive(answer, source)
+
+
+@pytest.mark.parametrize(('answer', 'source'), [
+    ('Line 1: Server-side request forgery could expose internal data; restrict the webhook URL target.',
+     'The webhook fetches a user-supplied URL without checking the target address.\n'),
+    ('Line 1: An IDOR could allow a user to read another account’s record; authorize the owner before returning data.',
+     'The endpoint loads a record by ID without checking which user owns it.\n'),
+])
+def test_common_security_findings_can_be_substantive_when_the_cited_flow_supports_them(answer, source):
+    assert review._substantive(answer, source)
+
+
+@pytest.mark.parametrize(('answer', 'source'), [
+    ('Line 1: Server-side request forgery could expose internal data; restrict the webhook URL target.',
+     'The webhook fetches a user-supplied URL target only after validating it against an internal-address denylist.\n'),
+    ('Line 1: SQL injection could expose member records; parameterize the user input.',
+     'The member lookup uses a parameterized SQL query for user-supplied values.\n'),
+    ('Line 1: An IDOR could allow a user to read another account’s record; authorize the owner before returning data.',
+     'The endpoint loads a record by ID only after verifying the requesting user owns it.\n'),
+    ('Line 1: Cross-site scripting could execute user content; escape the HTML before rendering.',
+     'The renderer escapes user-supplied HTML content before displaying it.\n'),
+])
+def test_security_labels_cannot_override_source_describing_a_safeguard(answer, source):
+    assert not review._substantive(answer, source)
+
+
+@pytest.mark.parametrize(('answer', 'source', 'expected'), [
+    ('Line 1: Server-side request forgery could expose internal data; restrict the webhook URL target.',
+     'The webhook fetches a user-supplied URL without validating the target against an internal-address denylist.\n', True),
+    ('Line 1: Server-side request forgery could expose internal data; restrict the webhook URL target.',
+     'No validation is applied to the webhook user-supplied URL target; localhost and private networks are reachable.\n', True),
+    ('Line 1: Server-side request forgery could expose internal data; restrict the webhook URL target.',
+     'Validation of the webhook URL target is missing, so internal addresses remain reachable.\n', True),
+    ('Line 1: Server-side request forgery could expose internal data; restrict the webhook URL target.',
+     'The webhook fetches a user-supplied URL target; it is validated for syntax only, not against private network destinations.\n', True),
+    ('Line 1: Server-side request forgery could expose internal data; restrict the webhook URL target.',
+     "The webhook isn't validated against internal addresses, so user-supplied URLs can reach the private network.\n", True),
+    ('Line 1: Command injection could run arbitrary shell commands; escape the user argument.',
+     'The handler safely escapes the user argument before passing it to the shell command.', False),
+    ('Line 1: An authorization bypass could allow an unauthenticated request to update a record; authorize the caller role in this request handler.',
+     'The API route authenticates every request and checks the caller role before updating the record.\n', False),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export excludes member contact details and includes only committee-approved fields.\n', False),
+    ('Line 1: Sensitive data leak could expose member contact details in the public report; restrict it to committee users.',
+     'Member contact details are excluded from the public report.\n', False),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export contains all member fields except contact details.\n', False),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'Member contact details are withheld from the public export.\n', False),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'Member contact details are only available to committee users.\n', False),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'Member contact details are not withheld from the public export; the export includes those fields.\n', True),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'Member contact details are only available to committee users in the internal register, but the public export includes all contact fields.\n', True),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export contains all member fields except contact details, but it also includes member contact details.\n', True),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export contains all member fields except contact details; however, it includes member contact details.\n', True),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export contains all member fields except contact details. The public export also includes member contact details.\n', True),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export contains all member fields except contact details, while also publishing member contact details.\n', True),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export contains all member fields except contact details, but includes member counts.\n', False),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export contains all member fields except contact details, but includes committee contact details.\n', False),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export contains all member fields except contact details, but does not include contact details.\n', False),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export contains all member fields except contact details, but includes member accommodation details.\n', False),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export excludes contact details; however, member contact details are still available on the public download.\n', True),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export contains all member fields except contact details, but publishes member phone numbers.\n', True),
+    ('Line 1: Information disclosure could expose member contact details in a public export; restrict it to committee users.',
+     'The public export contains all member fields except contact details, but publishes member email addresses.\n', True),
+    ('Line 1: Information disclosure could expose member email addresses in a public export; restrict it to committee users.',
+     'The public export contains all member fields except email addresses, but publishes member phone numbers.\n', False),
+])
+def test_negated_or_qualified_safeguards_do_not_hide_or_invent_findings(answer, source, expected):
+    assert review._substantive(answer, source) is expected
+
+
+def test_folder_cli_accepts_specific_line_numbered_findings_without_follow_up(tmp_path, monkeypatch, capsys):
+    folder = tmp_path / 'community-records'
+    folder.mkdir()
+    (folder / 'register.txt').write_text(
+        'Member names and accommodation details are included in this export.\n', encoding='utf-8')
+    (folder / 'volunteers.txt').write_text(
+        'Volunteer phone numbers are included in this contact sheet.\n', encoding='utf-8')
+    output = tmp_path / 'review.md'
+    monkeypatch.chdir(tmp_path)
+    responses = [
+        'Line 1: Exporting member accommodation details risks information disclosure to public readers; '
+        'restrict the export to authorised committee users.',
+        'Line 1: Missing owner for these volunteer phone numbers; confirm who may use them.',
+    ]
+    with patch('sinter.client.chat', side_effect=[client.ChatResult(text) for text in responses]) as model:
+        cli.main(['review', str(folder), '--consent', '-o', str(output)])
+
+    assert model.call_count == 2
+    report = output.read_text(encoding='utf-8')
+    assert report.count('Status: done') == 2
+    assert 'Status: partial' not in report
+    assert 'batches_complete": 2' in capsys.readouterr().out
 
 
 def test_uncertain_follow_up_preserves_its_budget_and_received_commentary():

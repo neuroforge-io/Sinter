@@ -45,7 +45,8 @@ def test_enquiry_is_a_usable_letter_with_visible_exact_sender_and_context():
     assert not any(term in document for term in ("SHA-256", "characters", "Keyword matches", "evidence pack", "independently verified"))
     assert "SHA-256" in result["markdown"] and result["sources"] and result["question_index"]
     assert payload == before
-    model.assert_not_called(); search.assert_not_called()
+    model.assert_not_called()
+    search.assert_not_called()
 
 
 def test_unfilled_enquiry_reports_details_outside_the_document():
@@ -54,8 +55,33 @@ def test_unfilled_enquiry_reports_details_outside_the_document():
     assert document.startswith("Hello,") and not PLACEHOLDER.search(document)
     assert "questions below" not in document and "Could you please clarify the following?" not in document
     assert "Kind regards" not in document
-    assert {row["field"] for row in result["missing_fields"]} == {"questions", "signatory", "contact_details"}
+    assert {row["field"] for row in result["missing_fields"]} == {
+        "recipient", "questions", "signatory", "contact_details",
+    }
     assert result["document_ready"] is False
+
+
+def test_enquiry_can_be_prepared_from_only_a_title_recipient_and_explicit_questions():
+    with patch("sinter.client.chat") as model, patch("sinter.client.search") as search:
+        result = run({"workflow": "brief", "document_type": "enquiry",
+                      "title": "Sporting Schools Term 1 2027",
+                      "recipient": "Australian Sports Commission",
+                      "questions": "What is the current application window?",
+                      "notes": "", "sources": [], "use_search": False,
+                      "use_model": False})
+    document = result["document_markdown"]
+    assert "Dear Australian Sports Commission," in document
+    assert "Re: Sporting Schools Term 1 2027" in document
+    assert "1. What is the current application window?" in document
+    assert "CAMPAIGN" not in document
+    assert result["sources"] == []
+    assert result["missing_fields"] == [
+        {"field": "signatory", "label": "Your name or sign-off"},
+        {"field": "contact_details", "label": "Your reply contact details"},
+    ]
+    assert "only the details and questions you entered" in result["warnings"][-1]
+    model.assert_not_called()
+    search.assert_not_called()
 
 
 def test_only_actual_questions_in_notes_are_reused():

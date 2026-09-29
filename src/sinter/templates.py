@@ -83,7 +83,7 @@ def _builtins() -> dict[str, Template]:
                  "Give up to five concise findings in at most 180 words.",
                  use_search=True, max_tokens=1024),
             Step("Expand", "For the topic {{topic}}, expand the supported findings below into a "
-                 "concise research brief of at most 450 words. Include findings, evidence gaps and "
+                 "concise research brief of at most 180 words. Include findings, evidence gaps and "
                  "source URLs; preserve uncertainty. Only use the supplied search evidence. "
                  "Do not write an enquiry letter.\nPrior findings:\n{{previous}}",
                  stream=True, max_tokens=2048),

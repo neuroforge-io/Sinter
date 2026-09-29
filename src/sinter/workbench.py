@@ -172,11 +172,24 @@ def run(payload: dict, progress=lambda message: None) -> dict:
         if not added:
             warnings.append("Search returned no usable additional evidence. Only supplied context is used.")
         warnings.append("Search results are excerpts, not full guidelines or verified authoritative sources.")
-    if not sources:
+    question_only_enquiry = (
+        kind == "brief" and payload.get("document_type", "enquiry") == "enquiry"
+        and bool(questions.strip())
+    )
+    if not sources and not question_only_enquiry:
         raise ValueError("Add notes or a reference, or enable search with a query.")
-    progress("Selecting traceable excerpts with source diversity")
-    selected, selection_warnings = select(sources, title + " " + query + " " + questions, payload.get("use_model", False))
-    warnings.extend(selection_warnings)
+    if sources:
+        progress("Selecting traceable excerpts with source diversity")
+        selected, selection_warnings = select(
+            sources, title + " " + query + " " + questions, payload.get("use_model", False)
+        )
+        warnings.extend(selection_warnings)
+    else:
+        selected = []
+        warnings.append(
+            "No background sources were supplied. This enquiry contains only "
+            "the details and questions you entered."
+        )
     lines = [f"# {literal(title)}", "DRAFT - HUMAN REVIEW REQUIRED", f"Prepared: {result['created_at']}"]
     if demo:
         lines.append("ILLUSTRATIVE EXAMPLE - " + ("NOT REAL GRANT INFORMATION" if kind == "grants" else "FICTIONAL SOURCE MATERIAL"))

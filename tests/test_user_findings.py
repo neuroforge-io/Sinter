@@ -2,6 +2,7 @@
 import json
 import time
 import io
+import copy
 from urllib.error import HTTPError
 from unittest.mock import patch
 
@@ -55,6 +56,86 @@ def test_research_keeps_a_missing_match_explicit():
     assert not result['highlights']
     assert 'No excerpts matched' in result['markdown']
     assert result['question_index'][0]['status'] == 'no_keyword_match'
+
+
+@pytest.mark.parametrize('selected_model', [client.AUTO_MODEL, client.DENSE_MODEL])
+def test_nonstream_research_template_completes_with_the_default_dense_budget(
+        server, monkeypatch, selected_model):
+    """Pin the observed truncation and prove the shorter built-in prompt avoids it."""
+    monkeypatch.delenv('NEUROFORGE_MODEL', raising=False)
+    server.app.preferences.update({'model': selected_model, 'max_tokens': 2048})
+    source = client.SearchResponse('2026-09-29T00:00:00Z', [
+        client.SearchResult('Garden guide', 'https://example.org/garden',
+                            'Community gardens need a reliable water supply.')])
+    requests = []
+    completions = []
+
+    def complete(path, body):
+        requests.append((path, body))
+        prompt = body['messages'][-1]['content']
+        if 'expand the supported findings' in prompt:
+            legacy = 'at most 450 words' in prompt
+            target_words = 450 if legacy else 180
+            phrase = 'Garden water evidence is relevant to planning'.split()
+            words = (phrase * (target_words // len(phrase))
+                     + phrase[:target_words % len(phrase)])
+            content = ' '.join(words)
+            finish = 'length' if legacy else 'stop'
+            completion_tokens = 512 if legacy else 300
+        elif 'Research Community gardens using' in prompt:
+            content = 'Reliable water supply is relevant to community garden planning. https://example.org/garden'
+            finish, completion_tokens = 'stop', 40
+        else:
+            content = 'Confirm local water access. Ask the site manager about costs. Check current funding rules.'
+            finish, completion_tokens = 'stop', 30
+        if 'expand the supported findings' in prompt:
+            completions.append((len(content.split()), finish, completion_tokens))
+        return {'model': client.DENSE_MODEL,
+                'choices': [{'message': {'content': content}, 'finish_reason': finish}],
+                'usage': {'prompt_tokens': 50, 'completion_tokens': completion_tokens,
+                          'total_tokens': 50 + completion_tokens}}
+
+    from sinter.templates import resolve_template
+    current_template = resolve_template('research')
+    legacy_template = copy.deepcopy(current_template)
+    legacy_template.steps[1].prompt = legacy_template.steps[1].prompt.replace(
+        'at most 180 words', 'at most 450 words')
+    templates = {'legacy-research': legacy_template, 'research': current_template}
+    def get_template(name):
+        return templates[name] if name in templates else resolve_template(name)
+
+    with (
+        patch.object(
+            client, '_get', return_value={'data': [{'id': client.DENSE_MODEL}]}
+        ) as discover,
+        patch.object(client, '_post', side_effect=complete),
+        patch('sinter.templates.search', return_value=source),
+        patch('sinter.server.resolve_template', side_effect=get_template),
+    ):
+        legacy_code, _, legacy_raw = post(server, '/api/template/run', {
+            'template': 'legacy-research', 'variables': {'topic': 'Community gardens'}})
+        current_code, _, current_raw = post(server, '/api/template/run', {
+            'template': 'research', 'variables': {'topic': 'Community gardens'}})
+
+    legacy = json.loads(legacy_raw)
+    current = json.loads(current_raw)
+    assert legacy_code == 502 and legacy['partial_result']['complete'] is False
+    assert legacy['partial_result']['partial']['step'] == 'Expand'
+    assert legacy['partial_result']['partial']['finish_reason'] == 'length'
+    assert legacy['partial_result']['partial']['max_tokens'] == 512
+    assert current_code == 200 and current['complete'] is True
+    assert [row['step'] for row in current['results']] == [
+        'Outline', 'Expand', 'Action Items']
+    assert len(requests) == 5
+    assert discover.call_count == (5 if selected_model == client.AUTO_MODEL else 0)
+    assert all(path == '/chat/completions' for path, _ in requests)
+    assert all(body['model'] == client.DENSE_MODEL and body['max_tokens'] == 512
+               for _, body in requests)
+    assert 'at most 450 words' in requests[1][1]['messages'][-1]['content']
+    assert 'at most 180 words' in requests[3][1]['messages'][-1]['content']
+    # This deterministic transport stub models truncation under a dense-token
+    # API budget; it does not claim to reproduce a particular model tokenizer.
+    assert completions == [(450, 'length', 512), (180, 'stop', 300)]
 
 
 def test_research_question_matches_ignore_generic_question_words():

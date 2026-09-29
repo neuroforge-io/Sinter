@@ -321,9 +321,211 @@ _LINE_REFERENCE = re.compile(
     r'(?i)\b(?:lines?\s+|L)(\d{1,9})(?:\s*[-–]\s*(?:L)?(\d{1,9}))?\b')
 _FINDING_LABEL = re.compile(r'(?i)\b(?:DEMONSTRATED|SUSPECTED)\b')
 _FINDING_SIGNAL = re.compile(
-    r'(?i)\b(?:conflicts?|inconsisten\w*|contradict\w*|missing|lacks?|ambiguous|incorrect|unsafe)\b'
-    r'|\bnot (?:named|listed|defined|provided|specified|stated|handled)\b'
-    r'|\bno (?:\w+\s+){0,6}(?:listed|provided|specified|stated|defined)\b')
+    r'(?i)\b(?:conflicts?|inconsisten\w*|contradict\w*|differs?|different|discrepan\w*|'
+    r'mismatch\w*|disagree\w*|missing|lacks?|absent|ambiguous|incorrect|unsafe|'
+    r'exposes?|discloses?|leaks?|overwrites?|bypasses?|escalates?|corrupts?|'
+    r'races?|deadlocks?|overflows?|exhausts?)\b'
+    r'|\bnot (?:named|listed|defined|provided|supplied|specified|stated|handled|available)\b'
+    r'|\bthere (?:is|are) no\b'
+    r'|\bno (?:\w+\s+){0,6}(?:listed|provided|supplied|specified|stated|defined)\b')
+_WEEKDAY = re.compile(r'(?i)\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b')
+_MONTH = (r'January|February|March|April|May|June|July|August|September|October|'
+          r'November|December')
+_CALENDAR_DATE = re.compile(
+    rf'(?i)\b(?:(?P<day_first>0?[1-9]|[12]\d|3[01])\s+(?P<month_first>{_MONTH})'
+    rf'(?:,?\s+(?P<year_first>(?:19|20)\d{{2}}))?|'
+    rf'(?P<month_second>{_MONTH})\s+(?P<day_second>0?[1-9]|[12]\d|3[01])'
+    rf'(?:,?\s+(?P<year_second>(?:19|20)\d{{2}}))?|'
+    r'(?P<iso_year>(?:19|20)\d{2})-(?P<iso_month>0?[1-9]|1[0-2])-'
+    r'(?P<iso_day>0?[1-9]|[12]\d|3[01])|'
+    r'(?P<numeric_day>0?[1-9]|[12]\d|3[01])[-/](?P<numeric_month>0?[1-9]|1[0-2])'
+    r'[-/](?P<numeric_year>\d{2}|(?:19|20)\d{2}))\b')
+_CONTRASTING_DATES = re.compile(
+    r'(?i)\b(?:one|another|earlier|previous|prior|later|first|second)\b'
+    r'(?:\s+[\w-]+){0,2}\s+(?:instruction|statement|deadline|date)\b')
+_COMPARISON_SIGNAL = re.compile(
+    r'(?i)\b(?:conflicts?|inconsisten\w*|contradict\w*|differs?|match(?:es|ing)?|different|'
+    r'discrepan\w*|mismatch\w*|disagree\w*)\b')
+_DATE_CONTEXT_NOISE = frozenset({
+    "access", "available", "community", "date", "dates", "deadline",
+    "due", "earlier", "event", "first", "friday", "gives", "instruction",
+    "instructions", "monday", "noon", "option", "options", "pool",
+    "previous", "prior", "says", "states", "shows", "notes", "reports",
+    "records", "lists", "confirms", "will",
+    "january", "february", "march", "april", "may", "june", "july",
+    "august", "september", "october", "november", "december", "versus",
+    "program", "programme", "project", "request", "requests", "school",
+    "saturday", "second", "stated", "statement", "statements", "sunday",
+    "thursday", "time", "times", "tuesday", "wednesday", "week", "weeks",
+})
+_DATE_SUBJECTS = frozenset({
+    "appointment", "application", "booking", "class", "closing", "date",
+    "deadline", "delivery", "due", "grant", "meeting", "rotation", "schedule",
+    "session", "term",
+})
+_DATE_DOCUMENT_MARKERS = frozenset({
+    "calendar", "form", "instruction", "instructions", "plan", "portal",
+    "schedule", "summary",
+})
+_SPECIFIC_FAILURE = re.compile(
+    r'(?i)\b(?:path traversal|directory traversal|command injection|sql injection|'
+    r'cross[- ]site scripting|authentication bypass|authorization bypass|privilege escalation|'
+    r'information disclosure|secret exposure|sensitive data leak|memory leak|resource exhaustion|'
+    r'race condition|deadlock|integer overflow|off[- ]by[- ]one|unhandled exception|'
+    r'data corruption|state corruption|denial of service|server[- ]side request forgery|ssrf|'
+    r'insecure direct object reference|idor|arbitrary file (?:read|write)|'
+    r'unsafe deseriali[sz]ation)\b')
+_IMPACT_OR_REMEDY = re.compile(
+    r'(?i)\b(?:because|which means|result(?:s|ing)? in|can cause|could cause|'
+    r'can allow|could allow|can expose|could expose|can overwrite|could overwrite|'
+    r'can leak|could leak|may crash|will crash|before (?:it|the)|so that|'
+    r'validate|restrict|constrain|bound|escape|sanitize|reject|authenticate|authorize|'
+    r'add a (?:lock|limit|timeout|check)|guard (?:this|the)|remove (?:this|the)|'
+    r'move (?:this|the)|avoid|prevent|protect)\b')
+_FAILURE_EVIDENCE = (
+    (re.compile(r'(?i)\bsql injection\b'),
+     (r'\b(?:sql|query|database|statement|execute)\b',
+      r'\b(?:request|user|input|parameter|concatenat|interpolat)\w*\b')),
+    (re.compile(r'(?i)\bcommand injection\b'),
+     (r'\b(?:command|shell|subprocess|exec)\w*\b',
+      r'\b(?:request|user|input|argument|parameter)\w*\b')),
+    (re.compile(r'(?i)\b(?:path|directory) traversal\b'),
+     (r'\b(?:path|file|directory|workspace|root|destination)\w*\b',
+      r'\b(?:request|user|input|filename|write|open|resolve|join)\w*\b')),
+    (re.compile(r'(?i)\bcross[- ]site scripting\b'),
+     (r'\b(?:html|markup|script|render|template)\w*\b',
+      r'\b(?:request|user|input|value|content)\w*\b')),
+    (re.compile(r'(?i)\b(?:authentication|authorization) bypass\b'),
+     (r'\b(?:auth|permission|role|access|admin|session|token)\w*\b',
+      r'\b(?:route|endpoint|request|handler|action|record)\w*\b')),
+    (re.compile(r'(?i)\b(?:server[- ]side request forgery|ssrf)\b'),
+     (r'\b(?:url|uri|webhook|request|fetch|redirect)\w*\b',
+      r'\b(?:internal|localhost|private|network|target|address)\w*\b')),
+    (re.compile(r'(?i)\b(?:insecure direct object reference|idor)\b'),
+     (r'\b(?:user|owner|account|record|object|resource)\w*\b',
+      r'\b(?:identifier|\bid\b|access|authori[sz]|permission|read|update|delete)\w*\b')),
+    (re.compile(r'(?i)\bprivilege escalation\b'),
+     (r'\b(?:permission|role|access|admin|privilege)\w*\b',
+      r'\b(?:request|user|route|endpoint|update|write|delete)\w*\b')),
+    (re.compile(r'(?i)\b(?:information disclosure|secret exposure|sensitive data leak)\b'),
+     (r'\b(?:personal|member|secret|credential|contact|medical|accommodation|phone|email)\w*\b',
+      r'\b(?:public|export|log|email|response|return|include|publish|share)\w*\b')),
+    (re.compile(r'(?i)\b(?:memory leak|resource exhaustion|denial of service)\b'),
+     (r'\b(?:memory|resource|request|loop|buffer|handle|file|connection)\w*\b',
+      r'\b(?:unbounded|allocate|allocate|retain|release|close|repeat|size|limit|many)\w*\b')),
+    (re.compile(r'(?i)\b(?:race condition|deadlock)\b'),
+     (r'\b(?:async|thread|concurrent|shared|lock|mutex|transaction)\w*\b',
+      r'\b(?:request|write|update|wait|acquire|release|commit)\w*\b')),
+    (re.compile(r'(?i)\b(?:integer overflow|off[- ]by[- ]one)\b'),
+     (r'\b(?:integer|number|count|size|index|length|range|slice|bound)\w*\b',
+      r'\b(?:add|multiply|cast|increment|decrement|compare|loop|offset)\w*\b')),
+    (re.compile(r'(?i)\b(?:unhandled exception|unsafe deseriali[sz]ation)\b'),
+     (r'\b(?:exception|error|deserialize|parse|decode|input|payload)\w*\b',
+      r'\b(?:request|user|try|catch|validate|reject|handler)\w*\b')),
+    (re.compile(r'(?i)\b(?:data corruption|state corruption|arbitrary file (?:read|write))\b'),
+     (r'\b(?:data|state|file|path|record|workspace|destination)\w*\b',
+      r'\b(?:write|update|persist|save|user|input|request|restore)\w*\b')),
+)
+_FAILURE_MITIGATIONS = (
+    (re.compile(r'(?i)\b(?:server[- ]side request forgery|ssrf)\b'), (
+        r'\b(?:validates?|validated|validating|checks?|checked|checking|verifies?|verified|verifying|'
+        r'restricts?|restricted|restricting)\b.{0,120}\b(?:against|using|with)\b'
+        r'.{0,60}\b(?:internal|private|localhost|target|destination|address|host|network)\b|'
+        r'\b(?:allowlist|denylist|blocklist)\b.{0,60}\b'
+        r'(?:internal|private|localhost|target|destination|address|host|network)\b',)),
+    (re.compile(r'(?i)\bsql injection\b'), (
+        r'\b(?:parameterized|prepared)\s+(?:sql|query|statement)s?\b',
+        r'\b(?:sql|query|statement)s?\b.{0,40}\b(?:parameterized|prepared)\b')),
+    (re.compile(r'(?i)\b(?:insecure direct object reference|idor)\b'), (
+        r'\b(?:check|verif|validat|authori[sz])\w*.{0,80}\b(?:owner|owns|ownership|belongs)\b',
+        r'\b(?:owner|owns|ownership|belongs)\b.{0,80}\b(?:check|verif|validat|authori[sz])\w*',
+        r'\bonly\s+(?:the\s+)?(?:record\s+)?owner\b.{0,60}\b(?:access|read|update|delete|view)\b')),
+    (re.compile(r'(?i)\bcross[- ]site scripting\b'), (
+        r'\b(?:escape|saniti[sz])\w*.{0,80}\b(?:html|markup|script|user|input|content)\b',
+        r'\b(?:html|markup|script|user|input|content)\b.{0,80}\b(?:escape|saniti[sz])\w*')),
+    (re.compile(r'(?i)\b(?:path|directory) traversal\b'), (
+        r'\b(?:resolv\w*|canonicali[sz]\w*|normaliz\w*)\b.{0,100}\b(?:under|within|inside|beneath|below)\b'
+        r'\s+(?:the\s+)?(?:workspace|root|base|directory)\b',)),
+    (re.compile(r'(?i)\bcommand injection\b'), (
+        r'\b(?:escape\w*|saniti[sz]\w*|quot\w*|parameteriz\w*)\b.{0,100}\b'
+        r'(?:user|input|argument|parameter)\w*\b.{0,100}\b(?:shell|command|exec)\w*\b',)),
+    (re.compile(r'(?i)\bauthorization bypass\b'), (
+        r'\b(?:authori[sz]|check|verif)\w*.{0,100}\b(?:caller|user|role|permission|access)\b'
+        r'.{0,140}\b(?:before|prior to|only after)\b.{0,100}\b'
+        r'(?:record|endpoint|route|action|update|write|delete)\b',)),
+    (re.compile(r'(?i)\bauthentication bypass\b'), (
+        r'\b(?:authenticat|verif)\w*.{0,100}\b(?:request|caller|user|session|token)\b'
+        r'.{0,180}\b(?:before|prior to|only after)\b.{0,100}\b'
+        r'(?:record|endpoint|route|action|update|write|delete)\b',)),
+    (re.compile(r'(?i)\b(?:information disclosure|secret exposure|sensitive data leak)\b'), (
+        r'\b(?:export|response|report|log|output)\b.{0,100}\b'
+        r'(?:excludes?|omits?|removes?|redacts?|masks?|strips?)\b.{0,100}\b'
+        r'(?:personal|member|secret|credential|contact|medical|accommodation|phone|email|identity|financial)\w*\b',
+        r'\b(?:personal|member|secret|credential|contact|medical|accommodation|phone|email|identity|financial)\w*\b'
+        r'.{0,100}\b(?:excluded|omitted|removed|redacted|masked|stripped)\b.{0,100}\b'
+        r'(?:export|response|report|log|output)\b',
+        # The sensitive field is expressly outside an otherwise broad export.
+        r'\b(?:export|response|report|log|output)\b.{0,120}\b(?:except(?:ed)?|excluding)\b'
+        r'.{0,60}\b(?:personal|member|secret|credential|contact|medical|accommodation|phone|email|identity|financial)\w*\b',
+        # A field withheld from a public output is not evidence that the output
+        # leaks that field. Start at the control verb so the negation guard can
+        # reject phrases such as "not withheld".
+        r'\b(?:personal|member|secret|credential|contact|medical|accommodation|phone|email|identity|financial)\w*\b'
+        r'.{0,80}\b(?:withheld|withhold|withholds|withholding|hidden|concealed)\b.{0,80}\b'
+        r'(?:from|in)\b.{0,50}\b(?:public|external|anonymous)\b.{0,30}\b(?:export|response|report|log|output)\b',
+        r'\b(?:public|external|anonymous)\b.{0,30}\b(?:export|response|report|log|output)\b'
+        r'.{0,80}\b(?:withheld|withhold|withholds|withholding|hides?|conceals?)\b.{0,80}\b'
+        r'(?:personal|member|secret|credential|contact|medical|accommodation|phone|email|identity|financial)\w*\b',
+        # Access limited to a trusted role is a concrete disclosure boundary.
+        r'\b(?:personal|member|secret|credential|contact|medical|accommodation|phone|email|identity|financial)\w*\b'
+        r'.{0,80}\b(?:only\s+)?(?:available|visible|accessible)\b.{0,50}\b(?:to|for)\b.{0,60}\b'
+        r'(?:committee|admin(?:istrator)?|authori[sz]ed|staff|private|internal)\w*\b',
+        r'\b(?:only\s+)?(?:committee|admin(?:istrator)?|authori[sz]ed|staff|private|internal)\w*\b'
+        r'.{0,60}\b(?:can\s+)?(?:view|access|see|read)\b.{0,60}\b'
+        r'(?:personal|member|secret|credential|contact|medical|accommodation|phone|email|identity|financial)\w*\b')),
+)
+_PUBLIC_DISCLOSURE_ASSERTION = (
+    re.compile(
+        r'(?i)\b(?:public|external|anonymous)\b[^\n.!?]{0,30}\b(?:export|response|report|log|output)\b'
+        r'[^\n.!?]{0,100}\b(?:includes?|contains?|returns?|exposes?|lists?|publishes?|publishing)\b[^\n.!?]{0,100}\b'
+        r'(?:personal|secret|credential|contact|medical|accommodation|phone|email|identity|financial|names?|addresses?)\w*\b'),
+    re.compile(
+        r'(?i)\b(?:personal|secret|credential|contact|medical|accommodation|phone|email|identity|financial|names?|addresses?)\w*\b'
+        r'[^\n.!?]{0,100}\b(?:included|containing|contained|returned|exposed|listed|published)\b[^\n.!?]{0,100}\b'
+        r'(?:public|external|anonymous)\b[^\n.!?]{0,30}\b(?:export|response|report|log|output)\b'),
+    re.compile(
+        r'(?i)\b(?:personal|secret|credential|contact|medical|accommodation|phone|email|identity|financial|names?|addresses?)\w*\b'
+        r'[^\n.!?]{0,100}\b(?:available|visible|accessible)\b[^\n.!?]{0,80}\b(?:on|in|via|through)\b[^\n.!?]{0,60}\b'
+        r'(?:public|external|anonymous)\b[^\n.!?]{0,30}\b(?:download|export|response|report|log|output|page|site)\b'),
+)
+_DISCLOSURE_AFTER_EXCEPTION = (
+    re.compile(
+        r'(?i)\b(?:but|however|while|yet|and)\b[^\n.!?]{0,80}\b'
+        r'(?:includes?|including|included|contains?|containing|contained|returns?|returning|returned|'
+        r'exposes?|exposing|exposed|lists?|listing|listed|publishes?|publishing|published)\b[^\n.!?]{0,100}\b'
+        r'(?:personal|secret|credential|contact|medical|accommodation|phone|email|identity|financial|names?|addresses?)\w*\b'),
+    re.compile(
+        r'(?i)\b(?:but|however|while|yet|and)\b[^\n.!?]{0,80}\b'
+        r'(?:personal|secret|credential|contact|medical|accommodation|phone|email|identity|financial|names?|addresses?)\w*\b'
+        r'[^\n.!?]{0,60}\b(?:still\s+)?(?:available|visible|accessible)\b[^\n.!?]{0,60}\b'
+        r'(?:on|in|via|through)\b[^\n.!?]{0,50}\b(?:public|external|anonymous)\b[^\n.!?]{0,30}\b'
+        r'(?:download|export|response|report|log|output|page|site)\b'),
+)
+_DISCLOSURE_SUBJECT = re.compile(
+    r'(?i)\b(?:members?|committee|administrators?|staff|employees?|volunteers?|students?|children|'
+    r'applicants?|customers?|users?|patients?)\b')
+_DISCLOSURE_REMEDY = re.compile(
+    r'(?i)\b(?:restrict|limit|mask|remove|redact|fix|change|ensure|should|must|please)\b')
+_SENSITIVE_DATA_TERM = re.compile(
+    r'(?i)\b(?:personal|secret|credential|contact|medical|accommodation|phone|email|identity|financial|names?|addresses?)\w*\b')
+_CONTACT_DATA_FIELDS = frozenset({'contact', 'phone', 'email', 'address'})
+_IDENTITY_DATA_FIELDS = frozenset({'identity', 'name', 'address'})
+_NEGATED_CONTROL = re.compile(
+    r"(?i)\b(?:no|not|never|without|lack(?:s|ed)?|missing|absent|isn't|aren't|wasn't|weren't|hasn't|haven't|hadn't|"
+    r"fail(?:s|ed)?\s+to|does\s+not|doesn't|do\s+not|don't|cannot|can't)\s+(?:\w+\s+){0,2}$")
+_NEGATION_WORD = re.compile(
+    r"(?i)\b(?:no|not|never|without|lack(?:s|ed)?|missing|absent|isn't|aren't|wasn't|weren't|hasn't|haven't|hadn't|"
+    r"fail(?:s|ed)?\s+to|does\s+not|doesn't|do\s+not|don't|cannot|can't)\b")
 _UNSUPPORTED_REQUEST = re.compile(
     r"(?i)\b(?:I|we) (?:cannot|can't|am unable to|are unable to)\s+"
     r'(?:\w+\s+){0,3}(?:review|assess|verify|evaluate|conclude|determine)\b'
@@ -341,12 +543,312 @@ def _anchor_words(text):
             if word not in _GROUNDING_STOP_WORDS}
 
 
+def _calendar_date_values(text):
+    """Return normalized full calendar dates mentioned in text."""
+    months = {name.casefold(): index for index, name in enumerate((
+        "January", "February", "March", "April", "May", "June", "July",
+        "August", "September", "October", "November", "December"), 1)}
+    values = set()
+    for match in _CALENDAR_DATE.finditer(text):
+        groups = match.groupdict()
+        if groups["day_first"]:
+            day, month, year = groups["day_first"], groups["month_first"], groups["year_first"]
+            values.add((months[month.casefold()], int(day), int(year) if year else None))
+        elif groups["day_second"]:
+            day, month, year = groups["day_second"], groups["month_second"], groups["year_second"]
+            values.add((months[month.casefold()], int(day), int(year) if year else None))
+        elif groups["iso_year"]:
+            values.add((int(groups["iso_month"]), int(groups["iso_day"]), int(groups["iso_year"])))
+        else:
+            year = int(groups["numeric_year"])
+            if year < 100:
+                year += 2000
+            values.add((int(groups["numeric_month"]), int(groups["numeric_day"]), year))
+    return values
+
+
+def _date_values_supported(claim_dates, source_dates):
+    """A missing year in a finding may inherit the source year, never its day/month."""
+    return all(any((source_month, source_day) == (month, day)
+                   and (year is None or source_year == year)
+                   for source_month, source_day, source_year in source_dates)
+               for month, day, year in claim_dates)
+
+
+def _date_topic_words(text):
+    text = _CALENDAR_DATE.sub(" ", text)
+    text = re.sub(r"\b(?:19|20)\d{2}\b", " ", text)
+    return _anchor_words(text) - _DATE_CONTEXT_NOISE
+
+
+def _calendar_date_conflict_grounded(claim, excerpt, cited):
+    """Require both sides of a numeric-date conflict in source context."""
+    claim_dates = _calendar_date_values(claim)
+    cited_dates = _calendar_date_values(cited)
+    claim_topics = _date_topic_words(claim)
+    contexts = []
+    for line in excerpt.splitlines() or [excerpt]:
+        # Keep dates in contrastive clauses separate so unrelated events on a
+        # single line cannot be joined into a claimed deadline conflict.
+        clauses = re.split(r'(?i)\s*(?:;|,\s*while\b|\bwhile\b|\bwhereas\b|\bbut\b)\s*', line)
+        for clause in clauses:
+            dates = _calendar_date_values(clause)
+            if dates:
+                topics = _date_topic_words(clause)
+                contexts.append((dates, topics))
+    if not contexts:
+        return False
+    for index, (left_dates, left_topics) in enumerate(contexts):
+        for right_dates, right_topics in contexts[index + 1:]:
+            source_dates = left_dates | right_dates
+            if len(source_dates) < 2:
+                continue
+            # Any date asserted by the reviewer must appear in the source;
+            # source dates also need a shared subject or an explicit document
+            # marker that links a second value to the first subject.
+            if claim_dates and not _date_values_supported(claim_dates, source_dates):
+                continue
+            if cited_dates and not (cited_dates & source_dates):
+                continue
+            shared_scope = left_topics & right_topics
+            if shared_scope and (not claim_topics or shared_scope & claim_topics):
+                return True
+            subject_terms = claim_topics & _DATE_SUBJECTS
+            left_subject = subject_terms & left_topics
+            right_subject = subject_terms & right_topics
+            for subject, other in ((left_subject, right_topics), (right_subject, left_topics)):
+                if subject and _DATE_DOCUMENT_MARKERS & other:
+                    other_topics = other - _DATE_DOCUMENT_MARKERS - _DATE_CONTEXT_NOISE
+                    if not other_topics or other_topics & claim_topics:
+                        return True
+    return False
+
+
+def _compared_dates_grounded(claim, excerpt, cited):
+    """Recognize date conflicts only when both dates belong to one source topic."""
+    claim_calendar_dates = _calendar_date_values(claim)
+    if claim_calendar_dates and _COMPARISON_SIGNAL.search(claim):
+        return _calendar_date_conflict_grounded(claim, excerpt, cited)
+    claim_days = {value.casefold() for value in _WEEKDAY.findall(claim)}
+    claim_topics = _anchor_words(claim) - _DATE_CONTEXT_NOISE
+    claim_topics -= {value.casefold() for value in _COMPARISON_SIGNAL.findall(claim)}
+    cited_topics = _anchor_words(cited) - _DATE_CONTEXT_NOISE
+    contexts = []
+    for line in excerpt.splitlines() or [excerpt]:
+        days = {value.casefold() for value in _WEEKDAY.findall(line)}
+        if days:
+            topics = _anchor_words(line) - _DATE_CONTEXT_NOISE
+            contexts.append((days, topics))
+    explicit_pair = len(claim_days) >= 2
+    comparative_wording = bool(_COMPARISON_SIGNAL.search(claim)
+                               and _CONTRASTING_DATES.search(claim))
+    if not explicit_pair and not comparative_wording:
+        return False
+    subject_terms = _anchor_words(claim) & _DATE_SUBJECTS
+    cited_days = {value.casefold() for value in _WEEKDAY.findall(cited)}
+    if len(contexts) == 1 and len(contexts[0][0]) >= 2 and claim_days:
+        for line in excerpt.splitlines() or [excerpt]:
+            if len({value.casefold() for value in _WEEKDAY.findall(line)}) < 2:
+                continue
+            clauses = re.split(
+                r'(?i)\s*(?:;|,\s*while\b|\bwhile\b|\bwhereas\b|\bbut\b)\s*', line)
+            dated = [({value.casefold() for value in _WEEKDAY.findall(clause)},
+                      _anchor_words(clause)) for clause in clauses
+                     if _WEEKDAY.search(clause)]
+            for index, (left_days, left_anchors) in enumerate(dated):
+                for right_days, right_anchors in dated[index + 1:]:
+                    source_days = left_days | right_days
+                    if (len(source_days) < 2 or not claim_days <= source_days
+                            or not (cited_days & source_days)):
+                        continue
+                    left_subject = subject_terms & left_anchors
+                    right_subject = subject_terms & right_anchors
+                    if left_subject and right_subject:
+                        return True
+                    for subject_anchor, other_anchors in (
+                            (left_subject, right_anchors),
+                            (right_subject, left_anchors)):
+                        if not subject_anchor or not (_DATE_DOCUMENT_MARKERS & other_anchors):
+                            continue
+                        # A bare "the summary says Friday" may refer to the
+                        # immediately preceding deadline. A form or summary
+                        # about a separately named subject must not inherit it.
+                        other_topics = (other_anchors - _DATE_CONTEXT_NOISE
+                                        - _DATE_DOCUMENT_MARKERS - subject_terms)
+                        other_claim_topics = (_anchor_words(claim)
+                                              - _DATE_CONTEXT_NOISE - subject_terms)
+                        if not other_topics or other_topics & other_claim_topics:
+                            return True
+    for index, (left_days, left_topics) in enumerate(contexts):
+        for right_days, right_topics in contexts[index + 1:]:
+            source_days = left_days | right_days
+            if len(source_days) < 2 or (claim_days and not claim_days <= source_days):
+                continue
+            # Separate dates about unrelated events are not a contradiction.
+            shared_scope = left_topics & right_topics
+            if not shared_scope:
+                continue
+            if claim_topics and not (shared_scope & claim_topics):
+                continue
+            # When a finding cites a location, at least one of the compared
+            # source lines must be that location; its topic must match too.
+            if cited.strip() != excerpt.strip():
+                cited_days = {value.casefold() for value in _WEEKDAY.findall(cited)}
+                if not (cited_days & source_days and shared_scope & cited_topics):
+                    continue
+            return True
+    return False
+
+
+def _disclosure_fields_overlap(left: set[str], right: set[str]) -> bool:
+    """Compare sensitive fields while allowing broad labels and their subfields."""
+    def normalise(values: set[str]) -> set[str]:
+        return {
+            {'names': 'name', 'addresses': 'address', 'phones': 'phone',
+             'emails': 'email', 'credentials': 'credential'}.get(value, value)
+            for value in values
+        }
+
+    left_fields, right_fields = normalise(left), normalise(right)
+    if not left_fields or not right_fields:
+        return False
+    if 'personal' in left_fields or 'personal' in right_fields:
+        return True
+    if left_fields & right_fields:
+        return True
+    if 'contact' in left_fields and right_fields & (_CONTACT_DATA_FIELDS - {'contact'}):
+        return True
+    if 'contact' in right_fields and left_fields & (_CONTACT_DATA_FIELDS - {'contact'}):
+        return True
+    if 'identity' in left_fields and right_fields & (_IDENTITY_DATA_FIELDS - {'identity'}):
+        return True
+    if 'identity' in right_fields and left_fields & (_IDENTITY_DATA_FIELDS - {'identity'}):
+        return True
+    return False
+
+
+def _specific_failure_supported(paragraph, cited):
+    """Require source evidence for the failure class before trusting its label."""
+    for failure, evidence_groups in _FAILURE_EVIDENCE:
+        if not failure.search(paragraph):
+            continue
+        # If a source both describes an internal access boundary and separately
+        # confirms sensitive fields in a public output, the affirmative public
+        # disclosure wins over the unrelated safeguard.
+        if failure.pattern.startswith('(?i)\\b(?:information disclosure'):
+            public_disclosure = False
+            public_assertion_seen = False
+            claim_scope = _DISCLOSURE_REMEDY.split(paragraph, maxsplit=1)[0]
+            claim_subjects = {term.casefold() for term in _DISCLOSURE_SUBJECT.findall(claim_scope)}
+            claimed_fields = {term.casefold() for term in _SENSITIVE_DATA_TERM.findall(claim_scope)}
+            for pattern in _PUBLIC_DISCLOSURE_ASSERTION:
+                for match in pattern.finditer(cited):
+                    prefix = cited[max(0, match.start() - 48):match.start()]
+                    public_assertion_seen = True
+                    if (_NEGATED_CONTROL.search(prefix)
+                            or _NEGATION_WORD.search(match.group(0))):
+                        continue
+                    source_subjects = {term.casefold() for term in _DISCLOSURE_SUBJECT.findall(match.group(0))}
+                    if claim_subjects and source_subjects and not (claim_subjects & source_subjects):
+                        continue
+                    sentence_start = max(
+                        cited.rfind('.', 0, match.start()), cited.rfind('!', 0, match.start()),
+                        cited.rfind('?', 0, match.start()), cited.rfind('\n', 0, match.start())) + 1
+                    sentence_end_candidates = [
+                        pos for mark in '.!?\n'
+                        if (pos := cited.find(mark, match.end())) >= 0]
+                    sentence_end = min(sentence_end_candidates, default=len(cited))
+                    sentence = cited[sentence_start:sentence_end]
+                    exception = re.search(
+                        r'(?i)\b(?:except(?:ed)?|excluding)\b(.{0,160})$', sentence)
+                    excluded_fields = ({term.casefold() for term in _SENSITIVE_DATA_TERM.findall(exception.group(1))}
+                                       if exception else set())
+                    later_disclosure = False
+                    if exception:
+                        for later_pattern in _DISCLOSURE_AFTER_EXCEPTION:
+                            later = later_pattern.search(exception.group(1))
+                            if not later:
+                                continue
+                            later_fields = {
+                                term.casefold() for term in _SENSITIVE_DATA_TERM.findall(later.group(0))}
+                            if not _disclosure_fields_overlap(claimed_fields, later_fields):
+                                continue
+                            if _NEGATION_WORD.search(later.group(0)):
+                                continue
+                            later_subjects = {
+                                term.casefold() for term in _DISCLOSURE_SUBJECT.findall(later.group(0))}
+                            if (not claim_subjects or not later_subjects
+                                    or claim_subjects & later_subjects):
+                                later_disclosure = True
+                                break
+                    if (_disclosure_fields_overlap(claimed_fields, excluded_fields)
+                            and not later_disclosure):
+                        continue
+                    public_disclosure = True
+                    break
+                if public_disclosure:
+                    break
+            if public_disclosure:
+                return all(re.search(pattern, cited, re.IGNORECASE)
+                           for pattern in evidence_groups)
+            if public_assertion_seen:
+                # An explicit public-output assertion about a different group
+                # or only about fields excluded from the output cannot support
+                # this finding by borrowing generic words like "member".
+                return False
+        mitigated = False
+        for label, patterns in _FAILURE_MITIGATIONS:
+            if not label.search(paragraph):
+                continue
+            for pattern in patterns:
+                for match in re.finditer(pattern, cited, re.IGNORECASE):
+                    prefix = cited[max(0, match.start() - 48):match.start()]
+                    if (not _NEGATED_CONTROL.search(prefix)
+                            and not _NEGATION_WORD.search(match.group(0))):
+                        mitigated = True
+                        break
+                if mitigated:
+                    break
+            if mitigated:
+                break
+        if mitigated:
+            return False
+        return all(re.search(pattern, cited, re.IGNORECASE)
+                   for pattern in evidence_groups)
+    # Unknown security or reliability labels cannot be grounded by the label
+    # and a generic fix suggestion alone.
+    return False
+
+
+def _omission_supported(claim, cited):
+    """Ground an absence claim in the particular thing said to be absent.
+
+    Broad omission words such as ``not provided`` occur in many unrelated
+    findings. Require a specific overlap with the cited text, with a narrow
+    role-name exception for cases such as ``the coordinator is not named``.
+    """
+    if not re.search(
+            r'(?i)(?:\b(?:not (?:named|listed|defined|provided|supplied|specified|stated|handled|available)|'
+            r'absent|missing|lacks?|not present|supplied)\b|'
+            r'\bthere (?:is|are) no\b)', claim):
+        return False
+    overlap = _anchor_words(cited) & _anchor_words(claim)
+    if len(overlap) >= 2 and sum(map(len, overlap)) >= 10:
+        return True
+    if re.search(r'(?i)\bnot named\b', claim):
+        roles = {"coordinator", "owner", "chair", "president", "treasurer",
+                 "secretary", "contact", "applicant", "signatory", "officer"}
+        return bool(overlap & roles)
+    return False
+
+
 def _substantive(content, excerpt, start_line=1):
     """Recognize source-grounded commentary, never certify the model's finding.
 
     Line numbers alone and confidence labels alone are not evidence. A referenced
-    line must exist and share concrete vocabulary with the finding. Labelled
-    findings without line numbers need a contiguous phrase from the excerpt.
+    finding must match source anchors; high-risk labels also need source terms
+    that support that specific failure class. Labelled findings without line
+    numbers need a contiguous phrase from the excerpt.
     """
     if not content.strip():
         return False
@@ -356,14 +858,31 @@ def _substantive(content, excerpt, start_line=1):
     for paragraph in re.split(r'\n\s*\n|\n(?=\s*(?:[-*]|\d+[.)])\s)', content):
         if _UNSUPPORTED_REQUEST.search(paragraph):
             continue
-        for match in re.finditer(r'["\'“‘`]([^"\'”’`]{12,})["\'”’`]', paragraph):
-            if match.group(1) in excerpt:
-                return True
         if EXPLICIT_CLEAN.search(paragraph) and len(paragraph) >= 40:
             return True
+        quote_matches = [match for match in re.finditer(
+            r'["\'“‘`]([^"\'”’`]{12,})["\'”’`]', paragraph)
+            if match.group(1) in excerpt]
         if len(paragraph.strip()) < 40:
             continue
-        for match in _LINE_REFERENCE.finditer(paragraph):
+        quotes = [match.group(1) for match in quote_matches]
+        # Quoted words locate the source, but cannot themselves make an
+        # unrelated claim substantive. Evaluate only the reviewer's claim.
+        claim = re.sub(r'["\'“‘`][^"\'”’`]{12,}["\'”’`]', ' ', paragraph)
+        claim = _LINE_REFERENCE.sub(' ', claim)
+        claim = _FINDING_LABEL.sub(' ', claim)
+        failure = _SPECIFIC_FAILURE.search(claim)
+        concrete_finding = bool(
+            _FINDING_SIGNAL.search(claim) or failure
+            or _compared_dates_grounded(claim, excerpt, excerpt))
+        date_comparison = bool(
+            _COMPARISON_SIGNAL.search(claim)
+            and (_WEEKDAY.search(claim) or _CALENDAR_DATE.search(claim)
+                 or _CONTRASTING_DATES.search(claim)))
+        if not concrete_finding:
+            continue
+        line_matches = list(_LINE_REFERENCE.finditer(paragraph))
+        for match in line_matches:
             first, last = int(match[1]), int(match[2] or match[1])
             if not start_line <= first <= last < start_line + len(excerpt_lines):
                 continue
@@ -371,19 +890,51 @@ def _substantive(content, excerpt, start_line=1):
             if last - first > 8:
                 continue
             cited = '\n'.join(excerpt_lines[first - start_line:last - start_line + 1])
-            overlap = _anchor_words(cited) & _anchor_words(paragraph)
-            if len(overlap) >= 2 and sum(map(len, overlap)) >= 10:
+            overlap = _anchor_words(cited) & _anchor_words(claim)
+            has_anchor = len(overlap) >= 2 and sum(map(len, overlap)) >= 10
+            has_omission_anchor = _omission_supported(claim, cited)
+            compared_dates = _compared_dates_grounded(claim, excerpt, cited)
+            if date_comparison and not compared_dates:
+                continue
+            supported_failure = bool(
+                failure and _IMPACT_OR_REMEDY.search(paragraph)
+                and _specific_failure_supported(claim, cited))
+            if supported_failure and (has_anchor or has_omission_anchor or compared_dates):
                 return True
-            if any(len(word) >= 8 for word in overlap) and _FINDING_SIGNAL.search(paragraph):
+            if not failure and concrete_finding and (has_anchor or has_omission_anchor or compared_dates):
                 return True
-        if _FINDING_LABEL.search(paragraph) or _FINDING_SIGNAL.search(paragraph):
-            source_words = re.findall(r'\b[\w-]+\b', excerpt.casefold())
-            normalized = ' ' + ' '.join(re.findall(r'\b[\w-]+\b', paragraph.casefold())) + ' '
-            width = 3 if _FINDING_LABEL.search(paragraph) else 5
-            for index in range(len(source_words) - width + 1):
-                phrase = ' '.join(source_words[index:index + width])
-                if len(_anchor_words(phrase)) >= 2 and ' ' + phrase + ' ' in normalized:
+        # A supplied location is a promise about where the finding appears.
+        # Never let a wrong or unsupported location fall back to a broad match
+        # against an unrelated part of the excerpt.
+        if line_matches:
+            continue
+        # A matching quote identifies the passage, but a reviewer may compare
+        # it with another passage elsewhere in the excerpt. Keep both as
+        # candidates and still require two meaningful claim/source anchors.
+        cited_options = [*quotes, excerpt] if quotes else [excerpt]
+        quote_anchors = set().union(*(_anchor_words(quote) for quote in quotes)) if quotes else set()
+        for cited in cited_options:
+            if failure and not _specific_failure_supported(claim, cited):
+                continue
+            overlap = _anchor_words(cited) & _anchor_words(claim)
+            compared_dates = _compared_dates_grounded(claim, excerpt, cited)
+            if date_comparison and not compared_dates:
+                continue
+            # A quote locates evidence, but repeating its nouns cannot ground
+            # a separate assertion. Require an independent source anchor,
+            # unless the quote itself explicitly documents the claimed omission.
+            independent_overlap = overlap - quote_anchors
+            quoted_omission = bool(
+                quotes and re.search(r'(?i)\b(?:no|not)\b', " ".join(quotes))
+                and _omission_supported(claim, cited))
+            if quotes and not compared_dates and not independent_overlap and not quoted_omission:
+                continue
+            if failure:
+                if _IMPACT_OR_REMEDY.search(claim) and len(overlap) >= 2:
                     return True
+            elif (len(overlap) >= 2 or compared_dates
+                  or _omission_supported(claim, cited)):
+                return True
     return False
 
 

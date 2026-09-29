@@ -203,8 +203,11 @@ def test_vague_hedge_becomes_partial_and_bound_on_resume():
 def test_substantive_gate_and_token_budget():
     assert review._substantive('No issues found after checking the supplied material.', 'x * 12')
     assert not review._substantive('Looks fine.', 'x * 12')
-    assert review._substantive('"Volunteers meet beside the garden."', 'Volunteers meet beside the garden.')
+    assert not review._substantive('"Volunteers meet beside the garden."', 'Volunteers meet beside the garden.')
     assert not review._substantive('"Volunteers meet beside the garden."', 'Unrelated wording entirely.')
+    assert review._substantive(
+        'Line 1: The volunteers meet beside the garden, but the meeting schedule is missing.',
+        'Volunteers meet beside the garden.')
     assert review._token_budget([]) == 704
     assert review._token_budget(['one']) == 704
     assert review._token_budget(['a', 'b', 'c']) == 1088
