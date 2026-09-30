@@ -29,6 +29,13 @@ changing that meaning requires an explicit edit. Save the campaign to retain the
 choice across reopening and backup restoration. Historical reports retain their
 original recorded denomination.
 
+Linking or clearing a requirement's registered source keeps its explanatory note.
+A different source clears the earlier quoted wording and resets any met/not-met
+assessment to **Not checked**. Unknown and clarification states stay unresolved.
+Re-read the new source, replace the excerpt and check date, and review the note
+before changing the assessment. The source's recorded date remains user-entered
+metadata; selecting it is not proof that you checked the quoted wording.
+
 Save revisions on this computer, export a JSON backup, or import a backup to continue. A stale revision is rejected and leaves your unsaved edits in the editor. Sinter does not submit applications, fetch funder pages, or treat a prepared brief as approval.
 
 ## Enquiry letters, briefs and agenda items

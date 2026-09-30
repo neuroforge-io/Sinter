@@ -19,6 +19,7 @@ import {campaignCapacity, CAMPAIGN_TEXT_LIMIT, CAMPAIGN_BYTE_LIMIT}
   from './campaign-capacity.js';
 import {campaignSourceOptions, matchingCampaignSources}
   from './campaign-source-options.js';
+import {selectRequirementSource} from './campaign-requirement-source.js';
 import {CEILING_CURRENCY_OPTIONS, campaignCeilingCurrency,
   campaignFundingAmount, campaignCurrencyComparisonNote} from './campaign-currency.js';
 
@@ -846,6 +847,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       const quote = input('Source wording (user-entered)', 'textarea', row, 'source_quote', 'Paste the exact wording yourself. If the registered source changed, re-read and replace this excerpt.', {rows: 3, maxLength: 4000}, updateProof);
       const date = input('Date this excerpt was checked', 'date', row, 'checked_at', 'Record when you re-read this exact wording. For a registered source, match its current check date.', {}, updateProof);
       const sourcePreview = h('p', {class: 'campaign-window-source'});
+      const sourceChange = h('p', {class: 'fine', role: 'status',
+        'aria-label': 'Requirement source change', hidden: true});
       function updateSourcePreview(linked) {
         sourcePreview.hidden = !linked;
         sourcePreview.replaceChildren(linked
@@ -857,30 +860,23 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       updateSourcePreview(linkedSource);
       const sourcePicker = campaignSourcePicker('Registered campaign source (optional)',
         row.source_id, linked => {
-        const changedSource = row.source_id !== (linked?.id || '');
-        row.source_id = linked?.id || '';
+        const selection = selectRequirementSource(row, linked);
+        Object.assign(row, selection.requirement);
         source.input.disabled = Boolean(linked);
         date.wrap.querySelector('label').textContent = linked
           ? 'Date checked for this excerpt · must match linked source' : 'Date checked for this excerpt (user-entered)';
         updateSourcePreview(linked);
-        if (linked) {
-          row.source_url = linked.url;
-          source.input.value = linked.url;
-          if (changedSource) {
-            row.status = 'unknown'; row.evidence = ''; row.source_quote = ''; row.checked_at = '';
-            reason.input.value = ''; quote.input.value = ''; date.input.value = '';
-            status.input.value = 'unknown';
-          }
-          if (!row.checked_at && linked.checked_at) {
-            row.checked_at = linked.checked_at;
-            date.input.value = linked.checked_at;
-          }
-        } else if (changedSource) {
-          row.status = 'unknown'; row.evidence = ''; row.source_url = '';
-          row.source_quote = ''; row.checked_at = '';
-          status.input.value = 'unknown'; reason.input.value = ''; source.input.value = '';
-          quote.input.value = ''; date.input.value = '';
-        }
+        source.input.value = row.source_url || '';
+        quote.input.value = row.source_quote || '';
+        date.input.value = row.checked_at || '';
+        status.input.value = row.status;
+        sourceChange.hidden = !selection.changedSource;
+        sourceChange.textContent = selection.changedSource
+          ? (linked
+            ? 'Source link changed. Your explanatory note is kept; recheck it against this source. Previous source wording was cleared.'
+            : 'Source link cleared. Your explanatory note is kept; source wording and check date were cleared.')
+            + (selection.resetAssessment ? ' The previous assessment was reset to Not checked.' : '')
+          : '';
           updateProof();
         });
       source.input.disabled = Boolean(row.source_id);
@@ -892,7 +888,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         h('article', {class: 'campaign-check-editor', 'aria-label': 'Requirement check'}, rule.wrap, status.wrap, proof, reason.wrap,
         h('details', {open: Boolean(row.source_id || row.source_url || row.source_quote)},
           h('summary', {}, 'Supporting source · user-entered, unverified'),
-          sourcePicker.wrap, sourcePreview, source.wrap, quote.wrap, date.wrap),
+          sourcePicker.wrap, sourceChange, sourcePreview, source.wrap, quote.wrap, date.wrap),
         remove(document.requirements, row, 'Remove requirement'))));
     }
     if (!document.requirements.some(row => row.opportunity === item.name)) requirements.append(h('p', {class: 'fine'}, 'No requirements checked yet. Start with applicant type, timing and permitted costs.'));

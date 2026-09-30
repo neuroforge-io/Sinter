@@ -265,7 +265,8 @@ class SourcePickerChecks(CampaignChecks):
         requirement = after["requirements"][0]
         assert requirement["source_id"] == chosen["id"]
         assert requirement["status"] == "unknown"
-        assert requirement["source_quote"] == requirement["evidence"] == ""
+        assert requirement["source_quote"] == ""
+        assert requirement["evidence"] == before["requirements"][0]["evidence"]
         assert requirement["checked_at"] == chosen["checked_at"]
         assert after["sources"] == before["sources"]
         assert after["communications"] == before["communications"]
@@ -289,6 +290,198 @@ class SourcePickerChecks(CampaignChecks):
         assert saved["sources"] == before["sources"]
         assert saved["communications"] == before["communications"]
 
+    def requirement_note_transitions(self, page, width=1440):
+        """Keep entered notes through actual source clicks, saves and reopening."""
+        from playwright.sync_api import expect
+
+        page.set_viewport_size({"width": width, "height": 844})
+        title = f"Fictional requirement source notes {width}"
+        imported = fixture(title)
+        imported["sources"][-1]["checked_at"] = ""
+        self.import_fixture(page, imported)
+        self.save(page)
+        before = self.snapshot(page, title)
+        first, second, undated = (
+            before["sources"][0],
+            before["sources"][1],
+            before["sources"][-1],
+        )
+        page.get_by_role("button", name="Add requirement", exact=True).click()
+        check = page.get_by_role("article", name="Requirement check").last
+        rule = "Fictional cost-category clarification"
+        note = (
+            "Costs are not accepted. Ask for clarification; "
+            "e\u0301quipment ownership is unconfirmed 🐝 <keep literally>."
+        )
+        check.get_by_label("Requirement", exact=True).fill(rule)
+        check.get_by_label("Requirement status", exact=True).select_option(
+            "clarification"
+        )
+        check.get_by_label(
+            "What the evidence establishes or leaves unclear", exact=True
+        ).fill(note)
+        check.get_by_text(
+            "Supporting source · user-entered, unverified", exact=True
+        ).click()
+        expected = json.loads(json.dumps(before))
+        record = {
+            "opportunity": "Fictional route",
+            "rule": rule,
+            "status": "clarification",
+            "evidence": note,
+            "source_id": "",
+            "source_url": "",
+            "source_quote": "",
+            "checked_at": "",
+        }
+        expected["requirements"].append(record)
+        last_saved = before
+
+        def open_check():
+            details = page.locator(".campaign-requirement").filter(
+                has=page.get_by_text(rule, exact=True)
+            )
+            if details.get_attribute("open") is None:
+                details.locator("summary").first.click()
+            current = details.get_by_role("article", name="Requirement check")
+            supporting = current.locator("details")
+            if supporting.get_attribute("open") is None:
+                supporting.locator("summary").first.click()
+            return current
+
+        def save_exact(**changes):
+            nonlocal last_saved
+            # Linking is local until the operator explicitly saves this record.
+            assert self.snapshot(page, title) == last_saved
+            record.update(changes)
+            current = open_check()
+            expect(current.get_by_label("Requirement", exact=True)).to_have_value(rule)
+            expect(
+                current.get_by_label("Requirement status", exact=True)
+            ).to_have_value(record["status"])
+            expect(
+                current.get_by_label(
+                    "What the evidence establishes or leaves unclear", exact=True
+                )
+            ).to_have_value(note)
+            expect(
+                current.get_by_label("Source wording (user-entered)", exact=True)
+            ).to_have_value(record["source_quote"])
+            expect(current.locator('[data-campaign-field="checked_at"]')).to_have_value(
+                record["checked_at"]
+            )
+            self.save(page)
+            assert self.snapshot(page, title) == expected
+            last_saved = json.loads(json.dumps(expected))
+            return open_check()
+
+        # The first link must not erase the freshly entered clarification.
+        self.choose(check, "Registered campaign source (optional)", second)
+        expect(
+            check.get_by_label("Requirement source change", exact=True)
+        ).to_contain_text(
+            "Your explanatory note is kept; recheck it against this source."
+        )
+        check.get_by_label(
+            "What the evidence establishes or leaves unclear", exact=True
+        ).scroll_into_view_if_needed()
+        self.screenshot(page, f"requirement-first-link-{width}")
+        check = save_exact(
+            source_id=second["id"],
+            source_url=second["url"],
+            checked_at=second["checked_at"],
+        )
+
+        # Re-selecting the same identity preserves the exact quote and older date.
+        retained_quote = "Exact prior wording, still requiring human review. 🐝"
+        check.get_by_label("Source wording (user-entered)", exact=True).fill(
+            retained_quote
+        )
+        check.locator('[data-campaign-field="checked_at"]').fill("2026-09-29")
+        self.choose(check, "Registered campaign source (optional)", second)
+        expect(check.locator(".campaign-proof-status")).to_contain_text("2026-09-29")
+        check = save_exact(source_quote=retained_quote, checked_at="2026-09-29")
+
+        # A different source and clearing it retain the note and clarification.
+        self.choose(check, "Registered campaign source (optional)", first)
+        check = save_exact(
+            source_id=first["id"],
+            source_url=first["url"],
+            source_quote="",
+            checked_at=first["checked_at"],
+        )
+        check.get_by_role("button", name="Clear link", exact=True).click()
+        expect(
+            check.get_by_label("Requirement source change", exact=True)
+        ).to_contain_text(
+            "Your explanatory note is kept; source wording and check date were cleared."
+        )
+        check = save_exact(source_id="", source_url="", source_quote="", checked_at="")
+
+        # An explicitly unknown check remains unknown, with no invented date.
+        check.get_by_label("Requirement status", exact=True).select_option("unknown")
+        self.choose(check, "Registered campaign source (optional)", undated)
+        check = save_exact(
+            status="unknown",
+            source_id=undated["id"],
+            source_url=undated["url"],
+            checked_at="",
+        )
+
+        # A same-source assessment survives; a changed source invalidates it.
+        self.choose(check, "Registered campaign source (optional)", second)
+        quote = "Fictional selected wording; no automatic eligibility decision."
+        check.get_by_label("Source wording (user-entered)", exact=True).fill(quote)
+        check.get_by_label("Requirement status", exact=True).select_option("met")
+        self.choose(check, "Registered campaign source (optional)", second)
+        check = save_exact(
+            status="met",
+            source_id=second["id"],
+            source_url=second["url"],
+            source_quote=quote,
+            checked_at=second["checked_at"],
+        )
+        self.choose(check, "Registered campaign source (optional)", first)
+        expect(
+            check.get_by_label("Requirement source change", exact=True)
+        ).to_contain_text("The previous assessment was reset to Not checked.")
+        check = save_exact(
+            status="unknown",
+            source_id=first["id"],
+            source_url=first["url"],
+            source_quote="",
+            checked_at=first["checked_at"],
+        )
+        check.get_by_label("Source wording (user-entered)", exact=True).fill(quote)
+        check.get_by_label("Requirement status", exact=True).select_option("not_met")
+        check = save_exact(status="not_met", source_quote=quote)
+        check.get_by_role("button", name="Clear link", exact=True).click()
+        check = save_exact(
+            status="unknown",
+            source_id="",
+            source_url="",
+            source_quote="",
+            checked_at="",
+        )
+
+        # Reopen the saved canonical record and compare all unrelated arrays too.
+        self.goto(page, "campaigns")
+        self.transfers(page)
+        page.get_by_role("button", name="Start a new campaign", exact=True).click()
+        page.get_by_role("button", name="Open " + title, exact=True).click()
+        expect(page.get_by_label("Campaign name", exact=True)).to_have_value(title)
+        reopened = open_check()
+        expect(
+            reopened.get_by_label(
+                "What the evidence establishes or leaves unclear", exact=True
+            )
+        ).to_have_value(note)
+        expect(reopened.get_by_label("Requirement status", exact=True)).to_have_value(
+            "unknown"
+        )
+        assert self.snapshot(page, title) == expected
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+
 
 def main(argv: list[str] | None = None) -> None:
     """Exercise real selection buttons against a fresh local save service."""
@@ -300,7 +493,9 @@ def main(argv: list[str] | None = None) -> None:
     paths = (
         "src/sinter/web/campaigns.js",
         "src/sinter/web/campaign-source-options.js",
+        "src/sinter/web/campaign-requirement-source.js",
         "src/sinter/web/campaigns.css",
+        "tools/campaign_source_picker_browser.py",
     )
     hashes = {
         name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in paths
@@ -332,6 +527,13 @@ def main(argv: list[str] | None = None) -> None:
                             "communication_source_snapshot",
                         ):
                             checks.check("source-picker-" + name, getattr(checks, name))
+                        for width in (1440, 390):
+                            checks.check(
+                                "source-picker-requirement-notes-" + str(width),
+                                lambda page, width=width: (
+                                    checks.requirement_note_transitions(page, width)
+                                ),
+                            )
                     finally:
                         browser.close()
                         resources["browser_closed"] = True

@@ -5,6 +5,11 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Keep a requirement's explanatory note when linking, changing or clearing its
+  source. Preserve unknown and clarification states; invalidate a met/not-met
+  assessment and old quoted wording when the source changes. Explain the
+  recheck needed without discarding the local note.
+
 - Keep local download bytes available during browser handoff, release them after
   a bounded interval and clean up immediately on a dispatch error. Say a download
   was requested instead of claiming the browser saved it. An explicit repeat Word

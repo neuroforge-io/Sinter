@@ -231,3 +231,29 @@ or by the deliberately delayed fictional handoff probe. No browser security
 setting was changed or bypassed. The scoped download-control judgment was **8 for
 user experience, 8.5 for functionality and 7.5 for aesthetics**, not a whole-product
 rating. Published preview installers are unchanged.
+
+### Requirement notes survive source changes
+
+An actual operator first entered a requirement's explanation, then linked its
+source. The earlier picker erased the note and clarification state. The corrected
+picker preserves exact explanatory wording on link, replacement and clear;
+met/not-met assessments still reset when the source changes, and earlier quoted
+wording is cleared. A visible message explains the recheck. Unknowns and
+clarification remain unresolved rather than becoming positive evidence.
+
+Independent qualification passed **117 campaign JavaScript tests, 52 focused
+Python checks, six fresh desktop/mobile browser journeys and 2,160 frozen
+transitions with 38,232 assertions**. The real campaign's clear/relink exercise
+also preserved its note and clarification state. Its revision-46 exported inputs
+were byte identical to revision 45. No model request or outgoing message was
+needed, and previous snapshots remain available privately.
+
+The current portfolio profiler completed **61 samples** against the exact
+fictional baseline (170,000 code points; 208,371 bytes), with ten separate driver
+measurements and unchanged source during the run. Median observations were
+336.8 ms for fresh open, 275.0 ms for warm open, 210.3 ms for modified save and
+392.5 ms for exact reopen. These include browser-driver/scroll/assertion work on
+an uncontrolled shared host. They are not customer latency guarantees or an A/B
+speedup. The first attempt could not locate its default browser and produced no
+samples; it remains a failed setup receipt. The successful run explicitly used
+the existing installed Chromium binary. All owned profiling resources closed.
