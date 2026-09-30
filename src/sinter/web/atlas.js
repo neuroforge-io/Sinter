@@ -14,7 +14,7 @@ export function atlasPage({setBusy, remember, seed = {}}) {
   const rememberNow = () => { if (active) remember('atlas', {title: 'Knowledge atlas', document, question: question.input.value}); };
   root.dispose = () => { active = false; ++selectionVersion; };
   question.input.addEventListener('input', () => { consent.input.checked = false; rememberNow(); });
-  async function accept(value, version = ++selectionVersion) {
+  async function accept(value, version = ++selectionVersion, {recheck = false} = {}) {
     if (!active) return false;
     let info;
     try { info = await request('/api/atlas/inspect', {data: {document: value}}); }
@@ -22,10 +22,15 @@ export function atlasPage({setBusy, remember, seed = {}}) {
     // Remembered sources are inspected outside the task lock. A newer selection
     // owns the page even when that older inspection succeeds or fails later.
     if (!active || version !== selectionVersion) return false;
-    document = value; consent.input.checked = false; rememberNow();
+    // Rechecking remembered sources is read-only: the user may already have
+    // searched this selection and approved it while inspection was pending.
+    if (!recheck) {
+      document = value; consent.input.checked = false;
+      result.replaceChildren();
+    }
+    rememberNow();
     summary.replaceChildren(notice(`${info.item_count} indexed items. Snapshot: ${info.snapshot_id}. Producer integrity: ${info.producer_integrity}.`),
       h('details', {}, h('summary', {}, 'Provenance and limitations'), ...info.warnings.map(w => h('p', {}, w))));
-    result.replaceChildren();
     return true;
   }
   async function task(action) {
@@ -88,7 +93,7 @@ export function atlasPage({setBusy, remember, seed = {}}) {
     result);
   if (document) {
     const version = ++selectionVersion;
-    accept(document, version).catch(error => {
+    accept(document, version, {recheck: true}).catch(error => {
       if (active && version === selectionVersion) summary.replaceChildren(notice(error.message, 'error'));
     });
   }

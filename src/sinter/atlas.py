@@ -70,7 +70,9 @@ def _source(value, path='', artifact_id='', paths=None):
     first, last = result.get('start_line', 0), result.get('end_line', 0)
     if end and end < start or first and last and last < first:
         raise ValueError('The RKC source range is reversed.')
-    if first and first == last and result.get('end_column', 0) < result.get('start_column', 0):
+    if (first and first == last
+            and 'start_column' in result and 'end_column' in result
+            and result['end_column'] < result['start_column']):
         raise ValueError('The RKC source column range is reversed.')
     if path and result['path'] != path:
         raise ValueError('The RKC source path disagrees with its object path.')

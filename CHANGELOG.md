@@ -5,6 +5,12 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Preserve completed atlas results and current consent during a background check
+  of the remembered source packet. Keep inspection errors visible. Explicit
+  imports, retrievals and compilation still replace the selected packet and
+  reset its result and consent. Validate supplied source columns without
+  inventing missing endpoints or rejecting a range solely because one is absent.
+
 - Add an explicit **On hold** action status. Retain task wording, owner, proposed
   date and history, while excluding held work from current suggestions and
   calendar entries. Resuming is an explicit edit and does not waive route gates.

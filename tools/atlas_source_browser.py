@@ -784,6 +784,106 @@ class AtlasSourceChecks(DeliverableChecks):
     def disposed_remembered_failure(self, page):
         self.delayed_remembered_packet(page, failed=True, disposed=True)
 
+    def same_snapshot_reinspection(self, page, *, failed):
+        """A passive remembered check must not erase a completed user search."""
+        from playwright.sync_api import expect
+
+        outcome = "failure" if failed else "success"
+        packet = self.source_bound_packets["before"]
+        region = self.open_atlas(page)
+        self.import_document(page, packet, f"fictional-same-snapshot-{outcome}.json")
+        self.find(page)
+        held = {}
+        pattern = "**/api/atlas/inspect"
+
+        def hold_inspection(route):
+            selected = route.request.post_data_json["document"]
+            if not held and selected.get("snapshot_id") == packet["snapshot_id"]:
+                held.update(route=route, response=route.fetch())
+            else:
+                route.continue_()
+
+        page.route(pattern, hold_inspection)
+        try:
+            self.goto(page, "home")
+            with page.expect_request(
+                lambda request: request.url.endswith("/api/atlas/inspect")
+            ):
+                region = self.open_atlas(page)
+            # The background inspection is still pending. This search goes
+            # through the actual server's own validation of the same packet.
+            self.find(page)
+            assert held and held["response"].status == 200
+            current_raw = self.retained_download(
+                page, "Download context JSON", f"same-snapshot-{outcome}-current.json"
+            )
+            current = json.loads(current_raw)
+            assert current["snapshot_id"] == packet["snapshot_id"]
+            self.consent(page).check()
+            completed = region.inner_text()
+            if failed:
+                held["route"].fulfill(
+                    status=400,
+                    json={"error": "Fictional current reinspection failure"},
+                )
+            else:
+                held["route"].fulfill(response=held["response"])
+            held["released"] = True
+            if failed:
+                expect(
+                    page.get_by_text(
+                        "Fictional current reinspection failure", exact=True
+                    )
+                ).to_be_visible()
+            else:
+                expect(
+                    page.get_by_text(f"Snapshot: {packet['snapshot_id']}.", exact=False)
+                ).to_be_visible()
+            assert region.inner_text() == completed
+            expect(self.consent(page)).to_be_checked()
+            retained = self.retained_download(
+                page, "Download context JSON", f"same-snapshot-{outcome}-retained.json"
+            )
+            assert retained == current_raw
+            self.screenshot(page, f"atlas-same-snapshot-reinspection-{outcome}")
+            page.unroute(pattern, hold_inspection)
+            # An explicit replacement, even the same snapshot, still resets
+            # consent and output. A failed passive check is not hidden or retried.
+            self.import_document(page, packet, f"fictional-explicit-{outcome}.json")
+            expect(self.consent(page)).not_to_be_checked()
+            assert not region.inner_text()
+            self.find(page)
+            searched = json.loads(
+                self.retained_download(
+                    page, "Download context JSON", f"same-snapshot-{outcome}-next.json"
+                )
+            )
+            assert searched["snapshot_id"] == current["snapshot_id"]
+            assert searched["items"] == current["items"]
+            self.delayed_inspections.append(
+                {
+                    "outcome": "same-snapshot-" + outcome,
+                    "held_snapshot": packet["snapshot_id"],
+                    "actual_server_inspection_status": held["response"].status,
+                    "injected_response_status": 400 if failed else None,
+                    "results_and_download_preserved": True,
+                    "current_failure_visible": failed,
+                    "consent_unchanged_by_passive_check": True,
+                    "explicit_replacement_resets_consent_and_results": True,
+                    "next_search_snapshot": searched["snapshot_id"],
+                }
+            )
+        finally:
+            if held and not held.get("released"):
+                held["route"].abort()
+            page.unroute(pattern, hold_inspection)
+
+    def same_snapshot_reinspection_success(self, page):
+        self.same_snapshot_reinspection(page, failed=False)
+
+    def same_snapshot_reinspection_failure(self, page):
+        self.same_snapshot_reinspection(page, failed=True)
+
 
 def main(argv=None):
     args = browser_arguments(__doc__, argv)
@@ -862,6 +962,14 @@ def main(argv=None):
                                 checks.disposed_remembered_failure,
                             ),
                             (
+                                "same-snapshot-reinspection-success",
+                                checks.same_snapshot_reinspection_success,
+                            ),
+                            (
+                                "same-snapshot-reinspection-failure",
+                                checks.same_snapshot_reinspection_failure,
+                            ),
+                            (
                                 "corrupt-identity-refusal",
                                 checks.reject_corrupt_identity,
                             ),
@@ -887,6 +995,7 @@ def main(argv=None):
                             in {
                                 "delayed-remembered-failure",
                                 "disposed-remembered-failure",
+                                "same-snapshot-reinspection-failure",
                             }
                             and row.get("url", "").endswith("/api/atlas/inspect")
                             and "400" in row["error"]
@@ -938,7 +1047,7 @@ def main(argv=None):
     if not receipt or not receipt["passed"]:
         raise SystemExit("FAIL: inspect receipt.json")
     print(
-        "PASS: eleven fictional Atlas source journeys; "
+        "PASS: thirteen fictional Atlas source journeys; "
         "no model/search/credential or external calls"
     )
 

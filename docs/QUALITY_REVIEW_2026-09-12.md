@@ -339,7 +339,45 @@ in-app browser. Save refused with the new recovery guidance; clipboard copying
 and full manual selection remained usable. The clipboard contained all
 **264,535 characters**, exactly matching the current working-copy JSON retained
 privately by the operator. Earlier snapshots and every original field outside
-the two deliberate record changes remained exact. A fresh file-download attempt
-still timed out; the local text recovery succeeds independently of that unresolved
-handoff. No hosted generation or outgoing communication was made by this operator
-or its review team in this cycle.
+the two deliberate record changes remained exact. The automation's notification
+wait for a fresh file download timed out, but later inspection found the actual
+file and confirmed its bytes exactly matched the reopened campaign. That attempt
+succeeded; it is separate from the earlier missing-file observation, whose cause
+remains unproven. Local text recovery also succeeded with the server stopped.
+No hosted generation or outgoing communication was made by this operator or its
+review team in this cycle.
+
+### Atlas results survive passive checks; omitted coordinates stay omitted
+
+A new adversarial witness found that a remembered packet's delayed inspection
+could erase a completed source retrieval and its downloads. Passive inspection
+now refreshes provenance without clearing the current output or consent. A
+current inspection error remains visible, while explicit import, retrieval and
+compilation continue to replace/reset the selection, even for the same snapshot.
+Older and disposed responses remain guarded. This is packet-inspection recovery,
+not qualification of every asynchronous or hosted generation operation.
+
+Another witness found that a supplied start column with an omitted end column
+was treated as reversed, because absence defaulted to zero. Range validation now
+compares columns only when both endpoints are supplied; it preserves omission
+and rejects explicit reversed ranges. The integrated validator already rejects
+known-artifact path contradictions; additional regression coverage protects that
+binding without a redundant implementation change. Original text, identities,
+pointers, offsets and seven canonical fictional packet outputs remain unchanged.
+
+Independent review passed **128 focused Python checks, 14 JavaScript cases,
+13 actual isolated browser journeys and 316 additional matrix assertion groups**.
+The omitted-column failures reproduced against the preceding source. Fresh UI
+checks covered delayed success/failure, wrong identity, contradictory path,
+changed snapshots, stale/disposed replies and explicit replacement. All owned
+browser/server resources closed, with no private, credential, model or external
+operations. The earlier passing broad suite missed these witnesses and is not
+used to dismiss them. Final combined-source qualification remains a separate
+recorded check; published installed previews are unchanged.
+
+The final combined source copy passed **2,123 Python tests with five
+platform-inapplicable skips**, plus fatal Ruff, whitespace and the narrow
+public-boundary check. Its runtime/test bytes are bound to the reviewed source
+and retained hash receipt. Qualification counts were added to this document
+after the run; no executable or test bytes changed. These are source results,
+not a new installer, customer-device or overall 10/10 qualification.

@@ -151,6 +151,44 @@ test('an unsuperseded remembered packet failure is reported', async t => {
   assert.equal(f.remembered.length, 0);
 });
 
+for (const outcome of ['success', 'failure']) {
+  test(`a late same-snapshot reinspection ${outcome} preserves completed results and the current consent`, async t => {
+    const initial = deferred(), started = deferred();
+    const f = fixture(t, {seed: {document: packets.before}, inspect: () => {
+      started.resolve(); return initial.promise;
+    }});
+    await started.promise;
+    await f.find();
+    const completed = f.result.textContent;
+    assert.match(completed, /Source packet only/);
+    assert.match(completed, /Download context JSON/);
+    f.consent.checked = true;
+    if (outcome === 'success') initial.resolve(Response.json(inspectInfo(packets.before)));
+    else initial.resolve(Response.json({error: 'Fictional current reinspection failure'}, {status: 400}));
+    await settle();
+    assert.equal(f.result.textContent, completed);
+    assert.equal(f.consent.checked, true);
+    assert.equal(action(f.root, 'Download context JSON').disabled, false);
+    if (outcome === 'failure') assert.match(f.root.textContent, /Fictional current reinspection failure/);
+    else assert.doesNotMatch(f.root.textContent, /Fictional current reinspection failure/);
+    assert.deepEqual(f.busy, [true, false]);
+    await f.find();
+    assert.equal(f.calls.filter(call => call.path === '/api/atlas/context').at(-1).data.document.snapshot_id, packets.before.snapshot_id);
+  });
+}
+
+test('an explicit same-snapshot import still replaces the selection and resets consent and results', async t => {
+  const f = fixture(t, {seed: {document: packets.before}});
+  await settle(); await f.find(); f.consent.checked = true;
+  assert.match(f.result.textContent, /Source packet only/);
+  await f.upload(packets.before);
+  assert.equal(f.result.textContent, '');
+  assert.equal(f.consent.checked, false);
+  assert.equal(f.remembered.at(-1).document.snapshot_id, packets.before.snapshot_id);
+  await f.find();
+  assert.equal(f.calls.filter(call => call.path === '/api/atlas/context').at(-1).data.document.snapshot_id, packets.before.snapshot_id);
+});
+
 test('failed replacement preserves a previously accepted document and resets consent', async t => {
   const f = fixture(t, {inspect: packet => packet.snapshot_id === packets.after.snapshot_id
     ? Response.json({error: 'Fictional rejected replacement'}, {status: 400}) : Response.json(inspectInfo(packet))});
