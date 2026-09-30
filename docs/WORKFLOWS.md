@@ -14,6 +14,21 @@ Use **Search watches** for hourly, daily or weekly checks. Watches resume overdu
 
 **Funding campaigns** keep several opportunities, application answers, quotes and next actions in one local record. Statuses, costs and requirement checks are entered by a person. A requirement is only treated as checked when its status, evidence, source link, source wording and check date are all present. A budget total is incomplete while any item lacks a numeric unit cost or a quote reference. Unknowns remain visible in the prepared brief.
 
+Each opportunity has its own **Funding ceiling currency**. Choose AUD, USD, EUR,
+GBP, NZD or CAD from the official funding terms; new opportunities start with
+currency unconfirmed. For another currency, choose **Another currency · comparison
+unsupported** and retain its exact name and payment conditions in the source or
+project-fit notes. Sinter does not verify those terms or convert currencies.
+
+Project costs remain explicitly **AUD**. A different, unconfirmed or unsupported
+funding denomination is shown separately in the route, currency review and brief;
+it is never numerically classified as within or over an AUD cost subtotal. Review
+the funding terms and cost basis separately. Non-cash routes remain **No grant
+cash**. Existing records without a currency retain their earlier AUD meaning;
+changing that meaning requires an explicit edit. Save the campaign to retain the
+choice across reopening and backup restoration. Historical reports retain their
+original recorded denomination.
+
 Save revisions on this computer, export a JSON backup, or import a backup to continue. A stale revision is rejected and leaves your unsaved edits in the editor. Sinter does not submit applications, fetch funder pages, or treat a prepared brief as approval.
 
 ## Enquiry letters, briefs and agenda items

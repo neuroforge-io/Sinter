@@ -15,8 +15,14 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterator
 
-from .client import safe_url
 from .campaign_capacity import text_characters
+from .campaign_currency import (
+    can_compare_ceiling,
+    ceiling_comparison_note,
+    ceiling_currency,
+    funding_amount,
+)
+from .client import safe_url
 from .evidence import literal, utc_now
 
 SCHEMA = "sinter-campaign/v1"
@@ -302,7 +308,7 @@ def validate(data: object) -> dict:
         "name", "funder", "url", "deadline", "application_window",
         "window_source_id", "window_source_url", "window_source_quote",
         "window_checked_at", "decision_window",
-        "ceiling", "fit", "status", "route_type", "application_mode", "applicant",
+        "ceiling", "ceiling_currency", "fit", "status", "route_type", "application_mode", "applicant",
         "applicant_confirmed",
     }):
         name = _text(row.get("name", ""), "Opportunity name", 200, True,
@@ -361,6 +367,11 @@ def validate(data: object) -> dict:
             "status": _status(row.get("status", "researching"),
                               OPPORTUNITY_STATUSES, "opportunity status"),
         })
+        currency = ceiling_currency(row)
+        # Preserve legacy AUD serialization; an explicit different denomination
+        # is part of the saved input, never an FX hint.
+        if currency != "AUD":
+            result["opportunities"][-1]["ceiling_currency"] = currency
     for row in _rows(data, "requirements", {
         "opportunity", "rule", "status", "evidence", "source_id", "source_url",
         "source_quote", "checked_at",
@@ -734,11 +745,13 @@ def _budget_summary(document: dict) -> dict:
         ceiling = opportunity["ceiling"]
         # A known subtotal can already exceed a ceiling even with unknown lines.
         over = (Decimal(totals["known_total"]) > Decimal(ceiling)
-                if ceiling is not None else None)
+                if can_compare_ceiling(opportunity) else None)
         active = opportunity["status"] in ACTIONABLE_OPPORTUNITY_STATES
         groups.append({"opportunity": opportunity["name"], **totals,
                        "status": opportunity["status"], "historical": not active,
-                       "ceiling": ceiling, "over_ceiling": over})
+                       "ceiling": ceiling, "over_ceiling": over,
+                       "ceiling_currency": ceiling_currency(opportunity),
+                       "comparison_note": ceiling_comparison_note(opportunity)})
     result["by_opportunity"] = groups
     result["unallocated_items"] = sum(not row["opportunity"]
                                       for row in document["budget"])
@@ -852,6 +865,9 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
         "budgets_over_ceiling": sum(row["over_ceiling"] is True
                                     for row in budget["by_opportunity"]
                                     if row["opportunity"] in active_names),
+        "funding_currency_review": sum(
+            bool(row["comparison_note"]) for row in budget["by_opportunity"]
+            if row["opportunity"] in active_names),
         "open_actions": len(current_actions),
         "actions_scope_unconfirmed": actions_scope_unconfirmed,
         "actions_submission_phase_review": actions_submission_phase_review,
@@ -898,11 +914,7 @@ def _brief_amount(value: str | None) -> str:
 
 def _route_amount(row: dict) -> str:
     """Keep a known non-cash route distinct from a missing amount."""
-    if row["route_type"] == "non_cash_support":
-        return "No grant cash (non-cash support)"
-    if row["ceiling"] is None:
-        return "Not recorded"
-    return _brief_amount(row["ceiling"])
+    return funding_amount(row)
 
 
 def _display_date(value: str) -> str:
@@ -1273,6 +1285,9 @@ def _render_decision_brief(document: dict, readiness: dict,
                 row, document["sources"]),
             "**Cash award / ceiling:** " + _route_amount(row),
         ])
+        comparison = ceiling_comparison_note(row)
+        if comparison:
+            lines.append("**Currency review:** " + comparison)
     if submitted:
         lines.extend(["### Submitted routes",
                       "These user-entered statuses are not independently verified."])
@@ -1338,6 +1353,11 @@ def _render_decision_brief(document: dict, readiness: dict,
             f"{count} {cost_label} unknown; known subtotal {_brief_amount(budget['known_total'])}; total unknown")
     else:
         review_items.append("Recorded cost total: " + _brief_amount(budget["total"]))
+    if readiness["funding_currency_review"]:
+        review_items.append(
+            f"{readiness['funding_currency_review']} active funding ceiling(s) "
+            "cannot be compared with AUD project costs; review currencies and "
+            "funding terms separately, without an assumed conversion")
     lines.extend(["## Open review items",
                   *["- " + item for item in review_items]])
 
@@ -1413,6 +1433,12 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                   f"{readiness['answers_over_limit']} answers over their limits; "
                   f"{budget_progress}; "
                   f"{readiness['open_actions']} open actions (confirmed current scope only).", NOTICE])
+    if readiness["funding_currency_review"]:
+        lines.append(
+            f"{readiness['funding_currency_review']} active funding ceiling(s) "
+            "have a different, unconfirmed or unsupported currency. Project "
+            "costs remain AUD; no currency conversion or ceiling comparison "
+            "was made for those routes.")
     if readiness["requirements_archived"]:
         count = readiness["requirements_archived"]
         noun, verb, route = ("check is", "does", "opportunity") if count == 1 else ("checks are", "do", "opportunities")
@@ -1565,6 +1591,9 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                                 else " allocated")
                              + (" — exceeds the entered funding ceiling."
                                 if group["over_ceiling"] else "."))
+                if group["comparison_note"]:
+                    lines.append(_inline(group["opportunity"]) + ": "
+                                 + group["comparison_note"])
     if historical_budget_rows:
         lines.extend(["### Historical budget items · inactive routes",
                       "These costs belong to closed, submitted, paused or not-pursued routes. They are excluded from the current project total and readiness checks.",

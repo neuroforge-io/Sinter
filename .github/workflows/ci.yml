@@ -69,6 +69,7 @@ jobs:
       - run: python tools/deliverable_browser.py
       - run: python tools/campaign_browser.py
       - run: python tools/campaign_source_picker_browser.py
+      - run: python tools/campaign_currency_browser.py
       - run: python tools/communication_view_browser.py
       - run: python tools/quality_browser.py
       - run: python tools/community_recovery_browser.py

@@ -5,6 +5,12 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Record each funding ceiling's currency explicitly, including unconfirmed and
+  unsupported other currencies. Keep project costs in AUD and withhold numeric
+  ceiling comparisons across denominations; show the review needed without an
+  assumed conversion. Preserve legacy AUD meanings, non-cash routes and explicit
+  choices through saves and backups.
+
 - Add an explicit source-only handover option that includes every selected
   passage, with later passages in a self-contained appendix. Preserve the compact
   default, exact references, original inputs and historical reports; save and

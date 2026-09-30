@@ -2,6 +2,7 @@
 import {isCampaignActionCurrent, isCampaignActionScopeConfirmed,
   isOpportunityActionable} from './campaign-state.js';
 import {campaignActionOwnerState} from './campaign-owner.js';
+import {campaignCurrencyComparisonNote} from './campaign-currency.js';
 import {campaignSourceSnapshotGuidance,
   campaignSourceSnapshotIssue} from './campaign-source-state.js';
 
@@ -182,6 +183,8 @@ function routeGaps(opportunity, requirements, today, sources = []) {
       }
     }
   }
+  const currencyGap = campaignCurrencyComparisonNote(opportunity);
+  if (currencyGap) gaps.push(currencyGap);
   return gaps;
 }
 
@@ -282,6 +285,8 @@ function suggestedAction(state, active, document, today, focus) {
     if (openCheck) {
       return requirementGap(openCheck, today, sources);
     }
+    const currencyGap = campaignCurrencyComparisonNote(opportunity);
+    if (currencyGap) return currencyGap;
   }
   return 'Review the next unresolved campaign item against current funder guidance.';
 }

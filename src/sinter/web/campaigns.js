@@ -19,6 +19,8 @@ import {campaignCapacity, CAMPAIGN_TEXT_LIMIT, CAMPAIGN_BYTE_LIMIT}
   from './campaign-capacity.js';
 import {campaignSourceOptions, matchingCampaignSources}
   from './campaign-source-options.js';
+import {CEILING_CURRENCY_OPTIONS, campaignCeilingCurrency,
+  campaignFundingAmount, campaignCurrencyComparisonNote} from './campaign-currency.js';
 
 const blank = () => ({schema: 'sinter-campaign/v1', title: '', organisation: '', objective: '',
   signatory: '', sender_role: '', contact_details: '',
@@ -77,17 +79,7 @@ const newRecordId = () => {
   crypto.getRandomValues(bytes);
   return [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
 };
-const money = value => {
-  if (value == null || value === '') return 'Not confirmed';
-  const amount = Number(value);
-  const minimumFractionDigits = Number.isInteger(amount) ? 0 : 2;
-  return 'A$' + new Intl.NumberFormat('en-AU', {
-    minimumFractionDigits, maximumFractionDigits: 2,
-  }).format(amount);
-};
-const routeAmountLabel = row => row.route_type === 'non_cash_support'
-  ? 'No grant cash' : row.ceiling == null || row.ceiling === ''
-    ? 'Amount not recorded' : 'Up to ' + money(row.ceiling);
+const routeAmountLabel = campaignFundingAmount;
 function compatibleCampaign(value) {
   const next = structuredClone(value || blank());
   // Campaign v1 documents saved before correspondence logging have no such key.
@@ -480,6 +472,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       [over.length, 'answers to shorten'],
       [heldAnswers.length, 'answer rows held'],
       [quotes.length, 'costs needing a quote'], [windows.length, 'application windows to verify'],
+      [document.opportunities.filter(row => isOpportunityActionable(row.status)
+        && campaignCurrencyComparisonNote(row)).length, 'funding currencies to review'],
       [ownersToConfirm.length, 'owners to confirm'],
       [actionReviewCount, 'actions to review']].map(([count, label]) =>
       h('div', {}, h('strong', {}, count), h('span', {}, label))));
@@ -547,7 +541,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   function addOpportunity() {
     let number = document.opportunities.length + 1;
     while (document.opportunities.some(row => row.name === 'Opportunity ' + number)) number++;
-    document.opportunities.push({name: 'Opportunity ' + number, funder: '', url: '', deadline: '', decision_window: '', ceiling: null, fit: '', route_type: 'unknown', status: 'researching'});
+    document.opportunities.push({name: 'Opportunity ' + number, funder: '', url: '', deadline: '', decision_window: '', ceiling: null, ceiling_currency: 'unconfirmed', fit: '', route_type: 'unknown', status: 'researching'});
     selected = document.opportunities.length - 1; changed(); renderEditor();
   }
   function renderEditor() {
@@ -656,6 +650,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const headerFunder = h('span', {class: 'eyebrow'}), headerName = h('h3', {}), programme = h('div');
     const windowSourceInfo = h('p', {class: 'campaign-window-source', role: 'status'});
     const maximum = h('dd', {}), deadlineLabel = h('dt', {}), deadlineValue = h('dd', {});
+    const currencyComparison = h('p', {class: 'fine campaign-currency-comparison', role: 'status'});
     const decisionValue = h('dd', {}), statusValue = h('dd', {}), workflowValue = h('dd', {}), fitValue = h('p', {});
     const applicantConfirmationStatus = h('small', {class: 'campaign-action-meta'});
     function updateOpportunityView() {
@@ -686,6 +681,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         windowSourceInfo.textContent = 'No registered application-window source linked; link an official page and recheck the wording.';
       }
       maximum.textContent = routeAmountLabel(item);
+      currencyComparison.textContent = campaignCurrencyComparisonNote(item);
+      currencyComparison.hidden = !currencyComparison.textContent;
       const windowKind = item.application_window || (item.deadline ? 'fixed' : 'unknown');
       if (item.status === 'closed' || item.status === 'submitted') {
         deadlineLabel.textContent = 'Recorded closing date';
@@ -787,7 +784,15 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       changed(); updateOpportunityView();
     });
     applicantConfirmation.wrap.append(applicantConfirmationStatus);
-    const ceiling = input('Maximum available (AUD)', 'number', item, 'ceiling', 'Leave blank when the programme publishes no cash award or the amount is not known. An offered ceiling is not an award or project budget.', {min: 0, step: '.01'}, element => { item.ceiling = element.value || null; updateOpportunityView(); });
+    const ceiling = input('Funding ceiling amount', 'number', item, 'ceiling', 'Use the amount in the programme terms and choose its currency separately. Leave blank when no cash award or amount is known. A ceiling is not an award or project budget.', {min: 0, step: '.01'}, element => { item.ceiling = element.value || null; updateOpportunityView(); });
+    const ceilingCurrency = selectField('Funding ceiling currency', CEILING_CURRENCY_OPTIONS,
+      campaignCeilingCurrency(item), 'Project costs remain AUD. No currency conversion is made. For another currency, retain its exact name in Project fit and timing or source notes.');
+    ceilingCurrency.input.dataset.campaignField = 'ceiling_currency';
+    ceilingCurrency.input.addEventListener('change', () => {
+      if (ceilingCurrency.input.value === 'AUD') delete item.ceiling_currency;
+      else item.ceiling_currency = ceilingCurrency.input.value;
+      changed(); updateOpportunityView();
+    });
     const state = choice('Opportunity status', opportunityStates, item, 'status', updateOpportunityView);
     const fit = input('Project fit and timing', 'textarea', item, 'fit', 'Which project option could this support? Record any exclusions or conditions before committing costs.', {rows: 3, maxLength: 6000}, updateOpportunityView);
     const opportunityEditor = h('details', {class: 'campaign-opportunity-editor', open: !item.funder && !item.fit},
@@ -795,7 +800,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       windowSourceInfo, windowSource.wrap,
       h('div', {class: 'form-grid'}, applicationMode.wrap, applicant.wrap),
       applicantConfirmation.wrap,
-      h('div', {class: 'form-grid'}, windowKind.wrap, deadline.wrap, windowChecked.wrap, decision.wrap, ceiling.wrap, state.wrap), windowQuote.wrap, fit.wrap);
+      h('div', {class: 'form-grid'}, windowKind.wrap, deadline.wrap, windowChecked.wrap, decision.wrap, ceiling.wrap, ceilingCurrency.wrap, state.wrap), windowQuote.wrap, fit.wrap);
     focus.append(h('header', {class: 'campaign-focus-heading'}, headerFunder, headerName, programme),
       h('dl', {class: 'campaign-opportunity-facts'},
         h('div', {}, h('dt', {}, 'Cash award / ceiling'), maximum),
@@ -803,6 +808,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         h('div', {}, h('dt', {}, 'Application lead'), workflowValue),
         h('div', {}, h('dt', {}, 'Decision timing'), decisionValue),
         h('div', {}, h('dt', {}, 'Status'), statusValue)),
+      currencyComparison,
       h('div', {class: 'campaign-fit'}, h('strong', {}, 'Project fit and timing'), fitValue),
       opportunityEditor);
     updateOpportunityView();
@@ -973,10 +979,15 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }
       total.textContent = !currentRows.length ? 'No costs recorded for active opportunities. The current project total is unknown.' : !priced
         ? `No costs priced yet · ${unknown} item${unknown === 1 ? '' : 's'} awaiting prices`
-        : `Known cost estimate: $${(cents / 100n).toLocaleString('en-AU')}.${String(cents % 100n).padStart(2, '0')}${unknown ? ' · ' + unknown + ' uncosted item' + (unknown === 1 ? '' : 's') + ' — total incomplete' : ''}`;
+        : `Known cost estimate: A$${(cents / 100n).toLocaleString('en-AU')}.${String(cents % 100n).padStart(2, '0')}${unknown ? ' · ' + unknown + ' uncosted item' + (unknown === 1 ? '' : 's') + ' — total incomplete' : ''}`;
     }
     panel.append(h('h3', {}, 'Current project costs'), h('p', {class: 'muted'}, 'Use AUD and keep the GST basis in the quote reference. Blank costs remain unknown. Estimates without a supplier quote still need checking.'), total,
       button('Add budget item', () => { document.budget.push({item: '', opportunity: '', quantity: 1, unit_cost: null, quote_reference: ''}); changed(); renderEditor(); }, 'quiet'));
+    for (const route of document.opportunities.filter(row => actionable.has(row.name))) {
+      const note = campaignCurrencyComparisonNote(route);
+      if (note) panel.append(h('p', {class: 'fine campaign-currency-comparison'},
+        route.name + ': ' + note));
+    }
     function renderBudgetRow(row) {
       const item = input('Budget item', 'text', row, 'item', '', {maxLength: 1000});
       const scope = choice('Funding opportunity', scopeChoices(), row, 'opportunity', () => renderEditor());
