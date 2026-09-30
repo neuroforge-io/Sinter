@@ -5,6 +5,13 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Keep campaign Save, preview and current status visible during long local
+  workflows, with keyboard-accessible recovery messages in short windows.
+  Clear an earlier save-success notice when edits become unsaved; retain
+  conflict errors and pending work. Show available route counts and recorded
+  closing dates consistently. Add a reproducible fictional portfolio profiler
+  with raw timings and explicit measurement limits.
+
 - Give the exact NeuroForge native buffered response a 55-second client budget,
   distinct from the service edge's 50-second contract, so response delivery has
   headroom. Preserve shorter task deadlines, cancellation, saved settings and

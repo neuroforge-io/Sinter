@@ -169,7 +169,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   let pendingFocus = null;
   let pendingActionFocus = null;
   const root = h('div', {class: 'campaign-page'}), shelf = h('div', {class: 'campaign-shelf'});
-  const feedback = h('div', {'aria-live': 'polite'}), status = h('span', {class: 'campaign-save-state', role: 'status'});
+  const feedback = h('div', {class: 'campaign-save-feedback', 'aria-live': 'polite', tabindex: 0}), status = h('span', {class: 'campaign-save-state', role: 'status'});
   const summary = h('div', {class: 'campaign-summary'}), editor = h('div'), output = h('div', {id: 'campaign-output', class: 'campaign-output'});
   const capacity = h('p', {class: 'fine', 'aria-label': 'Campaign capacity'});
   const decisionCard = h('section', {class: 'campaign-decision-card', 'aria-label': 'Campaign decision and next move'});
@@ -185,6 +185,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   function changed() {
     dirty = true; status.textContent = 'Unsaved changes';
+    feedback.querySelector('.notice.success')?.remove();
     if (output.children.length && output.dataset.stale !== 'true') {
       output.dataset.stale = 'true'; output.classList.add('campaign-output-stale');
       output.prepend(notice('This brief reflects an earlier campaign version. Re-prepare it before copying, downloading, saving or using it.', 'warning'));
@@ -686,7 +687,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       const windowKind = item.application_window || (item.deadline ? 'fixed' : 'unknown');
       if (item.status === 'closed' || item.status === 'submitted') {
         deadlineLabel.textContent = 'Recorded closing date';
-        deadlineValue.textContent = item.deadline || 'Not recorded';
+        deadlineValue.textContent = item.deadline ? displayDate(item.deadline) : 'Not recorded';
       } else if (windowKind === 'rolling') {
         deadlineLabel.textContent = 'Application window';
         deadlineValue.textContent = `Rolling${item.window_checked_at ? ` · checked ${displayDate(item.window_checked_at)}` : ' · check date needed'}`;
@@ -1618,9 +1619,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         for (const item of fundingChecks) {
           item.input.disabled = limitReached && !item.input.checked;
         }
-        fundingLimit.textContent = limitReached
-          ? '10 routes selected. Remove one before adding another.'
-          : `${row.funding_opportunities.length} of 10 route links selected.`;
+        fundingLimit.textContent = `${row.funding_opportunities.length} of ${fundingChecks.length} available route links selected. `
+          + (limitReached ? 'Maximum 10 links; remove one before adding another.'
+            : 'Maximum 10 links per product or asset.');
       }
       if (!document.opportunities.length) {
         funding.append(h('p', {class: 'fine'}, 'Add a funding opportunity before linking this asset to a route.'));
@@ -1841,7 +1842,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }, 'danger')));
   root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'CAMPAIGNS'), h('h2', {}, 'Keep the whole application together.'),
     h('p', {}, 'Compare opportunities, map products and IP questions to funding routes, prepare answers and turn missing details into next actions. Saved locally, with your sources beside the work.')),
-    practiceGuide, decisionCard, savedPanel, shelf, summary, capacity, editor, h('div', {class: 'campaign-save-bar'}, h('div', {class: 'button-row'}, saveButton, prepareButton), status), feedback, transfers, output);
+    h('div', {class: 'campaign-save-bar non-print', role: 'region', 'aria-label': 'Campaign save and preview'},
+      h('div', {class: 'button-row'}, saveButton, prepareButton), status, feedback),
+    practiceGuide, decisionCard, savedPanel, shelf, summary, capacity, editor, transfers, output);
   status.textContent = dirty ? 'Unsaved changes' : savedId ? 'Saved on this computer' : 'Not saved yet';
   renderEditor(); renderSummary();
   const existing = await refreshShelf();

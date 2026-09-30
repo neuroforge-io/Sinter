@@ -10,7 +10,7 @@ been published.
 September 12 review, not the September 30 candidate or the currently deployed
 native model. Current profile boundaries, offline and installed qualification
 are recorded in [published 0.5.4rc1 status](PREVIEW_0.5.4rc1.md) and
-[the next 0.5.4rc2 candidate](PREVIEW_0.5.4rc2.md). Native ERAIS supports
+[the published 0.5.4rc2 preview](PREVIEW_0.5.4rc2.md). Native ERAIS supports
 1–128 output tokens and short buffered questions; the earlier 32–2,048 range and
 long-recipe successes apply to legacy contracts. No historical score substitutes
 for current acceptance.
@@ -110,3 +110,95 @@ documents. Partial reviews now return exit 3, failed or uncertain provider outco
 return 1, and invalid CLI usage retains exit 2, so automation can separate follow-up
 from failure. Source links and hashes establish provenance, not truth; official
 decisions and communications stay with the user.
+
+## 30 September source-workflow reassessment
+
+The September 12 scores above remain historical. Actual operator use of long
+campaigns and source-only handovers found further defects; those scores do not
+establish current whole-product acceptance or the user's requested 10/10 bar.
+
+The following changes follow the frozen Linux-only 0.5.4rc2 release at
+`256d38fa4b61a4d548472ce5abfd0bf513789090`. They are development source changes,
+not changes to its installers or evidence of another installed platform passing:
+
+- A large real campaign could be refused because validation counted normalized
+  strings more than once. Shared capacity checks now count each value once and
+  warn before the unchanged admission limits; rejected input can still be backed
+  up and deliberately reduced.
+- An explicit handover option preserves all selected passages in a portable
+  appendix. It does not include every unselected original or turn related wording
+  into answers. Bounded Word grouping keeps short source captions and reference
+  keys beside the related material; narrow editor tracks fit the viewport.
+- Explicit visible source-selection buttons replace unreliable datalist
+  interaction. Searching does not change a link. Ambiguous identities are
+  excluded, historical snapshots remain identifiable, and linking a different
+  source retires its earlier assessment until a person reassesses it.
+- Pending draft edits now block copy, download, print, local save and campaign
+  correspondence logging until explicitly applied or cancelled. Refusal happens
+  before logging or changing a saved campaign revision.
+- Funding ceilings carry an explicit denomination. Legacy AUD meanings are
+  retained; new entries start unconfirmed. Non-AUD ceilings are never compared
+  numerically with AUD project costs, and no conversion or award is inferred.
+- The native client allows 55 seconds for transport while the qualified service
+  edge remains 50 seconds. Mocked delayed delivery exercises completion, bounded
+  refusal, cancellation and shorter enclosing deadlines without replay.
+
+Independent reviews found no remaining blocker in those bounded changes.
+Focused regression and browser receipts cover identity, partial results, saved
+work, revision conflicts, backups, exports and literal Unicode evidence. Before
+the native timing follow-up, the full Python suite passed **1,914 tests with five
+platform-inapplicable skips**. The timing follow-up independently passed 297
+focused native/provider/admission tests. This is source validation, not a claim
+that a hosted answer is useful or an installer contains these changes.
+
+A fictional 170,000-code-point portfolio benchmark used 81 sources, 27 products,
+12 routes and 10 communications. Its 61 measurements include automation and UI
+waits: median save 195 ms across five samples, with a retained 931 ms maximum;
+median fresh-context reopen 295 ms across three samples. These small local
+samples establish neither a service-level guarantee nor customer-device speed.
+They also exposed Save controls far below the active search fields, a usability
+gap that timing alone would have missed.
+
+The independently rendered raw nine-page evidence dossier scored **6.5 for user
+experience, 7.5 for artifact fidelity and 7 for aesthetics**. Those are scoped
+engineering judgments, not product-wide scores, legal or funding conclusions,
+or representative customer research. The dossier retained all selected passages
+but still needed a concise operator-written decision page and clearer page
+boundaries. Long-source fragments and lexical selection remain practical limits.
+No 10/10, completed live-assistant task, secured funding or automated-submission
+claim follows from these checks.
+
+### Closing the observed save and document-layout gaps
+
+An explicit editor page-boundary control now preserves the surrounding wording
+and represents a native Word break and a printed HTML break. It refuses a
+non-rendering insertion inside literal material without changing the editor.
+Independent checks covered five actual save/reopen/export journeys, Unicode
+cursor boundaries and literal nested markers. Normal exports remain byte-for-byte
+stable. Actual private operator packs were reviewed separately from the fictional
+control fixtures; their evidence and historical generated reports were retained.
+
+The campaign Save and preview controls now stay visible above the long editor.
+An initial constrained-height review found covered fields; the corrected layout
+passed eight actual browser viewports, including 320-by-400, 320-by-501,
+320-by-601 and 651-by-400 windows, with 40 complete-field visibility checks.
+Save/reopen and competing-revision refusal preserved the exact fictional
+portfolio. Editing clears only an earlier success notice; conflict errors and
+pending wording remain available. The scoped control assessment was **8 for user
+experience, 8.5 for functionality and 7.5 for aesthetics**. It does not qualify
+physical mobile keyboards, an installed package or the whole product.
+
+On the final development bytes, the full Python suite passed **1,939 tests with
+five platform-inapplicable skips**. The configured fatal Ruff gate, public-boundary
+check and deterministic offline self-audit also passed. The actual browser checks
+reported no external or model calls. A reusable profiler retained another 61
+measurements against the exact original fictional fixture, with ten separate
+driver-overhead measurements. Concurrent host work was uncontrolled: this is
+repeatable workflow evidence, not an A/B speedup or customer latency guarantee.
+
+The real NeuroForge portfolio was closed, the app stopped and restarted, and a
+fresh browser opened its latest saved revision. Its exported backup was byte
+identical, retaining 13 routes, 84 sources, 27 products/assets, ten communications
+and 19 actions. No credentials, private correspondence or campaign evidence were
+added to the public repository or release assets. No hosted model allowance was
+used, and no new application or outgoing message was sent by this cycle.

@@ -19,9 +19,11 @@ python tools/deliverable_browser.py
 python tools/campaign_browser.py
 python tools/campaign_source_picker_browser.py
 python tools/campaign_currency_browser.py
+python tools/campaign_action_bar_browser.py
 python tools/communication_view_browser.py
 python tools/handover_appendix_browser.py
 python tools/document_export_browser.py
+python tools/document_page_break_browser.py
 python tools/quality_browser.py
 ```
 
@@ -36,12 +38,23 @@ The same setup runs `browser_smoke.py`, `studio_browser.py`, `desktop_browser.py
 `casebook_browser.py`, `deliverable_browser.py`, `campaign_browser.py`,
 `campaign_source_picker_browser.py`,
 `campaign_currency_browser.py`,
+`campaign_action_bar_browser.py`,
 `communication_view_browser.py`,
 `handover_appendix_browser.py`, `document_export_browser.py`,
+`document_page_break_browser.py`,
 `quality_browser.py` and `site_browser.py`. Use `--chromium /path/to/chromium` or
 `SINTER_CHROMIUM` for an existing browser; the command-line option takes priority.
 Missing packages or browsers fail with installation guidance and a nonzero exit
 status, so an unexecuted integration test cannot silently pass CI.
+
+For a repeatable local portfolio measurement, run
+`python tools/campaign_portfolio_profile.py --chromium /path/to/chromium`.
+It uses the same fictional 170,000-character fixture as the recorded baseline
+and retains all 61 timings, setup failures and ten separate driver-overhead
+samples in a fresh temporary evidence folder. Measurements include automation,
+scrolling and assertions; no overhead is subtracted. Host load and customer
+devices are uncontrolled. The tool checks the saved workflow and fixture
+identity; it does not enforce a CI timing threshold or establish a speedup.
 
 Other integration and release tools also explain their arguments with `--help`:
 
@@ -184,10 +197,22 @@ and explicitly include original variables plus `{{previous}}` in each drafting a
 checking prompt. This keeps the source context available without copying the full
 conversation into every step. Source text remains untrusted data.
 
-Output limits are 32–8,192 tokens for compatible custom providers; the public
-NeuroForge endpoint accepts at most 2,048. It also accepts at most 49,152 UTF-8 bytes
-of alternating user/assistant messages and 8,192 bytes of initial system instructions.
-Admission failures are local validation errors. A length-limited template step
+Output limits depend on the explicitly selected connection. Compatible custom
+providers retain the 32–8,192 setting range. The legacy NeuroForge hybrid profile
+allows up to 2,048 output tokens, 49,152 UTF-8 bytes of alternating user/assistant
+messages and 8,192 bytes of initial system instructions; the dense profile caps
+output at 512 tokens.
+
+The qualified native profile is buffered only, with 1–128 output tokens, a
+2,048-byte final question, at most three recent exchanges and 4,096 history bytes,
+and a separate service-tokenized 512-token prompt budget. Caller system messages
+are unsupported. Larger recipes, including the example above, refuse that
+profile before generation and preserve their inputs. Use the visibly scoped
+**Short source answer** or explicitly select a capable provider. See the
+[native contract and fixtures](NATIVE_API_COMPATIBILITY.md) for exact identity,
+admission and completion checks. No public token-preflight route is qualified.
+
+Admission failures preserve the original inputs. A length-limited template step
 emits `step_partial` before failing; dependent steps do not run. JSON errors include
 `partial_result`, failed jobs retain it for Recent activity, and streamed output
 can be downloaded with its incomplete label. No generation is automatically replayed.
