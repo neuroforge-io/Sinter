@@ -12,9 +12,11 @@ import sys
 import tempfile
 import threading
 import time
+import zipfile
 from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
+from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -131,9 +133,11 @@ class DeliverableChecks:
         assert name.endswith('.json'), name
         return json.loads(content)
 
-    def copy(self, page):
+    def copy(self, page, *, incomplete=False):
         page.get_by_role('button', name='Copy draft text', exact=True).click()
-        page.get_by_text('Copied. Ready to paste into your email or document.', exact=True).wait_for()
+        confirmation = ('Incomplete draft copied. Review the partial text before using it.'
+                        if incomplete else 'Copied. Ready to paste into your email or document.')
+        page.get_by_text(confirmation, exact=True).wait_for()
         return page.evaluate('() => navigator.clipboard.readText()')
 
     def document(self, page):
@@ -368,6 +372,217 @@ class DeliverableChecks:
         assert '*useful paragraph*' not in copied and '| --- |' not in copied, copied
         self.screenshot(page, 'readable-markdown', full_page=True)
 
+    def assistant_evidence(self, page, *, incomplete=False):
+        """Selected records survive save/reopen without becoming verified sources."""
+        from playwright.sync_api import expect
+
+        submitted = []
+        page.on('request', lambda request: submitted.append(request.url)
+                if request.method == 'POST'
+                and request.url == self.base + '/api/assistant/job' else None)
+        source_id = 'a' * 32
+        quotes = [
+            'Registered associations may apply with school approval.',
+            'Earlier wording: costs must be incurred after approval.',
+            '**Literal quote** <script>window.__assistantXss=1</script>',
+        ]
+        route = ('Fictional garden recovery fund' if incomplete
+                 else 'Fictional garden fund')
+        document = {
+            'title': ('Fictional garden partial-recovery campaign' if incomplete
+                      else 'Fictional garden funding campaign'),
+            'organisation': PROFILE['organisation'],
+            'objective': 'Confirm applicant acceptance and supported garden costs.',
+            'opportunities': [{'name': route, 'status': 'clarification'}],
+            'sources': [{'id': source_id, 'title': 'Fictional garden guidance',
+                         'url': 'https://example.invalid/garden/current',
+                         'checked_at': '2026-09-12'}],
+            'requirements': [
+                {'opportunity': route, 'rule': 'Confirm applicant type',
+                 'status': 'unknown', 'evidence': 'Confirmation not received.',
+                 'source_id': source_id, 'source_url': 'https://example.invalid/garden/current',
+                 'source_quote': quotes[0], 'checked_at': '2026-09-12'},
+                {'opportunity': route, 'rule': 'Recheck supported costs',
+                 'status': 'unknown', 'source_id': source_id,
+                 'source_url': 'https://example.invalid/garden/earlier',
+                 'source_quote': quotes[1], 'checked_at': '2026-09-01'},
+                {'opportunity': route, 'rule': 'Review the unlinked quotation',
+                 'status': 'unknown', 'source_url': 'https://example.invalid/garden/unlinked',
+                 'source_quote': quotes[2], 'checked_at': '2026-09-12'},
+            ],
+            'actions': [{'task': 'Request the garden quote', 'status': 'done',
+                         'owner': 'Morgan Example', 'owner_kind': 'person',
+                         'owner_confirmed': False, 'opportunity': route,
+                         'scope_confirmed': True},
+                        {'task': 'Confirm the project scope', 'status': 'open',
+                         'owner': 'Funding coordinator (suggested role)',
+                         'owner_kind': 'role', 'owner_confirmed': False,
+                         'opportunity': route, 'scope_confirmed': True}],
+        }
+        saved = page.evaluate('''async document => {
+            const {request} = await import('/static/api.js');
+            await request('/api/settings', {data: {settings: {
+              provider:'openai-compatible', api_url:'https://example.invalid/v1',
+              model:'fixture-model', max_tokens:512}, confirm_endpoint:true}});
+            return await request('/api/campaigns/save', {data:{document}});
+        }''', document)
+        self.goto(page, 'explore')
+        page.get_by_label('Saved campaign', exact=True).select_option(saved['id'])
+        expect(page.get_by_label('Funding route', exact=True)).to_have_value(route)
+        page.get_by_label('Help me with', exact=True).select_option('enquiry')
+        for rule in ('Confirm applicant type', 'Recheck supported costs', 'Review the unlinked quotation'):
+            page.get_by_label(rule + ' · unknown', exact=True).check()
+        page.get_by_text('Include existing actions', exact=True).click()
+        page.get_by_label('Request the garden quote · done', exact=True).check()
+        page.get_by_label('Confirm the project scope · open', exact=True).check()
+        page.get_by_role('button', name='Preview what will be sent', exact=True).click()
+        page.get_by_label('Send only the displayed context to my selected model.', exact=True).check()
+        partial_text = ('# Garden applicant enquiry\n\nDear Casey Example,\n\n'
+                        'Please confirm whether our garden association can apply '
+                        'with school approval.\n\nWe also need confirmation of')
+        result = client.ChatResult(
+            partial_text if incomplete else FINAL_DRAFT,
+            finish_reason='incomplete' if incomplete else 'stop',
+            model='fixture-model')
+        model_reply = ({'side_effect': client.IncompleteGeneration(result, 512)}
+                       if incomplete else {'return_value': result})
+        with patch.object(client, 'chat', **model_reply) as model:
+            page.get_by_role('button', name='Ask my assistant', exact=True).click()
+            doc = self.document(page)
+        assert model.call_count == 1
+        if incomplete:
+            expect(doc).to_contain_text('INCOMPLETE MODEL DRAFT')
+            expect(doc).to_contain_text('We also need confirmation of')
+            expect(page.get_by_text('Incomplete model suggestion.', exact=False)).to_be_visible()
+
+        def review_saved_context():
+            report = page.get_by_role('region', name='Your draft report')
+            report.get_by_role('tab', name='Evidence', exact=True).click()
+            evidence = report.get_by_role('tabpanel', name='Evidence', exact=True)
+            expect(evidence).to_contain_text('3 selected checks · 2 selected actions')
+            expect(evidence).to_contain_text('User-entered and unverified')
+            assert '0 sources' not in evidence.inner_text()
+            assert 'Original sources' not in evidence.inner_text()
+            for index, rule in enumerate(('Confirm applicant type', 'Recheck supported costs', 'Review the unlinked quotation'), 1):
+                evidence.get_by_text(f'Check {index}: {rule}', exact=True).click()
+            expect(evidence.locator('blockquote')).to_have_text(quotes)
+            expect(evidence).to_contain_text('matches current source record (not source verification)')
+            expect(evidence).to_contain_text('differs from current source record; review needed')
+            expect(evidence).to_contain_text('unlinked quote')
+            links = evidence.get_by_role('link', name='Open the recorded source link', exact=True)
+            expect(links).to_have_count(3)
+            assert [links.nth(i).get_attribute('href') for i in range(3)] == [
+                'https://example.invalid/garden/current',
+                'https://example.invalid/garden/earlier',
+                'https://example.invalid/garden/unlinked',
+            ]
+            for index in range(3):
+                expect(links.nth(index)).to_have_attribute('rel', 'noopener noreferrer')
+            evidence.get_by_text('Action 1: Request the garden quote', exact=True).click()
+            expect(evidence).to_contain_text('Recorded state: done')
+            expect(evidence).to_contain_text('acceptance unconfirmed')
+            evidence.get_by_text('Action 2: Confirm the project scope', exact=True).click()
+            expect(evidence).to_contain_text('Suggested role only; no person named (Funding coordinator)')
+            assert page.evaluate('() => window.__assistantXss') is None
+            expect(evidence.locator('script, img, iframe')).to_have_count(0)
+            return evidence
+
+        evidence = review_saved_context()
+        path = self.artifacts / ('deliverable-assistant-partial-record-evidence.png'
+                                 if incomplete else 'deliverable-assistant-record-evidence.png')
+        evidence.screenshot(path=str(path), animations='disabled')
+        self.screenshots.append(path.name)
+        pack = self.pack(page)
+        assert pack['sources'] == [] and pack['excerpts'] == []
+        assert len(pack['context']['selected_checks']) == 3
+        assert len(pack['context']['selected_actions']) == 2
+        assert pack['context_hash'] in pack['markdown']
+        assert pack['context_hash'] not in pack['document_markdown']
+
+        def partial_exports(expected_text):
+            report = page.get_by_role('region', name='Your draft report')
+            report.get_by_role('tab', name='Document', exact=True).click()
+            expect(self.document(page)).to_contain_text('INCOMPLETE MODEL DRAFT')
+            record = self.pack(page)
+            assert record['incomplete'] is True
+            assert 'INCOMPLETE MODEL' in record['markdown']
+            assert 'INCOMPLETE MODEL' in record['document_markdown']
+            assert record['result']['content'] == partial_text
+            assert record['result']['finish_reason'] == 'incomplete'
+            assert record['context'] == pack['context']
+            assert record['context_hash'] == pack['context_hash']
+            copied = self.copy(page, incomplete=True)
+            assert 'INCOMPLETE MODEL DRAFT' in copied and expected_text in copied
+            name, markdown = self.download(page, 'Download Markdown')
+            assert name.endswith('.md')
+            assert 'INCOMPLETE MODEL DRAFT' in markdown and expected_text in markdown
+            name, html = self.download(page, 'Download document')
+            assert name.endswith('.html')
+            exported = page.context.new_page()
+            try:
+                exported.set_content(html)
+                text = exported.locator('.document').inner_text()
+                assert 'INCOMPLETE MODEL DRAFT' in text and expected_text in text
+                expect(exported.locator('script, iframe, object, embed')).to_have_count(0)
+            finally:
+                exported.close()
+            with page.expect_download() as pending:
+                page.get_by_role('button', name='Download Word (.docx)', exact=True).click()
+            assert pending.value.suggested_filename.endswith('.docx')
+            with zipfile.ZipFile(pending.value.path()) as archive:
+                assert archive.testzip() is None
+                word = ET.fromstring(archive.read('word/document.xml'))
+                text = ''.join(element.text or '' for element in word.iter(
+                    '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'))
+                assert 'INCOMPLETE MODEL DRAFT' in text and expected_text in text
+            return record
+
+        if incomplete:
+            partial_exports('We also need confirmation of')
+            name, raw = self.download(page, 'Download the assistant record')
+            assert name.endswith('.json')
+            assistant_record = json.loads(raw)
+            assert assistant_record['incomplete'] is True
+            assert assistant_record['context'] == pack['context']
+            assert assistant_record['result']['content'] == partial_text
+        page.get_by_role('button', name='Save to this computer', exact=True).click()
+        expect(page.get_by_text('Saved in My workspace', exact=False)).to_be_visible()
+        self.goto(page, 'library')
+        page.get_by_role('button', name='Open draft', exact=True).first.click()
+        self.document(page)
+        review_saved_context()
+        if incomplete:
+            partial_exports('We also need confirmation of')
+            self.options(page)
+            page.get_by_role('button', name='Edit draft', exact=True).click()
+            updated = ('# Retained garden notes\n\n'
+                       'Water access still needs venue confirmation.\n\nMorgan Example')
+            editor = page.get_by_label('Edit your draft', exact=True)
+            expect(editor).to_be_visible()
+            assert 'INCOMPLETE MODEL DRAFT' in editor.input_value()
+            editor.fill(updated)
+            assert 'INCOMPLETE' not in editor.input_value()
+            page.get_by_role('button', name='Apply edits', exact=True).click()
+            edited = partial_exports('Water access still needs venue confirmation.')
+            assert edited['document_edits']['markdown'] == updated
+            assert edited['document_markdown'] == pack['document_markdown']
+            page.get_by_role('button', name='Save to this computer', exact=True).click()
+            expect(page.get_by_text('Saved in My workspace', exact=False)).to_be_visible()
+            self.goto(page, 'library')
+            page.get_by_role('button', name='Open draft', exact=True).first.click()
+            self.document(page)
+            review_saved_context()
+            reopened = partial_exports('Water access still needs venue confirmation.')
+            assert reopened['document_edits'] == edited['document_edits']
+            self.screenshot(page, 'assistant-partial-edited-reopened', full_page=True)
+        current = page.evaluate('''async id => {
+            const {request} = await import('/static/api.js');
+            return await request('/api/campaigns/' + id);
+        }''', saved['id'])
+        assert current == saved, 'Assistant generation or document editing changed the campaign.'
+        assert model.call_count == 1, 'The partial model request was replayed.'
+        assert len(submitted) == 1, 'More than one assistant task was submitted.'
+
 
 def main(argv=None):
     args = browser_arguments(__doc__, argv)
@@ -390,6 +605,9 @@ def main(argv=None):
                 checks.check('edit-save-reopen-original-retained', checks.edited_draft_roundtrip)
                 checks.check('template-final-document', checks.template_document)
                 checks.check('readable-safe-markdown', checks.readable_markdown)
+                checks.check('assistant-selected-record-evidence', checks.assistant_evidence)
+                checks.check('assistant-partial-recovery-exports-save-edit',
+                             lambda page: checks.assistant_evidence(page, incomplete=True))
                 receipt = {
                     'schema': 'sinter-deliverable-browser/v1',
                     'fixture_notice': 'Fictional people, sources and model responses. No external requests permitted. Passing checks do not establish a quality rating.',

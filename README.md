@@ -16,7 +16,13 @@ Action plans and shared knowledge, with the evidence still in view.
 
 ---
 
-## Community workflows and model access: 0.5.3
+## Current candidate: 0.5.4rc1
+
+The published v0.5.3 installer predates the latest campaign and connection
+changes. This candidate has a separate source identity and qualification record;
+see [candidate status](docs/PREVIEW_0.5.4rc1.md) before choosing an install asset.
+Start with the [fictional offline garden walkthrough](examples/offline-garden/README.md).
+It needs no account, internet, model download or hosted generation.
 
 ### Clearer work and safer recovery
 
@@ -35,13 +41,48 @@ to Word while their original sources remain in the evidence pack.
 
 New connections discover the current supported NeuroForge model. Saved explicit
 choices are preserved. Answers start at 64 tokens; automatic/dense requests are
-capped at 512. One hosted generation runs at a time in each Sinter process, with
+capped to the advertised profile: native ERAIS 128, dense 512, hybrid up to 2,048.
+Native requests use one JSON response, even when the interface displays a stream.
+For native ERAIS, choose **Explore AI → Multi-step templates → Short source answer**
+and preview the exact selected excerpt and question before sending. Full reviews,
+long letters and eligibility decisions do not fit this small profile; Sinter
+retains those inputs and asks for a smaller scope or an explicitly capable provider.
+See the [native API contract and fixtures](docs/NATIVE_API_COMPATIBILITY.md).
+One hosted generation runs at a time in each Sinter process, with
 bounded, cancellable waiting. Install the new package to receive these changes;
 existing installations do not update themselves.
 
 [Testing findings and validation](docs/QUALITY_REVIEW_2026-09-12.md)
 
-### Earlier review quality changes in 0.5.2
+### Choose your optional assistant
+
+Settings offers NeuroForge's keyless preview, ChatGPT account access, Anthropic,
+OpenAI API keys, Gemini and compatible local or remote model servers. Load the
+model list before saving, or enter an exact model identifier. A successful model
+check confirms discovery; it does not claim that generation has been tested.
+Search continues through NeuroForge when another model provider is selected.
+
+ChatGPT plan access uses OpenAI's documented sign-in flow for eligible users and
+qualifying open-source local applications. Source installations need the optional
+account verification package: `python -m pip install 'sinter[accounts]'` (from a
+checkout, use `python -m pip install '.[accounts]'`). The provider controls response
+length and plan limits. Account tokens stay in protected local account storage;
+API keys entered for other providers stay in memory for the session. Sign-in alone
+does not change the selected model connection. See
+[OpenAI's account access guide](https://developers.openai.com/siwc/token-sharing-open-source/sign-in).
+Set an app allowance in ChatGPT's **Settings → Usage → App limits → Sinter** if
+you want a weekly ceiling, and leave credit fallback off to stay within that plan
+allowance. Sinter does not infer a remaining plan percentage from token counts.
+
+In Explore AI, the campaign assistant helps prioritise next actions, explain
+eligibility gaps or draft an enquiry. Select a saved route and the checks to
+include, inspect the context, then approve the model request. Suggestions stay
+separate from campaign records. Changes to the campaign invalidate an earlier
+preview. No messages or applications are sent by this assistant.
+
+[Optional assistant testing and limits](docs/ASSISTANT_VALIDATION_2026-09-30.md)
+
+### Review quality and current recovery behaviour
 
 Collection review now shapes batches from a deterministic local analysis: each batch
 is cut at statement and line boundaries and asked targeted questions about the real
@@ -84,7 +125,7 @@ Sinter is for P&Cs, clubs, associations, volunteer teams and anyone who has more
 | An organisation profile and funding questions | A source-linked funding shortlist, requirement checks and recurring searches | Missing conditions, source dates and eligibility uncertainty |
 | Notes, references and questions | An enquiry letter, briefing note or agenda item | Original excerpts and unanswered questions |
 | A meeting transcript or recording* | A reviewed transcript and draft minutes | Speaker labels, original wording, corrections and review flags |
-| Tasks and confirmed dates | An action plan, volunteer handover or event checklist | Stated owners and commitments, rather than invented ones |
+| Tasks and proposed dates | An action plan, volunteer handover or event checklist | Owner type, accepted responsibility and unconfirmed timing |
 | Two document versions | A line-by-line wording comparison | Exactly which lines changed, not an AI judgement of their meaning |
 | An exported RKC atlas | A cited source packet and optional model-assisted draft | Snapshot identity, source paths and citation identifiers |
 
@@ -171,7 +212,7 @@ Model assistance works **beside** RKC: Sinter sends a bounded, approved excerpt 
 | Optional speech recognition | Audio remains local; authorised model downloads contact the model host |
 | Session key entered in Settings | Process memory only; not saved into preferences or exports |
 
-The default NeuroForge service is a public preview with capacity and availability limits, **not a 24/7 service guarantee**. Its selected backend may be dense or legacy Fracture; a dense response is not a sparse conversion result. Sinter itself is free; a different provider or private deployment can have its own terms and charges. Advanced connection settings are optional, and changing the destination requires confirmation.
+The default NeuroForge service is a public preview with capacity and availability limits, **not a 24/7 service guarantee**. Its selected backend may be native ERAIS, dense or legacy Fracture. Native ERAIS is explicitly unqualified for general chat; protocol admission does not establish answer quality. A dense response is not a sparse conversion result. Sinter itself is free; a different provider or private deployment can have its own terms and charges. Advanced connection settings are optional, and changing the destination requires confirmation.
 
 Exact quotations establish provenance, not truth, authority, currency or completeness. Sinter never sends official letters, approves minutes or submits grant applications automatically. The local server is for one trusted local user, not an internet-facing team service.
 

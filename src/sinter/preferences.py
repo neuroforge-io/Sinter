@@ -10,17 +10,26 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .client import (
-    BASE_URL, DEFAULT_MODEL, DEFAULT_OUTPUT_TOKENS, PUBLIC_MAX_OUTPUT_TOKENS, safe_url, same_api_destination,
-    uses_neuroforge_api, validate_max_tokens,
+    BASE_URL,
+    DEFAULT_MODEL,
+    DEFAULT_OUTPUT_TOKENS,
+    PUBLIC_MAX_OUTPUT_TOKENS,
+    safe_url,
+    same_api_destination,
+    uses_neuroforge_api,
+    validate_max_tokens,
 )
+from .model_profiles import NATIVE_MODEL, native_profile_applies
 from .profiles import PROFILE_DEFAULTS, validate_profile
 
 DEFAULTS = {
     **PROFILE_DEFAULTS,
     'schema_version': 1, 'theme': 'dark', 'text_size': 'normal',
     'density': 'comfortable', 'reduce_motion': False, 'api_url': BASE_URL,
-    'model': DEFAULT_MODEL, 'max_tokens': DEFAULT_OUTPUT_TOKENS, 'rkc_port': 8787, 'rkc_executable': '',
+    'model': DEFAULT_MODEL, 'provider': 'openai-compatible',
+    'max_tokens': DEFAULT_OUTPUT_TOKENS, 'rkc_port': 8787, 'rkc_executable': '',
 }
+PROVIDERS = frozenset({'openai-compatible', 'anthropic', 'chatgpt'})
 MAX_PREFERENCES_BYTES = 65536
 
 
@@ -40,7 +49,8 @@ def validate(values: dict) -> dict:
             raise ValueError('Choose one of the offered appearance settings.')
     if type(result['reduce_motion']) is not bool or type(result['schema_version']) is not int or result['schema_version'] != 1:
         raise ValueError('Unsupported settings version or motion preference.')
-    validate_max_tokens(result['max_tokens'])
+    if not isinstance(result['provider'], str) or result['provider'] not in PROVIDERS:
+        raise ValueError('Choose one of the offered model connection types.')
     if type(result['rkc_port']) is not int or not 1024 <= result['rkc_port'] <= 65535:
         raise ValueError('Choose an RKC port from 1024 to 65535.')
     url = result['api_url'].rstrip('/')
@@ -52,6 +62,13 @@ def validate(values: dict) -> dict:
     if not result['model'] or not re.fullmatch(r'[A-Za-z0-9_./:@+-]{1,200}', result['model']):
         raise ValueError('Enter the model identifier supplied by your provider.')
     result['api_url'] = url
+    native = native_profile_applies(result['model'], url, result['provider'])
+    validate_max_tokens(result['max_tokens'], model=NATIVE_MODEL if native else None)
+    if result['provider'] == 'chatgpt' and not same_api_destination(
+            url, 'https://api.openai.com/v1'):
+        raise ValueError('ChatGPT account access uses the official OpenAI API address.')
+    if uses_neuroforge_api(url) and result['provider'] != 'openai-compatible':
+        raise ValueError('Use the NeuroForge connection type for the NeuroForge API.')
     if uses_neuroforge_api(url) and result['max_tokens'] > PUBLIC_MAX_OUTPUT_TOKENS:
         raise ValueError('The public NeuroForge API supports at most 2,048 output tokens per step. Choose 2,048 or less.')
     return result
@@ -80,10 +97,13 @@ class Preferences:
     def connection(self) -> dict:
         with self.lock:
             # Contact details are local draft defaults, never connection metadata.
-            values = {name: self._values[name] for name in ('api_url', 'model', 'max_tokens')}
+            values = {name: self._values[name] for name in
+                      ('api_url', 'model', 'max_tokens', 'provider')}
             # Environment variables remain an explicit administrator/CLI override.
             values['api_url'] = os.environ.get('NEUROFORGE_BASE_URL', values['api_url'])
             values['model'] = os.environ.get('NEUROFORGE_MODEL', values['model'])
+            if not same_api_destination(values['api_url'], self._values['api_url']):
+                values['provider'] = 'openai-compatible'
             values['api_key'] = (self._key if same_api_destination(
                 values['api_url'], self._values['api_url']) else '')
             # Never forward an inherited NeuroForge credential to a custom server.
@@ -93,6 +113,31 @@ class Preferences:
     def public(self) -> dict:
         return {'settings': self.snapshot(), 'has_session_key': bool(self._key), 'warning': self.warning,
                 'environment_override': bool(os.environ.get('NEUROFORGE_BASE_URL') or os.environ.get('NEUROFORGE_MODEL'))}
+
+    def preview_connection(self, values: dict, *, confirm_endpoint=False,
+                           api_key=None) -> dict:
+        """Validate an unsaved catalog check without retaining its credential."""
+        if not isinstance(values, dict) or set(values) - {
+                'api_url', 'provider', 'model', 'max_tokens'}:
+            raise ValueError('Provide only the model connection fields.')
+        if api_key is not None and (
+                not isinstance(api_key, str) or len(api_key) > 4096
+                or any(ord(c) < 33 or ord(c) > 126 for c in api_key)):
+            raise ValueError('The API key contains invalid characters.')
+        with self.lock:
+            candidate = validate({**self._values, **values})
+            same = (same_api_destination(candidate['api_url'],
+                                         self._values['api_url'])
+                    and candidate['provider'] == self._values['provider'])
+            if not same and confirm_endpoint is not True:
+                raise ValueError('Confirm the API destination before checking it.')
+            return {
+                **{name: candidate[name] for name in
+                   ('api_url', 'provider', 'model', 'max_tokens')},
+                'api_key': api_key if api_key is not None else
+                self._key if same else '',
+                'inherit_key': uses_neuroforge_api(candidate['api_url']),
+            }
 
     def update(self, values: dict, *, confirm_endpoint=False, api_key=None) -> dict:
         if not isinstance(values, dict) or set(values) - set(DEFAULTS):
@@ -104,14 +149,16 @@ class Preferences:
             # Partial saves (for example, a theme toggle) preserve the saved profile.
             # An explicit empty string clears just that profile field.
             validated = validate({**self._values, **values})
-            changed = validated['api_url'] != self._values['api_url']
+            changed = (validated['api_url'] != self._values['api_url']
+                       or validated['provider'] != self._values['provider'])
             if changed and confirm_endpoint is not True:
                 raise ValueError('Confirm the new API destination before saving it.')
             fd, name = tempfile.mkstemp(prefix='.preferences-', dir=self.path.parent)
             try:
                 with os.fdopen(fd, 'w', encoding='utf-8') as stream:
                     json.dump(validated, stream, ensure_ascii=False, indent=2)
-                    stream.flush(); os.fsync(stream.fileno())
+                    stream.flush()
+                    os.fsync(stream.fileno())
                 os.replace(name, self.path)
             finally:
                 if os.path.exists(name):

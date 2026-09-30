@@ -127,7 +127,7 @@ def test_nonstream_research_template_completes_with_the_default_dense_budget(
     assert [row['step'] for row in current['results']] == [
         'Outline', 'Expand', 'Action Items']
     assert len(requests) == 5
-    assert discover.call_count == (5 if selected_model == client.AUTO_MODEL else 0)
+    assert discover.call_count == (2 if selected_model == client.AUTO_MODEL else 0)
     assert all(path == '/chat/completions' for path, _ in requests)
     assert all(body['model'] == client.DENSE_MODEL and body['max_tokens'] == 512
                for _, body in requests)
@@ -197,6 +197,7 @@ def test_settings_reject_public_budget_but_allow_custom_provider_budget():
 
 @pytest.mark.parametrize('endpoint', ['/api/template/run', '/api/template/job'])
 def test_failed_templates_retain_complete_and_partial_steps(server, endpoint):
+    server.app.preferences.update({'model': client.MODEL})
     template = Template(name='Recovery fixture', description='A three-step fictional test', variables=[], steps=[
         Step('Extract', 'Extract the fictional notes'), Step('Draft', 'Prepare a draft'),
         Step('Check', 'Check the draft')])
@@ -226,7 +227,8 @@ def test_failed_templates_retain_complete_and_partial_steps(server, endpoint):
         assert result['partial']['finish_reason'] == 'length'
 
 
-def test_later_search_failure_keeps_received_template_work():
+def test_later_search_failure_keeps_received_template_work(monkeypatch):
+    monkeypatch.setenv('NEUROFORGE_MODEL', client.MODEL)
     template = Template('Later search', '', steps=[Step('Draft', 'Draft the supplied notes'),
         Step('Search', 'Search for context', use_search=True)])
     with patch('sinter.templates.chat', return_value=client.ChatResult('Received draft.', finish_reason='stop')) as model, \

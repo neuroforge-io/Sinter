@@ -7,7 +7,7 @@
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install '.[dev,browser]'
+python -m pip install '.[dev,browser,accounts]'
 python -m pytest -q
 python -m ruff check --select E9,F63,F7,F82 src tests tools
 python tools/check_public_boundary.py
@@ -19,6 +19,10 @@ python tools/deliverable_browser.py
 python tools/campaign_browser.py
 python tools/quality_browser.py
 ```
+
+The setup above includes account-verification tests on supported crypto targets.
+On Intel macOS, install `.[dev,browser]` and use a supported environment for the
+signed account tests.
 
 Windows activation: `.venv\Scripts\activate`. Browser integration uses fictional local fixtures and a temporary workspace. It must run in an environment that permits a browser to access its local HTTP server; do not bypass managed browser policies. The Actions workflow provides such an environment.
 
@@ -34,7 +38,7 @@ Other integration and release tools also explain their arguments with `--help`:
 
 ```sh
 python tools/rkc_smoke.py /path/to/rkc
-python -m pip install pyinstaller==6.22.2 certifi
+python -m pip install pyinstaller==6.22.2 certifi '.[accounts]'
 python tools/package_native.py --arch x64
 python tools/release_manifest.py publish source-package
 ```
@@ -46,6 +50,28 @@ installs and tests the package using the platform tools documented by
 full 40-character source commit verified by CI, plus all nine matching installer
 receipts and the verified source package. Setup errors exit with status 2;
 release validation failures exit with status 1 and never waive missing receipts.
+
+Signed account tests use local generated keys and mocked provider replies; they
+never sign in to a real account. CI installs the accounts extra on supported
+crypto targets and still tests the explicit missing-extra path. On Intel macOS,
+run core tests without that extra or use a supported environment for account
+tests. Current cryptography no longer supports Intel macOS or 32-bit Windows;
+its Windows ARM64 wheels are also unavailable. Native builds on those targets
+use `--without-accounts` and explicitly exclude the verifier packages. No older
+crypto release is substituted silently.
+
+Supported native account builds collect PyJWT, cryptography and their runtime
+metadata explicitly. Frozen and installed self-tests sign and verify an offline
+RS256 fixture through Sinter's identity-verification path and reject an invalid
+signature. Release assembly checks that target's capability, dependency versions,
+licence inventory and test receipt. Linux x86 builds use Debian Trixie's current
+Rust compiler for cryptography's source build; ARMv7 uses the supported wheel in
+Bookworm. Cross-platform success remains subject to the actual CI receipts.
+
+Published native receipts preserve both `frozen_test` and `installed_test`.
+Their version, platform, interpreter, pointer size and account capability must
+match; the published runtime checks come from the actual installed executable.
+Release assembly rejects missing or mismatched installed proof.
 
 Optional real speech integration downloads short test audio from a pinned revision of the upstream faster-whisper tests, and a tiny model from its normal model host. No personal recording, repository secret or Fracture API key is used:
 

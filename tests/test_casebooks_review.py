@@ -1,5 +1,6 @@
 """0.5 regressions for real community fragments, revisions, boundaries and recovery."""
 import copy
+import hashlib
 import io
 import json
 import threading
@@ -47,6 +48,45 @@ def test_document_formats_are_source_only(kind):
     assert 'DRAFT' in result['markdown']
 
 
+@pytest.mark.parametrize('kind', ['brief', 'enquiry', 'agenda', 'handover'])
+def test_saved_and_restored_casebook_keeps_selected_format(tmp_path, kind):
+    original = {**project(), 'document_type': kind}
+    repository = casebooks.Casebooks(Store(tmp_path))
+    saved = repository.save(original)
+    reopened = casebooks.Casebooks(Store(tmp_path)).get(saved['id'])
+    assert reopened['document']['document_type'] == kind
+    backup = json.loads(json.dumps(reopened['document']))
+    restored = repository.save(backup)
+    assert restored['id'] != saved['id']
+    assert restored['document']['documents'] == saved['document']['documents']
+    with patch('sinter.client.chat', side_effect=AssertionError('No model request')):
+        report = casebooks.build(restored['document'])
+    assert report['document_type'] == kind
+    assert report['casebook_fingerprint'] == saved['document']['fingerprint']
+    assert original == {**project(), 'document_type': kind}
+
+
+def test_old_casebook_defaults_to_brief_without_rewriting_original():
+    original = project()
+    before = copy.deepcopy(original)
+    normalized = casebooks.validate(original)
+    assert normalized['schema'] == 'sinter-casebook/v1'
+    assert normalized['document_type'] == 'brief'
+    assert casebooks.build(original)['document_type'] == 'brief'
+    assert original == before
+
+
+def test_casebook_report_format_is_bound_to_its_context_fingerprint():
+    original = {**project(), 'document_type': 'handover'}
+    handover = casebooks.build(original)
+    agenda = casebooks.build(original, 'agenda')
+    assert handover['casebook_fingerprint'] == casebooks.validate(original)['fingerprint']
+    assert agenda['casebook_fingerprint'] != handover['casebook_fingerprint']
+    assert agenda['casebook_fingerprint'] == casebooks.validate(
+        {**original, 'document_type': 'agenda'})['fingerprint']
+    assert original['document_type'] == 'handover'
+
+
 @pytest.mark.parametrize('change', [
     {'documents': []}, {'documents': [None]}, {'title': []}, {'schema': 'other'},
     {'questions': '\n'.join(str(i) for i in range(21))},
@@ -54,6 +94,8 @@ def test_document_formats_are_source_only(kind):
     {'documents': [{'title': 'x', 'content': 'y', 'date': '2026-02-30'}]},
     {'documents': [{'title': 'x', 'content': 'y', 'url': 'javascript:alert(1)'}]},
     {'documents': [{'title': 'x', 'content': 'y' * 200001}]},
+    {'document_type': 'briefing'}, {'document_type': None},
+    {'document_type': ['handover']},
 ])
 def test_casebook_rejects_bad_input(change):
     with pytest.raises(ValueError): casebooks.validate({**project(), **change})
@@ -233,5 +275,57 @@ def test_casebook_http_round_trip_and_stale_draft(tmp_path):
             time.sleep(.01)
         assert result['status'] == 'done' and result['result']['coverage']['documents_supplied'] == 2
         assert request('/api/jobs')['jobs'][0]['label'].startswith('Casebook:')
+        handover_job = request('/api/casebooks/build', {
+            'id': saved['id'], 'revision': 1, 'document_type': 'handover'})
+        for _ in range(100):
+            handover_result = request('/api/jobs/' + handover_job['id'])
+            if handover_result['status'] in {'done', 'failed'}:
+                break
+            time.sleep(.01)
+        assert handover_result['status'] == 'done'
+        handover = handover_result['result']
+        assert handover['document_type'] == 'handover'
+        assert handover['casebook_fingerprint'] != saved['document']['fingerprint']
+        draft_payload = {'id': saved['id'], 'revision': 1,
+                         'document_type': 'handover', 'consent': True,
+                         'fingerprint': handover['casebook_fingerprint']}
+        with (patch.object(client, 'chat', side_effect=AssertionError('No model request')),
+              patch.object(casebooks, 'draft', side_effect=lambda report, *_: report) as draft):
+            with pytest.raises(HTTPError):
+                request('/api/casebooks/draft', {
+                    **draft_payload, 'document_type': 'agenda'})
+            draft_job = request('/api/casebooks/draft', draft_payload)
+            for _ in range(100):
+                draft_result = request('/api/jobs/' + draft_job['id'])
+                if draft_result['status'] in {'done', 'failed'}:
+                    break
+                time.sleep(.01)
+            assert draft_result['status'] == 'done'
+            assert draft_result['result']['document_type'] == 'handover'
+            draft.assert_called_once()
+        assert request('/api/casebooks/' + saved['id'])['document']['document_type'] == 'brief'
+        # Simulate an actual v1 record saved before report format was persisted.
+        # Reading or preparing it must not require rewriting the user's record.
+        legacy = copy.deepcopy(saved['document'])
+        legacy.pop('document_type')
+        legacy.pop('fingerprint')
+        legacy['fingerprint'] = hashlib.sha256(json.dumps(
+            legacy, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        with server.app.store.connect() as db:
+            db.execute('UPDATE casebooks SET document=? WHERE id=?',
+                       (json.dumps(legacy), saved['id']))
+        for requested_format in (None, 'handover'):
+            legacy_payload = {'id': saved['id'], 'revision': 1}
+            if requested_format is not None:
+                legacy_payload['document_type'] = requested_format
+            legacy_job = request('/api/casebooks/build', legacy_payload)
+            for _ in range(100):
+                legacy_result = request('/api/jobs/' + legacy_job['id'])
+                if legacy_result['status'] in {'done', 'failed'}:
+                    break
+                time.sleep(.01)
+            assert legacy_result['status'] == 'done'
+            assert legacy_result['result']['document_type'] == (requested_format or 'brief')
+        assert request('/api/casebooks/' + saved['id'])['document'] == legacy
     finally:
         server.shutdown(); server.app.close(); server.server_close(); thread.join(timeout=2)

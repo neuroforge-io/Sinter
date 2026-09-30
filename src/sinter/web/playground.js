@@ -1,18 +1,20 @@
-import {h, button, field, selectField, notice, markdown, safeLink, announce, download} from './ui.js';
+import {h, button, check, field, selectField, notice, markdown, safeLink, announce, download} from './ui.js';
 import {request, stream} from './api.js';
 import {senderFields, senderContext} from './profile.js';
 import {renderReport} from './reports.js';
+import {campaignAssistant} from './assistant.js';
 
 /** Free-form model output is deliberately separate from evidence-only reports. */
 export async function playground({setBusy, seed = {}, remember}) {
   const preferences = await request('/api/settings');
-  const mode = selectField('Tool', [['chat', 'Chat with your model'], ['search', 'Search the web'], ['templates', 'Multi-step templates']], seed.mode || 'chat');
+  const mode = selectField('Tool', [['assistant', 'Campaign assistant'], ['chat', 'Chat with your model'], ['search', 'Search the web'], ['templates', 'Multi-step templates']], seed.mode || 'assistant');
   const view = h('div');
   const root = h('div', {}, h('header', {class: 'page-intro'}, h('h2', {}, 'From your context to a useful draft.'),
     h('p', {}, 'Write, summarise, research or ask a question. Your source material stays visible alongside the result.')),
     h('p', {class: 'workspace-hint'}, 'Uses your configured model service. Review the result before using it.'), mode.wrap, view);
   const history = [];
   let active = false, controller;
+  const assistantBusy = value => { mode.input.disabled = value; setBusy(value); };
   async function execute(path, data, onEvent, done) {
     if (active) return;
     active = true; mode.input.disabled = true; setBusy(true); controller = new AbortController();
@@ -73,7 +75,22 @@ export async function playground({setBusy, seed = {}, remember}) {
     const choice = selectField('Template', templates.map(template => [template.id, template.name]), seed.template || 'enquiry-letter');
     const fields = h('div'), output = h('div', {class: 'template-output'});
     const sender = senderFields(seed, preferences.settings);
-    let inputs = {}, selected;
+    let inputs = {}, selected, prepared, previewButton, submit, previewRevision = 0;
+    const transmission = h('div', {class: 'stack'});
+    const approval = check('I approve sending exactly this selected material to the displayed model service.');
+    function variablesNow() {
+      const values = Object.fromEntries(Object.entries(inputs).map(([name, input]) => [name, input.value]));
+      if (!sender.panel.hidden) values.sender = senderContext(sender.values());
+      return values;
+    }
+    function invalidatePreview() {
+      previewRevision++;
+      prepared = null; approval.input.checked = false;
+      transmission.replaceChildren();
+      approval.wrap.hidden = !selected?.compact_source;
+      if (previewButton) previewButton.hidden = !selected?.compact_source;
+      if (submit) submit.disabled = !!selected?.compact_source;
+    }
     function rememberInput() {
       remember?.('explore', {mode: 'templates', template: choice.input.value, variables: Object.fromEntries(Object.entries(inputs).map(([name, input]) => [name, input.value])), ...sender.values()});
     }
@@ -88,27 +105,53 @@ export async function playground({setBusy, seed = {}, remember}) {
         inputs[variable.name] = entry.input; fields.append(entry.wrap);
       }
       sender.panel.hidden = !['enquiry-letter', 'consultation-questions', 'newsletter'].includes(selected.id);
+      invalidatePreview();
     }
     choice.input.addEventListener('change', () => { choose(); rememberInput(); }); choose();
     const stop = button('Stop', () => controller?.abort()); stop.hidden = true;
-    const submit = h('button', {type: 'submit', class: 'button primary'}, 'Run template');
+    submit = h('button', {type: 'submit', class: 'button primary'}, 'Run template');
+    previewButton = button('Preview exact source request', async () => {
+      const requestedRevision = previewRevision;
+      previewButton.disabled = true; submit.disabled = true;
+      try {
+        const result = await request('/api/template/preview', {data: {template: selected.id, variables: variablesNow()}});
+        if (requestedRevision !== previewRevision) return;
+        prepared = result; approval.input.checked = false;
+        transmission.replaceChildren(notice(result.notice),
+          h('p', {}, 'Destination: ' + result.connection.api_url + ' · Model: ' + result.request.model),
+          h('details', {open: true, class: 'card'}, h('summary', {}, 'Exact material selected for transmission'),
+            h('pre', {class: 'plain-wrap'}, JSON.stringify(result.request, null, 2))),
+          h('p', {class: 'muted'}, 'Source snapshot: ' + result.sources[0].sha256));
+      } catch (error) { if (requestedRevision === previewRevision) { prepared = null; transmission.replaceChildren(notice(error.message, 'error')); } }
+      finally { previewButton.disabled = false; }
+    });
+    approval.input.addEventListener('change', () => { submit.disabled = !prepared || !approval.input.checked; });
+    invalidatePreview();
     const form = h('form', {class: 'card template-form'}, choice.wrap, fields, sender.panel,
+      previewButton, transmission, approval.wrap,
       h('div', {class: 'prepare-bar'}, h('p', {class: 'run-scope'}, 'Sends the entered context and displayed sender details to your configured model service.'), submit, stop));
     const inputSummary = h('summary', {hidden: true}, 'Review or edit template inputs');
     const inputPanel = h('details', {class: 'project-inputs', open: true}, inputSummary, form);
-    form.addEventListener('input', rememberInput);
+    form.addEventListener('input', event => {
+      rememberInput();
+      if (event.target !== approval.input) invalidatePreview();
+    });
     form.addEventListener('submit', async event => {
       event.preventDefault();
       if (active) return;
+      if (selected.compact_source && (!prepared || !approval.input.checked)) {
+        transmission.append(notice('Preview this source request and approve its exact material first.', 'error')); return;
+      }
       output.replaceChildren(); choice.input.disabled = true; submit.disabled = true; stop.hidden = false;
       const formFields = [...form.querySelectorAll('input,textarea')]; formFields.forEach(input => { input.disabled = true; });
       const progress = h('div', {class: 'template-progress', role: 'status'}, 'Starting your draft…');
       const liveBody = h('div', {class: 'template-live'}); output.append(progress, liveBody);
       let content = '', body, stepName = '', scheduled = false;
-      const saved = {results: [], sources: [], complete: false};
-      const variables = Object.fromEntries(Object.entries(inputs).map(([name, input]) => [name, input.value]));
-      if (!sender.panel.hidden) variables.sender = senderContext(sender.values());
-      await execute('/api/template/stream', {template: selected.id, variables}, event => {
+      const variables = variablesNow();
+      const saved = {results: [], sources: [], complete: false, template_inputs: {template: selected.id, variables}};
+      const data = {template: selected.id, variables};
+      if (selected.compact_source) Object.assign(data, {context_hash: prepared.context_hash, consent: true});
+      await execute('/api/template/stream', data, event => {
         if (event.type === 'step') {
           content = ''; stepName = event.name;
           progress.replaceChildren(h('span', {class: 'progress-dot'}), h('strong', {}, `Step ${saved.results.length + 1} of ${selected.steps}`), h('span', {}, event.name));
@@ -133,8 +176,8 @@ export async function playground({setBusy, seed = {}, remember}) {
           markdown: saved.results.map(item => '## ' + item.step + '\n\n' + item.content).join('\n\n'),
           document_markdown: document, model_draft: true, review_status: 'draft', created_at: new Date().toISOString(),
           model_review: selected.review_step != null ? saved.results[selected.review_step]?.content : '',
-          sources: saved.sources.flatMap(event => event.sources || []).map((source, index) => ({...source, id: 'template-source-' + index, kind: 'search_excerpt'})),
-          excerpts: [], warnings: ['Model-generated. Check names, dates and claims against your original context.'],
+          sources: saved.sources.flatMap(event => event.sources || []).map((source, index) => ({...source, id: source.id || 'template-source-' + index, kind: source.kind || 'search_excerpt'})),
+          excerpts: saved.sources.flatMap(event => event.excerpts || []), warnings: ['Model-generated. Check names, dates and claims against your original context.', ...(selected.compact_source ? ['A short selected-source answer; the complete source was not reviewed.'] : [])],
           template_run: saved, template_inputs: {template: selected.id, variables}};
         output.replaceChildren(renderReport(report)); inputSummary.hidden = false; inputPanel.open = false;
         output.scrollIntoView({block: 'start'});
@@ -146,15 +189,18 @@ export async function playground({setBusy, seed = {}, remember}) {
         liveBody.replaceChildren(details, button('Download partial output', () => download('sinter-template-INCOMPLETE.json', JSON.stringify(saved, null, 2), 'application/json')));
       }
       choice.input.disabled = false; submit.disabled = false; stop.hidden = true;
+      if (selected.compact_source) { prepared = null; approval.input.checked = false; submit.disabled = true; }
       formFields.forEach(input => { input.disabled = false; }); rememberInput();
     });
     view.replaceChildren(inputPanel, output);
   }
   mode.input.addEventListener('change', () => {
-    if (mode.input.value === 'chat') chatView();
+    if (mode.input.value === 'assistant') campaignAssistant({setBusy: assistantBusy}).then(page => { if (mode.input.value === 'assistant') view.replaceChildren(page); }).catch(error => view.replaceChildren(notice(error.message, 'error')));
+    else if (mode.input.value === 'chat') chatView();
     else if (mode.input.value === 'search') searchView();
     else templateView().catch(error => view.replaceChildren(notice(error.message, 'error')));
   });
-  if (mode.input.value === 'templates') await templateView(); else if (mode.input.value === 'search') searchView(); else chatView();
+  if (mode.input.value === 'assistant') view.replaceChildren(await campaignAssistant({setBusy: assistantBusy}));
+  else if (mode.input.value === 'templates') await templateView(); else if (mode.input.value === 'search') searchView(); else chatView();
   return root;
 }

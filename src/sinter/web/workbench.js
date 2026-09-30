@@ -133,7 +133,11 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   if (kind === 'brief') fields.append(documentType.wrap);
   fields.append(title.wrap);
   if (kind === 'research' && !demo) fields.append(search.wrap, query.wrap);
-  if (kind === 'brief') fields.append(recipient.wrap, campaignSenderPrompt, sender.panel);
+  if (kind === 'brief') {
+    fields.append(recipient.wrap);
+    if (campaignSenderPrompt) fields.append(campaignSenderPrompt);
+    fields.append(sender.panel);
+  }
   if (kind === 'grants') fields.append(h('details', {}, h('summary', {}, 'About your organisation (optional)'),
     h('div', {class: 'form-grid'}, org.wrap, location.wrap, budget.wrap)));
   fields.append(kind === 'research' ? h('details', {}, h('summary', {}, 'Add your notes (optional)'), notes.wrap) : notes.wrap);

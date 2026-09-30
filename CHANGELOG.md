@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.5.4rc1 - local workflow and native API candidate
+
+This is a new candidate, not an update to the published v0.5.3 tag. Candidate
+assets and platform qualification are recorded separately; an older installer
+does not contain the following changes.
+
+- Qualify NeuroForge's exact native ERAIS profile and public capability metadata.
+  Use buffered JSON, output limits of 1–128 tokens, a 2,048-byte final question,
+  three earlier exchanges within 4,096 bytes, and checked completion accounting
+  within the 512-token prompt budget. Deployment-owned system and sampling are
+  respected; no private preflight endpoint is called.
+- Keep explicit saved model/provider choices and custom-provider transport.
+  Discover and pin an automatic official model once per template run. Reject
+  unsupported native long recipes without dropping instructions or source text.
+  Short source answer previews its exact excerpt and question, binds consent to
+  that material and connection, and retains source hashes, citations and partials.
+- Add optional provider connections and a reviewable campaign assistant. ChatGPT
+  access and successful sign-in do not guarantee a completed answer. Interrupted
+  answers remain labelled incomplete and recoverable; uncertain requests are
+  never automatically replayed.
+- Preserve handover format through saves, reopen and backups. Recipient and
+  sender changes invalidate old reports. Garden practice files demonstrate local
+  source inspection, action editing, unresolved owners/dates, changed snapshots,
+  stale reviews, revision conflicts and restoration without a hosted model.
+- Keep campaign decisions, original inputs and historical evidence distinct from
+  current drafting. Owner type and acceptance remain explicit; local action-plan
+  dates are proposed targets. Casebooks and campaigns are separate records.
+- Strengthen installer source/asset identity, dependency notices, account-runtime
+  receipts and retained installed-app tests. Add copied-workspace upgrade checks
+  from the actual v0.5.3 source, without touching an operator's workspace.
+- Clarify current review exit codes: complete/offline plan 0, provider failure or
+  uncertainty 1, invalid command usage 2, substantive follow-up needed 3.
+
+Native protocol qualification is not general-chat quality qualification. This
+candidate does not add autonomous submissions, outgoing email, hosted multiuser
+collaboration or model downloads to the local workflow.
+
 ## 0.5.3 - community workflows, model access and recovery
 
 - Save reusable sender details locally, preview readable drafts, and export Word

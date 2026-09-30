@@ -19,6 +19,8 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from . import (
     __version__,
+    accounts,
+    assistant,
     atlas,
     campaigns,
     casebooks,
@@ -58,6 +60,7 @@ class Application:
     def __init__(self, directory=None):
         self.store = Store(directory)
         self.preferences = Preferences(self.store.directory)
+        self.accounts = accounts.AccountManager(self.store.directory)
         self.casebooks = casebooks.Casebooks(self.store)
         self.campaigns = campaigns.CampaignStore(self.store.directory)
         self.desktop_shutdown = None
@@ -68,7 +71,7 @@ class Application:
     def scheduler(self):
         while not self.stop.wait(5):
             try:
-                with client.connection_settings(self.preferences.connection()):
+                with client.connection_settings(self.connection()):
                     self.store.run_due()
             except Exception:
                 log.exception("Watch scheduler could not complete a check")
@@ -76,6 +79,18 @@ class Application:
     def close(self):
         self.stop.set()
         self.jobs.close()
+        self.accounts.close()
+
+    def connection(self, candidate=None):
+        """Bind account access only to its selected, official destination."""
+        settings = (self.preferences.connection() if candidate is None
+                    else dict(candidate))
+        if settings.get('provider') == 'chatgpt':
+            if not client.same_api_destination(
+                    settings['api_url'], 'https://api.openai.com/v1'):
+                raise ValueError('ChatGPT account access requires the official API.')
+            settings.update(self.accounts.connection())
+        return settings
 
 
 class LocalServer(ThreadingHTTPServer):
@@ -191,7 +206,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _guard(self, operation):
         try:
-            with client.connection_settings(self.app.preferences.connection()):
+            with client.connection_settings(self.app.connection()):
                 operation()
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             pass
@@ -238,13 +253,18 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"token": self.app.token, "version": __version__, "workflows": workbench.WORKFLOWS, "desktop": self.app.desktop_shutdown is not None})
         elif path == "/api/settings":
             self._json(self.app.preferences.public())
+        elif path == "/api/account":
+            self._json(self.app.accounts.status())
+        elif path == "/api/models":
+            self._json({"models": client.list_models()})
         elif path == "/api/health":
             ok, message = client.health_check()
             self._json({"ok": ok, "message": message}, 200 if ok else 503)
         elif path == "/api/templates":
             self._json({"templates": [{"id": key, "name": template.name, "description": template.description,
                                        "variables": [{"name": value, "label": value.replace("_", " ").title()} for value in template.variables],
-                                       "steps": len(template.steps), "output_step": template.output_step, "review_step": template.review_step} for key, template in available_templates().items()]})
+                                       "steps": len(template.steps), "output_step": template.output_step, "review_step": template.review_step,
+                                       "compact_source": template.compact_source} for key, template in available_templates().items()]})
         elif path == "/api/example":
             query = parse_qs(parsed.query, max_num_fields=8)
             self._json(workbench.example(query.get("workflow", ["brief"])[0]))
@@ -282,6 +302,42 @@ class Handler(BaseHTTPRequestHandler):
         body = self._body(path)
         if path == "/api/settings":
             self._json(self.app.preferences.update(body.get("settings"), confirm_endpoint=body.get("confirm_endpoint") is True, api_key=body.get("api_key")))
+        elif path == "/api/models":
+            candidate = self.app.preferences.preview_connection(
+                body.get('settings'),
+                confirm_endpoint=body.get('confirm_endpoint') is True,
+                api_key=body.get('api_key'))
+            with client.connection_settings(self.app.connection(candidate)):
+                self._json({"models": client.list_models()})
+        elif path == "/api/account/connect":
+            profile_id = body.get('profile_id')
+            if profile_id is not None:
+                profile_id = text(profile_id, 'ChatGPT account selection', 32, True)
+            result = self.app.accounts.start(profile_id)
+            self._json({**self.app.accounts.status(), **result})
+        elif path == "/api/account/activate":
+            self._json(self.app.accounts.activate(text(
+                body.get('profile_id'), 'ChatGPT account selection', 32, True)))
+        elif path == "/api/account/cancel":
+            self._json(self.app.accounts.cancel())
+        elif path == "/api/account/disconnect":
+            self._json(self.app.accounts.disconnect())
+        elif path == "/api/assistant/preview":
+            self._json(assistant.preview(self.app.campaigns, body))
+        elif path == "/api/assistant/job":
+            if body.get('consent') is not True:
+                raise ValueError('Confirm the displayed campaign context may be sent to your model.')
+            prepared = assistant.preview(self.app.campaigns, body)
+            if prepared['context_hash'] != body.get('context_hash'):
+                raise ValueError('Preview the current assistant context before sending it.')
+            if not prepared['fit']['allowed']:
+                raise ValueError(prepared['fit']['message'])
+            identifier = self.app.jobs.submit(
+                lambda progress: (progress('Reviewing the selected campaign context'),
+                                  assistant.run(self.app.campaigns, body))[1],
+                label='Campaign assistant', timeout=(client.STREAM_DEADLINE + 40
+                    if prepared['connection']['provider'] == 'chatgpt' else 180))
+            self._json({'job_id': identifier}, 202)
         elif path == "/api/desktop/quit":
             if self.app.desktop_shutdown is None:
                 raise ValueError("Stop the source launcher with Ctrl+C.")
@@ -306,10 +362,12 @@ class Handler(BaseHTTPRequestHandler):
             saved = self.app.casebooks.get(body.get("id"))
             if saved["revision"] != body.get("revision"):
                 raise ValueError("The project changed. Reopen or save it before preparing a report.")
-            if path.endswith("/draft") and (body.get("consent") is not True or body.get("fingerprint") != saved["document"]["fingerprint"]):
+            effective_type = body.get('document_type', saved['document'].get('document_type', 'brief'))
+            effective_book = casebooks.validate({**saved['document'], 'document_type': effective_type})
+            if path.endswith("/draft") and (body.get("consent") is not True or body.get("fingerprint") != effective_book["fingerprint"]):
                 raise ValueError("Preview the current source-only report and approve transfer before asking for a draft.")
             def operation(progress):
-                report = casebooks.build(saved["document"], body.get("document_type", "brief"), progress)
+                report = casebooks.build(saved["document"], body.get("document_type"), progress)
                 return casebooks.draft(report, True, progress) if path.endswith("/draft") else report
             self._json({"id": self.app.jobs.submit(operation, label="Casebook: " + saved["document"]["title"][:180], timeout=300)}, 202)
         elif path in {"/api/chat/job", "/api/template/job"}:
@@ -328,6 +386,10 @@ class Handler(BaseHTTPRequestHandler):
                 values = body.get("variables", {})
                 if not isinstance(values, dict):
                     raise ValueError("Template variables must be an object.")
+                if template.compact_source:
+                    from .template_scope import preview
+                    if body.get('consent') is not True or preview(template, values)['context_hash'] != body.get('context_hash'):
+                        raise ValueError('Preview the current source request and approve transfer before sending it.')
                 def operation(progress):
                     from .template_runs import collect_run
                     return collect_run(template, values, progress)
@@ -365,11 +427,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"content": result.content, "tokens": result.total_tokens, "finish_reason": result.finish_reason})
         elif path == "/api/search":
             self._json(asdict(client.search(body.get("query", ""))))
+        elif path == '/api/template/preview':
+            from .template_scope import preview
+            self._json(preview(resolve_template(body.get('template', '')),
+                               body.get('variables', {})))
         elif path in {"/api/template/run", "/api/template/stream"}:
             template = resolve_template(body.get("template", "custom"))
             variables = body.get("variables", {})
             if not isinstance(variables, dict):
                 raise ValueError("Template variables must be an object.")
+            if template.compact_source:
+                from .template_scope import preview
+                if body.get('consent') is not True or preview(template, variables)['context_hash'] != body.get('context_hash'):
+                    raise ValueError('Preview the current source request and approve transfer before sending it.')
             events = template_events(template, variables, stream=path.endswith("/stream"))
             if path.endswith("/stream"):
                 self._stream(events)

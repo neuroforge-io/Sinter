@@ -6,6 +6,14 @@ inputs. The endpoint-bound review identity in F7 remains an intentional protecti
 These are source improvements; they do not claim that a new installer release has
 been published.
 
+**Historical checkpoint.** The counts, live outputs and scores below describe the
+September 12 review, not the September 30 candidate or the currently deployed
+native model. Current profile boundaries, offline and installed qualification
+are recorded in [0.5.4rc1 status](PREVIEW_0.5.4rc1.md). Native ERAIS supports
+1–128 output tokens and short buffered questions; the earlier 32–2,048 range and
+long-recipe successes apply to legacy contracts. No historical score substitutes
+for current acceptance.
+
 ## Finding disposition
 
 | Finding | Result | Main regression evidence |

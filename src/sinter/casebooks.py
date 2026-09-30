@@ -74,7 +74,11 @@ def validate(payload):
             raise ValueError('This casebook exceeds 2,000,000 text characters. Split it into separate projects.')
         documents.append({'id': 'S' + identity[:24], 'title': name, 'content': content, 'url': url,
                           'date': date, 'sha256': digest})
-    normalized = {'schema': SCHEMA, 'title': title, 'questions': questions, 'documents': documents}
+    document_type = payload.get('document_type', 'brief')
+    if not isinstance(document_type, str) or document_type not in FORMATS:
+        raise ValueError('Choose a briefing, enquiry, agenda or handover.')
+    normalized = {'schema': SCHEMA, 'title': title, 'questions': questions,
+                  'document_type': document_type, 'documents': documents}
     for key, (label, limit) in DOCUMENT_FIELDS.items():
         if key in payload:
             normalized[key] = _text(payload[key], label, limit)
@@ -154,11 +158,15 @@ def _chunks(document):
         start = end
 
 
-def build(payload, document_type='brief', progress=lambda message: None):
+def build(payload, document_type=None, progress=lambda message: None):
     """Compile a bounded, source-only dossier with per-question evidence and gaps."""
+    book = validate(payload)
+    if document_type is None:
+        document_type = book['document_type']
     if not isinstance(document_type, str) or document_type not in FORMATS:
         raise ValueError('Choose a briefing, enquiry, agenda or handover.')
-    book = validate(payload)
+    if book['document_type'] != document_type:
+        book = validate({**book, 'document_type': document_type})
     progress('Indexing the supplied text locally; nothing is being uploaded')
     chunks, term_sets, frequencies = [], [], {}
     for index, document in enumerate(book['documents']):

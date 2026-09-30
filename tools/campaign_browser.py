@@ -177,19 +177,29 @@ class CampaignChecks(DeliverableChecks):
         self.screenshot(page, 'budget-editable', full_page=True)
         page.get_by_role('tab', name='Next actions', exact=True).click()
         actions = page.get_by_role('article', name='Campaign action', exact=True)
-        first_action = actions.nth(0)
-        second_action = actions.nth(1)
-        expect(first_action.get_by_label('Person or suggested role', exact=True)).to_have_value('')
-        expect(first_action).to_contain_text('Unassigned — no person is recorded.')
-        expect(second_action).to_contain_text('Name recorded — acceptance not recorded.')
+        # Actions move between urgency/status groups. Follow their task rather
+        # than a row position, and open the same disclosure a user would use.
+        first_action = actions.filter(has_text='Ask a qualified provider for an itemised quote')
+        second_action = actions.filter(has_text='Confirm applicant acceptance in writing')
+        for action in (first_action, second_action):
+            if action.locator('details').get_attribute('open') is None:
+                action.locator('summary').click()
+        expect(first_action.get_by_label('Owner name or role', exact=True)).to_have_value('')
+        expect(first_action).to_contain_text('Owner needed — no person is recorded.')
+        expect(first_action.get_by_label('Owner type', exact=True)).to_have_value('unassigned')
+        expect(second_action).to_contain_text('Owner type not confirmed: Example coordinator')
         acceptance = second_action.get_by_label('This person has accepted this action', exact=True)
+        expect(acceptance).to_be_disabled()
+        expect(acceptance).not_to_be_checked()
+        second_action.get_by_label('Owner type', exact=True).select_option('person')
+        expect(second_action).to_contain_text('Named person: Example coordinator; acceptance unconfirmed')
         expect(acceptance).to_be_enabled()
         expect(acceptance).not_to_be_checked()
         acceptance.check()
-        expect(second_action).to_contain_text('User marked accepted — confirm directly with this person.')
-        second_action.get_by_label('Person or suggested role', exact=True).fill('Example coordinator alternate')
+        expect(second_action).to_contain_text('Acceptance recorded by user; verify directly with this person.')
+        second_action.get_by_label('Owner name or role', exact=True).fill('Example coordinator alternate')
         expect(acceptance).not_to_be_checked()
-        expect(second_action).to_contain_text('Name recorded — acceptance not recorded.')
+        expect(second_action).to_contain_text('Named person: Example coordinator alternate; acceptance unconfirmed')
         target = first_action.get_by_label('Proposed target date', exact=True)
         overdue_date = page.evaluate('''() => {
             const day = new Date(); day.setDate(day.getDate() - 1);
@@ -205,9 +215,9 @@ class CampaignChecks(DeliverableChecks):
         expect(overdue_status).to_have_attribute('data-state', 'overdue')
         filename, csv = self.download(page, 'Download actions CSV')
         assert filename.endswith('.csv') and 'Ask a qualified provider' in csv
-        assert 'Example coordinator alternate (acceptance not recorded)' in csv
+        assert 'Example coordinator alternate (named person; acceptance unconfirmed)' in csv
         long_owner = 'A' * 200
-        second_action.get_by_label('Person or suggested role', exact=True).fill(long_owner)
+        second_action.get_by_label('Owner name or role', exact=True).fill(long_owner)
         second_action.get_by_label('This person has accepted this action', exact=True).check()
         filename, long_owner_csv = self.download(page, 'Download actions CSV')
         assert filename.endswith('.csv')
@@ -423,13 +433,15 @@ class CampaignChecks(DeliverableChecks):
     def communications_and_clarification_link(self, page):
         from playwright.sync_api import expect
         submitted = []
+        communication_campaign = fixture()
+        communication_campaign['title'] = 'Fictional communication log campaign'
 
         def track_workbench_request(request):
             if request.url.endswith('/api/workbench') and request.method == 'POST':
                 submitted.append(json.loads(request.post_data or '{}'))
 
         page.on('request', track_workbench_request)
-        self.import_fixture(page)
+        self.import_fixture(page, communication_campaign)
         page.get_by_text('Campaign details', exact=True).click()
         page.get_by_label('Authorised campaign signatory', exact=True).fill(
             'Casey Example')
@@ -437,13 +449,13 @@ class CampaignChecks(DeliverableChecks):
         page.get_by_label('Campaign contact details', exact=True).fill(
             'campaign@example.invalid\n0400 222 333')
         self.save(page)
-        saved_identity = page.evaluate('''async () => {
+        saved_identity = page.evaluate('''async title => {
             const {request} = await import('/static/api.js');
             const result = await request('/api/campaigns');
             const saved = result.campaigns.find(item =>
-                item.title === 'Fictional swimming capacity campaign');
+                item.title === title);
             return {id: saved.id, revision: saved.revision};
-        }''')
+        }''', communication_campaign['title'])
 
         page.get_by_role('tab', name='Communications', exact=True).click()
         page.get_by_role('button', name='Add communication', exact=True).click()
@@ -502,15 +514,15 @@ class CampaignChecks(DeliverableChecks):
         page.get_by_label('Opportunity name', exact=True).fill(
             'Fictional local sponsorship renamed')
         self.save(page)
-        saved_identity = page.evaluate('''async () => {
+        saved_identity = page.evaluate('''async title => {
             const {request} = await import('/static/api.js');
             const result = await request('/api/campaigns');
             const saved = result.campaigns.find(item =>
-                item.title === 'Fictional swimming capacity campaign');
+                item.title === title);
             const current = await request('/api/campaigns/' + saved.id);
             return {id: saved.id, revision: saved.revision,
                 communications: current.document.communications};
-        }''')
+        }''', communication_campaign['title'])
         assert saved_identity['communications'][0]['opportunity'] == \
             'Fictional local sponsorship renamed'
         saved_identity = {key: saved_identity[key] for key in ('id', 'revision')}
@@ -650,6 +662,9 @@ class CampaignChecks(DeliverableChecks):
         from playwright.sync_api import expect
 
         snapshot_campaign = fixture()
+        # Saved campaigns may share titles, and timestamps have second-level
+        # precision. Keep this independent journey's API lookup unambiguous.
+        snapshot_campaign['title'] = 'Fictional source snapshot campaign'
         source_id = 'f' * 32
         source = snapshot_campaign['sources'][0]
         source.update(id=source_id, checked_at='2026-09-20')
@@ -669,14 +684,14 @@ class CampaignChecks(DeliverableChecks):
         }]
         self.import_fixture(page, snapshot_campaign)
         self.save(page)
-        saved = page.evaluate('''async () => {
+        saved = page.evaluate('''async title => {
             const {request} = await import('/static/api.js');
             const list = await request('/api/campaigns');
             const item = list.campaigns.find(row =>
-                row.title === 'Fictional swimming capacity campaign');
+                row.title === title);
             const current = await request('/api/campaigns/' + item.id);
             return {id: item.id, document: current.document};
-        }''')
+        }''', snapshot_campaign['title'])
         page.get_by_role('tab', name='Opportunities', exact=True).click()
         closed_route = page.locator('.campaign-opportunity').filter(
             has_text='Fictional equipment fund')
@@ -749,13 +764,13 @@ class CampaignChecks(DeliverableChecks):
             return {document: current.document, markdown: report.markdown};
         }''', saved['id'])
         link = audited['document']['communications'][0]['evidence_links'][0]
-        assert link['title'] == original['title']
-        assert link['url'] == original['url']
-        assert link['checked_at'] == original['checked_at']
+        assert link['title'] == original['title'], link
+        assert link['url'] == original['url'], link
+        assert link['checked_at'] == original['checked_at'], link
         assert 'Saved source snapshot differs from the current source register; recheck before reuse.' \
-            in audited['markdown']
-        assert original['url'] in audited['markdown']
-        assert 'https://example.invalid/fund/current' in audited['markdown']
+            in audited['markdown'], audited['markdown']
+        assert original['url'] in audited['markdown'], audited['markdown']
+        assert 'https://example.invalid/fund/current' in audited['markdown'], audited['markdown']
 
         evidence.get_by_role('button', name='Clear link', exact=True).click()
         picker = evidence.get_by_label('Link to a saved campaign source', exact=True)
@@ -775,9 +790,9 @@ class CampaignChecks(DeliverableChecks):
             return await request('/api/campaigns/' + id);
         }''', saved['id'])
         refreshed = relinked['document']['communications'][0]['evidence_links'][0]
-        assert refreshed['title'] == 'Fictional updated equipment guidance'
-        assert refreshed['url'] == 'https://example.invalid/fund/current'
-        assert refreshed['checked_at'] == '2026-09-30'
+        assert refreshed['title'] == 'Fictional updated equipment guidance', refreshed
+        assert refreshed['url'] == 'https://example.invalid/fund/current', refreshed
+        assert refreshed['checked_at'] == '2026-09-30', refreshed
 
 
 def main(argv=None):

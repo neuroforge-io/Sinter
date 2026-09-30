@@ -9,9 +9,14 @@ import pytest
 from sinter import client
 from sinter.operations import Cancelled, DeadlineExceeded, budget
 from sinter.recipes import community_recipes
-from sinter.templates import (Step, Template, TemplateStepError, _from_data,
-                             get_builtin_template, template_events)
-
+from sinter.templates import (
+    Step,
+    Template,
+    TemplateStepError,
+    _from_data,
+    get_builtin_template,
+    template_events,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -36,7 +41,8 @@ def test_stream_returns_actual_metadata_without_changing_text_iterator():
         assert next(response) == "A useful answer."
         with pytest.raises(StopIteration) as stopped:
             next(response)
-    assert stopped.value.value == client.ChatResult("A useful answer.", 12, 4, 16, "stop")
+    assert stopped.value.value == client.ChatResult(
+        "A useful answer.", 12, 4, 16, "stop", client.MODEL)
     send.assert_called_once()
 
 
@@ -71,7 +77,7 @@ def test_broken_stream_retains_partial_text_and_actual_failure():
         with pytest.raises(TemplateStepError, match="ended early") as failed:
             list(template_events(template, {}))
     assert failed.value.partial["content"] == "Keep this"
-    assert failed.value.partial["finish_reason"] == "error"
+    assert failed.value.partial["finish_reason"] == "incomplete"
     send.assert_called_once()
 
 

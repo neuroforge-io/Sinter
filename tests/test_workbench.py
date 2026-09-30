@@ -147,7 +147,8 @@ def test_template_substitution_does_not_reinterpret_user_data():
     assert render_prompt('{{input}} {{previous}}', {'input': '{{previous}}', 'previous': 'history'}) == '{{previous}} history'
 
 
-def test_template_search_and_history_shared_in_streaming_mode():
+def test_template_search_and_history_shared_in_streaming_mode(monkeypatch):
+    monkeypatch.setenv('NEUROFORGE_MODEL', client.MODEL)
     response = client.SearchResponse('now', [client.SearchResult('Guide', 'https://example.org/guide', 'Quoted evidence')])
     calls = []
     def chat(messages, **kwargs):

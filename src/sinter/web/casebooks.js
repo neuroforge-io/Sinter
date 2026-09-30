@@ -20,7 +20,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   let docs = [...(seed.book?.documents || [])], busy = false, activeJob = null;
   const title = field('Project name', 'text', seed.book?.title || '', 'For example: school garden proposal or volunteer handover.', {maxLength: 200});
   const questions = field('What do you need to find out?', 'textarea', seed.book?.questions || '', 'One question per line, up to 20. Missing answers stay visible.', {maxLength: 12000, rows: 5});
-  const format = selectField('Prepare a', [['brief', 'Briefing note'], ['enquiry', 'Enquiry letter'], ['agenda', 'Agenda item'], ['handover', 'Volunteer handover']]);
+  const format = selectField('Prepare a', [['brief', 'Briefing note'], ['enquiry', 'Enquiry letter'], ['agenda', 'Agenda item'], ['handover', 'Volunteer handover']], seed.book?.document_type || 'brief');
   const status = h('div', {'aria-live': 'polite'}), output = h('div', {class: 'stack'}), sources = h('div', {class: 'stack'});
   const catalogue = h('div', {class: 'casebook-shelf'}), totals = h('p', {class: 'muted'});
   const stop = button('Stop this task', async () => {
@@ -38,8 +38,12 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   const upload = field('Add text files', 'file', '', 'TXT, Markdown, UTF-8 notes or code. Up to 300 documents and 2 million characters. No PDF/DOCX extraction.', {multiple: true});
   const backup = field('Restore a casebook backup', 'file', '', 'Opens as a new unsaved project; existing casebooks are not overwritten.', {accept: '.json'});
   const editor = h('fieldset', {class: 'casebook-editor'});
-  const value = () => ({schema: 'sinter-casebook/v1', title: title.input.value, questions: questions.input.value, recipient: recipient.input.value, ...sender.values(), documents: docs});
-  function changed() { remember?.('casebooks', {book: value(), savedId, revision}); output.replaceChildren(); }
+  const value = () => ({schema: 'sinter-casebook/v1', title: title.input.value, questions: questions.input.value,
+    document_type: format.input.value, recipient: recipient.input.value, ...sender.values(), documents: docs});
+  function changed({dirty = true} = {}) {
+    remember?.('casebooks', {book: value(), savedId, revision}, {dirty});
+    output.replaceChildren();
+  }
   function drawSources() {
     sources.replaceChildren(); totals.textContent = `${docs.length} documents / ${docs.reduce((n, row) => n + row.content.length, 0).toLocaleString()} characters, stored locally only when you save.`;
     for (const [index, row] of docs.entries()) {
@@ -52,10 +56,12 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   }
   function load(book, id = null, rev = null) {
     docs = book.documents; title.input.value = book.title; questions.input.value = book.questions || '';
+    format.input.value = book.document_type || 'brief';
     recipient.input.value = book.recipient || '';
     for (const [key, entry] of Object.entries(sender.entries)) entry.input.value = book[key] ?? '';
+    savedId = id; revision = rev;
     sender.panel.dispatchEvent(new Event('input', {bubbles: true}));
-    savedId = id; revision = rev; changed(); drawSources();
+    changed({dirty: !id}); drawSources();
   }
   async function refresh() {
     const result = await request('/api/casebooks'); catalogue.replaceChildren();
@@ -111,6 +117,8 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
     if (report.excerpts.length && !report.model_draft) output.append(preview);
   }
   title.input.addEventListener('input', changed); questions.input.addEventListener('input', changed);
+  recipient.input.addEventListener('input', changed);
+  sender.panel.addEventListener('input', changed);
   format.input.addEventListener('change', changed);
   upload.input.addEventListener('change', async () => {
     if (busy) return;

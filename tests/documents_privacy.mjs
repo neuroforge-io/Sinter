@@ -1,6 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {documentExportStyles, documentHtml, evidencePackForDownload} from '../src/sinter/web/documents.js';
+import {documentExportStyles, documentHtml, documentMarkdown, evidencePackForDownload} from '../src/sinter/web/documents.js';
+
+test('incomplete model text stays marked after edits and evidence round-trips', () => {
+  const marker = '**INCOMPLETE MODEL DRAFT — review the partial text.**';
+  const report = {workflow: 'assistant', incomplete: true,
+    document_markdown: marker + '\n\nOriginal partial text.',
+    document_edits: {markdown: 'Edited text without the warning.'}};
+  assert.equal(documentMarkdown(report), marker + '\n\nEdited text without the warning.');
+  assert.equal(documentMarkdown(evidencePackForDownload(report)), documentMarkdown(report));
+  delete report.document_edits;
+  assert.equal(documentMarkdown(report), report.document_markdown);
+  assert.equal(documentMarkdown({document_edits: {markdown: 'A complete draft.'}}), 'A complete draft.');
+});
 
 function campaignReport() {
   const messageBody = 'Private communication body with identifying details.\n\n'
@@ -144,6 +156,10 @@ test('downloaded campaign HTML applies the decision-record class to the rendered
     assert.match(html, /<div class="document campaign-decision-document">/);
     assert.match(html, /<h1>Decision brief<\/h1>/);
     assert.match(html, /\.campaign-decision-document h1\{font-size:24\.8px/);
+    const partial = documentHtml({workflow: 'assistant', incomplete: true,
+      document_edits: {markdown: 'Edited partial answer without its original marker.'}});
+    assert.match(partial, /Incomplete model draft · Review partial text/);
+    assert.match(partial, /INCOMPLETE MODEL DRAFT/);
   } finally {
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;

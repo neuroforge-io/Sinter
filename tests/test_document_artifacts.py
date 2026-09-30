@@ -179,7 +179,8 @@ def test_casebook_details_survive_validation_and_change_its_fingerprint():
     assert "Alex Morgan" in report["document_markdown"] and "alex@example.org" in report["document_markdown"]
     assert "The hall booking is not approved." in report["document_markdown"]
     assert report["document_ready"] and not PLACEHOLDER.search(report["document_markdown"])
-    assert report["source_register"] and report["casebook_fingerprint"] == book["fingerprint"]
+    assert report["source_register"] and report["casebook_fingerprint"] == casebooks.validate({**book, 'document_type': 'enquiry'})['fingerprint']
+    assert book['document_type'] == 'brief'  # An explicit report override does not rewrite saved inputs.
 
 
 def test_casebook_model_body_and_source_document_stay_distinct_and_sender_is_not_uploaded():
@@ -197,7 +198,8 @@ def test_casebook_model_body_and_source_document_stay_distinct_and_sender_is_not
 
 
 @pytest.mark.parametrize("name", community_recipes())
-def test_recipes_use_visible_sender_and_select_draft_separately_from_review(name):
+def test_recipes_use_visible_sender_and_select_draft_separately_from_review(name, monkeypatch):
+    monkeypatch.setenv('NEUROFORGE_MODEL', client.MODEL)
     template = get_builtin_template(name)
     sender = json.dumps(SENDER)
     values = {key: "Fictional source data" for key in template.variables}

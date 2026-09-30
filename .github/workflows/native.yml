@@ -17,13 +17,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {os: windows-2022, arch: x64, python_arch: x64, execution: native}
-          - {os: windows-2022, arch: x86, python_arch: x86, execution: compatibility}
-          - {os: windows-11-arm, arch: arm64, python_arch: arm64, execution: native}
-          - {os: macos-15-intel, arch: x64, python_arch: x64, execution: native}
-          - {os: macos-14, arch: arm64, python_arch: arm64, execution: native}
-          - {os: ubuntu-22.04, arch: x64, python_arch: x64, execution: native}
-          - {os: ubuntu-22.04-arm, arch: arm64, python_arch: arm64, execution: native}
+          - {os: windows-2022, arch: x64, python_arch: x64, execution: native, accounts: true, account_args: ''}
+          - {os: windows-2022, arch: x86, python_arch: x86, execution: compatibility, accounts: false, account_args: '--without-accounts'}
+          - {os: windows-11-arm, arch: arm64, python_arch: arm64, execution: native, accounts: false, account_args: '--without-accounts'}
+          - {os: macos-15-intel, arch: x64, python_arch: x64, execution: native, accounts: false, account_args: '--without-accounts'}
+          - {os: macos-14, arch: arm64, python_arch: arm64, execution: native, accounts: true, account_args: ''}
+          - {os: ubuntu-22.04, arch: x64, python_arch: x64, execution: native, accounts: true, account_args: ''}
+          - {os: ubuntu-22.04-arm, arch: arm64, python_arch: arm64, execution: native, accounts: true, account_args: ''}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -33,6 +33,9 @@ jobs:
           python-version: '3.13'
           architecture: ${{ matrix.python_arch }}
       - run: python -m pip install pyinstaller==6.22.2 certifi
+      - name: Install supported account verification runtime
+        if: matrix.accounts
+        run: python -m pip install '.[accounts]'
       - name: Ensure Windows installer compiler
         if: runner.os == 'Windows'
         shell: pwsh
@@ -41,7 +44,7 @@ jobs:
             choco install innosetup --yes --no-progress
           }
       - name: Build, install, exercise, and remove package
-        run: python tools/package_native.py --arch ${{ matrix.arch }} --execution ${{ matrix.execution }}
+        run: python tools/package_native.py --arch ${{ matrix.arch }} --execution ${{ matrix.execution }} ${{ matrix.account_args }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: native-${{ runner.os }}-${{ matrix.arch }}
@@ -56,8 +59,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {arch: x86, platform: linux/386, execution: compatibility}
-          - {arch: armv7, platform: linux/arm/v7, execution: emulated}
+          - {arch: x86, platform: linux/386, execution: compatibility, image: 'python:3.11-slim-trixie', compiler: 'cargo rustc'}
+          - {arch: armv7, platform: linux/arm/v7, execution: emulated, image: 'python:3.11-slim-bookworm', compiler: ''}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -71,11 +74,14 @@ jobs:
           TARGET_PLATFORM: ${{ matrix.platform }}
           TARGET_ARCH: ${{ matrix.arch }}
           EXECUTION_MODE: ${{ matrix.execution }}
+          PYTHON_IMAGE: ${{ matrix.image }}
+          CRYPTO_COMPILER: ${{ matrix.compiler }}
         run: |
-          docker run --rm --platform "$TARGET_PLATFORM" -e GITHUB_SHA -e TARGET_ARCH -e EXECUTION_MODE \
-            -v "$PWD:/work" -w /work python:3.11-slim-bookworm sh -ec '
-              apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev zlib1g-dev binutils
+          docker run --rm --platform "$TARGET_PLATFORM" -e GITHUB_SHA -e TARGET_ARCH -e EXECUTION_MODE -e CRYPTO_COMPILER \
+            -v "$PWD:/work" -w /work "$PYTHON_IMAGE" sh -ec '
+              apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev zlib1g-dev binutils libssl-dev libffi-dev pkg-config $CRYPTO_COMPILER
               python -m pip install pyinstaller==6.22.2 certifi
+              python -m pip install ".[accounts]"
               python tools/package_native.py --arch "$TARGET_ARCH" --execution "$EXECUTION_MODE"
             '
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

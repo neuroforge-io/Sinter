@@ -241,41 +241,60 @@ class QualityChecks:
     def settings(self, page):
         from playwright.sync_api import expect
         self.goto(page, 'settings')
-        page.get_by_text('Advanced: API and optional RKC connection', exact=True).click()
+        expect(page.get_by_role('heading', name='Connect your assistant', exact=True)).to_be_visible()
+        page.get_by_text('Connection address and API style', exact=True).click()
         maximum = page.get_by_label('Maximum answer length', exact=True)
-        address = page.get_by_label('API address', exact=True)
+        address = page.get_by_label('API base address', exact=True)
         model = page.get_by_label('Model identifier', exact=True)
-        address.fill('https://neuroforge.io/v1')
+        save_connection = page.get_by_role('button', name='Save connection', exact=True)
+        check_connection = page.get_by_role('button', name='Check saved connection', exact=True)
+        def set_address(value):
+            if not address.is_visible():
+                page.get_by_text('Connection address and API style', exact=True).click()
+            address.fill(value)
+        set_address('https://neuroforge.io/v1')
         expect(maximum).to_have_attribute('min', '32')
-        posts = []
+        posts, model_posts = [], []
         page.on('request', lambda request: posts.append(request.url)
                 if request.method == 'POST' and request.url.endswith('/api/settings') else None)
-        for identity, ceiling in (
-            ('auto', 512), ('erais-dense-gemma4-e4b', 512),
-            ('erais-fracture-gemma', 2048),
+        page.on('request', lambda request: model_posts.append(request.url)
+                if request.method == 'POST' and request.url.endswith('/api/models') else None)
+        for identity, minimum, ceiling in (
+            ('auto', 32, 512), ('erais-dense-gemma4-e4b', 32, 512),
+            ('erais-native-qwen3', 1, 128), ('erais-fracture-gemma', 32, 2048),
         ):
             model.fill(identity)
+            expect(maximum).to_have_attribute('min', str(minimum))
             expect(maximum).to_have_attribute('max', str(ceiling))
-            for invalid in ('31', str(ceiling + 1), '8192', '32.5', ''):
+            for invalid in (str(minimum - 1), str(ceiling + 1), '8192', str(minimum) + '.5', ''):
                 maximum.fill(invalid)
                 assert not maximum.evaluate('(input) => input.checkValidity()'), (identity, invalid)
-                page.get_by_role('button', name='Save my preferences', exact=True).click()
-            for valid in ('32', str(ceiling)):
+                save_connection.click()
+            for valid in (str(minimum), str(ceiling)):
                 maximum.fill(valid)
                 assert maximum.evaluate('(input) => input.checkValidity()'), (identity, valid)
         assert not posts, 'Invalid token settings were submitted.'
-        address.fill('https://custom.example/v1')
+        set_address('https://custom.example/v1')
         model.fill('custom/model')
+        expect(check_connection).to_be_disabled()
         expect(maximum).to_have_attribute('max', '8192')
         maximum.fill('8192')
         assert maximum.evaluate('(input) => input.checkValidity()')
-        address.fill('https://neuroforge.io/v1')
+        expect(page.get_by_label('Assistant connection', exact=True)).to_have_value('custom')
+        page.get_by_label('API style', exact=True).select_option('anthropic')
+        expect(page.get_by_label('I approve sending model requests to https://custom.example/v1.', exact=True)).not_to_be_checked()
+        page.get_by_role('button', name='Load available models', exact=True).click()
+        expect(page.get_by_text('Approve the API destination above before requesting its model list.', exact=True)).to_be_visible()
+        assert not model_posts, 'An unapproved destination received a model catalogue request.'
+        assert not posts, 'Draft destination/protocol changes were saved implicitly.'
+        page.get_by_label('API style', exact=True).select_option('openai-compatible')
+        set_address('https://neuroforge.io/v1')
         model.fill('auto')
         expect(maximum).to_have_attribute('max', '512')
         maximum.fill('512')
         page.get_by_label('Reading size', exact=True).select_option('large')
         page.get_by_label('Colour theme', exact=True).select_option('light')
-        page.get_by_role('button', name='Save my preferences', exact=True).click()
+        save_connection.click()
         expect(page.locator('html')).to_have_attribute('data-text-size', 'large')
         expect(page.locator('html')).to_have_attribute('data-theme', 'light')
         expect(page.get_by_text('Preferences saved on this computer.', exact=False)).to_be_visible()

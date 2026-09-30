@@ -71,7 +71,10 @@ export function evidencePackForDownload(report, {includePrivate = false} = {}) {
 }
 
 export function documentMarkdown(report) {
-  return report.document_edits?.markdown ?? report.document_markdown ?? report.markdown ?? '';
+  const content = report.document_edits?.markdown ?? report.document_markdown ?? report.markdown ?? '';
+  const marker = '**INCOMPLETE MODEL DRAFT — review the partial text.**';
+  return report.incomplete && !content.trimStart().startsWith(marker)
+    ? marker + '\n\n' + content : content;
 }
 
 export function plainDocument(value) {
@@ -132,7 +135,8 @@ export function documentHtml(report) {
     + '<title>' + escape(title) + '</title><style>' + documentExportStyles(report)
     + '</style></head><body><article class="sheet"><div class="status">' + (report.demo ? 'Fictional example · ' : '')
     + (report.workflow === 'campaign' ? 'Campaign decision record'
-      : report.model_draft ? 'Model-generated draft · Review before use' : 'Draft · Review before use') + '</div>'
+      : report.incomplete ? 'Incomplete model draft · Review partial text'
+        : report.model_draft ? 'Model-generated draft · Review before use' : 'Draft · Review before use') + '</div>'
     + body.outerHTML + '</article></body></html>';
 }
 
@@ -209,7 +213,8 @@ export function documentActions(report, {onChange = () => {}, save} = {}) {
     h('div', {class: 'button-row'}, button(isCampaign ? 'Copy decision brief' : 'Copy draft text', async () => {
       try { await navigator.clipboard.writeText(plainDocument(documentMarkdown(report))); feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, isCampaign
         ? 'Copied. Review the internal decision brief for accuracy and privacy before sharing.'
-        : 'Copied. Ready to paste into your email or document.')); announce(isCampaign ? 'Decision brief copied.' : 'Draft text copied.'); }
+        : report.incomplete ? 'Incomplete draft copied. Review the partial text before using it.'
+          : 'Copied. Ready to paste into your email or document.')); announce(isCampaign ? 'Decision brief copied.' : report.incomplete ? 'Incomplete draft text copied.' : 'Draft text copied.'); }
       catch { feedback.replaceChildren(notice('Clipboard access is unavailable. Download the document instead.', 'error')); }
     }, 'primary'), word, save || null, exports));
   return {controls, feedback, editor};

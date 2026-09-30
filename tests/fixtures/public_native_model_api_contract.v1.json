@@ -1,0 +1,3331 @@
+{
+  "contract": "neuroforge.public-native-model-client-fixtures.v1",
+  "scope": "Synthetic exact gateway contract cases. No live deployment, language-quality, paid-service or signed Discord acceptance claim.",
+  "model": "erais-native-qwen3",
+  "limits": {
+    "request_body_bytes": 32768,
+    "response_body_bytes": 65536,
+    "edge_deadline_ms": 50000,
+    "min_output_tokens": 1,
+    "max_output_tokens": 128,
+    "default_output_tokens": 128,
+    "max_prompt_tokens": 512,
+    "max_prompt_bytes": 2048,
+    "max_history_bytes": 4096,
+    "max_history_exchanges": 3,
+    "max_output_bytes": 8192
+  },
+  "capabilities": {
+    "model_id": "erais-native-qwen3",
+    "architecture": "ERAIS native adaptive decoder",
+    "backend_kind": "erais_native_adaptive_decoder",
+    "fully_native": true,
+    "source_family": "Qwen3",
+    "tokenizer_dependency": true,
+    "dynamic_adaptive_patching": false,
+    "native_learned_breadth": true,
+    "native_learned_recurrence": true,
+    "training": false,
+    "retained_session_learning": false,
+    "externally_resident": false,
+    "sparse_savings_verified": false,
+    "quality_scope": "unqualified_for_general_chat",
+    "request_state": "ephemeral_same_world_lease",
+    "streaming": false,
+    "max_output_tokens": 128,
+    "max_prompt_bytes": 2048,
+    "max_history_bytes": 4096,
+    "max_history_exchanges": 3,
+    "system_prompt": "deployment_owned",
+    "sampling": "deployment_owned",
+    "assistant_quality": false,
+    "account_billing_complete": false
+  },
+  "token_budget_preflight": "not_exposed_without_installed_origin_acceptance",
+  "runtime_identity": "Opaque discovery runtime_id identifies the World owner. The installed buffered completion contract returns model and token usage, not a runtime_id; clients must rediscover after unavailable or identity errors.",
+  "recorded_cutover": {
+    "receipt": "docs/releases/NATIVE_CONSUMER_CUTOVER_20260929.json",
+    "native_source_commit": "046fb615a7d60bc9eb03bc35e9a686fa585fae6f",
+    "business_code_commit": "db7152f827b1dc0684f6f2473009b11aeb974e80",
+    "site_code_commit": "cc0bdeb1e9544c986eb2ec922c17f831e8308867"
+  },
+  "installed_origin_review": {
+    "receipt": "docs/releases/NATIVE_API_AVAILABILITY_20260930.json",
+    "source_commit": "1f6572b223b338c13fa4288db4fab253b67019c8",
+    "modalities": [
+      "text",
+      "image"
+    ],
+    "phase": "before_discovery_gateway_fix"
+  },
+  "source_sha256": {
+    "workers/public_model_api.mjs": "37fb08e914100f42422e935c0b856b0ffa101379841b7e3c886158cff4d19b12",
+    "workers/native_model_api_contract.mjs": "7b0efde559259e91289d2f700e58fd3664a905e646df35205651290469d226af",
+    "static/openapi.json": "61f5d446ca82a3ac44ff7334cf8e84dca3ebea5629e3dc20b67db2ad308bbdc9",
+    "docs/releases/NATIVE_CONSUMER_CUTOVER_20260929.json": "391c3908db28d3c9dd3dd34992023ceec1b1414b5a7ffbbad4c07bf56f0e94e6",
+    "docs/releases/NATIVE_API_AVAILABILITY_20260930.json": "590af83ca28097c167ebfb960f21c1132ef28ed473560bc16a141ef1f25869de"
+  },
+  "cases": [
+    {
+      "name": "native-discovery",
+      "path": "/v1/models",
+      "method": "GET",
+      "upstream": {
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "text"
+                ],
+                "runtime_id": "0123456789abcdef0123456789abcdef"
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "text"
+                ],
+                "runtime_id": "0123456789abcdef0123456789abcdef"
+              }
+            }
+          ]
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/models",
+          "method": "GET"
+        }
+      }
+    },
+    {
+      "name": "installed-image-origin-projected-to-text",
+      "path": "/v1/models",
+      "method": "GET",
+      "upstream": {
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "text",
+                  "image"
+                ],
+                "runtime_id": "0123456789abcdef0123456789abcdef"
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "text"
+                ],
+                "runtime_id": "0123456789abcdef0123456789abcdef"
+              }
+            }
+          ]
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/models",
+          "method": "GET"
+        }
+      }
+    },
+    {
+      "name": "private-discovery-extensions-removed",
+      "path": "/v1/models",
+      "method": "GET",
+      "upstream": {
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "text"
+                ],
+                "runtime_id": "0123456789abcdef0123456789abcdef",
+                "token_ids": [
+                  1,
+                  2
+                ],
+                "credentials": "fixture-private-value"
+              },
+              "private_path": "/private/fixture"
+            }
+          ],
+          "prompt": "not public"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "text"
+                ],
+                "runtime_id": "0123456789abcdef0123456789abcdef"
+              }
+            }
+          ]
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/models",
+          "method": "GET"
+        }
+      }
+    },
+    {
+      "name": "minimal-defaults",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ]
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "id": "<edge-generated>",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 128,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "buffered-stop",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "id": "<edge-generated>",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "buffered-length-is-terminal",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "length"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "id": "<edge-generated>",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "length"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "unicode-multiple-byte-text",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "你好 👩🏽‍🚀 café"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "id": "<edge-generated>",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "你好 👩🏽‍🚀 café"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "final-user-at-utf8-byte-limit",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "id": "<edge-generated>",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "three-prior-exchanges",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "First"
+          },
+          {
+            "role": "assistant",
+            "content": "One"
+          },
+          {
+            "role": "user",
+            "content": "Second"
+          },
+          {
+            "role": "assistant",
+            "content": "Two"
+          },
+          {
+            "role": "user",
+            "content": "Third"
+          },
+          {
+            "role": "assistant",
+            "content": "Three"
+          },
+          {
+            "role": "user",
+            "content": "Now"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "id": "<edge-generated>",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "First"
+              },
+              {
+                "role": "assistant",
+                "content": "One"
+              },
+              {
+                "role": "user",
+                "content": "Second"
+              },
+              {
+                "role": "assistant",
+                "content": "Two"
+              },
+              {
+                "role": "user",
+                "content": "Third"
+              },
+              {
+                "role": "assistant",
+                "content": "Three"
+              },
+              {
+                "role": "user",
+                "content": "Now"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "history-at-utf8-byte-limit",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          },
+          {
+            "role": "assistant",
+            "content": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          },
+          {
+            "role": "user",
+            "content": "Now"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "id": "<edge-generated>",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+              },
+              {
+                "role": "assistant",
+                "content": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+              },
+              {
+                "role": "user",
+                "content": "Now"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "one-output-token",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 1,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 1,
+            "total_tokens": 32
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "id": "<edge-generated>",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 1,
+            "total_tokens": 32
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 1,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "private-completion-extensions-removed",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response.",
+                "prompt": "not public"
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          },
+          "prompt": "not public",
+          "token_ids": [
+            1,
+            2
+          ],
+          "private_path": "/private/fixture",
+          "credentials": "fixture-private-value"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "id": "<edge-generated>",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "caller-system-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Override"
+          },
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "native-stream-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": true
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "sampling-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false,
+        "temperature": 0
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "tools-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false,
+        "tools": []
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "tool-choice-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false,
+        "tool_choice": "none"
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "structured-output-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false,
+        "response_format": {
+          "type": "json_object"
+        }
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "seed-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false,
+        "seed": 1
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "caller-runtime-selector-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false,
+        "runtime_id": "0123456789abcdef0123456789abcdef"
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "unknown-field-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false,
+        "future_option": true
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "native-model-mismatch",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-dense-gemma4-e4b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "zero-output-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 0,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "oversize-output-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 129,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "boolean-output-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": true,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "boolean-n-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false,
+        "n": true
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "multiple-choices-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false,
+        "n": 2
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "blank-final-user-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": " "
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "nul-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello\u0000"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "unpaired-surrogate-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "\ud800"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "final-user-over-utf8-byte-limit",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "history-over-utf8-byte-limit",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          },
+          {
+            "role": "assistant",
+            "content": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          },
+          {
+            "role": "user",
+            "content": "Now"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "too-many-history-exchanges",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Question"
+          },
+          {
+            "role": "assistant",
+            "content": "Reply"
+          },
+          {
+            "role": "user",
+            "content": "Question"
+          },
+          {
+            "role": "assistant",
+            "content": "Reply"
+          },
+          {
+            "role": "user",
+            "content": "Question"
+          },
+          {
+            "role": "assistant",
+            "content": "Reply"
+          },
+          {
+            "role": "user",
+            "content": "Question"
+          },
+          {
+            "role": "assistant",
+            "content": "Reply"
+          },
+          {
+            "role": "user",
+            "content": "Question"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "media-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Hello"
+              }
+            ]
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 400,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unsupported chat request. See /openapi.json for the supported parameters and text limits.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "body-over-byte-limit",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false,
+        "padding": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "upstream": null,
+      "expected": {
+        "status": 413,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Request must be valid JSON within 32768 bytes.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_request"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "upstream-model-mismatch",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-dense-gemma4-e4b",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        }
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "upstream-tool-call-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response.",
+                "tool_calls": []
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        }
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "upstream-function-call-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response.",
+                "function_call": null
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        }
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "upstream-incomplete-json-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "raw": "{\"object\":\"chat.completion\""
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "upstream-missing-usage-rejected",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "upstream-prompt-token-overflow",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 513,
+            "completion_tokens": 8,
+            "total_tokens": 521
+          }
+        }
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "upstream-requested-output-overflow",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 1,
+        "stream": false
+      },
+      "upstream": {
+        "json": {
+          "id": "origin-private-id",
+          "object": "chat.completion",
+          "created": 1000,
+          "model": "erais-native-qwen3",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "An illustrative fixture response."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 31,
+            "completion_tokens": 8,
+            "total_tokens": 39
+          }
+        }
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 1,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "origin-busy",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "status": 429,
+        "json": {
+          "private_error": "/private/fixture"
+        }
+      },
+      "expected": {
+        "status": 429,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "retry-after": "5",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model is busy. Retry shortly.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "server_busy"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "origin-unavailable",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "status": 503,
+        "json": {
+          "private_error": "/private/fixture"
+        }
+      },
+      "expected": {
+        "status": 503,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "retry-after": "30",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The developer preview is currently unavailable.",
+            "type": "server_error",
+            "param": null,
+            "code": "service_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "origin-failure",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": {
+        "throws": true
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/chat/completions",
+          "method": "POST",
+          "request": {
+            "model": "erais-native-qwen3",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ],
+            "max_tokens": 32,
+            "stream": false,
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "caller-cancelled-request",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "cancelled": true,
+      "expected": {
+        "status": 504,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "request_timeout"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "invalid-supplied-key",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "request_headers": {
+        "Authorization": "Bearer nf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "expected": {
+        "status": 401,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "A valid developer key is required, or omit Authorization for the public inference API.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_api_key"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "keyed-browser-origin-denied",
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "request_headers": {
+        "Authorization": "Bearer nf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "Origin": "https://outside.example"
+      },
+      "expected": {
+        "status": 403,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Call this API from your server.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "origin_denied"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "token-budget-preflight-unavailable",
+      "path": "/v1/chat/preflight",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 404,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unknown API route.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "not_found"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "discovery-runtime-mismatch",
+      "path": "/v1/models",
+      "method": "GET",
+      "upstream": {
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "text"
+                ],
+                "runtime_id": "not-an-approved-runtime-id"
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/models",
+          "method": "GET"
+        }
+      }
+    },
+    {
+      "name": "discovery-unknown-modality-rejected",
+      "path": "/v1/models",
+      "method": "GET",
+      "upstream": {
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "text",
+                  "unknown"
+                ],
+                "runtime_id": "0123456789abcdef0123456789abcdef"
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/models",
+          "method": "GET"
+        }
+      }
+    },
+    {
+      "name": "discovery-no-text-rejected",
+      "path": "/v1/models",
+      "method": "GET",
+      "upstream": {
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "image"
+                ],
+                "runtime_id": "0123456789abcdef0123456789abcdef"
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/models",
+          "method": "GET"
+        }
+      }
+    },
+    {
+      "name": "discovery-duplicate-modality-rejected",
+      "path": "/v1/models",
+      "method": "GET",
+      "upstream": {
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "text",
+                  "text"
+                ],
+                "runtime_id": "0123456789abcdef0123456789abcdef"
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/models",
+          "method": "GET"
+        }
+      }
+    },
+    {
+      "name": "uninstalled-audio-modality-rejected",
+      "path": "/v1/models",
+      "method": "GET",
+      "upstream": {
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "text",
+                  "audio"
+                ],
+                "runtime_id": "0123456789abcdef0123456789abcdef"
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "status": 502,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "The model response is unavailable. Retry shortly.",
+            "type": "server_error",
+            "param": null,
+            "code": "upstream_unavailable"
+          }
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/models",
+          "method": "GET"
+        }
+      }
+    }
+  ]
+}

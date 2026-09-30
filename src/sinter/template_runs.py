@@ -15,7 +15,8 @@ class TemplateRunError(APIError):
 
 def collect_run(template: Template, variables: dict, progress=lambda message: None) -> dict:
     """Run once; preserve completed steps and label the stopped step incomplete."""
-    result = {"results": [], "sources": [], "complete": False}
+    result = {"results": [], "sources": [], "complete": False,
+              "template_inputs": {"template": template.name, "variables": dict(variables)}}
     try:
         for event in template_events(template, variables, stream=False):
             if event["type"] == "step":

@@ -11,7 +11,7 @@ export function communityPage({remember, seed = {}}) {
     if (entries.length >= 200) return;
     const action = field('Action', 'text', value.action || '', '', {maxLength: 2000});
     const owner = field('Person responsible', 'text', value.owner || '', 'Leave blank when unassigned.', {maxLength: 200});
-    const due = field('Confirmed due date', 'date', value.due || '');
+    const due = field('Proposed target date (unconfirmed)', 'date', value.due || '', 'Planning date only. Confirm it with the responsible person.');
     const status = selectField('Progress', [['not_started', 'Not started'], ['in_progress', 'In progress'], ['done', 'Done']], value.status || 'not_started');
     const row = {action, owner, due, status};
     const card = h('div', {class: 'card plan-row'}, action.wrap, h('div', {class: 'form-grid'}, owner.wrap, due.wrap, status.wrap),
@@ -42,7 +42,7 @@ export function communityPage({remember, seed = {}}) {
     finally { compare.disabled = false; }
   });
   return h('div', {class: 'stack'}, h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'LESS ADMIN. MORE DOING.'),
-    h('h2', {}, 'Small tools. Real time saved.'), h('p', {}, 'Organise volunteers and tasks, export confirmed dates and compare document revisions. Everything here stays local.')),
+    h('h2', {}, 'Small tools. Real time saved.'), h('p', {}, 'Organise volunteers and tasks, export proposed dates and compare document revisions. Everything here stays local.')),
     title.wrap, rows, h('div', {class: 'button-row'}, button('Add another action', () => { add(); changed(); }), prepare), output,
     h('details', {class: 'card'}, h('summary', {}, 'Compare two versions of a document'),
       h('div', {class: 'form-grid'}, before.wrap, after.wrap), compare, comparison));

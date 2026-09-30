@@ -8,10 +8,30 @@ notices. PyInstaller is GPL-2.0-or-later with an exception allowing its bootload
 to be distributed with applications under their own terms; Sinter source is
 not relicensed by the packaging step.
 
+On supported account-verification targets, desktop packages also include PyJWT
+(MIT), cryptography (Apache-2.0 or BSD-3-Clause), cffi (MIT), and pycparser
+(BSD-3-Clause). Their original licence files, all cryptography licence variants,
+exact distribution versions and licence-file digests are included under
+`licenses/`, with an inventory in `licenses/bundled-dependencies.json`. Each
+installed-app receipt states whether account verification is bundled and records
+an offline signed-token verification test. That test does not claim a live
+ChatGPT account connection or provider approval.
+
+Python 3.10 account builds also include typing_extensions (PSF-2.0), required by
+the current PyJWT release. Its version and original licence are recorded in the
+same inventory.
+
+Windows 32-bit, Windows ARM64 and Intel macOS preview packages omit those account
+verification libraries because the current cryptography release does not support
+those binary targets. Their local tools and API-key connections remain available.
+The portable core zipapp includes no third-party Python dependencies; source
+users may install the optional `accounts` extra on a compatible environment.
+
 Runtime libraries such as OpenSSL, SQLite, libffi, bzip2, xz and zlib retain their
-respective upstream licences. The Python distribution's licence file contains
-notices for incorporated third-party components. Build tools are not a grant
-of rights to the user's sources, RKC atlases, recordings or model assets.
+respective upstream licences. The Python runtime licence and original notices
+provided by the packaged dependencies are included in `licenses/`. Build tools
+are not a grant of rights to the user's sources, RKC atlases, recordings or model
+assets.
 
 Optional faster-whisper, CTranslate2, PyAV, tokenizers, Hugging Face components,
 speech model assets and the optional RKC application retain their own licences.

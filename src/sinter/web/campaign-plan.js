@@ -3,6 +3,11 @@ import {campaignActionOwnerState} from './campaign-owner.js';
 
 const ACTIVE_ROUTE_STATES = new Set(['researching', 'open', 'upcoming', 'clarification']);
 
+export function campaignActionPhaseLabel(phase) {
+  return ({pre_submission: 'Before submission',
+    post_submission: 'After-submission follow-up'})[phase] || 'Not recorded';
+}
+
 /** Preserve whether an older saved action ever recorded its scope. */
 export function normalizeCampaignActionScopes(actions) {
   return (Array.isArray(actions) ? actions : []).map(row => {

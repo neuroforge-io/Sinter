@@ -2,6 +2,8 @@ import {h, button, notice, markdown, safeLink, download, reportName, field, sele
 import {request} from './api.js';
 import {documentActions, documentMarkdown, plainDocument} from './documents.js';
 import {campaignCommunicationFromDraft, campaignDraftLogBlockReason} from './campaign-letter.js';
+import {campaignActionOwnerState} from './campaign-owner.js';
+import {campaignActionPhaseLabel} from './campaign-plan.js';
 
 /** The document is the default view; provenance remains one click away. */
 export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated} = {}) {
@@ -18,6 +20,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   }, 'quiet');
   const paper = h('div', {class: 'document-paper'});
   const isCampaign = report.workflow === 'campaign';
+  const isAssistant = report.workflow === 'assistant';
   const documentLabel = isCampaign ? 'Decision brief' : 'Document';
   const evidenceLabel = isCampaign ? 'Audit & evidence' : 'Evidence';
   const documentPanel = h('section', {class: 'document-panel', role: 'tabpanel', 'aria-label': documentLabel}, paper);
@@ -72,7 +75,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     connectCitations(article, report, sources, () => select('evidence'));
     paper.replaceChildren(h('div', {class: 'paper-label'}, report.workflow === 'campaign'
       ? 'CAMPAIGN DECISION RECORD'
-      : report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'), article);
+      : report.incomplete ? 'INCOMPLETE MODEL DRAFT' : report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'), article);
     completion.replaceChildren(h('div', {}, h('strong', {}, report.document_edits ? 'Check these details' : 'Finish the details'),
       h('p', {}, (report.document_edits ? 'Originally missing: ' : '') + (report.missing_fields || []).map(item => item.label).join(' · '))),
       onEditInputs ? button('Add missing details', onEditInputs) : h('span', {class: 'fine'}, 'Use More options → Edit draft to complete these.'));
@@ -81,7 +84,8 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   let evidenceArticle = markdown(report.markdown);
   connectCitations(evidenceArticle, report, sources);
   const campaignEvidence = campaignEvidenceCounts(report.campaign);
-  evidencePanel.append(...[h('div', {class: 'evidence-overview'},
+  if (isAssistant) evidencePanel.append(assistantEvidence(report, evidenceArticle));
+  else evidencePanel.append(...[h('div', {class: 'evidence-overview'},
     h('div', {}, h('h3', {}, isCampaign ? 'Campaign evidence at a glance' : 'What supports this draft'),
       h('p', {class: 'muted'}, isCampaign
         ? `${campaignEvidence.sources} linked campaign sources · ${campaignEvidence.excerpts} recorded wording excerpts`
@@ -112,6 +116,53 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   }
   if (onCorrect && report.segments?.length) documentPanel.append(correctionForm(report, onCorrect));
   return result;
+}
+
+/** Campaign entries preserve the approved context without implying verification. */
+function assistantEvidence(report, response) {
+  const context = report.context || {};
+  const checks = Array.isArray(context.selected_checks) ? context.selected_checks : [];
+  const actions = Array.isArray(context.selected_actions) ? context.selected_actions : [];
+  const route = context.route || {};
+  const count = (total, noun) => `${total} selected ${noun}${total === 1 ? '' : 's'}`;
+  const records = h('div', {class: 'stack'},
+    h('div', {class: 'evidence-overview'}, h('div', {},
+      h('h3', {}, 'Campaign records used by the assistant'),
+      h('p', {class: 'muted'}, `${count(checks.length, 'check')} · ${count(actions.length, 'action')}`)),
+      h('p', {class: 'fine'}, 'User-entered and unverified')),
+    h('p', {}, 'These are the campaign entries included in the approved request. Links, quotations, assessments and dates were entered by a user; Sinter has not opened or verified the sources.'),
+    context.organisation ? h('p', {class: 'fine'}, `${context.organisation} · ${report.campaign_title || 'Saved campaign'} · revision ${report.revision ?? 'not recorded'}`) : null,
+    route.name ? h('details', {class: 'source'}, h('summary', {}, `Recorded route: ${route.name}`),
+      h('p', {}, context.objective || 'Objective not recorded.'),
+      h('p', {class: 'fine'}, `Recorded state: ${route.status || 'not recorded'}. Window: ${route.application_window || 'not recorded'}. Deadline: ${route.deadline || 'not recorded'}.`),
+      route.window_source_quote ? h('div', {}, h('p', {class: 'fine'}, 'Window wording entered by a user'), h('blockquote', {}, route.window_source_quote)) : null,
+      h('p', {class: 'fine'}, `Window checked date (user-entered): ${route.window_checked_at || 'not recorded'}`)) : null,
+    h('h4', {}, 'Selected checks'));
+  if (!checks.length) records.append(h('p', {class: 'fine'}, Array.isArray(context.selected_checks)
+    ? 'No eligibility checks were included in this request.' : 'No selected check records were retained in this saved report.'));
+  for (const row of checks) records.append(h('details', {class: 'source'},
+    h('summary', {}, `Check ${row.record}: ${row.rule}`),
+    h('p', {class: 'fine'}, `Recorded assessment: ${row.status || 'not recorded'} · checked date (user-entered): ${row.checked_at || 'not recorded'}`),
+    h('p', {}, row.evidence || 'Applicant evidence not recorded.'),
+    h('p', {class: 'fine'}, `Source linkage at request time: ${row.source_snapshot || 'not recorded'}`),
+    row.source_url ? safeLink(row.source_url, 'Open the recorded source link') : h('p', {class: 'fine'}, 'No source link was included.'),
+    row.source_quote ? h('div', {}, h('p', {class: 'fine'}, 'Quoted wording entered by a user'), h('blockquote', {}, row.source_quote))
+      : h('p', {class: 'fine'}, 'No quoted source wording was included.')));
+  records.append(h('h4', {}, 'Selected actions'));
+  if (!actions.length) records.append(h('p', {class: 'fine'}, Array.isArray(context.selected_actions)
+    ? 'No existing actions were included in this request.' : 'No selected action records were retained in this saved report.'));
+  for (const row of actions) records.append(h('details', {class: 'source'},
+    h('summary', {}, `Action ${row.record}: ${row.task}`),
+    h('p', {class: 'fine'}, `Recorded state: ${row.status || 'not recorded'}. Proposed date: ${row.due || 'not recorded'}.`),
+    h('p', {}, `Recorded owner: ${campaignActionOwnerState(row.owner, row.owner_confirmed, row.owner_kind).summary}`),
+    h('p', {class: 'fine'}, `Scope: ${row.opportunity || 'campaign-wide'} (${row.scope_confirmed ? 'user-marked confirmed' : 'unconfirmed'}). Phase: ${campaignActionPhaseLabel(row.submission_phase)}.`)));
+  if (report.warnings?.length) records.append(h('details', {class: 'report-notes'}, h('summary', {}, 'Source limits and review notes'),
+    h('ul', {}, report.warnings.map(item => h('li', {}, item)))));
+  records.append(h('details', {class: 'report-notes'}, h('summary', {}, 'Model response and request record'),
+    response, h('h4', {}, 'Exact approved request'),
+    report.request_content ? h('pre', {class: 'help-code'}, report.request_content)
+      : h('p', {class: 'fine'}, 'The exact request was not retained in this saved report.')));
+  return records;
 }
 
 export function campaignEvidenceCounts(campaign) {
@@ -200,7 +251,7 @@ function connectCitations(article, report, sources, beforeJump = () => {}) {
   const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
   for (const node of nodes) {
     if (node.parentElement?.closest('code,pre,blockquote,a,button')) continue;
-    const matches = [...node.textContent.matchAll(/\b[SE][a-f0-9]{16}\b/g)].filter(match => references.has(match[0]) && (report.sources || []).some(item => item.id === references.get(match[0])));
+    const matches = [...node.textContent.matchAll(/\b(?:[SE][a-f0-9]{16}|e[1-9][0-9]{0,2})\b/g)].filter(match => references.has(match[0]) && (report.sources || []).some(item => item.id === references.get(match[0])));
     if (!matches.length) continue;
     const fragment = document.createDocumentFragment(); let start = 0;
     for (const match of matches) {

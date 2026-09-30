@@ -20,6 +20,15 @@ The core workbench, settings, source-linked reports, transcript import/review, c
 
 Speech engines, model weights and the RKC executable are **not** bundled. Optional transcription currently uses a source checkout with the speech extra. Importing an existing TXT/SRT/VTT/JSON transcript works in the core installer. RKC atlas import works without installing RKC; creating atlases or reading its live local context needs RKC separately.
 
+ChatGPT sign-in requires the bundled account-verification libraries. Current
+native build targets include them on Windows x64, Apple Silicon and Linux.
+Windows x86, Windows ARM64 and Intel macOS builds omit them because current
+cryptography binary support is unavailable; those builds explain the limitation
+in Settings. Provider API keys and compatible local models are still available.
+The installed-app receipt's `account_auth_bundled` field is authoritative for a
+download. An offline signed-token test proves the bundled verifier can run; it
+does not prove a live ChatGPT sign-in or access for your account.
+
 ## Platform qualification
 
 | Target | Build / installed-app execution |
@@ -30,10 +39,10 @@ Speech engines, model weights and the RKC executable are **not** bundled. Option
 | macOS Intel | macOS 15 Intel runner, Python 3.13 |
 | macOS Apple Silicon | macOS 14 ARM64 runner, Python 3.13 |
 | Linux x64 / ARM64 | Ubuntu 22.04 target runners, Python 3.13; glibc baseline recorded |
-| Linux x86 | Debian Bookworm 32-bit userspace, Python 3.11, host compatibility execution |
+| Linux x86 | Debian Trixie 32-bit userspace, Python 3.11, host compatibility execution |
 | Linux ARMv7 | Debian Bookworm armhf userspace, Python 3.11, QEMU emulation |
 
-Actual release receipts are authoritative for the build in your download. Windows installer minimum is Windows 10. macOS tests are not a claim of support for every earlier release. Linux 64-bit Ubuntu-built packages require glibc 2.35 or newer; the Bookworm 32-bit packages require glibc 2.36 or newer. Check the specific receipt and package dependencies. ARMv7 has not been validated on physical boards in this release.
+Actual release receipts are authoritative for the build in your download. Windows installer minimum is Windows 10. macOS tests are not a claim of support for every earlier release. Linux 64-bit Ubuntu-built packages require glibc 2.35 or newer; ARMv7 Bookworm packages require glibc 2.36 or newer; x86 Trixie packages require glibc 2.41 or newer. Check the specific receipt and package dependencies. ARMv7 has not been validated on physical boards in this release.
 
 Checks install the package, start the installed executable, serve its assets and exercise offline workflows. Windows and Linux checks also remove it. These checks do not establish real meeting accuracy, current hosted API availability or automatic operating-system trust.
 

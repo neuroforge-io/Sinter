@@ -6,10 +6,13 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 import pytest
+import test_runtime
+from test_runtime import post, request
 
 from sinter import client, profiles
 from sinter.preferences import DEFAULTS, Preferences, validate
-from test_runtime import post, request, server
+
+server = test_runtime.server
 
 
 PROFILE = {
@@ -85,7 +88,8 @@ def test_profile_does_not_enter_model_connection_or_request_body(tmp_path):
     preferences = Preferences(tmp_path)
     preferences.update(PROFILE)
     connection = preferences.connection()
-    assert set(connection) == {'api_url', 'model', 'max_tokens', 'api_key', 'inherit_key'}
+    assert set(connection) == {'api_url', 'model', 'max_tokens', 'api_key',
+                               'inherit_key', 'provider'}
     with client.connection_settings(connection):
         body = client._chat_body([client.Message('user', 'Public question')], 512)
     encoded = json.dumps(body)

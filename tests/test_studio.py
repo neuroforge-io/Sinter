@@ -47,7 +47,8 @@ def test_question_limit():
 
 
 @pytest.mark.parametrize('name', ['enquiry-letter', 'agenda-item', 'action-register', 'grant-checklist'])
-def test_recipes_preserve_original_context(name):
+def test_recipes_preserve_original_context(name, monkeypatch):
+    monkeypatch.setenv('NEUROFORGE_MODEL', 'erais-fracture-gemma')
     template = resolve_template(name)
     assert len(template.steps) == 3 and 'review required' in template.description
     with patch('sinter.templates.chat', return_value=ChatResult('Draft', finish_reason='stop')) as model:

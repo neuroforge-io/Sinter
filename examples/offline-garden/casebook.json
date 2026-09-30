@@ -1,0 +1,43 @@
+{
+  "schema": "sinter-casebook/v1",
+  "title": "Fictional garden project - volunteer handover",
+  "questions": "Has the equipment quote been received?\nWho has accepted checking the current funding guidance?\nIs the treasurer a named person or an unconfirmed owner type?\nWhat does the 9 October practice target mean?\nWhich earlier source wording needs review before reuse?\nWhat insurance excess applies?",
+  "document_type": "handover",
+  "documents": [
+    {
+      "id": "S16954cf5530cdf18c1ecbf2b",
+      "title": "Funding review - fictional original",
+      "content": "Fictional example — for practice only.\n\n# Example school garden funding\n\n## Funding opportunities and guidance to review\n\n### 1. Fictional example: Fictional garden programme - demonstration only\n\n> This fictional example supports school garden materials.\n\nRequirements have not been checked for this source yet.\n\nNext action: check the current official programme page for the application window, applicant conditions and exclusions.\n\n## Before applying\n\nConfirm the current application window and every applicant condition with the funder. A source excerpt or a matching requirement does not establish eligibility.",
+      "url": "",
+      "date": "",
+      "sha256": "4f29644e15d0306764a82a57cd8cf7c9138a9a2aa3ad894cafc2293f72cbbae4"
+    },
+    {
+      "id": "S7d2aba4dedc7c8a7c9e722f9",
+      "title": "Handover plan - fictional original",
+      "content": "# Fictional community project handover\n\nUSER-ENTERED PLAN - CONFIRM OWNERS AND DATES\n\n- Check current funder guidelines | Scope: Not specified | Owner: Unassigned | Proposed target (not confirmed): Not set | not_started\n\n- Obtain equipment quote | Scope: Not specified | Owner: Fictional treasurer | Proposed target (not confirmed): 2026-10-09 | in_progress",
+      "url": "",
+      "date": "",
+      "sha256": "399e1eaac2ffcbcdb265147d4126c179dcadf03e4e024b5eaf7498e8dab9a49f"
+    },
+    {
+      "id": "S4b871e2f7490c221a69bcade",
+      "title": "Action table - fictional original",
+      "content": "Action,Scope,Owner,Proposed target date (unconfirmed),Status\r\nCheck current funder guidelines,,,,not_started\r\nObtain equipment quote,,Fictional treasurer,2026-10-09,in_progress\r\n",
+      "url": "",
+      "date": "",
+      "sha256": "b55bb28ee965859f60aa3b0249fbe8e82ffd8aa24566fc4535ecc069ffba63fd"
+    },
+    {
+      "id": "Sc28ed478cf83d0570e55818a",
+      "title": "Review note - fictional practice conditions",
+      "content": "Fictional practice note only. No real person, school, funding offer or commitment is represented.\n\nThe guideline-checking action has no assigned owner. The earlier action table says Fictional treasurer; this owner type and acceptance remain unconfirmed. A volunteer coordinator is only a suggested role. No person has accepted the actions.\n\nThe equipment quote has not been received. The 9 October 2026 date is a proposed practice target, not a confirmed deadline or grant closing date. Applicant conditions, current application window and supported costs have not been checked.\n\nAn older eligibility excerpt records https://example.invalid/garden/earlier, checked 12 September 2026. The current fictional source register records https://example.invalid/garden/current, checked 30 September 2026. This mismatch is deliberate: preserve the earlier wording and review it before reuse. No website was opened or verified.\n\nEarlier-round answers, dates and actions are historical practice records. That round is recorded closed. No application or enquiry was sent. Keep those records for reference without using them as current work.",
+      "url": "",
+      "date": "",
+      "sha256": "14fa14a148d094a6914cc84999db0385b538a02579d0f88ad7c102ddaf865d3d"
+    }
+  ],
+  "recipient": "Incoming fictional committee",
+  "organisation": "Fictional School Community Association",
+  "fingerprint": "cb33f4aec620741c55c29df27ed5061d9fac6490ae7a9da1c7d43c3be1f3618c"
+}
