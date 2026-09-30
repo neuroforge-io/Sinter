@@ -59,7 +59,8 @@ function planRow(row, currentNames, opportunities) {
           ? 'After-submission follow-up' : 'Before submission',
     owner: owner.export,
     due: row.due,
-    status: row.status === 'done' ? 'done' : 'not_started',
+    status: row.status === 'done' ? 'done'
+      : row.status === 'held' ? 'held' : 'not_started',
   };
 }
 

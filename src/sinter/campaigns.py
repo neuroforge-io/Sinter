@@ -238,6 +238,8 @@ def _action_owner_summary(owner: str, kind: str, accepted: bool) -> str:
 
 def _action_is_current(row: dict, opportunities: list[dict]) -> bool:
     """Only show actions whose confirmed scope and submission phase match now."""
+    if row["status"] == "held":
+        return False
     if not row["scope_confirmed"]:
         return False
     if not row["opportunity"]:
@@ -464,7 +466,7 @@ def validate(data: object) -> dict:
             "owner_confirmed": owner_confirmed,
             "due": _date(row.get("due", ""), "Action deadline"),
             "status": _status(row.get("status", "open"),
-                              frozenset({"open", "done"}), "action status"),
+                              frozenset({"open", "held", "done"}), "action status"),
         })
     asset_names: set[str] = set()
     asset_ids: set[str] = set()
@@ -869,6 +871,8 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
             bool(row["comparison_note"]) for row in budget["by_opportunity"]
             if row["opportunity"] in active_names),
         "open_actions": len(current_actions),
+        "actions_held": sum(row["status"] == "held"
+                            for row in document["actions"]),
         "actions_scope_unconfirmed": actions_scope_unconfirmed,
         "actions_submission_phase_review": actions_submission_phase_review,
         "actions_phase_reclassification": actions_phase_reclassification,
@@ -884,7 +888,8 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
     }
     if core_missing or any(value for key, value in result.items()
                            if key not in {"status", "notice", "missing_sections",
-                                          "requirements_total", "requirements_archived"}):
+                                          "requirements_total", "requirements_archived",
+                                          "actions_held"}):
         result["status"] = "needs_attention"
     return result
 
@@ -1305,6 +1310,10 @@ def _render_decision_brief(document: dict, readiness: dict,
         f"{readiness['claims_without_evidence']} marked checks have incomplete or stale evidence",
         f"{readiness['open_actions']} open actions (confirmed current scope only)",
     ]
+    if readiness["actions_held"]:
+        review_items.append(
+            f"{readiness['actions_held']} action(s) on hold by your choice, "
+            "retained and not completed; excluded from current work")
     workflow_count = readiness["application_workflow_to_confirm"]
     if workflow_count:
         review_items.append(
@@ -1338,7 +1347,8 @@ def _render_decision_brief(document: dict, readiness: dict,
     if inactive_route_actions:
         review_items.append(
             f"{inactive_route_actions} open action(s) are held on closed, paused or not-pursued routes; "
-            "move continuing work to a current scope or mark obsolete work complete")
+            "move continuing work to a current scope or explicitly put it on hold; "
+            "mark Done only when completed")
     window_count = readiness["application_windows_to_check"]
     if window_count:
         review_items.append(
@@ -1455,6 +1465,10 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
     if readiness["actions_without_owner"]:
         lines.append(f"{readiness['actions_without_owner']} open actions have no user-confirmed owner; "
                      "names and role suggestions without recorded acceptance remain unconfirmed.")
+    if readiness["actions_held"]:
+        lines.append(f"{readiness['actions_held']} action(s) are on hold by your "
+                     "choice, retained and not completed. They do not count as "
+                     "current work; choose To do explicitly to resume.")
     if readiness["actions_scope_unconfirmed"]:
         count = readiness["actions_scope_unconfirmed"]
         lines.append(f"{count} open action(s) need scope confirmation and do not count as current work until classified.")
@@ -1466,7 +1480,7 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
         lines.append(f"{count} post-submission action(s) on active route(s) need reclassification before returning to current work.")
     if readiness["actions_inactive_route_review"]:
         count = readiness["actions_inactive_route_review"]
-        lines.append(f"{count} open action(s) belong to closed, paused or not-pursued routes; move continuing work to a current scope or mark obsolete work complete.")
+        lines.append(f"{count} open action(s) belong to closed, paused or not-pursued routes; move continuing work to a current scope or explicitly put it on hold. Mark Done only when completed.")
     for item in document["opportunities"]:
         name = item["name"]
         active = item["status"] in ACTIONABLE_OPPORTUNITY_STATES
@@ -1631,7 +1645,9 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                  if row["scope_confirmed"] else "")
         lines.append("- " + _inline(row["task"]) + " · Scope: " + scope + phase
                      + " · Owner: " + owner
-                     + " · Proposed target: " + target + " · " + row["status"])
+                     + " · Proposed target: " + target + " · "
+                     + ("On hold · retained, not completed"
+                        if row["status"] == "held" else row["status"]))
     lines.extend(_render_portfolio_register(document["assets"], document["sources"]))
     if document["communications"]:
         lines.extend([

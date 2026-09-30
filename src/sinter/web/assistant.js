@@ -54,6 +54,13 @@ export async function campaignAssistant({setBusy = () => {}} = {}) {
   });
   cancel.hidden = true;
   function invalidate() { previewSequence++; prepared = null; payload = null; preview.replaceChildren(); consent.input.checked = false; send.disabled = true; }
+  function updateHeldActions() {
+    for (const item of selectedActions) {
+      item.entry.input.disabled = saved.document.actions[item.index].status === 'held'
+        && task.input.value === 'next_actions';
+      if (item.entry.input.disabled) item.entry.input.checked = false;
+    }
+  }
   function chooseRoute() {
     invalidate(); selected = []; selectedActions = [];
     checks.replaceChildren(h('h4', {}, 'Choose the recorded checks to include'),
@@ -65,13 +72,14 @@ export async function campaignAssistant({setBusy = () => {}} = {}) {
       selected.push({index, entry}); checks.append(entry.wrap);
     });
     if (!selected.length) checks.append(notice('No eligibility checks are recorded for this route. You can still ask for the next step using its saved details.'));
-    actions.replaceChildren(h('h4', {}, 'Choose actions to include'), h('p', {class: 'fine'}, 'Include relevant existing actions so the assistant can avoid repeating completed work.'));
+    actions.replaceChildren(h('h4', {}, 'Choose actions to include'), h('p', {class: 'fine'}, 'Include relevant existing actions so the assistant can avoid repeating completed work. On hold actions are retained, not completed, and cannot be selected for next-action suggestions.'));
     saved.document.actions.forEach((row, index) => {
       if (row.opportunity && row.opportunity !== route.input.value) return;
-      const entry = check(`${row.task} · ${row.status}`);
+      const entry = check(`${row.task} · ${row.status === 'held' ? 'On hold · retained, not completed' : row.status}`);
       entry.input.addEventListener('change', invalidate);
       selectedActions.push({index, entry}); actions.append(entry.wrap);
     });
+    updateHeldActions();
   }
   async function chooseCampaign() {
     const sequence = ++loadSequence;
@@ -84,7 +92,8 @@ export async function campaignAssistant({setBusy = () => {}} = {}) {
   }
   campaign.input.addEventListener('change', () => chooseCampaign().catch(error => feedback.replaceChildren(notice(error.message, 'error'))));
   route.input.addEventListener('change', chooseRoute);
-  task.input.addEventListener('change', invalidate); question.input.addEventListener('input', invalidate);
+  task.input.addEventListener('change', () => { invalidate(); if (saved) updateHeldActions(); });
+  question.input.addEventListener('input', invalidate);
   const review = button('Preview what will be sent', async () => {
     invalidate(); feedback.replaceChildren();
     const sequence = previewSequence;

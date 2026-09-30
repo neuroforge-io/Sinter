@@ -69,6 +69,8 @@ jobs:
       - run: python tools/handover_appendix_browser.py
       - run: python tools/deliverable_browser.py
       - run: python tools/campaign_browser.py
+      - run: python tools/campaign_hold_browser.py
+      - run: python tools/campaign_backup_browser.py
       - run: python tools/campaign_source_picker_browser.py
       - run: python tools/campaign_currency_browser.py
       - run: python tools/campaign_action_bar_browser.py

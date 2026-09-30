@@ -286,3 +286,60 @@ failures in its catalogue-response mocks and is not reported as a pass. Fatal
 Ruff, whitespace and the narrow public-boundary checks passed. No new installed
 preview, hosted model result or whole-product 10/10 follows from this source
 checkpoint.
+
+### Held work and recovery without a running server · 1 October
+
+The independent review of three actual operator packs still rated usefulness
+**7**, evidence function **7.5** and Word presentation **7.5**. One earlier action
+remained current despite a later scope decision. The new explicit **On hold**
+status retains its exact task, proposed owner/date and history, excludes it from
+current suggestions and calendar exports, and requires explicit resume. Route
+and scope checks remain in force. The assistant rejects a held next-action
+request before model discovery or generation; other tasks retain labelled history.
+
+Held qualification included **199 focused Python checks, 69 JavaScript checks,
+576 frozen cases each in Python and JavaScript with 9,216 assertions each**, and
+**1,152 exact comparisons with earlier open/done documents**. Fresh desktop and
+mobile UI journeys confirmed the warning that published 0.5.4rc2 cannot open
+records containing held actions. Its refusal leaves the record unchanged; this
+is a source compatibility probe, not an installed downgrade test. Do not turn a
+held action into completed work merely to satisfy an older version.
+
+Another actual browser attempt retained unsaved inputs after its server stopped
+but produced no backup file. The original download failure's cause remains
+unproven. The new local backup-text controls provide an independent recovery
+path: complete working-copy JSON, explicit clipboard copying, manual selection
+and refresh that stays available when clipboard access stalls. They neither save
+a campaign nor create a file. Oversized text is preserved without implying it can
+be admitted to storage unchanged.
+
+Four fictional browser journeys stopped the actual local server, confirmed Save
+refusal and unchanged stored files, then recovered every working input without
+HTTP requests. They covered real desktop clipboard access, explicitly controlled
+mobile denial and clipboard stall, and a **1,091,551-byte** oversized working copy.
+Eight Node cases and three Python wrapper/argument checks passed. The controls'
+scoped review was **8 for experience, 8.5 for function and 7 for appearance**,
+not a whole-product rating. Independent review and final-source replays are
+retained locally.
+
+The combined source copy, based on committed provider-readiness changes plus the
+reviewed held/backup runtime and test overlays, passed **2,026 Python tests with
+five platform-inapplicable skips**. Exact source hashes and complete test output
+are retained with that copy. Fatal Ruff, whitespace and the narrow public-boundary
+check passed. The source result is separate from the published installers.
+
+The real Linux Australia Word pack opened read-only in LibreOffice with a
+five-page status and a readable first page. Linux desktop keyboard control timed
+out before navigating to its final page; this native check is incomplete. The
+independent retained-file rendering review covers the remaining pages, rather
+than claiming a complete native desktop walkthrough.
+
+The actual campaign also completed a stopped-server backup exercise through the
+in-app browser. Save refused with the new recovery guidance; clipboard copying
+and full manual selection remained usable. The clipboard contained all
+**264,535 characters**, exactly matching the current working-copy JSON retained
+privately by the operator. Earlier snapshots and every original field outside
+the two deliberate record changes remained exact. A fresh file-download attempt
+still timed out; the local text recovery succeeds independently of that unresolved
+handoff. No hosted generation or outgoing communication was made by this operator
+or its review team in this cycle.

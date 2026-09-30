@@ -41,7 +41,7 @@ def plan(title, rows):
         owner = text(row.get('owner', ''), 'Owner', 400)
         due = text(row.get('due', ''), 'Due date', 10)
         status = text(row.get('status', 'not_started'), 'Status', 20)
-        if status not in {'not_started', 'in_progress', 'done'}:
+        if status not in {'not_started', 'in_progress', 'held', 'done'}:
             raise ValueError('Choose a valid action status.')
         if due:
             try:
@@ -85,7 +85,7 @@ def plan(title, rows):
         return f'{value.year:04d}{value.month:02d}{value.day:02d}'
     cal = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//NeuroForge//Sinter user plan//EN', 'CALSCALE:GREGORIAN']
     for index, row in enumerate(output):
-        if row['due'] and row['status'] != 'done':
+        if row['due'] and row['status'] not in {'done', 'held'}:
             day = date.fromisoformat(row['due'])
             identity = hashlib.sha256((title+'\0'+str(index)+'\0'+row['action']).encode()).hexdigest()
             description = ['Scope: '+(row['scope'] or 'Not specified')]

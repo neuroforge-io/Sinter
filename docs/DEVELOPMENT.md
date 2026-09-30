@@ -17,6 +17,8 @@ python -m playwright install chromium
 python tools/browser_smoke.py
 python tools/deliverable_browser.py
 python tools/campaign_browser.py
+python tools/campaign_hold_browser.py
+python tools/campaign_backup_browser.py
 python tools/campaign_source_picker_browser.py
 python tools/campaign_currency_browser.py
 python tools/campaign_action_bar_browser.py
@@ -39,6 +41,7 @@ Every browser integration tool accepts `--help` without Playwright installed.
 The same setup runs `browser_smoke.py`, `studio_browser.py`, `desktop_browser.py`,
 `casebook_browser.py`, `casebook_save_state_browser.py`,
 `deliverable_browser.py`, `campaign_browser.py`,
+`campaign_hold_browser.py`, `campaign_backup_browser.py`,
 `campaign_source_picker_browser.py`,
 `campaign_currency_browser.py`,
 `campaign_action_bar_browser.py`,

@@ -88,6 +88,13 @@ The desktop app selects an available local port. Keep the app running for watch 
 
 Reports and preferences are local and unencrypted. Unsaved browser work is not a backup. Export or save before quitting. Uninstalling a core application does not delete `~/.sinter`; remove that directory only after preserving any reports you need. Model caches are managed separately by the optional speech tools.
 
+Unreleased development after 0.5.4rc2 adds **On hold** for actions and a complete
+local backup-text fallback. These features are not in the published installers.
+Earlier previews refuse to open a campaign containing held actions. Keep an
+independent backup before switching versions and use the newer source version
+for those records. Clipboard copying requires you to paste and retain the text
+yourself; it does not establish that a file exists or that a campaign was saved.
+
 ## Source and speech installation
 
 Python 3.10+ and a current browser are needed for a source installation:

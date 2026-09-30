@@ -113,8 +113,14 @@ export function isCampaignActionScopeConfirmed(action) {
     || (action.scope_confirmed !== false && Object.hasOwn(action, 'opportunity'));
 }
 
+/** Explicitly held work stays retained until the operator resumes it. */
+export function isCampaignActionOpen(action) {
+  return action.status !== 'done' && action.status !== 'held';
+}
+
 /** Keep pre- and post-submission tasks on the correct side of a route change. */
 export function isCampaignActionCurrent(action, opportunities) {
+  if (action.status === 'held') return false;
   if (!isCampaignActionScopeConfirmed(action)) return false;
   if (!action.opportunity) return true;
   const routes = Array.isArray(opportunities) ? opportunities : [];

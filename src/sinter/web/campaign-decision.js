@@ -1,5 +1,5 @@
 /** Conservative, read-only overview for the campaign workspace. */
-import {isCampaignActionCurrent, isCampaignActionScopeConfirmed,
+import {isCampaignActionCurrent, isCampaignActionOpen, isCampaignActionScopeConfirmed,
   isOpportunityActionable} from './campaign-state.js';
 import {campaignActionOwnerState} from './campaign-owner.js';
 import {campaignCurrencyComparisonNote} from './campaign-currency.js';
@@ -336,7 +336,7 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
   }
 
   const openActions = actions.map((action, index) => ({action, index}))
-    .filter(({action}) => action.status !== 'done' && hasText(action.task)
+    .filter(({action}) => isCampaignActionOpen(action) && hasText(action.task)
       && isCampaignActionCurrent(action, opportunities));
   const byUrgency = rows => {
     const overdue = rows.filter(({action}) => action.due && action.due < localToday)
@@ -369,24 +369,24 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
       ...(row.due ? {due: row.due} : {}),
     };
   } else {
-    const unconfirmedScopeCount = actions.filter(action => action.status !== 'done'
+    const unconfirmedScopeCount = actions.filter(action => isCampaignActionOpen(action)
       && hasText(action.task) && !isCampaignActionScopeConfirmed(action)).length;
     const submissionPhaseReviewCount = actions.filter(action => {
-      if (action.status === 'done' || !hasText(action.task)
+      if (!isCampaignActionOpen(action) || !hasText(action.task)
           || !isCampaignActionScopeConfirmed(action)) return false;
       const route = opportunities.find(row => row.name === action.opportunity);
       return route?.status === 'submitted'
         && action.submission_phase !== 'post_submission';
     }).length;
     const reactivatedRouteReviewCount = actions.filter(action => {
-      if (action.status === 'done' || !hasText(action.task)
+      if (!isCampaignActionOpen(action) || !hasText(action.task)
           || !isCampaignActionScopeConfirmed(action)
           || action.submission_phase !== 'post_submission') return false;
       const route = opportunities.find(row => row.name === action.opportunity);
       return Boolean(route && isOpportunityActionable(route.status));
     }).length;
     const inactiveRouteReviewCount = actions.filter(action => {
-      if (action.status === 'done' || !hasText(action.task)
+      if (!isCampaignActionOpen(action) || !hasText(action.task)
           || !isCampaignActionScopeConfirmed(action) || !hasText(action.opportunity)) return false;
       const route = opportunities.find(row => row.name === action.opportunity);
       return ['closed', 'paused', 'not_pursuing'].includes(route?.status);
@@ -399,7 +399,7 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
           : reactivatedRouteReviewCount
             ? `Review ${reactivatedRouteReviewCount} open action(s) on reactivated route(s). Reclassify them as before-submission work or keep them held.`
             : inactiveRouteReviewCount
-              ? `Review ${inactiveRouteReviewCount} open action(s) on inactive route(s). Move continuing work to a current scope or mark obsolete actions done.`
+              ? `Review ${inactiveRouteReviewCount} open action(s) on inactive route(s). Move continuing work to a current scope or explicitly put it on hold. Mark Done only when completed.`
               : suggestedAction(state, active, {requirements, sources}, localToday, focus),
       ownerNeeded: true, ownerStatus: 'Owner needed — no person is recorded.',
     };

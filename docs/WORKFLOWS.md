@@ -38,6 +38,24 @@ metadata; selecting it is not proof that you checked the quoted wording.
 
 Save revisions on this computer, export a JSON backup, or import a backup to continue. A stale revision is rejected and leaves your unsaved edits in the editor. Sinter does not submit applications, fetch funder pages, or treat a prepared brief as approval.
 
+In development after 0.5.4rc2, an action can be **On hold**. Use it for work that
+is paused or superseded but has not been completed. Its exact task, owner and
+proposed date stay recorded. Held actions appear separately and are excluded
+from current next actions and calendar exports. Change the status explicitly to
+**To do** to resume; existing scope and route checks still apply. Older previews
+cannot open a campaign containing this status. Keep a separate backup before
+changing versions; do not mark work completed merely to satisfy an older app.
+
+The development backup controls also provide **Copy backup text**, **Refresh
+backup text** and **Select backup text** under **Import or back up a campaign**.
+These capture every current input, including unsaved and oversized edits, without
+a server connection. Paste the complete text into a private text file to retain
+it. Copying does not save the campaign or create a file. If clipboard access fails
+or stalls, refresh and select the complete text for manual copying. An earlier
+capture or clipboard value does not include later edits. An oversized backup
+preserves those edits but still needs scope reduction before Sinter can save or
+restore it; retain the full backup while making a smaller working copy.
+
 ## Enquiry letters, briefs and agenda items
 
 Choose the output type before adding notes: **Enquiry letter**, **Briefing note** or **Agenda item for discussion**. Recipient, organisation and sign-off are optional. Missing details stay as placeholders instead of being invented.

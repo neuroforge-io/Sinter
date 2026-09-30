@@ -3,7 +3,7 @@ import {h, field, selectField, button, notice, download, announce, safeLink, che
 import {request} from './api.js';
 import {renderReport} from './reports.js';
 import {campaignClarificationDraft, campaignIdentityFromProfile} from './campaign-letter.js';
-import {defaultCampaignOpportunityIndex, isCampaignActionCurrent,
+import {defaultCampaignOpportunityIndex, isCampaignActionCurrent, isCampaignActionOpen,
   isCampaignActionScopeConfirmed, isOpportunityActionable,
   applicationAnswerAvailability} from './campaign-state.js';
 import {applicationWindowGaps, campaignDecision, CAMPAIGN_DECISION_NOTE} from './campaign-decision.js';
@@ -20,6 +20,7 @@ import {campaignCapacity, CAMPAIGN_TEXT_LIMIT, CAMPAIGN_BYTE_LIMIT}
 import {campaignSourceOptions, matchingCampaignSources}
   from './campaign-source-options.js';
 import {selectRequirementSource} from './campaign-requirement-source.js';
+import {campaignBackupControls} from './campaign-backup.js';
 import {CEILING_CURRENCY_OPTIONS, campaignCeilingCurrency,
   campaignFundingAmount, campaignCurrencyComparisonNote} from './campaign-currency.js';
 
@@ -363,7 +364,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       status.textContent = 'Saved on this computer';
       feedback.replaceChildren(notice('Campaign saved. Answers, costs, checks and actions will be here when you return.', 'success'));
       await refreshShelf(); announce('Campaign saved.');
-    } catch (problem) { error(problem.message + ' Your edits are still here. Export a campaign backup before reopening another version.'); }
+    } catch (problem) { error(problem.message + ' Your edits are still here. Export a campaign backup or use Copy backup text under Import or back up a campaign before reopening another version.'); }
     finally { lock(false); }
   }
   async function prepare() {
@@ -444,24 +445,24 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       && (row.unit_cost == null || row.unit_cost === '' || !row.quote_reference?.trim()));
     const windows = document.opportunities.filter(row => isOpportunityActionable(row.status)
       && applicationWindowGaps(row, localDate(), document.sources).length > 0);
-    const actionScopesToConfirm = document.actions.filter(row => row.status !== 'done'
+    const actionScopesToConfirm = document.actions.filter(row => isCampaignActionOpen(row)
       && row.scope_confirmed !== true).length;
-    const submittedActionsToReview = document.actions.filter(row => row.status !== 'done'
+    const submittedActionsToReview = document.actions.filter(row => isCampaignActionOpen(row)
       && row.scope_confirmed === true && row.opportunity
       && row.submission_phase !== 'post_submission'
       && document.opportunities.some(item => item.name === row.opportunity
         && item.status === 'submitted')).length;
-    const reopenedActionsToReview = document.actions.filter(row => row.status !== 'done'
+    const reopenedActionsToReview = document.actions.filter(row => isCampaignActionOpen(row)
       && row.scope_confirmed === true && row.opportunity
       && row.submission_phase === 'post_submission'
       && document.opportunities.some(item => item.name === row.opportunity
         && isOpportunityActionable(item.status))).length;
-    const inactiveRouteActionsToReview = document.actions.filter(row => row.status !== 'done'
+    const inactiveRouteActionsToReview = document.actions.filter(row => isCampaignActionOpen(row)
       && row.scope_confirmed === true && row.opportunity
       && document.opportunities.some(item => item.name === row.opportunity
         && ['closed', 'paused', 'not_pursuing'].includes(item.status))).length;
     const ownersToConfirm = document.actions.filter(row => {
-      if (row.status === 'done'
+      if (!isCampaignActionOpen(row)
           || !isCampaignActionCurrent(row, document.opportunities)) return false;
       const owner = campaignActionOwnerState(row.owner, row.owner_confirmed,
         row.owner_kind);
@@ -477,7 +478,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       [document.opportunities.filter(row => isOpportunityActionable(row.status)
         && campaignCurrencyComparisonNote(row)).length, 'funding currencies to review'],
       [ownersToConfirm.length, 'owners to confirm'],
-      [actionReviewCount, 'actions to review']].map(([count, label]) =>
+      [actionReviewCount, 'actions to review'],
+      [document.actions.filter(row => row.status === 'held').length, 'actions on hold']].map(([count, label]) =>
       h('div', {}, h('strong', {}, count), h('span', {}, label))));
     renderDecisionCard();
   }
@@ -1058,13 +1060,15 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         : left.index - right.index);
     });
     const currentActions = sortByUrgency(indexedActions.filter(({row}) =>
-      row.status !== 'done' && isCampaignActionCurrent(row, document.opportunities)));
+      isCampaignActionOpen(row) && isCampaignActionCurrent(row, document.opportunities)));
     const reviewActions = sortByUrgency(indexedActions.filter(({row}) =>
-      row.status !== 'done' && !isCampaignActionCurrent(row, document.opportunities)));
+      isCampaignActionOpen(row) && !isCampaignActionCurrent(row, document.opportunities)));
+    const heldActions = indexedActions.filter(({row}) => row.status === 'held');
     const completedActions = indexedActions.filter(({row}) => row.status === 'done');
     const groups = [
       {label: 'Current work', rows: currentActions},
       {label: 'Needs review before current work', rows: reviewActions},
+      {label: 'On hold', rows: heldActions},
       {label: 'Completed', rows: completedActions},
     ].filter(group => group.rows.length);
     for (const group of groups) {
@@ -1103,11 +1107,11 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         const phaseStatus = h('div', {class: 'campaign-action-phase-status', role: 'status', 'aria-live': 'polite'});
         function updatePhaseStatus() {
           phaseStatus.replaceChildren();
-          if (row.status === 'done') return;
+          if (row.status === 'done' || row.status === 'held') return;
           if (inactiveRoute) {
             const routeStatus = opportunityStates.find(([key]) => key === scopedOpportunity.status)?.[1]
               || 'inactive';
-            phaseStatus.append(notice(`This route is ${routeStatus.toLowerCase()}. The action is held out of current work. Move it to a current route or campaign-wide scope if it still applies, or mark it done if obsolete.`, 'warning'));
+            phaseStatus.append(notice(`This route is ${routeStatus.toLowerCase()}. The action is held out of current work. Move it to a current route or campaign-wide scope if it still applies, or choose On hold to retain it without treating it as current work. Mark Done only when completed.`, 'warning'));
           } else if (!phaseReviewable) return;
           else if (scopedOpportunity?.status === 'submitted'
               && row.submission_phase !== 'post_submission') {
@@ -1204,6 +1208,11 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           if (row.status === 'done') {
             dateStatus.textContent = row.due ? 'Completed — proposed target kept for reference.' : 'Completed — no target date was recorded.';
             dateStatus.dataset.state = 'done';
+          } else if (row.status === 'held') {
+            dateStatus.textContent = row.due
+              ? `On hold — proposed target ${displayDate(row.due)} kept for reference; not a current deadline.`
+              : 'On hold — no target date was recorded.';
+            dateStatus.dataset.state = 'held';
           } else if (!row.due) {
             dateStatus.textContent = 'No target date set. Confirm timing with the owner.';
             dateStatus.dataset.state = 'unset';
@@ -1223,11 +1232,13 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           renderEditor();
         });
         due.wrap.append(dateStatus);
-        const state = choice('Action status', [['open', 'To do'], ['done', 'Done']], row, 'status', () => {
+        const state = choice('Action status', [['open', 'To do'], ['held', 'On hold'], ['done', 'Done']], row, 'status', () => {
           updateDateStatus(); updatePhaseStatus(); refreshActionSummary();
           pendingActionFocus = {index: actionIndex, field: 'status'};
           renderEditor();
         });
+        state.wrap.append(h('small', {class: 'campaign-action-meta'},
+          'On hold needs newer Sinter; older previews cannot open these backups. Do not mark Done for compatibility.'));
         const taskText = String(row.task || '').trim().replace(/\s+/g, ' ');
         const taskSummary = h('span', {class: 'campaign-action-summary-task'},
           taskText || `Untitled action ${actionIndex + 1}`);
@@ -1242,9 +1253,10 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           const currentScope = row.scope_confirmed === true
             ? row.opportunity || 'Campaign-wide' : 'Scope needs confirmation';
           const currentDate = row.due
-            ? `${row.due < localDate() ? 'Past target' : 'Target'} ${displayDate(row.due)}`
+            ? `${row.status === 'held' ? 'Retained target' : row.due < localDate() ? 'Past target' : 'Target'} ${displayDate(row.due)}`
             : 'No target date';
-          const currentStatus = row.status === 'done' ? 'Done' : 'To do';
+          const currentStatus = row.status === 'done' ? 'Done'
+            : row.status === 'held' ? 'On hold · not completed' : 'To do';
           const currentHold = group.label === 'Needs review before current work'
             ? holdReason(row) : '';
           const metaChildren = [h('span', {},
@@ -1256,7 +1268,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         };
         refreshActionSummary();
         const details = h('details', {class: 'campaign-action-details', open: expandedActionRows.has(row)},
-          summary, task.wrap, scope.wrap,
+          summary, row.status === 'held'
+            ? notice('On hold by your choice, not completed. Choose To do to resume; scope and route checks still apply.') : null,
+          task.wrap, scope.wrap,
           h('div', {class: 'form-grid'}, owner.wrap, due.wrap, state.wrap, phase?.wrap),
           remove(document.actions, row, 'Remove action'));
         details.addEventListener('toggle', () => {
@@ -1285,7 +1299,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       } catch (problem) { error(problem.message); }
     }
     if (document.actions.length) panel.append(
-      h('p', {class: 'fine'}, 'CSV keeps closed-route and unconfirmed-scope actions clearly labelled for audit. The calendar includes only dated, unfinished actions with a confirmed current scope.'),
+      h('p', {class: 'fine'}, 'CSV keeps all actions, including On hold records (status held), for audit. The calendar includes only dated To do actions with a confirmed current scope; held and completed actions are excluded.'),
       h('div', {class: 'button-row'}, button('Download actions CSV', () => exportPlan('csv'), 'quiet'), button('Download action dates', () => exportPlan('calendar'), 'quiet')));
   }
   function renderCommunications(panel) {
@@ -1835,7 +1849,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         if (!window.confirm('Delete this saved campaign? Export a backup first if you need a copy.')) return;
         try { await request('/api/campaigns/delete', {data: {id: savedId, revision}}); apply(blank()); await refreshShelf(); }
         catch (problem) { error(problem.message); }
-      }, 'danger')));
+      }, 'danger')), campaignBackupControls(() => document));
   root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'CAMPAIGNS'), h('h2', {}, 'Keep the whole application together.'),
     h('p', {}, 'Compare opportunities, map products and IP questions to funding routes, prepare answers and turn missing details into next actions. Saved locally, with your sources beside the work.')),
     h('div', {class: 'campaign-save-bar non-print', role: 'region', 'aria-label': 'Campaign save and preview'},

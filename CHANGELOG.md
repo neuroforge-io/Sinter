@@ -5,6 +5,18 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Add an explicit **On hold** action status. Retain task wording, owner, proposed
+  date and history, while excluding held work from current suggestions and
+  calendar entries. Resuming is an explicit edit and does not waive route gates.
+  Earlier previews reject campaigns containing held actions; use this development
+  version and keep a separate backup before changing versions.
+
+- Offer complete working-copy backup text alongside file export. Copy, refresh
+  and manual selection work locally when the server is unavailable or an edit
+  exceeds save limits. Preserve all inputs without normalization or trimming;
+  clipboard success does not mean a file was saved. Manual refresh remains
+  available if clipboard access stalls.
+
 - Use bounded spacing for complete generated passage-reference mappings in Word.
   Preserve every source identity, Unicode range, word and font. Reject nested,
   duplicate or lookalike mappings for this layout hint; ordinary document bytes
