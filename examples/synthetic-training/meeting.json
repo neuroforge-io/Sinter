@@ -1,0 +1,19 @@
+{
+  "workflow": "meeting",
+  "title": "Fictional Copper Kite planning minutes",
+  "demo": true,
+  "use_search": false,
+  "use_model": false,
+  "organisation": "Copper Kite Practice Group (fictional)",
+  "signatory": "Sky Example (fictional)",
+  "notes": "SPEAKER_01: We did approve the booking.\nSPEAKER_02: I will ask for a fictional venue estimate.\nSPEAKER_01: No vote was taken today.",
+  "speaker_map": {"SPEAKER_01": "Robin Example (fictional)", "SPEAKER_02": "Sky Example (fictional)"},
+  "corrections": [
+    {
+      "segment_id": "T0001",
+      "original": "We did approve the booking.",
+      "replacement": "We did not approve the booking.",
+      "reason": "Deliberate training transcription error; corrected against the fictional exercise script."
+    }
+  ]
+}

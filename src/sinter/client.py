@@ -4,6 +4,7 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import re
 import threading
 import time
 import urllib.error
@@ -13,7 +14,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Generator, Iterator
-from urllib.parse import SplitResult, urlsplit
+from urllib.parse import SplitResult, quote, urlsplit
 
 from . import __version__
 from .model_profiles import (
@@ -26,6 +27,7 @@ from .model_profiles import (
 )
 from .operations import Cancelled, DeadlineExceeded, budget, checkpoint, remaining
 from .providers import (
+    ANTHROPIC,
     CHATGPT,
     CHATGPT_API_URL,
     OPENAI_COMPATIBLE,
@@ -414,7 +416,7 @@ def _require_response_model(value: dict, model: str) -> None:
 
 
 def _request_timeout(path: str, body: dict | None) -> float:
-    if path == "/models":
+    if urlsplit(path).path == "/models":
         return CONTROL_TIMEOUT
     if (path == "/chat/completions" and body
             and is_native_profile(body.get("model"))):
@@ -672,7 +674,53 @@ def validate_chat_request(messages: list[Message],
     _transport().request_body(body, _endpoint(""))
 
 
+def _validated_model_list(models: object) -> list[dict]:
+    if (not isinstance(models, list) or len(models) > 256
+            or any(not isinstance(model, dict) or not isinstance(model.get("id"), str)
+                   or not model["id"] or len(model["id"]) > 200 for model in models)
+            or len({model["id"] for model in models}) != len(models)):
+        raise APIError("The API returned an invalid model list.")
+    return models
+
+
+def _anthropic_models() -> list[dict]:
+    """Follow cursor pages within one control budget and the catalogue bound."""
+    models: list[dict] = []
+    path = "/models"
+    try:
+        with budget(CONTROL_TIMEOUT):
+            while True:
+                checkpoint()
+                result = _get(path)
+                checkpoint()
+                page = _validated_model_list(result.get("data"))
+                models = _validated_model_list(models + page)
+                more = result.get("has_more", False)
+                if type(more) is not bool:
+                    raise APIError("The API returned an invalid model list.")
+                if not more:
+                    return models
+                cursor = result.get("last_id")
+                if (not page or not isinstance(cursor, str)
+                        or not re.fullmatch(r"[A-Za-z0-9_./:@+-]{1,200}", cursor)
+                        or cursor != page[-1]["id"] or len(models) >= 256):
+                    raise APIError("The API returned an invalid model list.")
+                # Every continued page contributes a new ID, so duplicate checks
+                # also prevent cursor loops and bound discovery to 256 requests.
+                path = "/models?after_id=" + quote(cursor, safe="")
+    except DeadlineExceeded as exc:
+        # The inner budget has been restored. Preserve an expired enclosing
+        # deadline or cancellation; only discovery's own timeout becomes JSON.
+        checkpoint()
+        raise APIError(
+            "Model discovery exceeded its overall time budget. No request was "
+            "replayed; check the connection before trying again.", 504,
+        ) from exc
+
+
 def list_models() -> list[dict]:
+    if selected_provider() == ANTHROPIC:
+        return _anthropic_models()
     result = _get("/models")
     if selected_provider() == CHATGPT:
         catalog = result.get("models")
@@ -687,12 +735,7 @@ def list_models() -> list[dict]:
             raise APIError("The API returned an invalid model list.")
     else:
         models = result.get("data")
-    if (not isinstance(models, list) or len(models) > 256
-            or any(not isinstance(model, dict) or not isinstance(model.get("id"), str)
-                   or not model["id"] or len(model["id"]) > 200 for model in models)
-            or len({model["id"] for model in models}) != len(models)):
-        raise APIError("The API returned an invalid model list.")
-    return models
+    return _validated_model_list(models)
 
 
 def chat(messages: list[Message], max_tokens: int = DEFAULT_OUTPUT_TOKENS) -> ChatResult:

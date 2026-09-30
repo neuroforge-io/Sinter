@@ -1,0 +1,22 @@
+{
+  "workflow": "brief",
+  "document_type": "enquiry",
+  "title": "Fictional Copper Kite venue enquiry",
+  "demo": true,
+  "use_search": false,
+  "use_model": false,
+  "organisation": "Copper Kite Practice Group (fictional)",
+  "signatory": "Robin Example (fictional)",
+  "sender_role": "Practice coordinator",
+  "contact_details": "robin@example.invalid",
+  "recipient": "Fictional venue coordinator",
+  "notes": "FICTIONAL TRAINING ONLY: the group is considering a workshop. No booking or spending has been approved.",
+  "questions": "What entrance width and seating are available?\nWhat would the booking cost, and who can approve it?",
+  "sources": [
+    {
+      "title": "Fictional venue notice",
+      "kind": "sample",
+      "content": "The fictional workshop requires confirmation by its venue coordinator.\nEntrance width, seating arrangements and booking cost have not been confirmed."
+    }
+  ]
+}
