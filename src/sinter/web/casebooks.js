@@ -4,6 +4,7 @@ import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
 import {senderFields} from './profile.js';
 import {hasPendingSource, PENDING_SOURCE_MESSAGE} from './casebook-drafts.js';
+import {gardenGuide, GARDEN_PRACTICE} from './garden-practice.js';
 
 const example = () => ({schema: 'sinter-casebook/v1', title: 'Fictional P&C community evening',
   questions: 'Has the hall booking been confirmed?\nWhat access arrangements need checking?\nWho agreed to organise the volunteer roster?\nWhat is the insurance excess?',
@@ -13,12 +14,16 @@ const example = () => ({schema: 'sinter-casebook/v1', title: 'Fictional P&C comm
     {title: 'Volunteer discussion (fictional)', content: 'Morgan suggested a shared volunteer roster. No one agreed to own the roster yet. We should ask at the next meeting.'}
   ]});
 
-export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
+export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden} = {}) {
   const {settings} = await request('/api/settings');
   const sender = senderFields(seed.book || {}, settings);
   const recipient = field('Recipient or audience', 'text', seed.book?.recipient || '', '', {maxLength: 200});
   let savedId = seed.savedId || null, revision = seed.revision || null;
   let bookDirty = Boolean(seed.dirty);
+  let preparedReport = seed.report || null;
+  let practice = seed.practice || null;
+  const practiceGuide = onOpenGarden ? gardenGuide('casebooks', onOpenGarden) : h('div');
+  practiceGuide.hidden = practice !== GARDEN_PRACTICE;
   let docs = [...(seed.book?.documents || [])], busy = false, activeJob = null;
   const title = field('Project name', 'text', seed.book?.title || '', 'For example: school garden proposal or volunteer handover.', {maxLength: 200});
   const questions = field('What do you need to find out?', 'textarea', seed.book?.questions || '', 'One question per line, up to 20. Missing answers stay visible.', {maxLength: 12000, rows: 5});
@@ -52,7 +57,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   function rememberCurrent() {
     const pending = pendingSource();
     pendingNotice.textContent = pendingMessage();
-    remember?.('casebooks', {book: value(), savedId, revision, dirty: bookDirty, pendingSource: pending},
+    remember?.('casebooks', {book: value(), savedId, revision, dirty: bookDirty, pendingSource: pending, practice, report: preparedReport},
       {dirty: bookDirty || hasPendingSource(pending)});
   }
   function clearPending() {
@@ -69,7 +74,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
       || confirm('Replace the unsaved editor? Save your project and add or clear the pending source first if you need to keep it.');
   }
   function changed({dirty = true} = {}) {
-    bookDirty = dirty; rememberCurrent();
+    preparedReport = null; bookDirty = dirty; rememberCurrent();
     output.replaceChildren();
   }
   function drawSources() {
@@ -83,6 +88,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
     }
   }
   function load(book, id = null, rev = null) {
+    practice = null; practiceGuide.hidden = true;
     docs = book.documents; title.input.value = book.title; questions.input.value = book.questions || '';
     format.input.value = book.document_type || 'brief';
     recipient.input.value = book.recipient || '';
@@ -128,6 +134,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
     finally { activeJob = null; stop.hidden = true; lock(false); }
   }
   function drawReport(report) {
+    preparedReport = report; rememberCurrent();
     const coverage = report.coverage;
     const stats = h('div', {class: 'casebook-stats'},
       ...[[coverage.documents_supplied, 'documents supplied'], [coverage.passages_indexed, 'passages indexed'],
@@ -210,8 +217,9 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
         clearPending(); changed(); drawSources();
       }), button('Clear pending source', () => { if (!hasPendingSource(pendingSource()) || confirm('Clear this pending source? It has not been added or saved.')) clearPending(); }, 'quiet'), pendingNotice, upload.wrap);
   drawSources(); await refresh();
+  if (preparedReport) drawReport(preparedReport);
   return h('div', {class: 'stack casebooks-page'}, h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'LESS CHASING. MORE CONTEXT.'),
     h('h2', {}, 'All the bits. One useful picture.'), h('p', {}, 'Gather scattered notes, replies, policies and past decisions. Find the original wording behind each question and keep the gaps visible.')),
     h('section', {class: 'card'}, h('h3', {}, 'Your saved projects'), catalogue),
-    notice('Local by default. Sources are not fetched or uploaded automatically. Save deliberately, export backups, and review before sharing.'), editor, status, stop, output);
+    practiceGuide, notice('Local by default. Sources are not fetched or uploaded automatically. Save deliberately, export backups, and review before sharing.'), editor, status, stop, output);
 }

@@ -12,6 +12,7 @@ import {campaignSourceSnapshotGuidance,
   campaignSourceSnapshotIssue} from './campaign-source-state.js';
 import {campaignActionRowsForCalendar, campaignActionRowsForPlan,
   normalizeCampaignActionScopes} from './campaign-plan.js';
+import {gardenGuide, GARDEN_PRACTICE} from './garden-practice.js';
 
 const blank = () => ({schema: 'sinter-campaign/v1', title: '', organisation: '', objective: '',
   signatory: '', sender_role: '', contact_details: '',
@@ -151,9 +152,12 @@ function opportunityTiming(row) {
   }
   return 'Application window not checked';
 }
-export async function campaignsPage({setBusy = () => {}, remember = () => {}, seed = {}} = {}) {
+export async function campaignsPage({setBusy = () => {}, remember = () => {}, seed = {}, onOpenGarden} = {}) {
   let document = compatibleCampaign(seed.document || blank()), savedId = seed.id || null, revision = seed.revision || null;
   let dirty = Boolean(seed.dirty), selected = Number.isSafeInteger(seed.selected) && seed.selected >= 0 ? seed.selected : 0;
+  let practice = seed.practice || null;
+  const practiceGuide = onOpenGarden ? gardenGuide('campaigns', onOpenGarden) : h('div');
+  practiceGuide.hidden = practice !== GARDEN_PRACTICE;
   let tab = campaignTabs.some(([id]) => id === seed.tab) ? seed.tab : 'overview', busy = false;
   let expandedActionRows = null;
   let sourceQuery = typeof seed.sourceQuery === 'string' ? seed.sourceQuery : '';
@@ -172,7 +176,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
 
   function rememberCampaign() {
     remember('campaigns', {document: structuredClone(document), id: savedId, revision,
-      dirty, selected, tab, sourceQuery, assetQuery});
+      dirty, selected, tab, sourceQuery, assetQuery, practice});
   }
   function changed() {
     dirty = true; status.textContent = 'Unsaved changes';
@@ -267,6 +271,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const previousOpportunityName = document.opportunities?.[previousSelection]?.name || '';
     const previousSourceQuery = sourceQuery;
     const previousAssetQuery = assetQuery;
+    practice = null; practiceGuide.hidden = true;
     document = compatibleCampaign(next); savedId = id; revision = rev; dirty = false;
     expandedActionRows = null;
     const retainedSelection = resumeCurrentCampaign && previousOpportunityName
@@ -1690,7 +1695,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }, 'danger')));
   root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'CAMPAIGNS'), h('h2', {}, 'Keep the whole application together.'),
     h('p', {}, 'Compare opportunities, map products and IP questions to funding routes, prepare answers and turn missing details into next actions. Saved locally, with your sources beside the work.')),
-    decisionCard, savedPanel, shelf, summary, editor, h('div', {class: 'campaign-save-bar'}, h('div', {class: 'button-row'}, saveButton, prepareButton), status), feedback, transfers, output);
+    practiceGuide, decisionCard, savedPanel, shelf, summary, editor, h('div', {class: 'campaign-save-bar'}, h('div', {class: 'button-row'}, saveButton, prepareButton), status), feedback, transfers, output);
   status.textContent = dirty ? 'Unsaved changes' : savedId ? 'Saved on this computer' : 'Not saved yet';
   renderEditor(); renderSummary();
   const existing = await refreshShelf();

@@ -21,6 +21,8 @@ Action plans and shared knowledge, with the evidence still in view.
 The candidate is frozen at `cd928ba7561a09c477b3555e64aa6a3c4cc122b4`.
 Current `main` is subsequent `0.5.4rc2.dev0` development; its newer recovery
 changes are not included in or qualified by the frozen candidate installers.
+Development now exposes the complete paired garden example directly on Overview
+and Getting started, including original sources, handover and editable actions.
 
 The published v0.5.3 installer predates the latest campaign and connection
 changes. This candidate has a separate source identity and qualification record;

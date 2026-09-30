@@ -26,6 +26,7 @@ from . import (
     casebooks,
     client,
     community,
+    practice,
     speech,
     workbench,
 )
@@ -71,7 +72,7 @@ class Application:
     def scheduler(self):
         while not self.stop.wait(5):
             try:
-                with client.connection_settings(self.connection()):
+                with client.connection_settings(self.preferences.connection()):
                     self.store.run_due()
             except Exception:
                 log.exception("Watch scheduler could not complete a check")
@@ -206,8 +207,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _guard(self, operation):
         try:
-            with client.connection_settings(self.app.connection()):
-                operation()
+            operation()
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             pass
         except PermissionError as exc:
@@ -238,6 +238,30 @@ class Handler(BaseHTTPRequestHandler):
         self._trusted()
         parsed = urlsplit(self.path)
         path = unquote(parsed.path)
+        with self._request_connection(path):
+            self._dispatch_get(parsed, path)
+
+    def _request_connection(self, path, body=None):
+        """Local work never depends on an optional account token supplier.
+
+        Model previews still bind the selected account identity, and jobs retain
+        their destination-bound snapshot through the existing context capture.
+        Search is a separate tool whose transport never uses model credentials.
+        """
+        model = path in {"/api/models", "/api/health"} if body is None else (
+            path in {
+                "/api/assistant/preview", "/api/assistant/job",
+                "/api/casebooks/draft", "/api/chat/job", "/api/template/job",
+                "/api/atlas/answer", "/api/chat", "/api/chat/stream",
+                "/api/template/preview", "/api/template/run",
+                "/api/template/stream",
+            } or (path == "/api/workbench" and body.get("use_model") is True)
+        )
+        return client.connection_settings(
+            self.app.connection() if model else self.app.preferences.connection()
+        )
+
+    def _dispatch_get(self, parsed, path):
         if path in {"/", "/index.html"} or path.startswith("/static/"):
             name = "index.html" if path in {"/", "/index.html"} else path[8:]
             if not name or any(character in name for character in ("/", "\\", "%")) or name.startswith("."):
@@ -268,6 +292,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/example":
             query = parse_qs(parsed.query, max_num_fields=8)
             self._json(workbench.example(query.get("workflow", ["brief"])[0]))
+        elif path == "/api/practice/garden":
+            self._json(practice.garden())
         elif path == "/api/jobs":
             self._json({"jobs": self.app.jobs.list()})
         elif path == "/api/casebooks":
@@ -300,6 +326,10 @@ class Handler(BaseHTTPRequestHandler):
         self._trusted(write=True)
         path = urlsplit(self.path).path
         body = self._body(path)
+        with self._request_connection(path, body):
+            self._dispatch_post(path, body)
+
+    def _dispatch_post(self, path, body):
         if path == "/api/settings":
             self._json(self.app.preferences.update(body.get("settings"), confirm_endpoint=body.get("confirm_endpoint") is True, api_key=body.get("api_key")))
         elif path == "/api/models":

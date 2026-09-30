@@ -13,6 +13,7 @@ import {playground} from './playground.js';
 import {tools, buildNavigation, installToolFinder} from './navigation.js';
 import {rememberDraft, shouldWarnBeforeExit} from './draft-state.js';
 import {hasUnsavedReportDrafts, clearReportDrafts} from './report-drafts.js';
+import {gardenSeed, gardenCard, GARDEN_PRACTICE} from './garden-practice.js';
 
 const view = document.getElementById('view');
 const drafts = new Map();
@@ -29,6 +30,23 @@ function setBusy(value) {
 function remember(kind, value, options) { rememberDraft(drafts, dirtyDrafts, kind, value, options); }
 function go(route) { if (!busy) location.hash = route; }
 
+async function openGarden(kind) {
+  if (busy) return;
+  const previous = drafts.get(kind);
+  if (previous?.practice === GARDEN_PRACTICE) { go(kind); return; }
+  if (dirtyDrafts.has(kind) && !confirm('Open the fictional garden example in this editor? Save or export your current project first if you need to keep its unsaved inputs. Saved projects and document drafts stay available.')) return;
+  setBusy(true);
+  try {
+    const bundle = await request('/api/practice/garden');
+    remember(kind, gardenSeed(kind, bundle), {dirty: true});
+    setBusy(false); go(kind);
+  } catch (error) {
+    const message = error.message + ' Your current project is unchanged. Choose the example again to retry.';
+    view.prepend(notice(message, 'error')); announce(message);
+  }
+  finally { setBusy(false); }
+}
+
 function help() {
   const connection = h('div', {'aria-live': 'polite'});
   return h('div', {class: 'stack'}, h('header', {class: 'page-intro'}, h('h2', {}, 'You do not need to be technical.'),
@@ -38,6 +56,7 @@ function help() {
       h('p', {}, '2. Add actual reference text. A link alone is not evidence. Search is optional and sends only the query you enter.'),
       h('p', {}, '3. Prepare the draft, check sources and unknowns, then download or save it. Nothing is sent automatically.'),
       button('Open a local example', () => go('brief?example=1'), 'primary')),
+    gardenCard(openGarden),
     h('div', {class: 'card'}, h('h3', {}, 'Privacy and trust'),
       h('p', {}, 'The interface runs on your computer. Unsaved inputs live in this browser session; saved reports and watches live in ~/.sinter (or the configured data directory). Appearance and connection preferences are saved locally. API keys entered in Settings stay in memory for this session only.'),
       h('p', {}, 'Search sends the exact query. Optional model ranking sends up to six excerpts and the project question. Explore AI sends conversation or template inputs. Atlas drafting sends selected excerpts and your question. Avoid private information in external requests.'),
@@ -72,7 +91,7 @@ async function route() {
   view.firstElementChild?.dispose?.();
   view.replaceChildren(notice('Opening your workspace...'));
   try {
-    const options = {setBusy, remember, seed: drafts.get(id) || {}, example: new URLSearchParams(query || '').get('example') === '1',
+    const options = {setBusy, remember, seed: drafts.get(id) || {}, onOpenGarden: openGarden, example: new URLSearchParams(query || '').get('example') === '1',
       onDraftWithModel: payload => {
         remember('explore', {mode: 'templates', template: 'enquiry-letter', signatory: payload.signatory,
           sender_role: payload.sender_role, organisation: payload.organisation, contact_details: payload.contact_details,
@@ -92,7 +111,7 @@ async function route() {
     else if (id === 'tools') content = communityPage(options);
     else if (id === 'settings') content = await settingsPage();
     else if (id === 'help') content = help();
-    else content = home(go, drafts, (await request('/api/settings')).settings);
+    else content = home(go, drafts, (await request('/api/settings')).settings, openGarden);
     if (sequence !== routeSequence) return;
     view.replaceChildren(content); document.getElementById('content').focus({preventScroll: true}); window.scrollTo(0, 0);
   } catch (error) { if (sequence === routeSequence) view.replaceChildren(notice(error.message, 'error'), button('Try again', route)); }

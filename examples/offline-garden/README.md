@@ -21,6 +21,17 @@ The two files serve different purposes:
 
 ## Open the example
 
+On `0.5.4rc2.dev0` source development, open **Overview** or **Getting started**
+and choose **Open garden handover** or **Open garden campaign**. Each opens a
+new unsaved copy of this bundled data; the on-page guide links to its paired
+editor. Switching between them resumes your session edits. Existing saved work
+is unchanged, and replacing different unsaved inputs requires an explicit choice.
+Preparing a casebook report saves the project inputs; edited document text needs
+its separate **Save to this computer** action. This direct entry is subsequent
+development and is not part of the frozen 0.5.4rc1 installers.
+
+For the frozen preview, or to practise restoring backups, use the file path below.
+
 Start Sinter and open **Community casebooks** (`#casebooks`). Expand **Backups
 and project removal**, choose **Restore a casebook backup**, and select
 `casebook.json`. This opens a new unsaved project. Select **Save project**.

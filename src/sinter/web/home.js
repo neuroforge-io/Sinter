@@ -1,7 +1,8 @@
 import {h, button} from './ui.js';
+import {gardenCard} from './garden-practice.js';
 
 /** Overview is intentionally separate from routing and task execution. */
-export function home(go, drafts, settings = {}) {
+export function home(go, drafts, settings = {}, openGarden) {
   const cards = [
     ['research', '01', 'RESEARCH', 'Follow the evidence.', 'Explore a topic through source excerpts, clear citations and questions worth asking next.', 'Research a topic', 'A research brief with highlights and gaps'],
     ['grants', '01', 'FUNDING', 'Find the right opportunity.', 'Discover funding, check the requirements and keep a watch on what changes.', 'Find funding', 'A shortlist with sources and open questions'],
@@ -14,6 +15,7 @@ export function home(go, drafts, settings = {}) {
       h('h2', {}, settings.full_name ? 'What are we working on, ' + settings.full_name.split(' ')[0] + '?' : 'Your next piece of work starts here.'),
       h('p', {}, 'Research a question, write a letter or make sense of meeting notes. Leave with a document you can actually use.')),
       button('Try an example', () => go('brief?example=1'), 'quiet')),
+    openGarden ? gardenCard(openGarden) : null,
     !settings.full_name ? h('section', {class: 'profile-nudge'}, h('div', {}, h('strong', {}, 'Your details, ready for every draft'),
       h('p', {}, 'Add your name, group and contact details once. Sinter will complete the sign-off for you.')),
       button('Set up my details', () => go('settings'), 'primary')) : null,

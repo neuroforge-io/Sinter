@@ -2,6 +2,13 @@
 
 ## Unreleased - 0.5.4rc2.dev0
 
+- Open the complete fictional garden handover and campaign directly from Overview
+  or Getting started. Bundle all four practice sources, actions and historical
+  records; protect existing inputs and resume edits when switching the paired
+  editors. Practice copies are local and require no account or file import.
+- Keep local routes and security checks independent of optional model-account
+  callbacks. Model jobs retain their selected account identity; search remains
+  separate from model credentials. An account failure cannot block local saves.
 - Preserve a pending casebook source's title, text, date and link while changing
   pages. Saving, preparing and exporting explicitly require adding or clearing
   that source, preventing silent omissions. Pending text protects application exit.

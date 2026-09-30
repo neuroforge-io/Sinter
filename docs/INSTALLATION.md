@@ -59,6 +59,13 @@ Checks install the package, start the installed executable, serve its assets and
 
 Choose **Try an example** for a fictional offline demonstration. Use **Settings** for reading size, theme, motion and connection choices.
 
+On subsequent `0.5.4rc2.dev0` source development, Overview and Getting started
+also offer **Open garden handover** and **Open garden campaign**. These open the
+complete bundled fictional project without a file picker. Saved projects stay
+unchanged; opening starts an unsaved copy and switching the paired editors resumes
+your current session edits. The frozen 0.5.4rc1 installers do not include this newer
+entry; their walkthrough uses the supplied JSON backups instead.
+
 The desktop app selects an available local port. Keep the app running for watch checks. Use **Quit Sinter** in its navigation to stop the local process; closing a browser tab alone does not stop it. Source-launcher users can press Ctrl+C in the terminal.
 
 Reports and preferences are local and unencrypted. Unsaved browser work is not a backup. Export or save before quitting. Uninstalling a core application does not delete `~/.sinter`; remove that directory only after preserving any reports you need. Model caches are managed separately by the optional speech tools.

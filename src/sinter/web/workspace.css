@@ -1,4 +1,15 @@
 /* Task navigation, readable results and a focused workspace. */
+.garden-practice-card{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px 32px;padding:24px;margin:0 0 24px;border:1px solid var(--edge);border-radius:var(--radius);background:var(--surface)}
+.garden-practice-intro h3{margin:10px 0;font-size:1.4rem}
+.garden-practice-intro p{color:var(--muted);font-size:.9rem;margin:0;max-width:48em}
+.garden-practice-choices{display:grid;gap:12px;align-content:center}
+.garden-practice-choices>div{display:grid;gap:4px}
+.garden-practice-choices .button{justify-content:start}
+.garden-practice-choices small{font-size:.75rem}
+.garden-practice-card>.fine{grid-column:1/-1;margin:0;padding-top:14px;border-top:1px solid var(--line)}
+.garden-practice-guide{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:12px;padding:16px 20px;background:var(--surface);margin-bottom:20px}
+.garden-practice-guide p{font-size:.88rem;color:var(--muted);margin:8px 0 12px;max-width:65em}
+@media(max-width:650px){.garden-practice-card{grid-template-columns:minmax(0,1fr);gap:18px;padding:20px}}
 .sidebar{width:248px;padding:22px 14px 16px;scrollbar-width:thin}
 .shell{margin-left:248px}
 .brand{padding:0 12px 18px}

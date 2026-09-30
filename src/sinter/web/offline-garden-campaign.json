@@ -1,0 +1,173 @@
+{
+  "schema": "sinter-campaign/v1",
+  "title": "Fictional garden project - actions and funding review",
+  "organisation": "Fictional School Community Association",
+  "objective": "Practise a useful handover: record an equipment quote task, review funding conditions and keep unknown owners, proposed dates and historical evidence visible. This is a fictional example, not a real funding search.",
+  "signatory": "",
+  "sender_role": "",
+  "contact_details": "",
+  "opportunities": [
+    {
+      "name": "Fictional garden programme - practice only",
+      "funder": "Fictional demonstration programme",
+      "url": "https://example.invalid/garden/current",
+      "deadline": "",
+      "application_window": "unknown",
+      "window_source_id": "",
+      "window_source_url": "",
+      "window_source_quote": "",
+      "window_checked_at": "",
+      "decision_window": "",
+      "ceiling": null,
+      "fit": "A fictional description mentions school garden materials. Applicant conditions, exclusions and the application window remain unchecked.",
+      "route_type": "cash_grant",
+      "application_mode": "unknown",
+      "applicant": "",
+      "applicant_confirmed": false,
+      "status": "clarification"
+    },
+    {
+      "name": "Earlier fictional round - closed",
+      "funder": "Fictional earlier programme",
+      "url": "https://example.invalid/garden/earlier",
+      "deadline": "",
+      "application_window": "unknown",
+      "window_source_id": "",
+      "window_source_url": "",
+      "window_source_quote": "",
+      "window_checked_at": "",
+      "decision_window": "",
+      "ceiling": null,
+      "fit": "Historical practice record only. Do not copy its answer as a current application.",
+      "route_type": "cash_grant",
+      "application_mode": "required",
+      "applicant": "Fictional association - unconfirmed",
+      "applicant_confirmed": false,
+      "status": "closed"
+    }
+  ],
+  "requirements": [
+    {
+      "opportunity": "Fictional garden programme - practice only",
+      "rule": "Confirm applicant conditions and exclusions",
+      "status": "unknown",
+      "evidence": "No current applicant evidence or official guidance has been verified.",
+      "source_id": "",
+      "source_url": "",
+      "source_quote": "",
+      "checked_at": ""
+    },
+    {
+      "opportunity": "Fictional garden programme - practice only",
+      "rule": "Recheck the earlier supported-cost wording",
+      "status": "met",
+      "evidence": "Deliberate practice example of an older user mark. Source metadata now differs; this is not verified eligibility.",
+      "source_id": "72512aa1bd5c5c8fdb5e098849cb6399",
+      "source_url": "https://example.invalid/garden/earlier",
+      "source_quote": "This fictional example supports school garden materials.",
+      "checked_at": "2026-09-12"
+    },
+    {
+      "opportunity": "Fictional garden programme - practice only",
+      "rule": "Confirm the current application window",
+      "status": "unknown",
+      "evidence": "No closing date has been confirmed. The action target is not a programme deadline.",
+      "source_id": "",
+      "source_url": "",
+      "source_quote": "",
+      "checked_at": ""
+    },
+    {
+      "opportunity": "Earlier fictional round - closed",
+      "rule": "Earlier applicant check - historical only",
+      "status": "unknown",
+      "evidence": "Retained as historical context, not a current requirement.",
+      "source_id": "",
+      "source_url": "",
+      "source_quote": "",
+      "checked_at": ""
+    }
+  ],
+  "answers": [
+    {
+      "opportunity": "Earlier fictional round - closed",
+      "label": "Earlier project description - historical",
+      "text": "Historical fictional draft: a garden project was discussed. Costs, applicant conditions and permission were never confirmed. Not submitted.",
+      "limit": 400,
+      "status": "draft"
+    }
+  ],
+  "budget": [
+    {
+      "item": "Garden materials - itemised quote pending",
+      "opportunity": "Fictional garden programme - practice only",
+      "quantity": 1,
+      "unit_cost": null,
+      "quote_reference": ""
+    }
+  ],
+  "actions": [
+    {
+      "opportunity": "Fictional garden programme - practice only",
+      "scope_confirmed": true,
+      "submission_phase": "pre_submission",
+      "task": "Check current funder guidelines",
+      "owner": "",
+      "owner_kind": "unassigned",
+      "owner_confirmed": false,
+      "due": "",
+      "status": "open"
+    },
+    {
+      "opportunity": "Fictional garden programme - practice only",
+      "scope_confirmed": true,
+      "submission_phase": "pre_submission",
+      "task": "Obtain equipment quote - recorded as in progress in the original practice table",
+      "owner": "Fictional treasurer",
+      "owner_kind": "unknown",
+      "owner_confirmed": false,
+      "due": "2026-10-09",
+      "status": "open"
+    },
+    {
+      "opportunity": "Fictional garden programme - practice only",
+      "scope_confirmed": true,
+      "submission_phase": "pre_submission",
+      "task": "Confirm who will coordinate volunteer watering",
+      "owner": "Volunteer coordinator (suggested role)",
+      "owner_kind": "role",
+      "owner_confirmed": false,
+      "due": "",
+      "status": "open"
+    },
+    {
+      "opportunity": "Earlier fictional round - closed",
+      "scope_confirmed": true,
+      "submission_phase": "pre_submission",
+      "task": "Review last-round notes before reusing any answers",
+      "owner": "",
+      "owner_kind": "unassigned",
+      "owner_confirmed": false,
+      "due": "",
+      "status": "open"
+    }
+  ],
+  "sources": [
+    {
+      "id": "72512aa1bd5c5c8fdb5e098849cb6399",
+      "title": "Fictional garden guidance - current register entry",
+      "url": "https://example.invalid/garden/current",
+      "notes": "Fictional practice wording only. No website was opened or verified. This fictional example supports school garden materials.",
+      "checked_at": "2026-09-30"
+    },
+    {
+      "id": "18f21991c5ab1446f87ff749a04f2cfd",
+      "title": "Earlier fictional planning note",
+      "url": "https://example.invalid/garden/earlier",
+      "notes": "Historical practice record. Earlier user marks and draft text do not establish eligibility or submission.",
+      "checked_at": "2026-09-12"
+    }
+  ],
+  "communications": [],
+  "assets": []
+}
