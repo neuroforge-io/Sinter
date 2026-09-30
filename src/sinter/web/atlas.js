@@ -12,10 +12,10 @@ export function atlasPage({setBusy, remember, seed = {}}) {
   const root = h('div', {class: 'stack'});
   const controls = [];
   const rememberNow = () => remember('atlas', {title: 'Knowledge atlas', document, question: question.input.value});
-  question.input.addEventListener('input', rememberNow);
+  question.input.addEventListener('input', () => { consent.input.checked = false; rememberNow(); });
   async function accept(value) {
     const info = await request('/api/atlas/inspect', {data: {document: value}});
-    document = value; rememberNow();
+    document = value; consent.input.checked = false; rememberNow();
     summary.replaceChildren(notice(`${info.item_count} indexed items. Snapshot: ${info.snapshot_id}. Producer integrity: ${info.producer_integrity}.`),
       h('details', {}, h('summary', {}, 'Provenance and limitations'), ...info.warnings.map(w => h('p', {}, w))));
     result.replaceChildren();
@@ -33,6 +33,7 @@ export function atlasPage({setBusy, remember, seed = {}}) {
     announce('Knowledge context ready for review.');
   }
   input.input.addEventListener('change', () => task(async () => {
+    consent.input.checked = false;
     const file = input.input.files[0];
     if (!file || file.size > 4194304) throw new Error('Choose a JSON export smaller than 4 MB.');
     await accept(JSON.parse(await file.text()));
@@ -42,6 +43,7 @@ export function atlasPage({setBusy, remember, seed = {}}) {
     show(await request('/api/atlas/context', {data: {document, question: question.input.value}}));
   }), 'primary');
   const local = button('Read context from local RKC', () => task(async () => {
+    consent.input.checked = false;
     const value = await request('/api/atlas/retrieve', {data: {question: question.input.value}});
     await accept(value.document); show(await request('/api/atlas/context', {data: {document, question: question.input.value}}));
   }), 'quiet');

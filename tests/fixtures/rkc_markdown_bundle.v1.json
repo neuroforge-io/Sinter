@@ -1,0 +1,80 @@
+{
+  "snapshot": {
+    "schema_version": "0.2.0",
+    "id": "rkc:snapshot:eb0a427f75002a38efdf4c30"
+  },
+  "artifacts": [
+    {
+      "id": "rkc:artifact:2be09df08f95165bf021e56d",
+      "path": "handbook.md",
+      "kind": "file"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "fictional-lantern-lending-section",
+      "name": "Lantern lending period",
+      "kind": "document_section",
+      "artifact_id": "rkc:artifact:2be09df08f95165bf021e56d",
+      "source": {
+        "artifact_id": "rkc:artifact:2be09df08f95165bf021e56d",
+        "path": "handbook.md",
+        "start_line": 5,
+        "end_line": 9,
+        "anchor": "lantern-lending-period"
+      },
+      "evidence_ids": [
+        "fictional-lantern-markdown-evidence"
+      ]
+    }
+  ],
+  "edges": [],
+  "evidence": [
+    {
+      "id": "fictional-lantern-markdown-evidence",
+      "kind": "documentation_asserted",
+      "method": "markdown.heading",
+      "confidence": 1,
+      "source": {
+        "artifact_id": "rkc:artifact:2be09df08f95165bf021e56d",
+        "path": "handbook.md",
+        "start_line": 5,
+        "end_line": 9,
+        "anchor": "lantern-lending-period"
+      }
+    }
+  ],
+  "diagnostics": [],
+  "documents": [
+    {
+      "id": "rkc:document:e34275c5166d14aae9ff52ec",
+      "kind": "source_document",
+      "title": "Lantern library handbook",
+      "path": "handbook.md",
+      "generator": "rkc.markdown",
+      "generator_version": "0.2.0",
+      "status": "validated",
+      "attributes": {
+        "artifact_id": "rkc:artifact:2be09df08f95165bf021e56d"
+      },
+      "sections": [
+        {
+          "id": "fictional-lantern-lending-section",
+          "ordinal": 0,
+          "heading": "Lantern lending period",
+          "markdown": "## Lantern lending period\n\nLantern lending period is 14 days.\nLantern renewals are allowed once.",
+          "plain_text": "## Lantern lending period\n\nLantern lending period is 14 days.\nLantern renewals are allowed once.",
+          "evidence_ids": [
+            "fictional-lantern-markdown-evidence"
+          ],
+          "attributes": {
+            "level": 2,
+            "anchor": "lantern-lending-period",
+            "start_line": 5,
+            "end_line": 9
+          }
+        }
+      ]
+    }
+  ]
+}

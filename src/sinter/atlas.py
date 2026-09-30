@@ -39,6 +39,132 @@ def _string(value, label, maximum=4000, required=False):
     return text(value, label, maximum, required)
 
 
+def _references(value, available=None):
+    if value is None:
+        value = []
+    if (not isinstance(value, list) or len(value) > MAX_RECORDS
+            or any(not isinstance(v, str) or len(v) > 300 for v in value)):
+        raise ValueError('Evidence references must be bounded text identifiers.')
+    if available is not None and any(v not in available for v in value):
+        raise ValueError('A bundle evidence reference has no supplied evidence object.')
+    return list(value)
+
+
+def _source(value, path='', artifact_id='', paths=None):
+    """Keep producer object coordinates separate from retained excerpt offsets."""
+    if value is None:
+        return None
+    strings = {'artifact_id': 300, 'path': 4000, 'anchor': 4000}
+    coordinates = {'start_byte', 'end_byte', 'start_line', 'end_line',
+                   'start_column', 'end_column'}
+    if not isinstance(value, dict) or set(value) - strings.keys() - coordinates:
+        raise ValueError('Invalid RKC source location fields.')
+    result = {key: _string(v, 'Source '+key, strings[key])
+              for key, v in value.items() if key in strings}
+    _string(result.get('path'), 'Source path', 4000, True)
+    for key in coordinates & value.keys():
+        if type(value[key]) is not int or value[key] < 0:
+            raise ValueError('Source coordinates must be nonnegative integers.')
+        result[key] = value[key]
+    start, end = result.get('start_byte', 0), result.get('end_byte', 0)
+    first, last = result.get('start_line', 0), result.get('end_line', 0)
+    if end and end < start or first and last and last < first:
+        raise ValueError('The RKC source range is reversed.')
+    if first and first == last and result.get('end_column', 0) < result.get('start_column', 0):
+        raise ValueError('The RKC source column range is reversed.')
+    if path and result['path'] != path:
+        raise ValueError('The RKC source path disagrees with its object path.')
+    supplied_artifact = result.get('artifact_id', '')
+    if artifact_id and supplied_artifact and supplied_artifact != artifact_id:
+        raise ValueError('The RKC source artifact disagrees with its node.')
+    if paths is not None and supplied_artifact:
+        if supplied_artifact not in paths or paths[supplied_artifact] != result['path']:
+            raise ValueError('The RKC source artifact or path is not bound in this bundle.')
+    return result
+
+
+def _markdown_sections(document, nodes, paths, available_evidence):
+    """Enrich existing Markdown nodes; never mint a new remote citation type."""
+    selected, seen_documents, total = {}, set(), 0
+    documents = document.get('documents')
+    if documents is None:
+        documents = []
+    for index, row in enumerate(_rows(documents, 'Documents')):
+        identifier = _string(row.get('id'), 'Document ID', 300, True)
+        if identifier in seen_documents:
+            raise ValueError('Duplicate document identities in this atlas.')
+        seen_documents.add(identifier)
+        if row.get('kind') != 'source_document':
+            continue
+        path = _string(row.get('path', ''), 'Document source path', 4000)
+        attributes = row.get('attributes')
+        if attributes is None:
+            attributes = {}
+        if not isinstance(attributes, dict):
+            raise ValueError('Invalid RKC document attributes.')
+        artifact_id = _string(attributes.get('artifact_id', ''), 'Document artifact ID', 300)
+        if artifact_id and (artifact_id not in paths or path and paths[artifact_id] != path):
+            raise ValueError('The document source artifact or path disagrees with the bundle.')
+        generator = _string(row.get('generator'), 'Document generator', 300, True)
+        status = _string(row.get('status'), 'Document status', 100, True)
+        if status not in {'draft', 'validated', 'rejected', 'published', 'stale'}:
+            raise ValueError('Invalid RKC document status.')
+        seen_sections = set()
+        sections = row.get('sections')
+        if sections is None:
+            sections = []
+        for offset, section in enumerate(_rows(sections, 'Document sections')):
+            total += 1
+            if total > MAX_RECORDS:
+                raise ValueError('Too many document sections in this atlas.')
+            section_id = _string(section.get('id'), 'Section ID', 300, True)
+            if section_id in seen_sections:
+                raise ValueError('Duplicate section identities in an RKC document.')
+            seen_sections.add(section_id)
+            ordinal = section.get('ordinal')
+            if type(ordinal) is not int or ordinal < 0:
+                raise ValueError('Document section order must be a nonnegative integer.')
+            field = 'markdown'
+            content = _string(section.get(field, ''), 'Section Markdown', 262144)
+            if not content.strip():
+                field = 'plain_text'
+                content = _string(section.get(field, ''), 'Section plain text', 262144)
+            references = _references(section.get('evidence_ids'), available_evidence)
+            node = nodes.get(section_id)
+            if not node or node['kind'] != 'document_section' or not content.strip():
+                continue
+            if not path and not artifact_id:
+                raise ValueError('A source-document section needs a supplied source binding.')
+            node_artifact = node.get('artifact_id') or node.get('source', {}).get('artifact_id')
+            if path and node['path'] != path or artifact_id and node_artifact != artifact_id:
+                raise ValueError('The document section does not match its source node.')
+            section_attributes = section.get('attributes')
+            if section_attributes is None:
+                section_attributes = {}
+            if not isinstance(section_attributes, dict):
+                raise ValueError('Invalid RKC section attributes.')
+            source = node.get('source', {})
+            for key in ('anchor', 'start_line', 'end_line'):
+                if key in section_attributes:
+                    value = section_attributes[key]
+                    if key == 'anchor':
+                        _string(value, 'Section anchor', 4000)
+                    elif type(value) is not int or value < 0:
+                        raise ValueError('Section coordinates must be nonnegative integers.')
+                    if key in source and value != source[key]:
+                        raise ValueError('The section source location disagrees with its node.')
+            if section_id in selected:
+                raise ValueError('An RKC node has ambiguous document-section bodies.')
+            selected[section_id] = {
+                'text': content, 'pointer': f'/documents/{index}/sections/{offset}/{field}',
+                'evidence_ids': list(dict.fromkeys(node['evidence_ids'] + references)),
+                'document_id': identifier, 'section_id': section_id,
+                'document_kind': 'source_document', 'generator': generator,
+                'document_status': status,
+            }
+    return selected
+
+
 def validate(document: dict) -> dict:
     """Return a bounded working view plus provenance; never read paths in an atlas."""
     if not isinstance(document, dict) or len(_json(document).encode('utf-8')) > MAX_BYTES:
@@ -62,11 +188,7 @@ def validate(document: dict) -> dict:
             if citation != expected:
                 raise ValueError('A context citation does not match its snapshot and object identity.')
             content = _string(row.get('text'), 'Indexed excerpt', 262144)
-            evidence_ids = row.get('evidence_ids')
-            if evidence_ids is None:
-                evidence_ids = []
-            if not isinstance(evidence_ids, list) or any(not isinstance(v, str) or len(v) > 300 for v in evidence_ids):
-                raise ValueError('Evidence references must be text identifiers.')
+            evidence_ids = _references(row.get('evidence_ids'))
             if type(row.get('score')) not in (int, float) or not math.isfinite(row['score']):
                 raise ValueError('The context score must be finite.')
             items.append({'id': citation, 'object_id': identifier, 'object_type': object_type,
@@ -74,6 +196,10 @@ def validate(document: dict) -> dict:
                           'path': _string(row.get('path'), 'Source path', 4000), 'text': content,
                           'pointer': f'/items/{len(items)}/text', 'evidence_ids': list(evidence_ids),
                           'kind': _string(row.get('kind', ''), 'Kind', 100)})
+            source = _source(row.get('source'), items[-1]['path'],
+                             artifact_id=identifier if object_type == 'artifact' else '')
+            if source is not None:
+                items[-1]['source'] = source
         if document['truncated']:
             warnings.append('RKC marked this context packet as truncated; it is not an exhaustive atlas.')
         supplied = document.get('warnings', [])
@@ -94,21 +220,42 @@ def validate(document: dict) -> dict:
             if value is None and field in {'edges', 'evidence', 'diagnostics'}:
                 value = []
             _rows(value, field)
-        paths = {row.get('id'): row.get('path', '') for row in document['artifacts'] if isinstance(row.get('id'), str)}
+        paths = {}
+        for row in document['artifacts']:
+            identifier = _string(row.get('id'), 'Artifact ID', 300, True)
+            if identifier in paths:
+                raise ValueError('Duplicate artifact identities in this atlas.')
+            paths[identifier] = _string(row.get('path', ''), 'Artifact path', 4000)
+        available_evidence = set()
+        for row in document.get('evidence') or []:
+            identifier = _string(row.get('id'), 'Evidence ID', 300, True)
+            if identifier in available_evidence:
+                raise ValueError('Duplicate evidence identities in this atlas.')
+            available_evidence.add(identifier)
         for index, row in enumerate(document['nodes']):
             identifier = _string(row.get('id'), 'Node ID', 300, True)
             title = _string(row.get('name'), 'Node name', 2000, True)
             kind = _string(row.get('kind'), 'Node kind', 100, True)
             signature = _string(row.get('signature', ''), 'Signature', 20000)
-            source = row.get('source', {})
-            if not isinstance(source, dict):
-                raise ValueError('Invalid RKC node source.')
-            path = _string(source.get('path', paths.get(row.get('artifact_id', ''), '')), 'Source path', 4000)
+            artifact_id = _string(row.get('artifact_id', ''), 'Node artifact ID', 300)
+            if artifact_id and artifact_id not in paths:
+                raise ValueError('An RKC node references an artifact absent from this bundle.')
+            source = _source(row.get('source'), artifact_id=artifact_id, paths=paths)
+            path = _string((source or {}).get('path', paths.get(artifact_id, '')), 'Source path', 4000)
             citation = hashlib.sha256((snapshot + '\0node\0' + identifier).encode()).hexdigest()
             items.append({'id': citation, 'object_id': identifier, 'object_type': 'node', 'title': title,
                           'path': path, 'text': signature or title, 'kind': kind,
-                          'pointer': f'/nodes/{index}/' + ('signature' if signature else 'name'), 'evidence_ids': []})
-        warnings.append('Bundle search uses exact node names/signatures, not complete source files. Connect to the RKC context service for richer indexed excerpts.')
+                          'pointer': f'/nodes/{index}/' + ('signature' if signature else 'name'),
+                          'evidence_ids': _references(row.get('evidence_ids'), available_evidence)})
+            if source is not None:
+                items[-1]['source'] = source
+        node_bindings = {row['object_id']: {**row, 'artifact_id': document['nodes'][index].get('artifact_id', '')}
+                         for index, row in enumerate(items)}
+        sections = _markdown_sections(document, node_bindings, paths, available_evidence)
+        for row in items:
+            if row['object_id'] in sections:
+                row.update(sections[row['object_id']])
+        warnings.append('Bundle search uses exact node names/signatures and supplied source-document sections bound to matching document-section nodes, not complete source files. Other document content is not imported. Connect to the RKC context service for richer indexed excerpts.')
     else:
         raise ValueError('Choose bundle.json or a packet with schema_version rkc-context/v1.')
     if len({row['id'] for row in items}) != len(items):
@@ -149,8 +296,16 @@ def context(document, question):
              'Question: '+literal(question), 'RKC snapshot: '+literal(view['snapshot_id'])]
     for index, row in enumerate(chosen, 1):
         lines += [f"## [{index}] {literal(row['title'])}", 'Source: '+literal(row['path']),
-                  'Citation ID: '+row['id'], 'JSON location: '+row['pointer'],
-                  '> '+literal(row['text']).replace('\n', '\n> ')]
+                  'Citation ID: '+row['id'], 'JSON location: '+row['pointer']]
+        if 'source' in row:
+            lines.append('Source object location (producer metadata; not excerpt offsets): '
+                         + literal(_json(row['source'])))
+        if 'document_id' in row:
+            lines.append('Document section: '+literal(row['document_id'])+' / '
+                         + literal(row['section_id'])+'; generator: '
+                         + literal(row['generator'])+'; producer status: '
+                         + literal(row['document_status']))
+        lines.append('> '+literal(row['text']).replace('\n', '\n> '))
     lines += ['## Review notes'] + ['- '+literal(w) for w in result['warnings']]
     result['markdown'] = '\n\n'.join(lines)
     return result
