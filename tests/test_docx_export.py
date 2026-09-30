@@ -189,6 +189,85 @@ def test_tables_are_editable_keep_all_cells_and_repeat_header():
     ] == ["center", "right", "left"]
 
 
+def test_quoted_reference_paragraph_keeps_identity_and_range_on_one_page():
+    _, parts = package(
+        "## Passage reference key\n\n"
+        "> **Passage 5** — Original source: Fictional note\n"
+        "> Excerpt ID: `example-5`; source ID: `fictional-source`.\n"
+        "> Unicode characters: 12–85; quoted in the selected evidence appendix.\n\n"
+        "Ordinary following paragraph."
+    )
+    paragraphs = parts["word/document.xml"].findall("w:body/w:p", NS)
+    reference = next(item for item in paragraphs if text(item).startswith("Passage 5"))
+    assert "Excerpt ID: example-5" in text(reference)
+    assert "Unicode characters: 12–85" in text(reference)
+    assert reference.find("w:pPr/w:keepLines", NS) is not None
+    assert reference.find("w:pPr/w:keepNext", NS) is None
+    ordinary = next(item for item in paragraphs if text(item).startswith("Ordinary"))
+    assert ordinary.find("w:pPr/w:keepLines", NS) is None
+
+
+def test_bounded_source_caption_and_date_stay_with_one_quote_not_the_next_note():
+    markdown = (
+        "### Passage 6\n\n"
+        "> Original source: Fictional current scope.txt\n\n"
+        "> Source link (supplied): https://example.invalid/scope\n"
+        "> Date label (supplied): Source date (unverified): 2026-09-30\n\n"
+        "> The scope is one small fictional pilot; commitments are unknown.\n\n"
+        "> A separate unlinked quoted note.\n\n"
+        "> Original source: Compact fictional note\n\n"
+        "> No meeting has been confirmed."
+    )
+    _, parts = package(markdown)
+    paragraphs = parts["word/document.xml"].findall("w:body/w:p", NS)
+    chained = [
+        text(item)
+        for item in paragraphs
+        if item.find("w:pPr/w:keepNext", NS) is not None
+    ]
+    assert chained == [
+        "Original source: Fictional current scope.txt",
+        "Source link (supplied): https://example.invalid/scope\n"
+        "Date label (supplied): Source date (unverified): 2026-09-30",
+        "Original source: Compact fictional note",
+    ]
+    for item in paragraphs[1:]:
+        assert item.find("w:pPr/w:keepLines", NS) is not None
+    assert text(parts["word/document.xml"]).count("commitments are unknown") == 1
+
+
+@pytest.mark.parametrize(
+    "following",
+    [
+        "> " + "large" * 500,
+        "\n".join("> repeated line" for _ in range(21)),
+        "> ```text\n> literal code\n> ```",
+        "### Next passage",
+        "> Original source: A different source\n\n> Its separate quote.",
+        "| Item | Owner |\n| --- | --- |\n| Ask | Unknown |",
+    ],
+)
+def test_source_pagination_never_chains_oversized_or_ambiguous_blocks(following):
+    _, parts = package(
+        "> Original source: Fictional caption\n\n"
+        "> Source link (supplied): https://example.invalid/test\n"
+        "> Date label (supplied): Unknown\n\n" + following
+    )
+    paragraphs = parts["word/document.xml"].findall("w:body/w:p", NS)
+    caption, metadata = paragraphs[:2]
+    assert caption.find("w:pPr/w:keepNext", NS) is None
+    assert metadata.find("w:pPr/w:keepNext", NS) is None
+
+
+def test_source_pagination_does_not_promote_unrecognised_metadata_shape():
+    _, parts = package(
+        "> Original source: Fictional caption\n\n"
+        "> Source link (supplied): https://example.invalid/test\n"
+        "> An unrelated source statement.\n\n> A quoted note."
+    )
+    assert not parts["word/document.xml"].findall("w:body/w:p/w:pPr/w:keepNext", NS)
+
+
 def test_links_are_click_targets_only_and_dangerous_markup_is_literal():
     hostile = (
         '<script>alert("bad")</script>\n'

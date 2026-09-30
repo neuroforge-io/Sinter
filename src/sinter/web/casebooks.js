@@ -5,6 +5,8 @@ import {renderReport} from './reports.js';
 import {senderFields} from './profile.js';
 import {hasPendingSource, PENDING_SOURCE_MESSAGE} from './casebook-drafts.js';
 import {gardenGuide, GARDEN_PRACTICE} from './garden-practice.js';
+import {HANDOVER_EVIDENCE_OPTIONS, handoverEvidenceMode,
+  handoverExportNotice} from './casebook-handover.js';
 
 const example = () => ({schema: 'sinter-casebook/v1', title: 'Fictional P&C community evening',
   questions: 'Has the hall booking been confirmed?\nWhat access arrangements need checking?\nWho agreed to organise the volunteer roster?\nWhat is the insurance excess?',
@@ -28,6 +30,10 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   const title = field('Project name', 'text', seed.book?.title || '', 'For example: school garden proposal or volunteer handover.', {maxLength: 200});
   const questions = field('What do you need to find out?', 'textarea', seed.book?.questions || '', 'One question per line, up to 20. Missing answers stay visible.', {maxLength: 12000, rows: 5});
   const format = selectField('Prepare a', [['brief', 'Briefing note'], ['enquiry', 'Enquiry letter'], ['agenda', 'Agenda item'], ['handover', 'Volunteer handover']], seed.book?.document_type || 'brief');
+  const handoverEvidence = selectField('Evidence in source-only handover', HANDOVER_EVIDENCE_OPTIONS,
+    handoverEvidenceMode(seed.book), 'Word exports the document text you review or edit. The appendix carries selected passages, not all original sources; it does not establish answers.');
+  const showHandoverEvidence = () => { handoverEvidence.wrap.hidden = format.input.value !== 'handover'; };
+  showHandoverEvidence();
   const status = h('div', {'aria-live': 'polite'}), output = h('div', {class: 'stack', id: 'casebook-output'}), sources = h('div', {class: 'stack'});
   const catalogue = h('div', {class: 'casebook-shelf'}), totals = h('p', {class: 'muted'});
   const stop = button('Stop this task', async () => {
@@ -46,7 +52,8 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   const backup = field('Restore a casebook backup', 'file', '', 'Opens as a new unsaved project; existing casebooks are not overwritten.', {accept: '.json'});
   const editor = h('fieldset', {class: 'casebook-editor'});
   const value = () => ({schema: 'sinter-casebook/v1', title: title.input.value, questions: questions.input.value,
-    document_type: format.input.value, recipient: recipient.input.value, ...sender.values(), documents: docs});
+    document_type: format.input.value, recipient: recipient.input.value, ...sender.values(), documents: docs,
+    ...(handoverEvidence.input.value === 'selected_appendix' ? {handover_evidence: 'selected_appendix'} : {})});
   const pendingSource = () => ({title: name.input.value, content: contents.input.value,
     date: sourceDate.input.value, url: sourceURL.input.value});
   const sourcePanel = h('details', {class: 'card', open: !docs.length || hasPendingSource(pendingSource())});
@@ -91,6 +98,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     practice = null; practiceGuide.hidden = true;
     docs = book.documents; title.input.value = book.title; questions.input.value = book.questions || '';
     format.input.value = book.document_type || 'brief';
+    handoverEvidence.input.value = handoverEvidenceMode(book); showHandoverEvidence();
     recipient.input.value = book.recipient || '';
     for (const [key, entry] of Object.entries(sender.entries)) entry.input.value = book[key] ?? '';
     savedId = id; revision = rev;
@@ -151,13 +159,16 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     const draftButton = button('Prepare an optional AI draft', () => perform('draft', report.casebook_fingerprint), 'quiet'); draftButton.disabled = true;
     consent.input.addEventListener('change', () => draftButton.disabled = !consent.input.checked);
     preview.append(consent.wrap, draftButton);
-    output.replaceChildren(stats, gaps, renderReport(report));
+    const exportScope = handoverExportNotice(report);
+    output.replaceChildren(stats, gaps, ...(exportScope
+      ? [notice(exportScope)] : []), renderReport(report));
     if (report.excerpts.length && !report.model_draft) output.append(preview);
   }
   title.input.addEventListener('input', changed); questions.input.addEventListener('input', changed);
   recipient.input.addEventListener('input', changed);
   sender.panel.addEventListener('input', changed);
-  format.input.addEventListener('change', changed);
+  format.input.addEventListener('change', () => { showHandoverEvidence(); changed(); });
+  handoverEvidence.input.addEventListener('change', changed);
   for (const entry of [name, contents, sourceDate, sourceURL]) entry.input.addEventListener('input', rememberCurrent);
   upload.input.addEventListener('change', async () => {
     if (busy) return;
@@ -198,7 +209,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
       load(example()); status.replaceChildren(notice('Fictional example. No real venue, person or decision is represented.'));
     }), button('New project', () => { if (canReplace()) load({title: '', questions: '', documents: []}); }, 'quiet')),
     sourcePanel,
-    totals, sources, format.wrap, recipient.wrap, sender.panel,
+    totals, sources, format.wrap, handoverEvidence.wrap, recipient.wrap, sender.panel,
     h('div', {class: 'casebook-actions'}, button('Prepare source-only report', () => perform('build'), 'primary'),
       button('Save project', async () => { lock(true); try { await save(); status.replaceChildren(notice(`Saved revision ${revision}. This saves the project inputs; use Save to this computer on an edited report to keep that draft. Local storage is not encrypted.`, 'success')); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } finally { lock(false); } }),
       button('Export project backup', () => { try { admitPending(); download('sinter-casebook.json', JSON.stringify(value(), null, 2), 'application/json'); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } })),

@@ -22,6 +22,35 @@ without wording matches and documents not represented in the selection. A lexica
 match **does not mean a question was answered**, and no match does not prove absence.
 Read the originals for qualifications, negation, contradictions and chronology.
 
+## Choose what a source-only handover carries
+
+The default **Compact notes** handover quotes up to four selected passages. Its
+reference key identifies later passages, which remain in Sinter's Evidence view.
+This format is useful for a short checklist, but it does not carry every selected
+passage into Word.
+
+For a reader who needs the selected wording without Sinter, choose **Include every
+selected passage · with appendix** under **Evidence in source-only handover**.
+Prepare the report again. The first four passages stay in the main notes; later
+selected passages appear in its appendix with supplied source titles, links and
+date labels. The reference key retains exact source/excerpt identities and Unicode
+ranges. Sinter keeps each quoted paragraph together in Word when it fits on a page;
+bounded source captions and date labels stay with their next quoted note. Long or
+unsupported layouts can still cross pages.
+
+This option reproduces the existing selection, not all original sources or their
+unselected surrounding text. It does not answer the questions, verify source
+metadata, accept owners or confirm dates. Inspect the selection and originals
+before sharing. **Download Word** exports the document wording currently shown;
+applied edits can change or remove evidence. The option applies to source-only
+handovers, not optional model-generated drafts.
+
+The explicit choice survives project save, reopen and backup restore. Changing it
+retires the current preparation and invalidates its old model-transfer preview;
+prepare again before using the new scope. Historical saved reports and exports
+retain their original wording. Share a project backup separately if the reader
+needs the full admitted collection.
+
 ## Save, reopen and hand over
 
 **Save project** writes to the local Sinter workspace. A revision check prevents a

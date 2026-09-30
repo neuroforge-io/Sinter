@@ -17,7 +17,7 @@ summary{cursor:pointer;min-height:2.75rem;align-content:center}
 }
 
 /* Casebooks: readable editorial hierarchy without heavyweight UI dependencies. */
-.casebook-editor{border:1px solid var(--line);border-radius:1.2rem;padding:clamp(1rem,3vw,2rem);min-width:0;display:grid;gap:1.2rem}
+.casebook-editor{border:1px solid var(--line);border-radius:1.2rem;padding:clamp(1rem,3vw,2rem);min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:1.2rem}
 .casebook-editor legend{font-weight:750;font-size:1.15rem;padding:0 .6rem}
 .casebook-editor:disabled{opacity:.8}
 .casebook-shelf{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:1rem}

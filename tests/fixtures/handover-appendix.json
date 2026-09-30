@@ -1,0 +1,51 @@
+{
+  "schema": "sinter-casebook/v1",
+  "title": "Fictional self-contained pilot handover",
+  "organisation": "Fictional Community Association",
+  "document_type": "handover",
+  "questions": "preparationmarker?\nbudgetmarker?\nbackgroundmarker?\nhistorymarker?\nmeetingmarker?\nscopemarker?\nipmarker?\nownermarker?\nfinalmarker?",
+  "documents": [
+    {
+      "title": "Fictional preparation and budget.md",
+      "content": "preparationmarker The fictional preparation has no approval or commitment. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \nbudgetmarker The fictional budget is unknown; cash matching is not available. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \nUNSELECTED ORIGINAL CONTEXT: this unrelated retained wording must not enter the appendix. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. ",
+      "url": "https://example.invalid/fictional/preparation",
+      "date": "2026-09-01"
+    },
+    {
+      "title": "Fictional background and history.md",
+      "content": "backgroundmarker The fictional background is supplied for context only. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \nhistorymarker The earlier fictional request is superseded historical wording. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. ",
+      "url": "https://example.invalid/fictional/history",
+      "date": "2026-08-25"
+    },
+    {
+      "title": "Fictional proposed meeting.txt",
+      "content": "meetingmarker The fictional meeting time is 09:45 on 7 October; it is proposed, not confirmed.",
+      "url": "https://example.invalid/fictional/source-3",
+      "date": "2026-09-30"
+    },
+    {
+      "title": "Fictional current scope.txt",
+      "content": "scopemarker The current fictional scope is one small pilot; further commitments are unknown.",
+      "url": "https://example.invalid/fictional/source-4",
+      "date": "2026-09-30"
+    },
+    {
+      "title": "Fictional IP review.txt",
+      "content": "ipmarker Fictional IP ownership and novelty remain unverified; seek qualified review.",
+      "url": "https://example.invalid/fictional/source-5",
+      "date": "2026-09-30"
+    },
+    {
+      "title": "Fictional ownership.txt",
+      "content": "ownermarker No named person has accepted the fictional follow-up; the role is unassigned.",
+      "url": "https://example.invalid/fictional/source-6",
+      "date": "2026-09-30"
+    },
+    {
+      "title": "Fictional unanswered final question.txt",
+      "content": "finalmarker The final fictional answer remains unknown — ask 李 😀 before relying on it.",
+      "url": "https://example.invalid/fictional/source-7",
+      "date": "2026-09-30"
+    }
+  ]
+}

@@ -14,6 +14,7 @@ from .document_markup import inline
 from .evidence import Excerpt, Source, literal, validate_excerpt
 
 MAX_NOTES = 4
+EVIDENCE_MODES = frozenset({"compact", "selected_appendix"})
 MAX_TABLE_ROWS = 40
 MAX_TABLE_COLUMNS = 12
 _LINE_BREAKS = "\r\n\v\f\x85\u2028\u2029"
@@ -245,8 +246,14 @@ def render(
     sources: list[Source],
     selected: list[Excerpt],
     questions: list[dict],
+    *,
+    include_selected_appendix: bool = False,
 ) -> str:
     """Format selected wording and question-specific checks; never mark answers."""
+    if type(include_selected_appendix) is not bool:
+        raise ValueError(
+            "Selected evidence appendix must be explicitly enabled or disabled."
+        )
     records = reference_records(sources, selected)
     by_source = {source.id: source for source in sources}
     by_excerpt = {record["excerpt_id"]: record for record in records}
@@ -293,23 +300,55 @@ def render(
         ]
     )
     displayed = selected[:MAX_NOTES]
-    if selected:
+    if include_selected_appendix:
+        # Selected excerpts are already admitted, bounded and exact. This mode
+        # changes document presentation only; it never selects more evidence.
+        lines[-1] = (
+            "This document reproduces every selected passage, not every original "
+            "source or its unselected surrounding text. Selection does not "
+            "answer the questions or confirm commitments. Full originals remain "
+            "in the project backup."
+        )
+        source_count = len({item.source_id for item in selected})
+        lines.append(
+            f"Including all {len(selected)} selected passages from "
+            f"{source_count} source{'s' if source_count != 1 else ''}. "
+            "This is not an exhaustive source review."
+        )
+    elif selected:
         source_count = len({item.source_id for item in displayed})
         lines.append(
             f"Showing {len(displayed)} of {len(selected)} selected passages from "
             f"{source_count} source{'s' if source_count != 1 else ''}. All selected "
             "passages remain available in Evidence."
         )
-    for excerpt in displayed:
+
+    def quoted_passage(excerpt):
         source = by_source[excerpt.source_id]
+        note = ["### " + by_excerpt[excerpt.id]["label"], _source_caption(source.title)]
+        if include_selected_appendix:
+            note.append(
+                "> Source link (supplied): "
+                + literal(source.url or "Not supplied")
+                + "\n> Date label (supplied): "
+                + literal(source.retrieved_at or "Unknown")
+            )
+        return note + [_source_quote(source, excerpt)]
+
+    for excerpt in displayed:
+        lines.extend(quoted_passage(excerpt))
+    if include_selected_appendix and len(selected) > MAX_NOTES:
         lines.extend(
             [
-                "### " + by_excerpt[excerpt.id]["label"],
-                _source_caption(source.title),
-                _source_quote(source, excerpt),
+                "## Selected evidence appendix",
+                "The remaining selected passages are reproduced below for readers "
+                "without Sinter's Evidence view. They remain supplied source wording, "
+                "not verified answers, accepted responsibilities or confirmed dates.",
             ]
         )
-    if len(selected) > MAX_NOTES:
+        for excerpt in selected[MAX_NOTES:]:
+            lines.extend(quoted_passage(excerpt))
+    elif len(selected) > MAX_NOTES:
         lines.append(
             f"{len(selected) - MAX_NOTES} additional selected passages "
             "remain in Evidence. This handover is not a full source review."
@@ -333,13 +372,17 @@ def render(
             scope = (
                 "quoted above."
                 if number < MAX_NOTES
+                else "quoted in the selected evidence appendix."
+                if include_selected_appendix
                 else "Evidence only — not reproduced in this document. "
                 "Read its exact wording in Evidence."
             )
             # One quoted paragraph keeps each identity/range mapping together.
             # The supplied title remains inside the literal metadata boundary.
             lines.append(
-                "> **" + record["label"] + "** — "
+                "> **"
+                + record["label"]
+                + "** — "
                 + _source_caption(source.title)[2:]
                 + "\n> Excerpt ID: "
                 + _literal_code(record["excerpt_id"])

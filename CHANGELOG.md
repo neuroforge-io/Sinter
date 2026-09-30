@@ -5,6 +5,24 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Add an explicit source-only handover option that includes every selected
+  passage, with later passages in a self-contained appendix. Preserve the compact
+  default, exact references, original inputs and historical reports; save and
+  fingerprint the choice. Explain the limits of selection and Word's current
+  document wording. Keep quoted Word paragraphs together when they fit a page,
+  and pair bounded source metadata with its next note without chaining a dossier.
+- Keep casebook inputs within the window after resizing, including cached source
+  details and opened backup controls on narrow screens.
+- Copy, download, print and saving to the campaign log now ask you to apply or cancel pending draft edits
+  instead of silently exporting the earlier wording; pending text remains in
+  the editor.
+- Count each product/evidence record once against campaign capacity; show size
+  estimates before saving. Existing 200,000-character/1 MB limits and
+  oversized-edit backup/retry recovery remain enforced.
+- Saved campaign sources can be selected through visible matching buttons, with
+  duplicate names distinguished by source IDs; searching alone does not change a
+  link.
+
 - Search campaign communications by their saved wording, filter by route or
   campaign-wide scope, and choose record, newest or oldest order. Undated entries
   stay explicit. View changes preserve canonical record order, pending edits and

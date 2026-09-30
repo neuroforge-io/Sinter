@@ -77,6 +77,11 @@ export function documentMarkdown(report) {
     ? marker + '\n\n' + content : content;
 }
 
+/** An unchanged open editor can export; changed wording needs an explicit choice. */
+export function hasUnappliedDocumentEdits(current, text, open) {
+  return open === true && text !== current;
+}
+
 export function plainDocument(value) {
   // Read a detached, safe DOM tree. Copying never exposes Markdown escapes or markup.
   const node = markdown(value);
@@ -156,6 +161,7 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
       + 'in this download', false)
     : null;
   const word = button(isCampaign ? 'Download Word brief (.docx)' : 'Download Word (.docx)', async () => {
+    if (!canUseDocument()) return;
     word.disabled = true;
     try {
       const content = await request('/api/documents/docx', {data: {title: report.document_title || report.title || 'Sinter draft', markdown: documentMarkdown(report)}, responseType: 'blob'});
@@ -165,6 +171,13 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
     finally { word.disabled = false; }
   });
   const input = field(isCampaign ? 'Edit the decision brief' : 'Edit your draft', 'textarea', editorSeed?.text || '', 'Apply edits, then save the draft to keep them after closing Sinter. The original output and source evidence are retained.', {rows: 18, maxLength: 500000});
+  function canUseDocument(operation = 'copying, downloading or printing') {
+    if (!hasUnappliedDocumentEdits(documentMarkdown(report), input.input.value, !editor.hidden)) return true;
+    const message = `Apply or cancel your pending draft edits before ${operation}. Your text is still in the editor.`;
+    feedback.replaceChildren(notice(message, 'error'));
+    input.input.focus(); announce(message);
+    return false;
+  }
   input.input.addEventListener('input', () => onEditorChange(input.input.value, true));
   const edit = button(isCampaign ? 'Edit decision brief' : 'Edit draft', () => { if (editor.hidden) input.input.value = documentMarkdown(report); editor.hidden = false; input.input.focus(); }, 'quiet');
   const apply = button('Apply edits', () => {
@@ -176,6 +189,7 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
   editor.append(input.wrap, h('div', {class: 'button-row'}, apply, button('Cancel edits', () => { editor.hidden = true; onEditorChange('', false); exports.querySelector('summary').focus(); })));
   const evidencePack = button(
     isCampaign ? 'Download redacted evidence pack' : 'Download evidence pack', () => {
+    if (!canUseDocument()) return;
     const includedPrivate = Boolean(privateExport?.input.checked);
     const content = evidencePackForDownload(report, {includePrivate: includedPrivate});
     download(reportName(report.title) + '.json',
@@ -202,21 +216,22 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
           + 'user-entered personal or sensitive details. Review the whole file '
           + 'before sharing. Sinter downloads it to your device and does not '
           + 'transmit it; the saved campaign is unchanged.')) : null,
-      button(isCampaign ? 'Download decision brief' : 'Download document', () => downloadDocument(report)),
-      button(isCampaign ? 'Download Markdown brief' : 'Download Markdown', () => download(reportName(report.title) + '.md', documentMarkdown(report), 'text/markdown;charset=utf-8')),
+      button(isCampaign ? 'Download decision brief' : 'Download document', () => { if (canUseDocument()) downloadDocument(report); }),
+      button(isCampaign ? 'Download Markdown brief' : 'Download Markdown', () => { if (canUseDocument()) download(reportName(report.title) + '.md', documentMarkdown(report), 'text/markdown;charset=utf-8'); }),
       evidencePack,
-      button('Print / save PDF', () => window.print()), edit));
+      button('Print / save PDF', () => { if (canUseDocument()) window.print(); }), edit));
   exports.addEventListener('click', event => { if (event.target.closest('button')) exports.open = false; });
   exports.addEventListener('keydown', event => {
     if (event.key === 'Escape' && exports.open) { event.preventDefault(); exports.open = false; exports.querySelector('summary').focus(); }
   });
   const controls = h('div', {class: 'document-toolbar non-print'},
     h('div', {class: 'button-row'}, button(isCampaign ? 'Copy decision brief' : 'Copy draft text', async () => {
+      if (!canUseDocument()) return;
       try { await navigator.clipboard.writeText(plainDocument(documentMarkdown(report))); feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, isCampaign
         ? 'Copied. Review the internal decision brief for accuracy and privacy before sharing.'
         : report.incomplete ? 'Incomplete draft copied. Review the partial text before using it.'
           : 'Copied. Ready to paste into your email or document.')); announce(isCampaign ? 'Decision brief copied.' : report.incomplete ? 'Incomplete draft text copied.' : 'Draft text copied.'); }
       catch { feedback.replaceChildren(notice('Clipboard access is unavailable. Download the document instead.', 'error')); }
     }, 'primary'), word, save || null, exports));
-  return {controls, feedback, editor};
+  return {controls, feedback, editor, canUseDocument};
 }

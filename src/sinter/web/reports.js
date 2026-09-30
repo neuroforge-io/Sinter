@@ -13,12 +13,10 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   registerReportDraft(report, documentMarkdown(report));
   const result = h('section', {class: 'report-area', 'aria-label': 'Your draft report'});
   const message = h('div', {class: 'non-print', 'aria-live': 'polite'});
-  const campaignLog = report.campaign_link ? campaignDraftLog(report, message, onCampaignUpdated) : null;
+  const campaignLog = report.campaign_link ? campaignDraftLog(report, message,
+    onCampaignUpdated, () => actions.canUseDocument('saving to the campaign log')) : null;
   const save = button('Save to this computer', async () => {
-    if (reportEditorDraft(report)) {
-      message.replaceChildren(notice('Apply or cancel your pending draft edits before saving. Your text is still in the editor.', 'error'));
-      return;
-    }
+    if (!actions.canUseDocument('saving')) return;
     save.disabled = true;
     try {
       const snapshot = structuredClone(report);
@@ -209,11 +207,12 @@ export function campaignEvidenceCounts(campaign) {
     excerpts: excerpts.filter(value => typeof value === 'string' && value.trim()).length};
 }
 
-function campaignDraftLog(report, feedback, onCampaignUpdated) {
+function campaignDraftLog(report, feedback, onCampaignUpdated, canSave) {
   const channel = selectField('Draft channel for the campaign log', [
     ['email', 'Email'], ['letter', 'Letter'], ['portal', 'Application portal'], ['other', 'Other'],
   ], 'email');
   const control = button('Save draft to campaign log', async () => {
+    if (!canSave()) return;
     const link = report.campaign_link;
     const blocked = campaignDraftLogBlockReason(link);
     if (blocked) { feedback.replaceChildren(notice(blocked, 'error')); return; }

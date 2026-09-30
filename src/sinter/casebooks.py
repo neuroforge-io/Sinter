@@ -16,7 +16,8 @@ from dataclasses import asdict
 
 from . import client
 from .briefs import DOCUMENT_FIELDS, prepare_document
-from .evidence import Source, Excerpt, literal, render_evidence, tokens, utc_now
+from .evidence import Excerpt, Source, literal, render_evidence, tokens, utc_now
+from .handover import EVIDENCE_MODES as HANDOVER_EVIDENCE_MODES
 from .handover import reference_records as handover_references
 from .handover import render as render_handover
 
@@ -81,6 +82,15 @@ def validate(payload):
         raise ValueError('Choose a briefing, enquiry, agenda or handover.')
     normalized = {'schema': SCHEMA, 'title': title, 'questions': questions,
                   'document_type': document_type, 'documents': documents}
+    handover_evidence = payload.get('handover_evidence', 'compact')
+    if (not isinstance(handover_evidence, str)
+            or handover_evidence not in HANDOVER_EVIDENCE_MODES):
+        raise ValueError(
+            'Choose compact handover notes or a selected evidence appendix.')
+    # Keep old compact projects' normalized content and fingerprint unchanged.
+    # The explicit appendix choice is saved and bound to report/draft admission.
+    if handover_evidence != 'compact':
+        normalized['handover_evidence'] = handover_evidence
     for key, (label, limit) in DOCUMENT_FIELDS.items():
         if key in payload:
             normalized[key] = _text(payload[key], label, limit)
@@ -246,8 +256,12 @@ def build(payload, document_type=None, progress=lambda message: None):
         # its original wording, selection, exact excerpts and limitations.
         prepared['document_markdown'] = render_handover(
             book['title'], prepared['document_details'], sources, picked,
-            question_index)
+            question_index,
+            include_selected_appendix=(
+                book.get('handover_evidence') == 'selected_appendix'))
         prepared['document_references'] = handover_references(sources, picked)
+        if book.get('handover_evidence') == 'selected_appendix':
+            prepared['handover_evidence'] = 'selected_appendix'
     return {**prepared, 'workflow': 'casebook', 'title': book['title'], 'created_at': utc_now(), 'review_status': 'draft',
             'document_type': document_type, 'markdown': '\n\n'.join(lines), 'sources': report_sources,
             'excerpts': list(selected.values()), 'question_index': question_index, 'coverage': coverage,

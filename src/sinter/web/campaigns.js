@@ -17,6 +17,8 @@ import {campaignCommunicationView, COMMUNICATION_ORDERS}
   from './campaign-communication-view.js';
 import {campaignCapacity, CAMPAIGN_TEXT_LIMIT, CAMPAIGN_BYTE_LIMIT}
   from './campaign-capacity.js';
+import {campaignSourceOptions, matchingCampaignSources}
+  from './campaign-source-options.js';
 
 const blank = () => ({schema: 'sinter-campaign/v1', title: '', organisation: '', objective: '',
   signatory: '', sender_role: '', contact_details: '',
@@ -221,55 +223,72 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   let sourcePickerSequence = 0;
   function campaignSourcePicker(label, selectedId, onSelect) {
-    const options = document.sources.filter(source => source.id && source.title).map(source => {
-      let host = '';
-      try { host = new URL(source.url).hostname.replace(/^www\./, ''); } catch {}
-      return {source, base: `${source.title}${host ? ` · ${host}` : ''}`};
-    });
-    const counts = new Map();
-    for (const option of options) counts.set(option.base, (counts.get(option.base) || 0) + 1);
-    for (const option of options) option.value = counts.get(option.base) > 1
-      ? `${option.base} · ${option.source.id.slice(0, 6)}` : option.base;
+    const options = campaignSourceOptions(document.sources);
     const selectedOption = options.find(option => option.source.id === selectedId);
     const listId = `campaign-source-options-${++sourcePickerSequence}`;
-    const entry = field(label, 'search', selectedOption?.value || '',
-      'Search by title or website and choose a saved campaign source. Links stay unverified.', {
+    const entry = field(label, 'search', selectedOption?.label || '',
+      'Search by title or website, then use a Link source button. Typing does not change the link. Links stay unverified.', {
         autocomplete: 'off', placeholder: 'Search saved sources…',
       });
-    entry.input.setAttribute('list', listId);
+    entry.input.setAttribute('aria-controls', listId);
     const status = h('small', {class: 'campaign-source-picker-status', role: 'status'},
       selectedOption ? `Linked to ${selectedOption.source.title} · user-entered, unverified.`
         : options.length ? 'No campaign source linked.'
           : 'Add a source in the Sources tab first.');
+    const matchStatus = h('small', {class: 'campaign-source-picker-status', role: 'status'});
+    const matches = h('div', {class: 'campaign-source-matches', id: listId,
+      role: 'group', 'aria-label': 'Matching saved campaign sources', hidden: true});
+    function closeMatches() { matches.hidden = true; matchStatus.textContent = ''; }
+    function selectSource(option) {
+      entry.input.value = option.label;
+      status.textContent = `Linked to ${option.source.title} · user-entered, unverified.`;
+      clear.hidden = false; closeMatches();
+      onSelect(option.source); changed();
+    }
+    function showMatches() {
+      const found = matchingCampaignSources(options, entry.input.value);
+      matches.replaceChildren(...found.matches.map(option => {
+        const control = button('Link source: ' + option.label, () => selectSource(option), 'quiet');
+        control.dataset.campaignSourceId = option.source.id;
+        return h('div', {class: 'campaign-source-match'}, control,
+          h('small', {class: 'fine'}, option.source.url || 'No saved source URL.'),
+          h('small', {class: 'fine'}, 'Source checked date (user-entered): '
+            + (option.source.checked_at || 'Not recorded')));
+      }));
+      matches.hidden = !found.matches.length;
+      matchStatus.textContent = !options.length ? 'Add a source in the Sources tab first.'
+        : !found.total ? 'No matching saved sources. Try a title or website.'
+          : `${found.total} matching saved source${found.total === 1 ? '' : 's'}`
+            + (found.total > found.matches.length
+              ? ` · showing ${found.matches.length}. Refine the search to find another source.`
+              : '. Choose a Link source button.');
+    }
     const clear = button('Clear link', () => {
       entry.input.value = '';
       status.textContent = options.length ? 'No campaign source linked.'
         : 'Add a source in the Sources tab first.';
-      clear.hidden = true;
-      onSelect(null);
-      changed();
+      clear.hidden = true; closeMatches();
+      onSelect(null); changed();
+      if (entry.input.isConnected) entry.input.focus();
     }, 'quiet');
     clear.hidden = !selectedOption;
-    const datalist = h('datalist', {id: listId}, ...options.map(option =>
-      h('option', {value: option.value, label: option.source.url || option.source.title})));
-    entry.input.addEventListener('change', () => {
-      const selected = options.find(option => option.value === entry.input.value);
-      if (!selected && entry.input.value.trim()) {
-        entry.input.value = options.find(option => option.source.id === selectedId)?.value || '';
-        status.textContent = 'Choose a matching source from the suggestions, or clear the link.';
-        return;
+    entry.input.addEventListener('input', showMatches);
+    entry.input.addEventListener('focus', showMatches);
+    entry.input.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown') {
+        showMatches(); const first = matches.querySelector('button');
+        if (first) { event.preventDefault(); first.focus(); }
       }
-      const source = selected?.source || null;
-      entry.input.value = selected?.value || '';
-      status.textContent = source
-        ? `Linked to ${source.title} · user-entered, unverified.`
-        : options.length ? 'No campaign source linked.' : 'Add a source in the Sources tab first.';
-      clear.hidden = !source;
-      onSelect(source);
-      changed();
+      if (event.key === 'Enter') { event.preventDefault(); showMatches(); }
+      if (event.key === 'Escape') { event.preventDefault(); closeMatches(); }
+    });
+    matches.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        event.preventDefault(); entry.input.focus(); closeMatches();
+      }
     });
     return {input: entry.input, wrap: h('div', {class: 'campaign-source-picker'},
-      entry.wrap, datalist, status, clear)};
+      entry.wrap, status, clear, matchStatus, matches)};
   }
   function remove(rows, item, label) {
     return button(label, () => { rows.splice(rows.indexOf(item), 1); changed(); renderEditor(); }, 'quiet');
@@ -1307,8 +1326,12 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         query: communicationQuery, route: communicationRoute, order: communicationOrder});
       const shown = new Set(view.map(({index}) => index));
       for (const [index, card] of cards) card.hidden = !shown.has(index);
-      communicationList.replaceChildren(...view.map(({index}) => cards.get(index)),
-        ...[...cards].filter(([index]) => !shown.has(index)).map(([, card]) => card));
+      const arranged = [...view.map(({index}) => cards.get(index)),
+        ...[...cards].filter(([index]) => !shown.has(index)).map(([, card]) => card)];
+      const current = [...communicationList.children];
+      if (arranged.length !== current.length || arranged.some((card, index) => card !== current[index])) {
+        communicationList.replaceChildren(...arranged);
+      }
       empty.hidden = view.length !== 0;
       clear.hidden = !communicationQuery && communicationRoute === null;
       const orderLabel = COMMUNICATION_ORDERS.find(([value]) => value === communicationOrder)?.[1]
@@ -1329,7 +1352,14 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       communicationOrder = order.input.value; updateCommunicationView(); rememberCampaign();
     });
     // Commit-time refresh keeps edited wording searchable without moving a row mid-typing.
-    communicationList.addEventListener('change', updateCommunicationView);
+    communicationList.addEventListener('change', event => {
+      // Source search is view-only. Detaching this card on search-field blur
+      // interrupts the mouse click on its explicit selection button.
+      if (!event.target.closest('.campaign-source-picker')) updateCommunicationView();
+    });
+    communicationList.addEventListener('click', event => {
+      if (event.target.closest('.campaign-source-picker button')) updateCommunicationView();
+    });
     panel.append(search.wrap, h('div', {class: 'form-grid'}, routeFilter.wrap, order.wrap),
       clear, resultCount, empty, communicationList);
     const directionOptions = [['incoming', 'Incoming'], ['outgoing', 'Outgoing']];

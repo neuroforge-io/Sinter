@@ -16,7 +16,7 @@ export function senderFields(data = {}, settings = {}) {
   const summary = h('span');
   function refresh() { const sender = values(); summary.textContent = [sender.signatory, sender.organisation].filter(Boolean).join(' · ') || 'Add your name and contact details'; }
   const panel = h('details', {class: 'sender-panel'}, h('summary', {}, h('span', {class: 'sender-label'}, 'Your sign-off'), summary),
-    h('p', {class: 'fine'}, 'Filled from your saved details. Changes here apply to this draft only. ', h('a', {href: '#settings'}, 'Update your profile')),
+    h('p', {class: 'fine'}, 'Saved details appear here when available. Changes apply to this draft only. ', h('a', {href: '#settings'}, 'Update your profile')),
     h('div', {class: 'form-grid'}, entries.signatory.wrap, entries.sender_role.wrap), entries.organisation.wrap, entries.contact_details.wrap);
   panel.addEventListener('input', refresh); refresh();
   return {panel, entries, values};

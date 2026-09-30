@@ -17,6 +17,9 @@ from .document_markup import Paragraph, Span, Table, parse
 
 MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 MAX_MARKDOWN = 500_000
+# Keep one bounded source note together, never an arbitrary quote dossier.
+_MAX_SOURCE_NOTE_GROUP_CHARS = 2400
+_MAX_SOURCE_NOTE_GROUP_LINES = 20
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 REL = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -73,6 +76,54 @@ def _text(value: object, name: str, limit: int, *, single_line: bool = False) ->
     if single_line and any(char in value for char in "\r\n\t\u2028\u2029"):
         raise ValueError(f"{name} must be a single line.")
     return value
+
+
+def _source_note_keep_next(blocks: list[Paragraph | Table]) -> frozenset[int]:
+    """Pair supplied source metadata with one small quoted paragraph only."""
+    keep = set()
+
+    def plain_quote(block):
+        return (
+            isinstance(block, Paragraph)
+            and block.quote
+            and not (block.heading or block.code or block.list_id)
+        )
+
+    def wording(block):
+        return "".join(span.text for span in block.spans)
+
+    for index, caption in enumerate(blocks):
+        if not plain_quote(caption) or not wording(caption).startswith(
+            "Original source: "
+        ):
+            continue
+        end = index + 1
+        if end >= len(blocks):
+            continue
+        metadata = blocks[end]
+        if plain_quote(metadata) and wording(metadata).startswith(
+            "Source link (supplied): "
+        ):
+            # Admit only the generated two-line metadata shape. This is a
+            # layout hint, never source identity or date verification.
+            lines = wording(metadata).splitlines()
+            if len(lines) != 2 or not lines[1].startswith("Date label (supplied): "):
+                continue
+            end += 1
+        if end >= len(blocks) or not plain_quote(blocks[end]):
+            continue
+        if wording(blocks[end]).startswith(
+            ("Original source: ", "Source link (supplied): ")
+        ):
+            continue
+        text = "\n".join(wording(block) for block in blocks[index : end + 1])
+        if (
+            len(text) <= _MAX_SOURCE_NOTE_GROUP_CHARS
+            and len(text.splitlines()) <= _MAX_SOURCE_NOTE_GROUP_LINES
+        ):
+            # Stop at the note: the following passage/key cannot be chained.
+            keep.update(range(index, end))
+    return frozenset(keep)
 
 
 class _Package:
@@ -176,6 +227,7 @@ class _Package:
         *,
         title: bool = False,
         align: str | None = None,
+        keep_next: bool = False,
     ) -> None:
         node = _element(parent, "p")
         properties = _element(node, "pPr")
@@ -189,6 +241,12 @@ class _Package:
             _element(properties, "pStyle", val="Code")
         elif paragraph.quote:
             _element(properties, "pStyle", val="Quote")
+        if paragraph.quote:
+            # A source/reference paragraph is one unit. Keep its identity and
+            # range together when it fits on a page; do not chain other notes.
+            _element(properties, "keepLines")
+        if keep_next:
+            _element(properties, "keepNext")
         if paragraph.list_id:
             number = _element(properties, "numPr")
             _element(number, "ilvl", val=paragraph.list_level)
@@ -294,12 +352,17 @@ def export_docx(payload: object) -> WordDocument:
     title = _text(payload["title"], "Document title", 200, single_line=True)
     markdown = _text(payload["markdown"], "Document text", MAX_MARKDOWN)
     package = _Package()
-    for index, block in enumerate(parse(markdown)):
+    blocks = parse(markdown)
+    keep_next = _source_note_keep_next(blocks)
+    for index, block in enumerate(blocks):
         if isinstance(block, Table):
             package.table(block)
         else:
             package.paragraph(
-                package.body, block, title=index == 0 and block.heading == 1
+                package.body,
+                block,
+                title=index == 0 and block.heading == 1,
+                keep_next=index in keep_next,
             )
     package.numbering.extend(package.numbers)
     section = _element(package.body, "sectPr")

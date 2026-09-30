@@ -77,6 +77,7 @@ class CampaignChecks(DeliverableChecks):
         from playwright.sync_api import expect
         page.get_by_role('button', name='Save campaign', exact=True).click()
         expect(page.get_by_text('Campaign saved. Answers, costs, checks and actions will be here when you return.', exact=True)).to_be_visible()
+        expect(page.get_by_role('button', name='Save campaign', exact=True)).to_be_enabled()
 
     def capacity_and_recovery(self, page):
         from playwright.sync_api import expect
@@ -825,7 +826,9 @@ class CampaignChecks(DeliverableChecks):
         evidence.get_by_role('button', name='Clear link', exact=True).click()
         picker = evidence.get_by_label('Link to a saved campaign source', exact=True)
         picker.fill('Fictional updated equipment guidance · example.invalid')
-        picker.dispatch_event('change')
+        evidence.get_by_role('button',
+            name='Link source: Fictional updated equipment guidance · example.invalid',
+            exact=True).click()
         expect(evidence.get_by_label('Evidence title', exact=True)).to_have_value(
             'Fictional updated equipment guidance')
         expect(evidence.get_by_label('Evidence link', exact=True)).to_have_value(
