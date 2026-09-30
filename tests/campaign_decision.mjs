@@ -612,3 +612,109 @@ test('distinct progress guidance keeps the selected route and does not promise c
   assert.equal(result.action.ownerNeeded, true);
   assert.match(result.action.task, /Applicant type accepted.*Record a source excerpt/);
 });
+
+test('a later user-marked unmet check outranks unknown and clarification checks on an active route', () => {
+  for (const routeStatus of ['open', 'clarification']) {
+    for (const firstStatus of ['unknown', 'clarification']) {
+      const document = {
+        opportunities: [{...readyRoute, status: routeStatus}],
+        requirements: [
+          {...goodCheck, rule: 'Broad applicant interpretation', status: firstStatus},
+          {...goodCheck, rule: 'Cash matching is available', status: 'not_met'},
+        ],
+      };
+      const original = JSON.stringify(document);
+      const result = decide(document, '2026-09-29');
+      assert.equal(result.state, 'not_ready');
+      assert.equal(result.label, 'NOT READY');
+      assert.ok(result.detail.endsWith('“Cash matching is available” is marked not met in the user-entered record.'));
+      assert.equal(result.action.task, '“Cash matching is available” is marked not met in the user-entered record.');
+      assert.equal(result.action.source, 'suggested');
+      assert.equal(result.action.ownerNeeded, true);
+      assert.equal(Object.hasOwn(result.action, 'due'), false);
+      assert.match(result.reopenCriteria, /keep unresolved checks open/);
+      assert.equal(JSON.stringify(document), original);
+      assertReadableGuidance(result);
+    }
+  }
+});
+
+test('unmet-check priority is scoped to the selected active route', () => {
+  const other = {...readyRoute, name: 'Other route'};
+  const result = decide({opportunities: [other, readyRoute], requirements: [
+    {...goodCheck, opportunity: other.name, rule: 'Other route cash condition', status: 'not_met'},
+    {...goodCheck, rule: 'Selected applicant interpretation', status: 'unknown'},
+  ]}, '2026-09-29', readyRoute.name);
+  assert.match(result.detail, /Selected applicant interpretation/);
+  assert.match(result.action.task, /Selected applicant interpretation/);
+  assert.doesNotMatch(result.detail + result.action.task, /Other route cash condition/);
+});
+
+test('multiple unmet checks use their original stable order without rewriting evidence', () => {
+  const document = {opportunities: [readyRoute], requirements: [
+    {...goodCheck, rule: 'Earlier unknown check', status: 'unknown'},
+    {...goodCheck, rule: 'First unmet condition', status: 'not_met'},
+    {...goodCheck, rule: 'Second unmet condition', status: 'not_met'},
+  ]};
+  const original = JSON.stringify(document);
+  const result = decide(document, '2026-09-29');
+  assert.match(result.detail, /First unmet condition.*marked not met/);
+  assert.match(result.action.task, /First unmet condition.*marked not met/);
+  assert.doesNotMatch(result.detail + result.action.task, /Earlier unknown check|Second unmet condition/);
+  assert.equal(JSON.stringify(document), original);
+});
+
+test('prioritising a user-marked unmet check does not bypass stale or changed source gates', () => {
+  const sourceId = 'b'.repeat(32);
+  for (const variant of ['stale', 'changed']) {
+    const check = {...goodCheck, source_id: sourceId, rule: 'Cash condition',
+      status: 'not_met', checked_at: variant === 'stale' ? '2026-06-30' : goodCheck.checked_at};
+    const linked = {id: sourceId, url: check.source_url,
+      checked_at: variant === 'changed' ? '2026-09-21' : check.checked_at};
+    const document = {opportunities: [readyRoute], requirements: [check],
+      sources: [windowSource, linked]};
+    const original = JSON.stringify(document);
+    const blocked = decide(document, '2026-09-29');
+    assert.equal(blocked.state, 'not_ready');
+    assert.match(blocked.detail, /Cash condition.*marked not met in the user-entered record/);
+    assert.equal(JSON.stringify(document), original);
+    const reassessed = decide({...document, requirements: [{...check, status: 'met'}]}, '2026-09-29');
+    assert.equal(reassessed.state, 'not_ready');
+    assert.match(reassessed.detail, variant === 'stale'
+      ? /last checked 91 days ago/ : /saved check date differs from the linked record/);
+  }
+});
+
+test('remaining route gaps still block review when an unmet check is explicitly changed', () => {
+  const document = {opportunities: [{...readyRoute, application_mode: 'unknown'}],
+    requirements: [{...goodCheck, rule: 'Cash condition', status: 'not_met'}]};
+  const blocked = decide(document, '2026-09-29');
+  assert.match(blocked.detail, /Cash condition.*marked not met/);
+  const reassessed = decide({...document,
+    requirements: [{...document.requirements[0], status: 'met'}]}, '2026-09-29');
+  assert.equal(reassessed.state, 'not_ready');
+  assert.match(reassessed.detail, /formal application and who is allowed to apply/);
+});
+
+test('an unmet primary gap leaves the explicit recorded action, owner and proposed date untouched', () => {
+  const recorded = {opportunity: readyRoute.name, scope_confirmed: true,
+    task: 'Confirm the cash range with the operator', status: 'open',
+    owner: 'Fictional Treasurer', owner_kind: 'role', owner_confirmed: false,
+    due: '2026-10-02'};
+  const document = {opportunities: [{...readyRoute, status: 'clarification'}],
+    requirements: [
+      {...goodCheck, rule: 'Broad applicant interpretation', status: 'clarification'},
+      {...goodCheck, rule: 'Cash matching is available', status: 'not_met'},
+    ], actions: [recorded]};
+  const original = JSON.stringify(document);
+  const result = decide(document, '2026-09-29');
+  assert.match(result.detail, /Cash matching is available.*marked not met/);
+  assert.equal(result.action.source, 'recorded');
+  assert.equal(result.action.actionIndex, 0);
+  assert.equal(result.action.task, recorded.task);
+  assert.equal(result.action.opportunity, recorded.opportunity);
+  assert.equal(result.action.due, recorded.due);
+  assert.equal(result.action.ownerNeeded, true);
+  assert.match(result.action.ownerStatus, /role suggestion, not a named person/);
+  assert.equal(JSON.stringify(document), original);
+});

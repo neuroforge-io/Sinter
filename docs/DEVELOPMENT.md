@@ -17,6 +17,7 @@ python -m playwright install chromium
 python tools/browser_smoke.py
 python tools/deliverable_browser.py
 python tools/campaign_browser.py
+python tools/communication_view_browser.py
 python tools/quality_browser.py
 ```
 
@@ -29,6 +30,7 @@ Windows activation: `.venv\Scripts\activate`. Browser integration uses fictional
 Every browser integration tool accepts `--help` without Playwright installed.
 The same setup runs `browser_smoke.py`, `studio_browser.py`, `desktop_browser.py`,
 `casebook_browser.py`, `deliverable_browser.py`, `campaign_browser.py`,
+`communication_view_browser.py`,
 `quality_browser.py` and `site_browser.py`. Use `--chromium /path/to/chromium` or
 `SINTER_CHROMIUM` for an existing browser; the command-line option takes priority.
 Missing packages or browsers fail with installation guidance and a nonzero exit

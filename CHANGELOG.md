@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.4rc3.dev0 - unreleased development
+
+These source changes follow the published 0.5.4rc2 preview. They are not in its
+installers and have not received installed-platform qualification.
+
+- Search campaign communications by their saved wording, filter by route or
+  campaign-wide scope, and choose record, newest or oldest order. Undated entries
+  stay explicit. View changes preserve canonical record order, pending edits and
+  source snapshots; editing a sorted record updates its original entry.
+- Show each communication's related route in its collapsed summary. Keep the
+  correct record expanded after filtering, saving or removing a neighbouring
+  entry; reveal and focus new drafts even when the previous view had no matches.
+- Prioritise a user-recorded unmet requirement in the selected route's review
+  guidance. Keep every other check, source freshness rule and recorded action,
+  owner and proposed date intact. This does not verify programme ineligibility or
+  grant authority to submit.
+
 ## 0.5.4rc2 - published Linux local workflow preview
 
 Published [30 September 2026](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc2)

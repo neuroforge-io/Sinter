@@ -76,6 +76,12 @@ function requirementGap(check, today, sources = []) {
   return `${name} is marked met, but its source record is incomplete or out of date. ${sourceRecordGuidance(check, today, sources)}`;
 }
 
+function firstUnmetRequirement(checks) {
+  // This is a user-entered blocker, not verified programme ineligibility.
+  // Keep source order when several checks are marked not met.
+  return checks.find(row => row.status === 'not_met');
+}
+
 function windowCheckGap(checkedAt, today, label) {
   if (!hasText(checkedAt)) {
     return `Record when the ${label} was checked.`;
@@ -139,10 +145,12 @@ export function applicationWindowGaps(opportunity, today, sources = []) {
 
 function routeGaps(opportunity, requirements, today, sources = []) {
   const gaps = [];
+  const checks = requirements.filter(row => row.opportunity === opportunity.name);
+  const unmet = firstUnmetRequirement(checks);
+  if (unmet) gaps.push(requirementGap(unmet, today, sources));
   if (opportunity.status === 'researching') {
     gaps.push('Confirm that a current round is open from the official programme page.');
   } else if (opportunity.status === 'clarification') {
-    const checks = requirements.filter(row => row.opportunity === opportunity.name);
     const unresolved = checks.find(row => row.status === 'clarification')
       || checks.find(row => row.status !== 'met'
         || !sourceComplete(row, today, sources));
@@ -165,7 +173,6 @@ function routeGaps(opportunity, requirements, today, sources = []) {
   if (!hasText(opportunity.url)) gaps.push('Add the current official programme page.');
   gaps.push(...applicationWindowGaps(opportunity, today, sources));
 
-  const checks = requirements.filter(row => row.opportunity === opportunity.name);
   if (!checks.length) {
     gaps.push('No applicant eligibility checks are recorded.');
   } else {
@@ -232,9 +239,11 @@ function suggestedAction(state, active, document, today, focus) {
   if (state === 'ready_for_review') return 'Ask a P&C reviewer to check the recorded eligibility evidence and authority.';
   const ordered = focus ? [focus] : active;
   for (const opportunity of ordered) {
+    const checks = (document.requirements || []).filter(row =>
+      row.opportunity === opportunity.name);
+    const unmet = firstUnmetRequirement(checks);
+    if (unmet) return requirementGap(unmet, today, sources);
     if (opportunity.status === 'clarification') {
-      const checks = (document.requirements || []).filter(row =>
-        row.opportunity === opportunity.name);
       const unresolved = checks.find(row => row.status === 'clarification')
         || checks.find(row => row.status !== 'met'
           || !sourceComplete(row, today, sources));
@@ -265,7 +274,6 @@ function suggestedAction(state, active, document, today, focus) {
     if (timingGap) {
       return `Resolve the application window for “${opportunity.name}”: ${timingGap}`;
     }
-    const checks = (document.requirements || []).filter(row => row.opportunity === opportunity.name);
     if (!checks.length) {
       return `Record the applicant eligibility checks for “${opportunity.name}” from current official guidance.`;
     }

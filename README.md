@@ -31,6 +31,9 @@ save, quit, restart, reopen, Word/JSON export and separate restored copies witho
 a model request. Separate actual package upgrades from v0.5.3 and v0.5.4rc1 retain
 copied fictional workspaces, preferences and explicit model selections.
 
+Current development reports `0.5.4rc3.dev0`. Its communications search/order and
+unmet-check guidance changes are source-only and are not qualified installers.
+
 The earlier v0.5.3 and [v0.5.4rc1](docs/PREVIEW_0.5.4rc1.md) previews remain
 unchanged; their installers have different source and capabilities.
 See [preview scope and evidence](docs/PREVIEW_0.5.4rc2.md) before choosing an asset.
