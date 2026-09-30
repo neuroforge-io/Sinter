@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import socket
@@ -290,6 +291,63 @@ def test_json_hashes_are_canonical_unicode_and_reject_nonfinite_numbers():
     assert flow.object_digest({"z": 1, "a": "前😀"}) == expected
     with pytest.raises(ValueError):
         flow.object_digest({"invalid": float("nan")})
+
+
+def garden_campaign():
+    return json.loads(
+        (flow.ROOT / "src/sinter/web/offline-garden-campaign.json").read_text()
+    )
+
+
+def test_source_first_action_check_accepts_only_task_edit_without_changing_fixture():
+    original = garden_campaign()
+    before = copy.deepcopy(original)
+    saved = copy.deepcopy(original)
+    saved["actions"][0]["task"] = flow.ACTION_TASK
+    flow.check_campaign_actions(saved, original)
+    flow.check_campaign_actions(copy.deepcopy(saved), original)
+    assert original == before
+    assert saved["actions"][0]["owner"] == ""
+    assert saved["actions"][0]["due"] == ""
+    assert saved["actions"][1:] == before["actions"][1:]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "display_first_instead_of_source_first",
+        "both_tasks",
+        "source_first_owner",
+        "source_first_due",
+        "another_action_confirmation",
+        "reordered_actions",
+        "missing_action",
+    ],
+)
+def test_action_check_rejects_wrong_row_and_any_unintended_action_change(change):
+    original = garden_campaign()
+    saved = copy.deepcopy(original)
+    saved["actions"][0]["task"] = flow.ACTION_TASK
+    if change == "display_first_instead_of_source_first":
+        saved["actions"][0]["task"] = original["actions"][0]["task"]
+        saved["actions"][1]["task"] = flow.ACTION_TASK
+    elif change == "both_tasks":
+        saved["actions"][1]["task"] = flow.ACTION_TASK
+    elif change == "source_first_owner":
+        saved["actions"][0]["owner"] = "Unintended owner"
+    elif change == "source_first_due":
+        saved["actions"][0]["due"] = "2026-10-01"
+    elif change == "another_action_confirmation":
+        saved["actions"][1]["owner_confirmed"] = True
+    elif change == "reordered_actions":
+        saved["actions"][0], saved["actions"][1] = (
+            saved["actions"][1],
+            saved["actions"][0],
+        )
+    else:
+        saved["actions"].pop()
+    with pytest.raises(ValueError, match="intended source action edit"):
+        flow.check_campaign_actions(saved, original)
 
 
 def test_word_proof_rejects_external_relationships_and_macro_payloads(tmp_path):

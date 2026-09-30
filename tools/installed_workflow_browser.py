@@ -78,6 +78,16 @@ def object_digest(value: object) -> str:
     ).hexdigest()
 
 
+def check_campaign_actions(document: dict, original: dict) -> None:
+    """Require the source-first task edit and preserve every other action field."""
+    expected = [dict(action) for action in original["actions"]]
+    expected[0]["task"] = ACTION_TASK
+    if document["actions"] != expected:
+        raise ValueError(
+            "Campaign actions differ from the intended source action edit."
+        )
+
+
 def command(*args: str, timeout: int = 30) -> str:
     """Run bounded test tooling; output never contains request/session payloads."""
     result = subprocess.run(
@@ -699,9 +709,7 @@ def browser_workflow(
                 "button", name="Open garden campaign"
             ).click()
             page.get_by_role("tab", name="Next actions", exact=True).click()
-            action = page.get_by_role(
-                "article", name="Campaign action", exact=True
-            ).nth(0)
+            action = page.locator('.campaign-action[data-action-index="0"]')
             if action.locator("details").get_attribute("open") is None:
                 action.locator("summary").click()
             action.locator('[data-campaign-field="task"]').fill(ACTION_TASK)
@@ -734,6 +742,9 @@ def browser_workflow(
             campaigns = read("/api/campaigns")["campaigns"]
             assert len(campaigns) == 1
             snapshots["saved_campaign"] = read("/api/campaigns/" + campaigns[0]["id"])
+            check_campaign_actions(
+                snapshots["saved_campaign"]["document"], fixture["campaign"]
+            )
             checks.append(CHECKS[5])
             quit_app(1)
             checks.append(CHECKS[6])
@@ -749,14 +760,17 @@ def browser_workflow(
             page.on("dialog", lambda dialog: dialog.accept())
             page.goto(origin + "/#campaigns")
             page.get_by_role("tab", name="Next actions", exact=True).click()
-            action = page.get_by_role(
-                "article", name="Campaign action", exact=True
-            ).nth(0)
+            action = page.locator('.campaign-action[data-action-index="0"]')
             if action.locator("details").get_attribute("open") is None:
                 action.locator("summary").click()
             expect(action.locator('[data-campaign-field="task"]')).to_have_value(
                 ACTION_TASK
             )
+            reopened_campaign = read(
+                "/api/campaigns/" + snapshots["saved_campaign"]["id"]
+            )
+            check_campaign_actions(reopened_campaign["document"], fixture["campaign"])
+            assert reopened_campaign == snapshots["saved_campaign"]
             page.get_by_role("tab", name="Communications", exact=True).click()
             expect(
                 page.get_by_role("article", name="Campaign communication", exact=True)
@@ -877,6 +891,10 @@ def browser_workflow(
             )
             assert (
                 original_campaign["document"]["communications"][0]["status"] == "draft"
+            )
+            assert (
+                snapshots["restored_campaign"]["document"]["actions"]
+                == original_campaign["document"]["actions"]
             )
             for key in ("answers", "requirements", "sources"):
                 assert original_campaign["document"][key] == fixture["campaign"][key]
