@@ -6,6 +6,14 @@ Exact candidate source and install-asset identities are recorded in each
 versioned build receipt and SHA256SUMS. A source checkout version alone is not an
 installed-platform qualification.
 
+Published on 30 September 2026 as a
+[Linux x64 prerelease](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc1),
+exact source `cd928ba7561a09c477b3555e64aa6a3c4cc122b4`. All eight public
+attachments were downloaded and reverified against the reviewed stage.
+[Publication receipt](releases/PREVIEW_0.5.4rc1_PUBLICATION_RECEIPT.md) records
+the qualified target and outstanding limits. Newer `0.5.4rc2.dev0` source work
+is separate and is not included in these installers.
+
 ## Useful without a model
 
 Use the [fictional garden bundle and walkthrough](../examples/offline-garden/README.md).

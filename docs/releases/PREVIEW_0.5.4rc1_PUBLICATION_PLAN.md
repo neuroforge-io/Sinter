@@ -12,7 +12,7 @@ authority. The current local preparation does not establish a public download.
 - Source: `cd928ba7561a09c477b3555e64aa6a3c4cc122b4`.
 - Proposed create-only tag: `v0.5.4rc1`, directly identifying that source.
 - GitHub repository: `neuroforge-io/Sinter`.
-- `prerelease=true`, `latest=false`; published stable v0.5.3 is untouched.
+- `prerelease=true`, `latest=false`; the published v0.5.3 preview is untouched.
 - Qualified native target: Linux x64, Ubuntu 22.04/glibc 2.35.
 - Unqualified: Windows x64/x86/ARM64, macOS x64/ARM64, Linux x86/ARM64/ARMv7.
 
@@ -29,7 +29,7 @@ Run from the Sinter repository, using a new output directory:
 python3 tools/candidate_release.py prepare \
   --candidate /home/lloyd/sinter/dist/preview-0.5.4rc1 \
   --independent-review /home/lloyd/sinter/browser-artifacts/final-independent-qualification \
-  --output /home/lloyd/sinter/dist/publication-review-0.5.4rc1-v2 \
+  --output /home/lloyd/sinter/dist/publication-review-0.5.4rc1-v3 \
   --version 0.5.4rc1 \
   --commit cd928ba7561a09c477b3555e64aa6a3c4cc122b4
 ```
@@ -94,9 +94,9 @@ Recheck the stage and print the exact proposed commands:
 
 ```sh
 python3 tools/candidate_release.py verify \
-  /home/lloyd/sinter/dist/publication-review-0.5.4rc1-v2/candidate-release-manifest.json
+  /home/lloyd/sinter/dist/publication-review-0.5.4rc1-v3/candidate-release-manifest.json
 python3 tools/candidate_release.py commands \
-  /home/lloyd/sinter/dist/publication-review-0.5.4rc1-v2/candidate-release-manifest.json
+  /home/lloyd/sinter/dist/publication-review-0.5.4rc1-v3/candidate-release-manifest.json
 ```
 
 The printed commands are for human review. After explicit approval, the rc-tag
@@ -120,9 +120,15 @@ complete.
 Read the actual GitHub release metadata and confirm the exact tag commit,
 `prerelease=true`, eight expected assets and immutable sizes. Check the latest
 stable-release endpoint separately to confirm its release identity is unchanged.
+The current endpoint returns 404 because the existing releases are prereleases;
+retain and compare that response rather than describing v0.5.3 as stable.
 Download the public checksums and artifacts into a fresh temporary directory;
 verify hashes, source identity and qualification bundle again. Only then provide
 actual public release/download URLs to the site and business agents. Their older
 source-only rehearsals remain historical and do not inherit this candidate's
 installed qualification. Human customer-device acceptance remains a separate
 checkpoint.
+
+The v3 stage corrects the description of v0.5.3 to “published preview”; GitHub
+records it as a prerelease. Its application files and qualification ZIP are
+byte-identical to the independently reviewed v2 stage. Earlier stages are retained.

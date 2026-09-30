@@ -44,9 +44,13 @@ def _write_checksums(folder: Path) -> None:
 
 def release_notes(version: str, commit: str) -> str:
     """Keep public prose bound to the same qualified scope as its manifest."""
+    status = (
+        "This is a separate prerelease; "
+        "the published v0.5.3 preview remains unchanged."
+    )
     return f"""# Sinter {version} — Linux x64 preview
 
-Exact source: `{commit}`. This is a prerelease, not a replacement for stable v0.5.3.
+Exact source: `{commit}`. {status}
 
 Only Linux x64 has installed qualification: Ubuntu 22.04/glibc 2.35, native execution,
 with a clean offline install and actual v0.5.3 package replacement retaining a copied

@@ -18,6 +18,11 @@ Action plans and shared knowledge, with the evidence still in view.
 
 ## Current candidate: 0.5.4rc1
 
+The [Linux x64 preview is published](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc1),
+qualified on Ubuntu 22.04/glibc 2.35. Other platforms are not qualified for this
+candidate. [Publication evidence](docs/releases/PREVIEW_0.5.4rc1_PUBLICATION_RECEIPT.md)
+records the exact public downloads and installed/upgrade scope.
+
 The candidate is frozen at `cd928ba7561a09c477b3555e64aa6a3c4cc122b4`.
 Current `main` is subsequent `0.5.4rc2.dev0` development; its newer recovery
 changes are not included in or qualified by the frozen candidate installers.

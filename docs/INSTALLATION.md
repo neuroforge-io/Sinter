@@ -6,6 +6,13 @@
 
 Choose an actual published asset from [Releases](https://github.com/neuroforge-io/Sinter/releases). Versioned assets include a runtime, web interface, original licence notices and build receipts. The default experience is local and opens in your existing browser, without installing another browser engine.
 
+The current [0.5.4rc1 preview](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc1)
+qualifies **Linux x64 on Ubuntu 22.04/glibc 2.35 only**. Choose its
+[Debian/Ubuntu installer](https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc1/Sinter-0.5.4rc1-linux-x64.deb)
+or native runtime archive. The platform descriptions below explain the packaging
+machinery and earlier downloads; they do not qualify other 0.5.4rc1 targets.
+See [public download verification](releases/PREVIEW_0.5.4rc1_PUBLICATION_RECEIPT.md).
+
 Windows: choose `windows-x64-setup.exe` for most Intel/AMD PCs, `windows-arm64-setup.exe` for an ARM64 installation, or `windows-x86-setup.exe` for a 32-bit installation. Run it as your normal user; it installs under Local AppData and creates a Start menu entry. Desktop shortcuts are optional. Uninstall through Installed apps.
 
 macOS: choose `darwin-arm64.pkg` for Apple Silicon or `darwin-x64.pkg` for an Intel Mac. The package installs `/Applications/Sinter.app`. Open it from Applications. There is no 32-bit macOS package. Remove the app using normal administrator-approved software management when it is no longer needed.
