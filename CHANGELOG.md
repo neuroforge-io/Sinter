@@ -5,6 +5,13 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Keep local download bytes available during browser handoff, release them after
+  a bounded interval and clean up immediately on a dispatch error. Say a download
+  was requested instead of claiming the browser saved it. An explicit repeat Word
+  download reuses the exact prepared file; changed wording or titles prepare a
+  new file. Refuse stale or pending edits introduced during preparation without
+  losing them or replaying a model request.
+
 - Show whether casebook inputs are saved, unsaved or still pending in the source
   editor. Keep report saving separate. Clear only the earlier project-save
   confirmation when new input changes; retain recovery errors and restore focus

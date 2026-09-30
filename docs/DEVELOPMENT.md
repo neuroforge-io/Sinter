@@ -24,6 +24,7 @@ python tools/communication_view_browser.py
 python tools/handover_appendix_browser.py
 python tools/casebook_save_state_browser.py
 python tools/document_export_browser.py
+python tools/download_lifecycle_browser.py
 python tools/document_page_break_browser.py
 python tools/quality_browser.py
 ```
@@ -43,6 +44,7 @@ The same setup runs `browser_smoke.py`, `studio_browser.py`, `desktop_browser.py
 `campaign_action_bar_browser.py`,
 `communication_view_browser.py`,
 `handover_appendix_browser.py`, `document_export_browser.py`,
+`download_lifecycle_browser.py`,
 `document_page_break_browser.py`,
 `quality_browser.py` and `site_browser.py`. Use `--chromium /path/to/chromium` or
 `SINTER_CHROMIUM` for an existing browser; the command-line option takes priority.

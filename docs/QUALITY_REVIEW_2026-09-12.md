@@ -188,7 +188,7 @@ pending wording remain available. The scoped control assessment was **8 for user
 experience, 8.5 for functionality and 7.5 for aesthetics**. It does not qualify
 physical mobile keyboards, an installed package or the whole product.
 
-On the final development bytes, the full Python suite passed **1,939 tests with
+At the campaign-control checkpoint, the full Python suite passed **1,939 tests with
 five platform-inapplicable skips**. The configured fatal Ruff gate, public-boundary
 check and deterministic offline self-audit also passed. The actual browser checks
 reported no external or model calls. A reusable profiler retained another 61
@@ -202,3 +202,32 @@ identical, retaining 13 routes, 84 sources, 27 products/assets, ten communicatio
 and 19 actions. No credentials, private correspondence or campaign evidence were
 added to the public repository or release assets. No hosted model allowance was
 used, and no new application or outgoing message was sent by this cycle.
+
+### Browser download handoff and explicit local recovery
+
+Download feedback now reports a request to the browser rather than claiming a
+file was saved. Local Blob URLs have a bounded 60-second handoff lifetime and
+immediate cleanup on a dispatch exception. A repeated explicit Word click reuses
+the exact prepared title and applied wording. Changed titles or wording require
+a new local compile; pending or changed input introduced while compilation is in
+flight prevents a stale export and retains the editor.
+
+The independent review passed ten source-bound fictional browser journeys and
+seven additional adversarial scenarios, including delayed handoff, compile
+failure, rapid clicks, conflicting input and isolated reports with identical
+titles. Existing export and recovery journeys also passed. The full local Python
+suite passed **1,944 tests with five platform-inapplicable skips**, alongside the
+configured fatal Ruff and narrow public-boundary checks. These are source tests,
+not installed-platform or customer-device qualification.
+
+Separately, the actual in-app browser produced Word and JSON files for three
+saved NeuroForge preparation cases. Checks compared retained files, not success
+notifications, and preserved the original report fields, source identities and
+complete generated handover wording. An explicit unchanged repeat produced an
+identical Word file. Earlier in-app attempts had displayed a notification without
+a retained file; the successful recheck also followed a fresh app process and
+browser tab. The original failure's cause is not established by these observations
+or by the deliberately delayed fictional handoff probe. No browser security
+setting was changed or bypassed. The scoped download-control judgment was **8 for
+user experience, 8.5 for functionality and 7.5 for aesthetics**, not a whole-product
+rating. Published preview installers are unchanged.

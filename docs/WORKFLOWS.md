@@ -59,6 +59,13 @@ A custom template cannot turn an unverified generative output into a verified re
 
 Save explicitly in **My workspace**, copy the readable draft, download Markdown or a portable HTML document, or export a Word file built only from the current draft text. The JSON evidence pack keeps the original model output, sources and any later edits. Browser printing also supports Save as PDF through your browser. Sinter does not upload saved reports to a cloud account, send official communications or approve records.
 
+A download notification means Sinter requested the browser transfer. Check your
+browser's downloads for the actual file. Clicking **Download Word** again with
+the same applied wording reuses the prepared local file. Changed wording or a
+changed title prepares a new file; edits made during preparation remain in the
+editor and must be applied before downloading. No model request is repeated by
+this local export action.
+
 To keep an operator's front page separate from the supporting evidence, open
 **Edit draft**, place the cursor after the front-page wording and choose **Insert
 page break**. For a campaign, use **Edit decision brief**. The control retains

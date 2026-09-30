@@ -77,6 +77,7 @@ jobs:
       - run: python tools/community_recovery_browser.py
       - run: python tools/report_recovery_browser.py
       - run: python tools/document_export_browser.py
+      - run: python tools/download_lifecycle_browser.py
       - run: python tools/document_page_break_browser.py
       - run: python tools/garden_practice_browser.py
       - run: python tools/campaign_guidance_browser.py

@@ -164,13 +164,28 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
     ? check('Include full communication records and personal contact details '
       + 'in this download', false)
     : null;
+  let preparedWord;
+  const wordInput = () => ({title: report.document_title || report.title || 'Sinter draft', markdown: documentMarkdown(report)});
+  const sameWordInput = (left, right) => left?.title === right.title && left?.markdown === right.markdown;
   const word = button(isCampaign ? 'Download Word brief (.docx)' : 'Download Word (.docx)', async () => {
     if (!canUseDocument()) return;
+    const snapshot = wordInput();
     word.disabled = true;
     try {
-      const content = await request('/api/documents/docx', {data: {title: report.document_title || report.title || 'Sinter draft', markdown: documentMarkdown(report)}, responseType: 'blob'});
-      download(reportName(report.document_title || report.title || 'Sinter draft') + '.docx', content, content.type);
-      feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, 'Word document downloaded. Open it to keep editing.')); announce('Word document downloaded.');
+      if (!sameWordInput(preparedWord, snapshot)) {
+        const content = await request('/api/documents/docx', {data: snapshot, responseType: 'blob'});
+        preparedWord = {...snapshot, content};
+        if (!canUseDocument('downloading Word')) return;
+        if (!sameWordInput(snapshot, wordInput())) {
+          const message = 'The draft changed while Word was being prepared. Click Download Word again to prepare the current wording. Your edits are retained.';
+          feedback.replaceChildren(notice(message, 'warning')); announce(message);
+          return;
+        }
+      }
+      // An explicit retry of unchanged wording stays within this click and
+      // reuses the prepared local file; it does not replay the compile request.
+      download(reportName(snapshot.title) + '.docx', preparedWord.content, preparedWord.content.type);
+      feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, 'Word download requested. Check your browser’s downloads, then open the file to keep editing.')); announce('Word download requested. Check your browser’s downloads.');
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
     finally { word.disabled = false; }
   });
@@ -222,8 +237,8 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
       privateExport.input.checked = false;
       evidencePack.textContent = 'Download redacted evidence pack';
       feedback.replaceChildren(notice(
-        'Downloaded with private campaign details. Keep this file private; '
-          + 'Sinter did not transmit it.', 'warning'));
+        'Download requested with private campaign details. Check your browser’s '
+          + 'downloads. Keep this file private; Sinter did not transmit it.', 'warning'));
     }
   });
   if (privateExport) privateExport.input.addEventListener('change', () => {

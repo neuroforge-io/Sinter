@@ -39,9 +39,19 @@ export function announce(message) {
 
 export function download(name, content, type = 'text/plain;charset=utf-8') {
   const url = URL.createObjectURL(new Blob([content], {type}));
-  const link = h('a', {href: url, download: name});
-  document.body.append(link); link.click(); link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  let link;
+  try {
+    link = h('a', {href: url, download: name});
+    document.body.append(link); link.click();
+    // Browser download handoff can outlive the click, especially in an embedded
+    // browser. Retain the bytes briefly; clicking cannot confirm a saved file.
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    URL.revokeObjectURL(url);
+    throw error;
+  } finally {
+    link?.remove();
+  }
 }
 
 export function reportName(title) {
