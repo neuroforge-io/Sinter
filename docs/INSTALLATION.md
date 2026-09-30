@@ -31,6 +31,11 @@ does not prove a live ChatGPT sign-in or access for your account.
 
 ## Platform qualification
 
+The table below declares the CI build/test environments. It is not a pass matrix
+for every candidate. The published v0.5.3 packages predate current main; consult
+[0.5.4rc1 candidate qualification](PREVIEW_0.5.4rc1.md) and its exact receipts
+before treating a newer platform as tested.
+
 | Target | Build / installed-app execution |
 | --- | --- |
 | Windows x64 | Windows Server 2022 x64 runner, Python 3.13 |

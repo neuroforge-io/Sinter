@@ -260,12 +260,16 @@ class QualityChecks:
         page.on('request', lambda request: model_posts.append(request.url)
                 if request.method == 'POST' and request.url.endswith('/api/models') else None)
         for identity, minimum, ceiling in (
-            ('auto', 32, 512), ('erais-dense-gemma4-e4b', 32, 512),
-            ('erais-native-qwen3', 1, 128), ('erais-fracture-gemma', 32, 2048),
+            ('auto', 32, 2048), ('erais-dense-gemma4-e4b', 32, 2048),
+            ('erais-native-qwen3', 1, 2048), ('erais-fracture-gemma', 32, 2048),
         ):
             model.fill(identity)
             expect(maximum).to_have_attribute('min', str(minimum))
             expect(maximum).to_have_attribute('max', str(ceiling))
+            if identity == 'erais-native-qwen3':
+                expect(page.get_by_text('Native ERAIS applies at most 128', exact=False)).to_be_visible()
+            if identity == 'erais-dense-gemma4-e4b':
+                expect(page.get_by_text('The dense NeuroForge preview applies at most 512', exact=False)).to_be_visible()
             for invalid in (str(minimum - 1), str(ceiling + 1), '8192', str(minimum) + '.5', ''):
                 maximum.fill(invalid)
                 assert not maximum.evaluate('(input) => input.checkValidity()'), (identity, invalid)
@@ -290,7 +294,7 @@ class QualityChecks:
         page.get_by_label('API style', exact=True).select_option('openai-compatible')
         set_address('https://neuroforge.io/v1')
         model.fill('auto')
-        expect(maximum).to_have_attribute('max', '512')
+        expect(maximum).to_have_attribute('max', '2048')
         maximum.fill('512')
         page.get_by_label('Reading size', exact=True).select_option('large')
         page.get_by_label('Colour theme', exact=True).select_option('light')
@@ -692,6 +696,9 @@ def main(argv=None):
                 checks.check('research-evidence-roundtrip', checks.research)
                 checks.check('meeting-statistics', checks.meeting_stats)
                 checks.check('settings-validity', checks.settings)
+                # Later synthetic long-template journeys explicitly use the legacy
+                # profile; native discovery/admission has its own gateway suite.
+                server.app.preferences.update({'model': client.MODEL, 'max_tokens': 2048})
                 checks.check('template-stream-complete', lambda page: checks.template_stream(page, complete=True))
                 checks.check('template-stream-partial', lambda page: checks.template_stream(page, complete=False))
                 checks.check('template-job-recovery', checks.template_job)

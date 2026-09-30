@@ -13,6 +13,8 @@ export async function playground({setBusy, seed = {}, remember}) {
     h('p', {}, 'Write, summarise, research or ask a question. Your source material stays visible alongside the result.')),
     h('p', {class: 'workspace-hint'}, 'Uses your configured model service. Review the result before using it.'), mode.wrap, view);
   const history = [];
+  const templateDrafts = new Map();
+  let lastTemplate = seed.template || 'enquiry-letter', senderDraft = seed;
   let active = false, controller;
   const assistantBusy = value => { mode.input.disabled = value; setBusy(value); };
   async function execute(path, data, onEvent, done) {
@@ -72,9 +74,9 @@ export async function playground({setBusy, seed = {}, remember}) {
   async function templateView() {
     const {templates} = await request('/api/templates');
     if (mode.input.value !== 'templates') return;
-    const choice = selectField('Template', templates.map(template => [template.id, template.name]), seed.template || 'enquiry-letter');
+    const choice = selectField('Template', templates.map(template => [template.id, template.name]), lastTemplate);
     const fields = h('div'), output = h('div', {class: 'template-output'});
-    const sender = senderFields(seed, preferences.settings);
+    const sender = senderFields(senderDraft, preferences.settings);
     let inputs = {}, selected, prepared, previewButton, submit, previewRevision = 0;
     const transmission = h('div', {class: 'stack'});
     const approval = check('I approve sending exactly this selected material to the displayed model service.');
@@ -92,15 +94,19 @@ export async function playground({setBusy, seed = {}, remember}) {
       if (submit) submit.disabled = !!selected?.compact_source;
     }
     function rememberInput() {
+      templateDrafts.set(choice.input.value, Object.fromEntries(Object.entries(inputs).map(([name, input]) => [name, input.value])));
+      lastTemplate = choice.input.value; senderDraft = sender.values();
       remember?.('explore', {mode: 'templates', template: choice.input.value, variables: Object.fromEntries(Object.entries(inputs).map(([name, input]) => [name, input.value])), ...sender.values()});
     }
     function choose() {
+      if (selected) templateDrafts.set(selected.id, Object.fromEntries(Object.entries(inputs).map(([name, input]) => [name, input.value])));
       inputs = {}; fields.replaceChildren();
       selected = templates.find(item => item.id === choice.input.value);
       fields.append(h('p', {class: 'muted'}, selected.description));
       const defaults = {format: 'Concise bullet points', level: 'Plain language', language: 'Identify from the code', organisation: preferences.settings.organisation || ''};
       for (const variable of selected.variables) {
-        const value = seed.template === selected.id ? seed.variables?.[variable.name] ?? defaults[variable.name] ?? '' : defaults[variable.name] || '';
+        const value = templateDrafts.get(selected.id)?.[variable.name] ??
+          (seed.template === selected.id ? seed.variables?.[variable.name] ?? defaults[variable.name] ?? '' : defaults[variable.name] || '');
         const entry = field(variable.label, ['recipient', 'audience', 'format', 'level', 'language', 'topic'].includes(variable.name) ? 'text' : 'textarea', value, '', {maxLength: 60000, rows: ['context', 'guidelines', 'code', 'text', 'prompt'].includes(variable.name) ? 7 : 3});
         inputs[variable.name] = entry.input; fields.append(entry.wrap);
       }
@@ -133,6 +139,7 @@ export async function playground({setBusy, seed = {}, remember}) {
     const inputSummary = h('summary', {hidden: true}, 'Review or edit template inputs');
     const inputPanel = h('details', {class: 'project-inputs', open: true}, inputSummary, form);
     form.addEventListener('input', event => {
+      if (event.target === choice.input) return; // Selection's change handler first loads its own fields.
       rememberInput();
       if (event.target !== approval.input) invalidatePreview();
     });
@@ -170,7 +177,7 @@ export async function playground({setBusy, seed = {}, remember}) {
         const selectedStep = selected.output_step ?? saved.results.length - 1;
         let document = saved.results[selectedStep]?.content || saved.results.at(-1).content;
         if (selected.id === 'research' && saved.results[2]) document += '\n\n## Next actions\n\n' + saved.results[2].content;
-        const subject = variables.recipient || variables.topic || variables.audience || '';
+        const subject = variables.source_title || variables.recipient || variables.topic || variables.audience || '';
         const draftTitle = (selected.name + (subject ? ' — ' + subject.trim() : '')).slice(0, 200);
         const report = {workflow: 'template', title: draftTitle, document_title: draftTitle,
           markdown: saved.results.map(item => '## ' + item.step + '\n\n' + item.content).join('\n\n'),

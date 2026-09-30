@@ -49,3 +49,14 @@ describes the declared matrix; actual candidate receipts establish what ran.
 Release promotion requires the advertised platform's installed and upgrade
 evidence, a useful local walkthrough and clear unsupported-feature representation.
 Hosted AI quality and availability remain optional, separately reported limits.
+
+## Independent critic
+
+The scoped offline source/campaign assessment is UX **7.5/10**, functionality
+**8.5/10** and aesthetics **7.5/10**. The critic used actual local source,
+save/reopen/restore/conflict and compact-source interface journeys. It found and
+rechecked delayed-preview, citation, template-switch data-loss and report-title
+defects. These fixes do not establish extraordinary design, live assistant
+quality, a funding outcome or representative customer acceptance. Long forms and
+deliberate transfer between separate records remain usability limits. No aspect
+is claimed to be 10/10.

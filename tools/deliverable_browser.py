@@ -603,6 +603,7 @@ def main(argv=None):
                 checks.check('complete-example-copy-export', checks.complete_example)
                 checks.check('profile-defaults-explicit-blanks', checks.profile_roundtrip)
                 checks.check('edit-save-reopen-original-retained', checks.edited_draft_roundtrip)
+                server.app.preferences.update({'model': client.MODEL, 'max_tokens': 2048})
                 checks.check('template-final-document', checks.template_document)
                 checks.check('readable-safe-markdown', checks.readable_markdown)
                 checks.check('assistant-selected-record-evidence', checks.assistant_evidence)
