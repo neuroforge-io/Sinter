@@ -59,6 +59,21 @@ A custom template cannot turn an unverified generative output into a verified re
 
 Save explicitly in **My workspace**, copy the readable draft, download Markdown or a portable HTML document, or export a Word file built only from the current draft text. The JSON evidence pack keeps the original model output, sources and any later edits. Browser printing also supports Save as PDF through your browser. Sinter does not upload saved reports to a cloud account, send official communications or approve records.
 
+To keep an operator's front page separate from the supporting evidence, open
+**Edit draft**, place the cursor after the front-page wording and choose **Insert
+page break**. For a campaign, use **Edit decision brief**. The control retains
+selected text; it does not replace it. Choose **Apply edits**, then **Save to this
+computer**. Word and printed HTML begin the following content on a new page.
+Review the exported layout: Sinter does not shorten or remove evidence to make a
+front page fit.
+
+The saved Markdown keeps `<!-- sinter-page-break -->` on its own line, separated
+from surrounding blocks by blank lines. This exact top-level marker is the
+portable Sinter page boundary; other Markdown readers may ignore it. Markers
+inside quotations, code, lists or table cells remain literal source text.
+Copying readable draft text omits the page-boundary label. Original report text,
+source evidence and previously saved reports remain available separately.
+
 Data is stored without encryption in `~/.sinter/workspace.sqlite3` (or your `SINTER_DATA_DIR`). Back it up responsibly. Unsaved inputs are retained only during this browser session; reload or closing the app can lose them. Returning to Overview lets you continue an unsaved real project without erasing its inputs.
 
 ## Community tools and knowledge

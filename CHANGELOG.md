@@ -10,6 +10,11 @@ installers and have not received installed-platform qualification.
   headroom. Preserve shorter task deadlines, cancellation, saved settings and
   other providers; never automatically retry generation.
 
+- Add an explicit **Insert page break** draft-editor action. Applied edits keep
+  the boundary in Markdown and use native Word and printed HTML page breaks,
+  retaining all following evidence. Quoted and fenced markers remain literal;
+  original reports and source records are preserved.
+
 - Record each funding ceiling's currency explicitly, including unconfirmed and
   unsupported other currencies. Keep project costs in AUD and withhold numeric
   ceiling comparisons across denominations; show the review needed without an

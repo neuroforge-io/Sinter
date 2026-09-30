@@ -40,7 +40,13 @@ class Table:
     alignments: tuple[str, ...]
 
 
-Block = Paragraph | Table
+@dataclass(frozen=True)
+class PageBreak:
+    """An explicit document boundary, never inferred from source wording."""
+
+
+PAGE_BREAK_MARKER = "<!-- sinter-page-break -->"
+Block = Paragraph | Table | PageBreak
 _INLINE = re.compile(
     r"\\[\\`*_{}\[\]#!|>]|\*\*([^\n]+?)\*\*|(?<!\w)__([^\n]+?)__(?!\w)"
     r"|(?<!`)(`+)(?!`)([^\n]*?)(?<!`)\3(?!`)"
@@ -155,6 +161,16 @@ def parse(markdown: str) -> tuple[Block, ...]:
         while i < len(lines):
             line = lines[i]
             if not line.strip():
+                i += 1
+                continue
+            if (
+                depth == 0
+                and not quote
+                and line == PAGE_BREAK_MARKER
+                and (i == 0 or not lines[i - 1].strip())
+                and (i + 1 == len(lines) or not lines[i + 1].strip())
+            ):
+                result.append(PageBreak())
                 i += 1
                 continue
             fence = re.fullmatch(r"\s*(`{3,}|~{3,})([^\s]*)\s*", line)

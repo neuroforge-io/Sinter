@@ -3,6 +3,7 @@ import {
   h, button, check, field, markdown, download, reportName, notice, announce,
 } from './ui.js';
 import {request} from './api.js';
+import {insertDocumentPageBreak} from './document-page-break.js';
 
 const REDACTED = '[Redacted from this export]';
 const PRIVATE_PACK_NOTICE = 'This export omits communication bodies, subjects, '
@@ -87,6 +88,7 @@ export function plainDocument(value) {
   const node = markdown(value);
   function text(element) {
     if (element.nodeType === Node.TEXT_NODE) return element.textContent;
+    if (element.className?.split(/\s+/).includes('document-page-break')) return '';
     if (element.tagName === 'BR') return '\n';
     if (element.tagName === 'PRE') return element.textContent;
     if (element.tagName === 'UL' || element.tagName === 'OL') {
@@ -119,6 +121,8 @@ export function documentExportStyles(report) {
   const shared = 'h1,h2,h3,h4{font-family:system-ui,sans-serif;line-height:1.25}h1{font-size:30px}h2{font-size:23px;margin-top:1.6em}h3{font-size:18px}p{margin:0 0 1em}li{margin:.35em 0}'
     + 'blockquote{margin:1em 0;padding-left:18px;border-left:3px solid #b59a54}pre{white-space:pre-wrap;background:#f5f5f1;padding:18px}code{font-size:.9em}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;text-align:left}.align-center{text-align:center}.align-right{text-align:right}.table-scroll{overflow-x:auto;margin:1em 0}li>p{margin:.35em 0}a{color:#245989}'
     + '.status{font:11px system-ui,sans-serif;letter-spacing:.08em;color:#626b72;text-transform:uppercase;margin-bottom:28px}.document{overflow-wrap:anywhere}'
+    + '.document-page-break{border-top:1px dashed #ccc;margin:1.5em 0;padding-top:.5em;color:#626b72;font:11px system-ui,sans-serif}'
+    + '@media print{.document-page-break{break-after:page;page-break-after:always;height:0;margin:0;padding:0;border:0;font-size:0;color:transparent}}'
     + '@media(max-width:650px){.sheet{margin:0;padding:28px 22px;border:0}}@media print{body{background:white}.sheet{margin:0;padding:0;border:0}.status{font-size:9px}.table-scroll{overflow:visible}h1,h2,h3,h4{break-after:avoid}tr{break-inside:avoid}}';
   if (report.workflow !== 'campaign') {
     return 'body{margin:0;background:#f3f2ed;color:#202a35;font:17px/1.65 Georgia,serif}.sheet{max-width:720px;margin:40px auto;padding:55px 64px;background:white;border:1px solid #deded6}'
@@ -170,7 +174,7 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
     finally { word.disabled = false; }
   });
-  const input = field(isCampaign ? 'Edit the decision brief' : 'Edit your draft', 'textarea', editorSeed?.text || '', 'Apply edits, then save the draft to keep them after closing Sinter. The original output and source evidence are retained.', {rows: 18, maxLength: 500000});
+  const input = field(isCampaign ? 'Edit the decision brief' : 'Edit your draft', 'textarea', editorSeed?.text || '', 'Apply edits, then save the draft to keep them after closing Sinter. Use Insert page break at your cursor to start the following content on a new exported page. The original output and source evidence are retained.', {rows: 18, maxLength: 500000});
   function canUseDocument(operation = 'copying, downloading or printing') {
     if (!hasUnappliedDocumentEdits(documentMarkdown(report), input.input.value, !editor.hidden)) return true;
     const message = `Apply or cancel your pending draft edits before ${operation}. Your text is still in the editor.`;
@@ -186,7 +190,27 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
     report.document_edits = {markdown: input.input.value, edited_at: new Date().toISOString(), author: 'user'};
     editor.hidden = true; onChange(); feedback.replaceChildren(notice('Edits applied. Save this draft to keep them.', 'success')); announce('Draft updated. Original evidence retained.'); exports.querySelector('summary').focus();
   }, 'primary');
-  editor.append(input.wrap, h('div', {class: 'button-row'}, apply, button('Cancel edits', () => { editor.hidden = true; onEditorChange('', false); exports.querySelector('summary').focus(); })));
+  const pageBreak = button('Insert page break', () => {
+    const inserted = insertDocumentPageBreak(input.input.value, input.input.selectionStart);
+    if (inserted.text.length > input.input.maxLength) {
+      feedback.replaceChildren(notice('Keep this draft under 500,000 characters before inserting a page break. Your text is unchanged.', 'error'));
+      return;
+    }
+    // A marker inside a literal code block cannot become a page boundary.
+    // Use the same safe renderer as the document instead of a second lexer.
+    const boundaries = text => markdown(text).querySelectorAll('.document-page-break').length;
+    if (boundaries(inserted.text) !== boundaries(input.input.value) + 1) {
+      feedback.replaceChildren(notice('Place the cursor between document paragraphs, outside code or quoted text, before inserting a page break. Your text is unchanged.', 'error'));
+      input.input.focus();
+      return;
+    }
+    input.input.value = inserted.text;
+    input.input.focus(); input.input.setSelectionRange(inserted.cursor, inserted.cursor);
+    onEditorChange(input.input.value, true);
+    feedback.replaceChildren(notice('Page break inserted. Apply edits, then save the draft to keep it.'));
+    announce('Page break inserted at your cursor. Apply edits to use it.');
+  }, 'quiet');
+  editor.append(input.wrap, h('div', {class: 'button-row'}, apply, pageBreak, button('Cancel edits', () => { editor.hidden = true; onEditorChange('', false); exports.querySelector('summary').focus(); })));
   const evidencePack = button(
     isCampaign ? 'Download redacted evidence pack' : 'Download evidence pack', () => {
     if (!canUseDocument()) return;

@@ -12,7 +12,15 @@ import pytest
 from test_runtime import post, request, server  # noqa: F401
 
 from sinter import client, evidence
-from sinter.document_markup import Paragraph, Table, inline, parse, safe_href
+from sinter.document_markup import (
+    PAGE_BREAK_MARKER,
+    PageBreak,
+    Paragraph,
+    Table,
+    inline,
+    parse,
+    safe_href,
+)
 from sinter.docx_export import MAX_MARKDOWN, MIME, REL, R, W, export_docx
 
 NS = {"w": W, "r": R, "rel": REL}
@@ -87,6 +95,71 @@ def test_native_word_package_opens_has_required_relationships_and_deterministic_
             f"{{{W}}}instrText",
             f"{{{W}}}fldSimple",
         }
+
+
+def test_explicit_page_boundary_is_native_and_retains_all_following_evidence():
+    body = (
+        "# Fictional operator front page\n\nCurrent scope stays unconfirmed.\n\n"
+        + PAGE_BREAK_MARKER
+        + "\n\n## Selected evidence\n\n> Original source: Fictional note\n\n"
+        "> Source link (supplied): https://example.invalid/note\n"
+        "> Date label (supplied): Not confirmed\n\n"
+        "> Exact supplied words café 🌿 remain unchanged.\n\n"
+        "> Reference key: Eaaaaaaaaaaaaaaaa\n> Range: 0–43\n"
+    )
+    original = body
+    blocks = parse(body)
+    assert sum(isinstance(block, PageBreak) for block in blocks) == 1
+    _, parts = package(body)
+    document = parts["word/document.xml"]
+    breaks = document.findall("w:body/w:p/w:r/w:br", NS)
+    native = [node for node in breaks if node.get(f"{{{W}}}type") == "page"]
+    assert len(native) == 1
+    assert PAGE_BREAK_MARKER not in text(document)
+    assert "Exact supplied words café 🌿 remain unchanged." in text(document)
+    assert "Reference key: Eaaaaaaaaaaaaaaaa\nRange: 0–43" in text(document)
+    paragraphs = document.findall("w:body/w:p", NS)
+    boundary = next(
+        index
+        for index, node in enumerate(paragraphs)
+        if node.find('w:r/w:br[@w:type="page"]', NS) is not None
+    )
+    assert text(paragraphs[boundary - 1]) == "Current scope stays unconfirmed."
+    assert text(paragraphs[boundary + 1]) == "Selected evidence"
+    assert body == original
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "```text\n" + PAGE_BREAK_MARKER + "\n```",
+        "> " + PAGE_BREAK_MARKER,
+        "- " + PAGE_BREAK_MARKER,
+        "- A list item\n\n  " + PAGE_BREAK_MARKER,
+        "| Source |\n| --- |\n| " + PAGE_BREAK_MARKER + " |",
+        "Before " + PAGE_BREAK_MARKER + " after.",
+        "Before\n" + PAGE_BREAK_MARKER + "\nAfter",
+        "   " + PAGE_BREAK_MARKER,
+        PAGE_BREAK_MARKER + "<script>alert(1)</script>",
+    ],
+)
+def test_page_marker_in_literal_or_nested_material_never_becomes_a_break(body):
+    assert not any(isinstance(block, PageBreak) for block in parse(body))
+    _, parts = package(body)
+    document = parts["word/document.xml"]
+    assert not document.findall('.//w:br[@w:type="page"]', NS)
+    assert PAGE_BREAK_MARKER in text(document)
+
+
+def test_explicit_boundary_stops_source_caption_grouping():
+    _, parts = package(
+        "> Original source: Fictional caption\n\n"
+        + PAGE_BREAK_MARKER
+        + "\n\n> A separate supplied note."
+    )
+    caption = parts["word/document.xml"].find("w:body/w:p", NS)
+    assert caption.find("w:pPr/w:keepLines", NS) is not None
+    assert caption.find("w:pPr/w:keepNext", NS) is None
 
 
 def test_paragraphs_headings_emphasis_signatures_and_verbatim_code():

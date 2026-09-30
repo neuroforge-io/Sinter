@@ -1,5 +1,6 @@
 /** Readable, bounded Markdown rendering without interpreting HTML from any source. */
 import {h, safeLink} from './dom.js';
+import {isDocumentPageBreak} from './document-page-break.js';
 
 function literal(value) {
   return value.replace(/\\([\\`*_{}\[\]#!|>])/g, '$1')
@@ -58,6 +59,11 @@ function blocks(lines, root, depth = 0) {
   while (i < lines.length) {
     const line = lines[i];
     if (!line.trim()) { i++; continue; }
+    if (isDocumentPageBreak(lines, i, depth)) {
+      root.append(h('div', {class: 'document-page-break', role: 'separator',
+        'aria-label': 'Page break'}, 'Page break'));
+      i++; continue;
+    }
     const fence = /^\s*(`{3,}|~{3,})([^\s]*)\s*$/.exec(line);
     if (fence) {
       const content = []; i++;

@@ -21,6 +21,8 @@
 .document table{border-collapse:collapse;width:100%;font-family:ui-sans-serif,system-ui,sans-serif;font-size:.82rem;line-height:1.5}.document th,.document td{border-bottom:1px solid var(--line);padding:11px 13px;vertical-align:top;min-width:100px}.document th{font-weight:650;background:var(--raised);text-align:left}.document tr:last-child td{border-bottom:0}
 .document .citation-link{font-family:ui-sans-serif,system-ui,sans-serif;white-space:nowrap}
 .document .align-center{text-align:center}.document .align-right{text-align:right}
+.document .document-page-break{border-top:1px dashed var(--line);margin:1.5em 0;padding-top:.5em;color:var(--muted);font:11px ui-sans-serif,system-ui,sans-serif}
+@media print{.document .document-page-break{break-after:page;page-break-after:always;height:0;margin:0;padding:0;border:0;font-size:0;color:transparent}}
 .evidence-overview{display:flex;justify-content:space-between;gap:20px;align-items:center;margin:18px 0}.evidence-overview h3{font-size:1rem;margin:0 0 6px}.evidence-overview p{font-size:.8rem;margin:0;max-width:340px}
 .evidence-panel .document{font-size:.86rem;padding:24px}.sources-panel{position:static}.source-metadata{margin:16px 0 0;font-size:.78rem}.source-metadata summary{min-height:30px}.source-usage-count{font-size:.72rem;color:var(--muted);font-weight:400;white-space:nowrap}
 .completion-panel{display:flex;align-items:center;justify-content:space-between;gap:18px;border:1px solid var(--edge);border-left:3px solid var(--accent);padding:15px 18px;margin-bottom:18px;border-radius:10px;background:var(--surface)}.completion-panel strong{font-size:.86rem}.completion-panel p{font-size:.8rem;color:var(--muted);margin:4px 0 0}

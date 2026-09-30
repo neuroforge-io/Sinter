@@ -13,7 +13,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from xml.etree import ElementTree as ET
 
-from .document_markup import Paragraph, Span, Table, parse
+from .document_markup import Block, PageBreak, Paragraph, Span, Table, parse
 
 MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 MAX_MARKDOWN = 500_000
@@ -78,7 +78,7 @@ def _text(value: object, name: str, limit: int, *, single_line: bool = False) ->
     return value
 
 
-def _source_note_keep_next(blocks: list[Paragraph | Table]) -> frozenset[int]:
+def _source_note_keep_next(blocks: tuple[Block, ...]) -> frozenset[int]:
     """Pair supplied source metadata with one small quoted paragraph only."""
     keep = set()
 
@@ -289,6 +289,13 @@ class _Package:
                 self.paragraph(cell, Paragraph(spans), align=table.alignments[at])
         self.paragraph(self.body, Paragraph(()))
 
+    def page_break(self) -> None:
+        """Use a native editable Word break without a section or hidden content."""
+        node = _element(self.body, "p")
+        properties = _element(node, "pPr")
+        _element(properties, "spacing", before=0, after=0)
+        _element(_element(node, "r"), "br", type="page")
+
 
 def _styles() -> ET.Element:
     styles = ET.Element(f"{{{W}}}styles")
@@ -355,7 +362,9 @@ def export_docx(payload: object) -> WordDocument:
     blocks = parse(markdown)
     keep_next = _source_note_keep_next(blocks)
     for index, block in enumerate(blocks):
-        if isinstance(block, Table):
+        if isinstance(block, PageBreak):
+            package.page_break()
+        elif isinstance(block, Table):
             package.table(block)
         else:
             package.paragraph(
