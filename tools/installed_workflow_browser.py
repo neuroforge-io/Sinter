@@ -1097,17 +1097,24 @@ def main(argv: list[str] | None = None) -> None:
         return
     args = arguments(argv)
     try:
-        import playwright.sync_api  # noqa: F401
+        from playwright.sync_api import Error as BrowserError
     except ImportError:
         raise SystemExit(
             "Host Playwright is required: install .[browser] and Chromium."
         ) from None
     try:
         qualify(args, args.fixture)
-    except (AssertionError, OSError, ValueError, subprocess.SubprocessError):
+    except (
+        AssertionError,
+        OSError,
+        ValueError,
+        subprocess.SubprocessError,
+        BrowserError,
+        zipfile.BadZipFile,
+        ElementTree.ParseError,
+    ):
         raise SystemExit(
-            "Installed workflow failed; incomplete receipt retained. "
-            "No check was skipped."
+            "Installed workflow failed; no completed qualification was produced."
         ) from None
     print(
         "PASS: installed offline UI, actual restart, Word/backups/restores and cleanup."
