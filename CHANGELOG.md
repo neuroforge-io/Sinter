@@ -1,9 +1,16 @@
 # Changelog
 
-## 0.5.4rc2 - next local workflow candidate
+## 0.5.4rc2 - published Linux local workflow preview
 
-Candidate source version; fresh installation and upgrade receipts establish
-platform qualification and published assets. Prior previews remain unchanged.
+Published [30 September 2026](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc2)
+from `256d38fa4b61a4d548472ce5abfd0bf513789090`. Installed qualification is
+Linux x64 on Ubuntu 22.04/glibc 2.35 only. Both actual published v0.5.3 and
+v0.5.4rc1 package upgrades passed with copied fictional workspaces, preferences
+and explicit model selections retained. Fifteen offline installed-browser checks
+retain five screenshots, a Word handover and two JSON backups. See
+[preview evidence and limitations](docs/PREVIEW_0.5.4rc2.md).
+Prior previews remain unchanged; later documentation on main is not new package
+source or additional platform qualification.
 
 - Pin both published preview sources and Linux installers for independent copied
   and actual package-upgrade checks. Reject changed or oversized extracted prior
@@ -48,6 +55,9 @@ platform qualification and published assets. Prior previews remain unchanged.
   preparation succeeds. Focus a completed casebook report so it is easy to find.
 - These changes follow the frozen `cd928ba` 0.5.4rc1 candidate. They do not modify
   that candidate's assets or inherit its installed-platform qualification.
+
+This unsigned preview does not qualify other platforms, customer-device
+acceptance, general native assistant quality or completed live ChatGPT generation.
 
 ## 0.5.4rc1 - local workflow and native API candidate
 

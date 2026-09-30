@@ -1,13 +1,32 @@
-# Sinter 0.5.4rc2 candidate
+# Sinter 0.5.4rc2 Linux preview
 
-This is the preparation snapshot before installer qualification. Actual published
-assets and retained release receipts establish availability and tested targets;
-a source version alone does not. The preceding Linux x64 preview is
+The [0.5.4rc2 prerelease](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc2)
+was published on 30 September 2026 from exact source
+`256d38fa4b61a4d548472ce5abfd0bf513789090`. Installed qualification covers
+**Linux x64 on Ubuntu 22.04/glibc 2.35 only**. Later main documentation,
+including the release-note clarification at `6f2b401`, does not change the
+published package source. [Public download verification](releases/PREVIEW_0.5.4rc2_PUBLICATION_RECEIPT.md)
+records the public assets and retained evidence.
+
+The preceding Linux x64 preview is
 [0.5.4rc1](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc1),
 frozen at `cd928ba7561a09c477b3555e64aa6a3c4cc122b4`. Neither that tag nor
 the earlier v0.5.3 preview is replaced.
 
-## Changes being qualified
+## Available assets
+
+The release has eight attachments: the Linux x64 `.deb` installer and native
+`.tar.gz` runtime, `sinter-0.5.4rc2.pyz`, the exact source ZIP, the qualification
+ZIP, `candidate-release-manifest.json`, `SHA256SUMS.txt` and release notes.
+The Debian package version is `0.5.4~rc2`; the app displays `0.5.4rc2`.
+The portable Python app requires Python 3.10+ and is distinct from the bundled
+native runtime. Source and portable attachments do not qualify another platform.
+
+Windows x64/x86/ARM64, macOS Intel/Apple Silicon and Linux x86/ARM64/ARMv7 remain
+unqualified for rc2. Their earlier previews remain accessible on Releases with
+their own source identities and limitations.
+
+## Changes included
 
 The paired fictional garden casebook and campaign open directly from Overview
 and Getting started. Source-only handovers use short passage labels with an
@@ -30,23 +49,39 @@ Long native recipes, caller system instructions, streaming, media, tools and
 public exact token preflight are unsupported. Inputs and partials remain local;
 uncertain requests are never automatically replayed.
 
-## Required installation evidence
+## Installed workflow and upgrade evidence
 
-The next Linux x64 package must retain source and runtime hashes, original
-dependency notices, packaged assets and an independent clean Ubuntu 22.04/glibc
-2.35 installation test. Both published priors, v0.5.3 and v0.5.4rc1, require
-separate actual package replacements retaining copied fictional workspaces,
-preferences and explicit model selections. Admission/seeding checks alone are
-not upgrade qualification; see [the tooling review](UPGRADE_QUALIFICATION_2026-09-30.md).
+The qualification ZIP retains exact source, binary and web-asset hashes,
+original dependency notices, Linux shared-library origins and licence texts,
+native execution receipts and clean Ubuntu 22.04/glibc 2.35 installation evidence.
+Bundled account-verification tests are offline; they do not qualify live sign-in
+or generation.
 
-A new installed-browser journey must operate the frozen executable through
-prepare, source inspection, edit, save, interface quit, complete process exit,
-restart, reopen, real Word/JSON downloads and separate restored copies. Its
-retained screenshots and downloads must match the source fixtures and candidate
-bytes. Existing source-server tests cannot substitute for it. The qualification
-container has no external network, and the workflow requests no model operation.
+Both published priors, v0.5.3 and v0.5.4rc1, passed separate actual Debian package
+replacements, without uninstalling the prior package first. Copied fictional
+workspaces retained campaign/casebook identities and revisions, saved reports,
+original source evidence, edits, profile/appearance preferences, explicit model
+selection and disabled watches. Each original fixture remained unchanged, and
+the replaced package was removed after the test. Source-copy checks are retained
+separately; admission/seeding alone is not upgrade qualification. See
+[the upgrade tooling review](UPGRADE_QUALIFICATION_2026-09-30.md).
 
-Only a target with fresh installed evidence may be advertised as qualified.
+The frozen installed executable passed 15 offline browser checks: package and
+process identity; Overview practice discovery; exact original-source inspection;
+handover preparation, editing and saving; campaign action and correspondence-draft
+saving; interface quit and complete process exit; actual binary restart;
+saved report/campaign reopen; verified Word download; two JSON backups; restoration
+as separate copies; preserved original inputs and correspondence; second quit;
+and package/container cleanup. The retained `installed-workflow-browser.json`
+binds those checks to the source archive, installer, binary and served assets.
+
+Eight retained artifacts comprise five screenshots, `handover.docx`,
+`casebook-backup.json` and `campaign-backup.json`. The scripted browser journey
+operates the actual installed process; it is not a manual customer acceptance
+receipt. Its container had no external network, and no model operation was
+requested. Source-server test passes are separate evidence.
+
+Only the target with this installed evidence is advertised as qualified.
 Other platforms, publisher signing/notarization, customer-device acceptance and
 completed live ChatGPT generation remain unqualified. A Linux-only scoped gate
 does not satisfy or bypass the nine-platform publisher. Never disable OS

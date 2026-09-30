@@ -10,28 +10,30 @@ Action plans and shared knowledge, with the evidence still in view.
 
 [Download Sinter](https://github.com/neuroforge-io/Sinter/releases) · [Getting started](docs/INSTALLATION.md) · [What you can do](docs/WORKFLOWS.md) · [Help & feedback](https://github.com/neuroforge-io/Sinter/issues)
 
-**Apache 2.0 · Local-first · Windows / macOS / Linux · By NeuroForge**
+**Apache 2.0 · Local-first · Linux preview / cross-platform source · By NeuroForge**
 
 </div>
 
 ---
 
-## Current candidate: 0.5.4rc1
+## Current preview: 0.5.4rc2
 
-The [Linux x64 preview is published](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc1),
+The [Linux x64 preview is published](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc2),
 qualified on Ubuntu 22.04/glibc 2.35. Other platforms are not qualified for this
-candidate. [Publication evidence](docs/releases/PREVIEW_0.5.4rc1_PUBLICATION_RECEIPT.md)
+preview. [Publication evidence](docs/releases/PREVIEW_0.5.4rc2_PUBLICATION_RECEIPT.md)
 records the exact public downloads and installed/upgrade scope.
 
-The candidate is frozen at `cd928ba7561a09c477b3555e64aa6a3c4cc122b4`.
-Current `main` prepares the subsequent [0.5.4rc2 candidate](docs/PREVIEW_0.5.4rc2.md);
-its newer recovery changes are not included in or qualified by the rc1 installers.
-The next candidate exposes the complete paired garden example directly on Overview
-and Getting started, including original sources, handover and editable actions.
+The package source is frozen at `256d38fa4b61a4d548472ce5abfd0bf513789090`.
+Later `main` commits do not change those downloads. This preview opens the complete
+paired garden example directly from Overview and Getting started, with original
+sources, a handover and editable actions. Fifteen installed-browser checks cover
+save, quit, restart, reopen, Word/JSON export and separate restored copies without
+a model request. Separate actual package upgrades from v0.5.3 and v0.5.4rc1 retain
+copied fictional workspaces, preferences and explicit model selections.
 
-The published v0.5.3 installer predates the latest campaign and connection
-changes. This candidate has a separate source identity and qualification record;
-see [candidate status](docs/PREVIEW_0.5.4rc1.md) before choosing an install asset.
+The earlier v0.5.3 and [v0.5.4rc1](docs/PREVIEW_0.5.4rc1.md) previews remain
+unchanged; their installers have different source and capabilities.
+See [preview scope and evidence](docs/PREVIEW_0.5.4rc2.md) before choosing an asset.
 Start with the [fictional offline garden walkthrough](examples/offline-garden/README.md).
 It needs no account, internet, model download or hosted generation.
 
@@ -152,20 +154,21 @@ The installed application opens its interface in your existing browser. It inclu
 
 ## Install, open, try an example
 
-1. Open [Releases](https://github.com/neuroforge-io/Sinter/releases) and choose the package for your operating system and processor.
+1. Open the [0.5.4rc2 release](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc2) and choose its Linux x64 package if your environment matches the tested Ubuntu 22.04/glibc 2.35 baseline.
 2. Run the installer using your normal operating-system software controls.
 3. Open **Sinter** from your applications menu and choose **Try an example**.
 
-| System | Packages | Architecture choices |
+| System | Current 0.5.4rc2 availability | Qualification |
 | --- | --- | --- |
-| Windows | Per-user `.exe` installer, shortcuts and uninstaller | Intel/AMD 64-bit (`x64`), 32-bit (`x86`), ARM64 |
-| macOS | `.pkg` installing `Sinter.app` in Applications | Apple Silicon (`arm64`), Intel 64-bit (`x64`) |
-| Debian / Ubuntu Linux | `.deb`, plus a portable runtime archive | Intel/AMD `x64` and `x86`, ARM64, ARMv7 (`armhf`) |
-| Other supported source environments | Source ZIP, wheel or `sinter.pyz` | Python 3.10 or newer; no third-party core runtime packages |
+| Ubuntu Linux, Intel/AMD 64-bit (`x64`) | `.deb` installer and native `.tar.gz` runtime | Ubuntu 22.04 / glibc 2.35 installed and upgrade tests |
+| Windows, macOS and other Linux architectures | No qualified rc2 installer | Earlier previews remain on Releases; they do not contain rc2 changes |
+| Source / portable Python app | Source ZIP and `sinter.pyz` | Requires Python 3.10+; separate from native installed qualification |
 
 **These are community preview builds, not publisher-signed or notarised installers.** Operating-system policy may warn or block installation. Follow your organisation's software policy; do not disable security protections. Build receipts record the interpreter, processor, compatibility/emulation mode and installed-app tests. A passing build is not certification for every older OS version.
 
-Modern macOS has no 32-bit target here. `x64` covers both AMD and Intel processors. ARMv7 runs are tested under emulation, and x86 packages in a 32-bit compatibility environment. Linux packages record their minimum glibc version. See [installation details and limitations](docs/INSTALLATION.md).
+`x64` covers both AMD and Intel processors. Other distributions and older runtime
+combinations have not been qualified for rc2. See
+[installation details and limitations](docs/INSTALLATION.md).
 
 ### Prefer source?
 

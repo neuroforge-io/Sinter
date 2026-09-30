@@ -6,12 +6,16 @@
 
 Choose an actual published asset from [Releases](https://github.com/neuroforge-io/Sinter/releases). Versioned assets include a runtime, web interface, original licence notices and build receipts. The default experience is local and opens in your existing browser, without installing another browser engine.
 
-The current [0.5.4rc1 preview](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc1)
+The current [0.5.4rc2 preview](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc2)
 qualifies **Linux x64 on Ubuntu 22.04/glibc 2.35 only**. Choose its
-[Debian/Ubuntu installer](https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc1/Sinter-0.5.4rc1-linux-x64.deb)
-or native runtime archive. The platform descriptions below explain the packaging
-machinery and earlier downloads; they do not qualify other 0.5.4rc1 targets.
-See [public download verification](releases/PREVIEW_0.5.4rc1_PUBLICATION_RECEIPT.md).
+[Debian/Ubuntu installer](https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc2/Sinter-0.5.4rc2-linux-x64.deb)
+or [native runtime archive](https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc2/Sinter-0.5.4rc2-linux-x64.tar.gz).
+The exact package source is `256d38fa4b61a4d548472ce5abfd0bf513789090`.
+Windows, macOS and other Linux architectures have no qualified rc2 installer.
+The platform descriptions below explain the packaging machinery and earlier
+downloads; they do not qualify additional rc2 targets. See
+[public download verification](releases/PREVIEW_0.5.4rc2_PUBLICATION_RECEIPT.md)
+and [installed workflow evidence](PREVIEW_0.5.4rc2.md).
 
 Windows: choose `windows-x64-setup.exe` for most Intel/AMD PCs, `windows-arm64-setup.exe` for an ARM64 installation, or `windows-x86-setup.exe` for a 32-bit installation. Run it as your normal user; it installs under Local AppData and creates a Start menu entry. Desktop shortcuts are optional. Uninstall through Installed apps.
 
@@ -20,8 +24,15 @@ macOS: choose `darwin-arm64.pkg` for Apple Silicon or `darwin-x64.pkg` for an In
 Debian/Ubuntu: open the `.deb` for your architecture in your software installer. An application-menu entry launches Sinter. Package-manager installation/removal requires the usual administrator permission. A `.tar.gz` runtime archive is also available for compatible Linux environments; it is not a universal binary for every distribution.
 
 Debian prerelease package versions use `~` so ordinary updates can install the
-later final release: app/download version `0.5.4rc1` has package-manager version
-`0.5.4~rc1`. The native receipt records both identities.
+later final release: app/download version `0.5.4rc2` has package-manager version
+`0.5.4~rc2`. The native receipt records both identities.
+
+Separate actual package replacements from published v0.5.3 and v0.5.4rc1 were
+tested on copied fictional workspaces. Saved work, original sources, preferences
+and explicit model selections survived. Before upgrading your own installation,
+save current work and export backups. Quit Sinter, then install the new `.deb`
+using normal software controls; no uninstall or workspace reset is needed for
+the tested upgrade paths. This test does not replace customer-device acceptance.
 
 These preview packages are **not publisher-signed or notarised**. macOS application bundles are ad-hoc signed for integrity, not verified publisher identity. A managed machine can refuse them. Do not disable operating-system protections; follow your organisation's policy or use an approved source installation.
 
@@ -43,9 +54,9 @@ does not prove a live ChatGPT sign-in or access for your account.
 ## Platform qualification
 
 The table below declares the CI build/test environments. It is not a pass matrix
-for every candidate. The published v0.5.3 packages predate current main; consult
-[0.5.4rc1 candidate qualification](PREVIEW_0.5.4rc1.md) and its exact receipts
-before treating a newer platform as tested.
+for every candidate. The published v0.5.3 and v0.5.4rc1 packages predate rc2;
+consult [0.5.4rc2 qualification](PREVIEW_0.5.4rc2.md) and its exact receipts
+before treating a platform as tested.
 
 | Target | Build / installed-app execution |
 | --- | --- |
@@ -66,7 +77,7 @@ Checks install the package, start the installed executable, serve its assets and
 
 Choose **Try an example** for a fictional offline demonstration. Use **Settings** for reading size, theme, motion and connection choices.
 
-On the subsequent [0.5.4rc2 candidate source](PREVIEW_0.5.4rc2.md), Overview and Getting started
+In the published [0.5.4rc2 preview](PREVIEW_0.5.4rc2.md), Overview and Getting started
 also offer **Open garden handover** and **Open garden campaign**. These open the
 complete bundled fictional project without a file picker. Saved projects stay
 unchanged; opening starts an unsaved copy and switching the paired editors resumes
@@ -114,3 +125,10 @@ A missing Pages setting is not a failed application build. Release downloads rem
 `Native installers` builds nine targets using `tools/package_native.py`. `Sinter quality` runs the core, browser, real speech and RKC integration tests. `Publish tested community release` calls both workflows at a new main-branch version and publishes a preview only after every required job succeeds.
 
 The publisher checks all nine installer receipts, source commit identity and SHA-256 digests before attaching files. It does not overwrite an existing release. `SHA256SUMS.txt` and `build-manifest.json` accompany the packages. This is artifact integrity and test provenance, not publisher code signing.
+
+The Linux-only rc2 preview uses a separate explicit candidate gate. Its
+`candidate-release-manifest.json` binds the exact source, installer, runtime
+archive and qualification pack. Both prior upgrades and the frozen executable's
+15-check offline browser journey are mandatory. This does not pass or bypass the
+full nine-target publisher; development and candidate versions are excluded from
+its automatic publication path.
