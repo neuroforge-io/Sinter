@@ -14,6 +14,7 @@ import json
 import os
 import platform
 import plistlib
+import re
 import shutil
 import struct
 import subprocess
@@ -51,6 +52,27 @@ RUNTIME_FIELDS = (
 
 def run(*args, **kwargs):
     subprocess.run([str(arg) for arg in args], check=True, **kwargs)
+
+
+def debian_package_version(version: str) -> str:
+    """Keep Python pre-releases below the corresponding final Debian version."""
+    parsed = re.fullmatch(
+        r"(?P<release>[0-9]+(?:\.[0-9]+)*)"
+        r"(?P<pre>(?:a|b|rc)[0-9]+)?"
+        r"(?P<post>\.post[0-9]+)?"
+        r"(?P<dev>\.dev[0-9]+)?",
+        version,
+    )
+    if parsed is None:
+        raise ValueError("Use a canonical release/pre/post/dev package version.")
+    result = parsed["release"]
+    if parsed["pre"]:
+        result += "~" + parsed["pre"]
+    if parsed["post"]:
+        result += "+" + parsed["post"][1:]
+    if parsed["dev"]:
+        result += "~~" + parsed["dev"][1:]
+    return result
 
 
 def icon(folder: Path) -> tuple[Path, Path]:
@@ -483,8 +505,9 @@ def main(argv: list[str] | None = None) -> None:
         control = stage / "DEBIAN"
         control.mkdir()
         libc = platform.libc_ver()[1]
+        package_version = debian_package_version(__version__)
         (control / "control").write_text(
-            f"Package: sinter\nVersion: {__version__}\nArchitecture: {debarch}\n"
+            f"Package: sinter\nVersion: {package_version}\nArchitecture: {debarch}\n"
             "Maintainer: NeuroForge <support@neuroforge.io>\n"
             f"Depends: libc6 (>= {libc}), zlib1g\nSection: utils\nPriority: optional\n"
             "Description: Local-first community workbench using the Fracture API\n"
@@ -494,6 +517,12 @@ def main(argv: list[str] | None = None) -> None:
         )
         installer = release / (prefix + ".deb")
         run("dpkg-deb", "--root-owner-group", "--build", stage, installer)
+        installed_version = subprocess.check_output(
+            ["dpkg-deb", "-f", str(installer), "Version"], text=True
+        ).strip()
+        assert installed_version == package_version, (
+            "Debian installer control version did not match."
+        )
         sudo = [] if os.geteuid() == 0 else ["sudo"]
         run(*sudo, "dpkg", "-i", installer)
         with tempfile.TemporaryDirectory() as temp:
@@ -511,6 +540,7 @@ def main(argv: list[str] | None = None) -> None:
             "installed .deb, ran installed HTTP/examples, removed package"
         )
         receipt["glibc_minimum"] = libc
+        receipt["package_version"] = installed_version
         shutil.make_archive(str(release / prefix), "gztar", ROOT / "dist", "Sinter")
     receipt["installer_sha256"] = hashlib.sha256(installer.read_bytes()).hexdigest()
     receipt["installer"] = installer.name

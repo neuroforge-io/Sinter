@@ -12,6 +12,10 @@ macOS: choose `darwin-arm64.pkg` for Apple Silicon or `darwin-x64.pkg` for an In
 
 Debian/Ubuntu: open the `.deb` for your architecture in your software installer. An application-menu entry launches Sinter. Package-manager installation/removal requires the usual administrator permission. A `.tar.gz` runtime archive is also available for compatible Linux environments; it is not a universal binary for every distribution.
 
+Debian prerelease package versions use `~` so ordinary updates can install the
+later final release: app/download version `0.5.4rc1` has package-manager version
+`0.5.4~rc1`. The native receipt records both identities.
+
 These preview packages are **not publisher-signed or notarised**. macOS application bundles are ad-hoc signed for integrity, not verified publisher identity. A managed machine can refuse them. Do not disable operating-system protections; follow your organisation's policy or use an approved source installation.
 
 ## What is included?

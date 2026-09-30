@@ -10,10 +10,13 @@ The versioned public gateway fixture is
 `tests/fixtures/public_native_model_api_contract.v1.json`, copied verbatim from the
 NeuroForge site fixture generator. Its contract identifier is
 `neuroforge.public-native-model-client-fixtures.v1`; SHA-256 is
-`ce0d7f8b5b0aba4d67640486c8e9d2fd2af6cedbd83712ac0a9030cfa763b6d7`.
-The 54 synthetic gateway cases record source-file hashes and the cutover receipt.
+`711feb4f774674d4e4c6ab7dbe77dada7668004d4be0014445256a03a0f5edc4`.
+The 57 synthetic gateway cases record source-file hashes and the cutover receipt.
 They establish reproducible protocol behavior, not live deployment availability,
 language quality, a paid-service promise, or installed-client acceptance.
+This pack comes from site commit `22aad400`; public worker deployment
+`d0425e8a8a844833abf7daf8b026881cadc3b885` restored text discovery on
+30 September 2026. Live Sinter generation acceptance is recorded separately.
 
 | Capability | Exact native boundary |
 | --- | --- |
@@ -38,8 +41,14 @@ Sinter never truncates source conditions or strips supplied system instructions.
 Discovery qualifies the exact native metadata, including buffered-only text,
 deployment-owned system/sampling, input/output limits, the opaque owner runtime
 identifier, and the explicit quality limitations. The public metadata is text-only
-even if the installed origin also has image support. No image/audio capability is
-inferred. A completion does **not** echo the runtime identifier; completion identity
+even if the installed origin also has image and audio support. The public fixture
+for the installed `native-world-model-api-007` metadata projects only text and
+removes its audio, vision and tokenizer details. `/v1/audio/speech`, `/v1/tokenize`
+and `/v1/chat/preflight` remain unqualified public routes returning 404; a media
+message is rejected by text admission. Sinter infers no image/audio capability or
+public tokenizer from installed-origin metadata.
+
+A completion does **not** echo the runtime identifier; completion identity
 checks therefore establish the requested model and token accounting, not a
 per-completion owner attestation. Rediscover after an unavailable or identity error.
 

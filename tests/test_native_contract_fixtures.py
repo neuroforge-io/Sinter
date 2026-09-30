@@ -38,7 +38,7 @@ def no_network(monkeypatch):
 
 def test_public_native_fixture_version_identity_and_capabilities_are_exact():
     assert hashlib.sha256(FIXTURE_PATH.read_bytes()).hexdigest() == (
-        "ce0d7f8b5b0aba4d67640486c8e9d2fd2af6cedbd83712ac0a9030cfa763b6d7"
+        "711feb4f774674d4e4c6ab7dbe77dada7668004d4be0014445256a03a0f5edc4"
     )
     assert (
         PACK["contract"]
@@ -75,6 +75,34 @@ def test_public_native_fixture_version_identity_and_capabilities_are_exact():
         and set(digest) <= set("0123456789abcdef")
         for digest in PACK["source_sha256"].values()
     )
+
+
+def test_installed_audio_vision_and_tokenizer_do_not_expand_public_text_contract():
+    installed = next(
+        row
+        for row in CASES
+        if row["name"] == "installed-007-audio-origin-projected-to-text"
+    )
+    origin = installed["upstream"]["json"]["data"][0]["erais"]
+    public = installed["expected"]["body"]["data"][0]["erais"]
+    assert origin["modalities"] == ["text", "image", "audio"]
+    assert origin["token_budget_endpoint"] == "/v1/tokenize"
+    assert public["modalities"] == ["text"]
+    assert set(public) == set(NATIVE_CAPABILITIES) | {"modalities", "runtime_id"}
+    assert public["runtime_id"] == origin["runtime_id"]
+    for name, path in [
+        ("advertised-origin-tokenize-not-publicly-qualified", "/v1/tokenize"),
+        ("installed-origin-audio-not-publicly-qualified", "/v1/audio/speech"),
+        ("token-budget-preflight-unavailable", "/v1/chat/preflight"),
+    ]:
+        case = next(row for row in CASES if row["name"] == name)
+        assert case["path"] == path
+        assert case["expected"]["status"] == 404
+        assert case["expected"]["body"]["error"]["code"] == "not_found"
+        assert case["expected"]["forwarded"] is None
+    media = next(row for row in CASES if row["name"] == "media-rejected")
+    assert media["expected"]["status"] == 400
+    assert media["expected"]["forwarded"] is None
 
 
 @pytest.mark.parametrize(

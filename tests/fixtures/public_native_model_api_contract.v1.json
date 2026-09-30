@@ -58,12 +58,26 @@
     ],
     "phase": "before_discovery_gateway_fix"
   },
+  "installed_origin_observation": {
+    "receipt": "docs/releases/NATIVE_API_ORIGIN_OBSERVATION_20260930.json",
+    "source_commit": "191261be9a5e81b7d163196318ce5b54bb966cbd",
+    "origin_revision": "native-world-model-api-007",
+    "runtime_id": "a447e389350c4993a79d8264d4597843",
+    "modalities": [
+      "text",
+      "image",
+      "audio"
+    ],
+    "listing_sha256": "e8871e0d6307ead83fe8b0c9b6631477d5b80d49e7baaf07905870405f57f10f",
+    "scope": "Protected discovery metadata only; public text projection and held token-budget preflight."
+  },
   "source_sha256": {
     "workers/public_model_api.mjs": "37fb08e914100f42422e935c0b856b0ffa101379841b7e3c886158cff4d19b12",
-    "workers/native_model_api_contract.mjs": "7b0efde559259e91289d2f700e58fd3664a905e646df35205651290469d226af",
+    "workers/native_model_api_contract.mjs": "71ec0f97d42d8832cf1cbe5560a9599a87c55fa30cc267105291aca75344b050",
     "static/openapi.json": "61f5d446ca82a3ac44ff7334cf8e84dca3ebea5629e3dc20b67db2ad308bbdc9",
     "docs/releases/NATIVE_CONSUMER_CUTOVER_20260929.json": "391c3908db28d3c9dd3dd34992023ceec1b1414b5a7ffbbad4c07bf56f0e94e6",
-    "docs/releases/NATIVE_API_AVAILABILITY_20260930.json": "590af83ca28097c167ebfb960f21c1132ef28ed473560bc16a141ef1f25869de"
+    "docs/releases/NATIVE_API_AVAILABILITY_20260930.json": "590af83ca28097c167ebfb960f21c1132ef28ed473560bc16a141ef1f25869de",
+    "docs/releases/NATIVE_API_ORIGIN_OBSERVATION_20260930.json": "383ed0250fc09ba2129368037c9c93ed44892c37a0150fd4d3e39113932660b3"
   },
   "cases": [
     {
@@ -265,6 +279,132 @@
                   "text"
                 ],
                 "runtime_id": "0123456789abcdef0123456789abcdef"
+              }
+            }
+          ]
+        },
+        "forwarded": {
+          "path": "/api/unified-world/v1/model/models",
+          "method": "GET"
+        }
+      }
+    },
+    {
+      "name": "installed-007-audio-origin-projected-to-text",
+      "path": "/v1/models",
+      "method": "GET",
+      "upstream": {
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "architecture": "ERAIS native adaptive decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "modalities": [
+                  "text",
+                  "image",
+                  "audio"
+                ],
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "scope": "text_capability_only",
+                "runtime_id": "a447e389350c4993a79d8264d4597843",
+                "input_modalities": [
+                  "text",
+                  "image"
+                ],
+                "output_modalities": [
+                  "text",
+                  "audio"
+                ],
+                "vision_scope": "native_clip_visual_matches",
+                "vision_object_detection": false,
+                "audio_generation": [
+                  "lux",
+                  "fracture"
+                ],
+                "audio_response_format": "wav",
+                "audio_input": "visitor_session_speech_perception",
+                "music_generation": false,
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_tokens": 512,
+                "token_budget_endpoint": "/v1/tokenize",
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "status": 200,
+        "headers": {
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "id": "erais-native-qwen3",
+              "object": "model",
+              "created": 0,
+              "owned_by": "neuroforge",
+              "erais": {
+                "model_id": "erais-native-qwen3",
+                "architecture": "ERAIS native adaptive decoder",
+                "backend_kind": "erais_native_adaptive_decoder",
+                "fully_native": true,
+                "source_family": "Qwen3",
+                "tokenizer_dependency": true,
+                "dynamic_adaptive_patching": false,
+                "native_learned_breadth": true,
+                "native_learned_recurrence": true,
+                "training": false,
+                "retained_session_learning": false,
+                "externally_resident": false,
+                "sparse_savings_verified": false,
+                "quality_scope": "unqualified_for_general_chat",
+                "request_state": "ephemeral_same_world_lease",
+                "streaming": false,
+                "max_output_tokens": 128,
+                "max_prompt_bytes": 2048,
+                "max_history_bytes": 4096,
+                "max_history_exchanges": 3,
+                "system_prompt": "deployment_owned",
+                "sampling": "deployment_owned",
+                "assistant_quality": false,
+                "account_billing_complete": false,
+                "modalities": [
+                  "text"
+                ],
+                "runtime_id": "a447e389350c4993a79d8264d4597843"
               }
             }
           ]
@@ -2970,6 +3110,72 @@
       }
     },
     {
+      "name": "advertised-origin-tokenize-not-publicly-qualified",
+      "path": "/v1/tokenize",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "max_tokens": 32,
+        "stream": false
+      },
+      "upstream": null,
+      "expected": {
+        "status": 404,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unknown API route.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "not_found"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
+      "name": "installed-origin-audio-not-publicly-qualified",
+      "path": "/v1/audio/speech",
+      "method": "POST",
+      "request": {
+        "model": "erais-native-qwen3",
+        "input": "Hello",
+        "voice": "fracture"
+      },
+      "upstream": null,
+      "expected": {
+        "status": 404,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-robots-tag": "noindex, nofollow"
+        },
+        "body": {
+          "error": {
+            "message": "Unknown API route.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "not_found"
+          }
+        },
+        "forwarded": null
+      }
+    },
+    {
       "name": "discovery-runtime-mismatch",
       "path": "/v1/models",
       "method": "GET",
@@ -3256,7 +3462,7 @@
       }
     },
     {
-      "name": "uninstalled-audio-modality-rejected",
+      "name": "discovery-audio-without-text-rejected",
       "path": "/v1/models",
       "method": "GET",
       "upstream": {
@@ -3294,7 +3500,6 @@
                 "assistant_quality": false,
                 "account_billing_complete": false,
                 "modalities": [
-                  "text",
                   "audio"
                 ],
                 "runtime_id": "0123456789abcdef0123456789abcdef"

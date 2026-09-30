@@ -18,7 +18,7 @@ def explicit_legacy_model(monkeypatch):
 
 
 def test_version():
-    assert re.fullmatch(r'\d+\.\d+\.\d+', __version__)
+    assert re.fullmatch(r'\d+\.\d+\.\d+(?:rc[1-9]\d*)?', __version__)
     metadata = (Path(__file__).parents[1] / 'pyproject.toml').read_text(encoding='utf-8')
     assert 'dynamic = ["version"]' in metadata
     assert '[tool.hatch.version]\npath = "src/sinter/__init__.py"' in metadata

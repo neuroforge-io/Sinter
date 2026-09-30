@@ -6,6 +6,7 @@ import hashlib
 import importlib.metadata
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -155,6 +156,54 @@ def test_python310_dependency_is_bundled_and_explicitly_excluded_for_core(
     assert "typing_extensions" in metadata
     core = package.account_bundle_arguments(False)
     assert core[core.index("typing_extensions") - 1] == "--exclude-module"
+
+
+@pytest.mark.parametrize(
+    "version,expected",
+    [
+        ("0.5.3", "0.5.3"),
+        ("0.5.4rc1", "0.5.4~rc1"),
+        ("0.5.4b2", "0.5.4~b2"),
+        ("0.5.4a1", "0.5.4~a1"),
+        ("0.5.4.dev1", "0.5.4~~dev1"),
+        ("0.5.4rc1.dev1", "0.5.4~rc1~~dev1"),
+        ("0.5.4.post1", "0.5.4+post1"),
+    ],
+)
+def test_debian_package_version_projects_canonical_python_versions(version, expected):
+    assert package.debian_package_version(version) == expected
+
+
+def test_debian_prerelease_order_allows_normal_upgrade_to_final():
+    dpkg = shutil.which("dpkg")
+    if not dpkg:
+        pytest.skip("The actual Debian version comparator is unavailable.")
+    versions = [
+        "0.5.3",
+        "0.5.4.dev1",
+        "0.5.4a1.dev1",
+        "0.5.4a1",
+        "0.5.4b1",
+        "0.5.4rc1.dev1",
+        "0.5.4rc1",
+        "0.5.4",
+        "0.5.4.post1.dev1",
+        "0.5.4.post1",
+    ]
+    for prior, following in zip(versions, versions[1:]):
+        run = subprocess.run(
+            [
+                dpkg,
+                "--compare-versions",
+                package.debian_package_version(prior),
+                "lt",
+                package.debian_package_version(following),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert run.returncode == 0, f"Upgrade ordering broke: {prior} -> {following}"
 
 
 @pytest.fixture

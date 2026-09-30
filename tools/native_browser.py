@@ -73,7 +73,11 @@ class FixtureGateway:
     def open(self, request, **kwargs):
         if request.full_url == client.BASE_URL + "/models":
             self.discovery += 1
-            return FixtureReply(CASES["native-discovery"]["expected"]["body"])
+            return FixtureReply(
+                CASES["installed-007-audio-origin-projected-to-text"]["expected"][
+                    "body"
+                ]
+            )
         if request.full_url != client.BASE_URL + "/chat/completions":
             raise AssertionError("Unexpected outbound destination was blocked")
         body = json.loads(request.data)
@@ -207,6 +211,19 @@ class NativeChecks(DeliverableChecks):
             )
         ).to_be_visible()
         assert self.gateway.discovery > 0 and not self.gateway.requests
+        public = page.evaluate("""async () => {
+            const {request} = await import('/static/api.js');
+            return (await request('/api/models')).models[0].erais;
+        }""")
+        assert public["modalities"] == ["text"]
+        assert public["assistant_quality"] is False
+        assert not set(public) & {
+            "audio_generation",
+            "vision_scope",
+            "token_budget_endpoint",
+            "input_modalities",
+            "output_modalities",
+        }
         for settings in [
             {"model": client.MODEL, "max_tokens": 2048},
             {
