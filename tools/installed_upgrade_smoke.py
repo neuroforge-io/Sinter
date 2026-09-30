@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -15,9 +14,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from tools.package_native import debian_package_version  # noqa: E402
 from tools.upgrade_smoke import (  # noqa: E402
-    PRIOR_COMMIT,
+    QUALIFIED_PRIORS,
+    file_sha256,
     hashes,
     prepare_fixture,
+    prior_for_arguments,
     run_native,
 )
 
@@ -53,31 +54,54 @@ def qualify(args) -> dict:
         )
     if installed_version():
         raise ValueError("The disposable container already has Sinter installed.")
-    prior_sha = hashlib.sha256(args.prior_installer.read_bytes()).hexdigest()
-    candidate_sha = hashlib.sha256(args.candidate_installer.read_bytes()).hexdigest()
-    if prior_sha != args.prior_sha256:
+    prior = prior_for_arguments(args)
+    prior_sha = file_sha256(args.prior_installer)
+    candidate_sha = file_sha256(args.candidate_installer)
+    if (
+        args.prior_sha256 != prior.installer_sha256
+        or prior_sha != prior.installer_sha256
+    ):
         raise ValueError("Prior native installer differs from its published checksum.")
     for installer in (args.prior_installer, args.candidate_installer):
         if package_field(installer, "Package") != "sinter":
             raise ValueError("Use actual Sinter Debian installers.")
-    if package_field(args.prior_installer, "Version") != "0.5.3":
-        raise ValueError("Use the published v0.5.3 prior native installer.")
+        if package_field(installer, "Architecture") != "amd64":
+            raise ValueError("This qualification requires Linux x64 installers.")
+    prior_package = debian_package_version(prior.version)
+    if package_field(args.prior_installer, "Version") != prior_package:
+        raise ValueError(
+            "Prior native package version differs from its qualified release."
+        )
     expected_package = debian_package_version(args.expected_version)
     if package_field(args.candidate_installer, "Version") != expected_package:
         raise ValueError("Candidate native installer version does not match.")
+    if (
+        subprocess.run(
+            ["dpkg", "--compare-versions", prior_package, "lt", expected_package],
+            check=False,
+            timeout=20,
+        ).returncode
+        != 0
+    ):
+        raise ValueError(
+            "The candidate must follow the prior package in upgrade order."
+        )
     expected, original, copied, original_hashes = prepare_fixture(
-        args.prior_source, args.output
+        args.prior_source,
+        args.output,
+        prior=prior,
+        prior_source_archive=args.prior_source_archive,
     )
     checks = []
     try:
         subprocess.run(
             ["dpkg", "-i", str(args.prior_installer)], check=True, timeout=60
         )
-        assert installed_version() == "0.5.3"
+        assert installed_version() == prior_package
         prior_version, prior_checks = run_native(
-            BINARY, copied, expected, args.output, "0.5.3", legacy=True
+            BINARY, copied, expected, args.output, prior.version, legacy=True
         )
-        assert installed_version() == "0.5.3"
+        assert installed_version() == prior_package
         # Deliberately retain the installed prior package while applying its update.
         subprocess.run(
             ["dpkg", "-i", str(args.candidate_installer)], check=True, timeout=60
@@ -86,11 +110,12 @@ def qualify(args) -> dict:
         candidate_version, candidate_checks = run_native(
             BINARY, copied, expected, args.output, args.expected_version
         )
-        binary_sha = hashlib.sha256(BINARY.read_bytes()).hexdigest()
+        binary_sha = file_sha256(BINARY)
         assert hashes(original) == original_hashes
         checks.extend(
             [
-                "checksum-verified published v0.5.3 installer installed and launched",
+                f"checksum-verified published v{prior.version} installer "
+                "installed and launched",
                 "copied fictional workspace used by actual prior native application",
                 "candidate installer replaced prior package without prior uninstall",
                 "candidate reopened retained data and ran source-only workflow",
@@ -108,8 +133,10 @@ def qualify(args) -> dict:
         "fixture_notice": (
             "Fictional source-created workspace; actual native package replacement."
         ),
-        "prior_source_commit": PRIOR_COMMIT,
+        "prior_source_commit": prior.source_commit,
+        "prior_source_archive_sha256": prior.source_archive_sha256,
         "prior_app_version": prior_version,
+        "prior_package_version": prior_package,
         "prior_installer_sha256": prior_sha,
         "candidate_source_commit": args.source_commit,
         "candidate_app_version": candidate_version,
@@ -126,6 +153,11 @@ def qualify(args) -> dict:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--prior-source", type=Path, required=True)
+    parser.add_argument("--prior-source-archive", type=Path, required=True)
+    parser.add_argument(
+        "--prior-version", choices=list(QUALIFIED_PRIORS), default="0.5.3"
+    )
+    parser.add_argument("--prior-commit")
     parser.add_argument("--prior-installer", type=Path, required=True)
     parser.add_argument("--prior-sha256", required=True)
     parser.add_argument("--candidate-installer", type=Path, required=True)
