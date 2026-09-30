@@ -2,6 +2,13 @@
 
 ## Unreleased - 0.5.4rc2.dev0
 
+- Use consistent short passage labels in source-only handovers, with an exact
+  source/excerpt identity and Unicode-range key. Admit local passage links only
+  when the retained quote still matches its unique original. Keep older reports,
+  Audit wording and quoted source metadata unchanged.
+- State a campaign's concrete blocker once, with a distinct route-review control
+  that preserves pending edits. Keep full recorded actions, owner qualifications,
+  proposed dates and historical decision metadata available.
 - Present source-only handovers with question-specific checks, clearly attributed
   notes and complete quoted action tables. Keep unmatched answers unknown and
   retain literal fallback wording, original evidence and retrieval limitations.

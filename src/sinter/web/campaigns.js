@@ -6,7 +6,7 @@ import {campaignClarificationDraft, campaignIdentityFromProfile} from './campaig
 import {defaultCampaignOpportunityIndex, isCampaignActionCurrent,
   isCampaignActionScopeConfirmed, isOpportunityActionable,
   applicationAnswerAvailability} from './campaign-state.js';
-import {applicationWindowGaps, campaignDecision} from './campaign-decision.js';
+import {applicationWindowGaps, campaignDecision, CAMPAIGN_DECISION_NOTE} from './campaign-decision.js';
 import {campaignActionOwnerState, normalizeCampaignActionOwners} from './campaign-owner.js';
 import {campaignSourceSnapshotGuidance,
   campaignSourceSnapshotIssue} from './campaign-source-state.js';
@@ -435,6 +435,14 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   function renderDecisionCard() {
     const result = campaignDecision(document, undefined, document.opportunities[selected]?.name || '');
     const state = h('span', {class: 'campaign-decision-state', 'data-state': result.state}, result.label);
+    const repeatsBlocker = result.state === 'not_ready' && result.action.source === 'suggested'
+      && result.detail.includes(result.action.task);
+    const openRouteChecks = () => {
+      tab = 'overview'; rememberCampaign(); renderEditor();
+      const focus = editor.querySelector('.campaign-focus') || editor;
+      focus.tabIndex = -1; focus.focus({preventScroll: true});
+      focus.scrollIntoView({block: 'start'});
+    };
     const targetDate = result.action.due ? new Date(result.action.due + 'T12:00:00') : null;
     const targetDatePast = Boolean(result.action.due && result.action.due < localDate());
     const taskPreview = result.action.task.length > 260
@@ -443,14 +451,15 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       h('span', {class: 'eyebrow'}, result.action.source === 'recorded'
         ? result.action.opportunity ? `NEXT ACTION · ${result.action.opportunity}` : 'NEXT CAMPAIGN ACTION'
         : 'SUGGESTED ROUTE STEP'),
-      h('p', {class: 'campaign-decision-task'}, taskPreview),
-      taskPreview !== result.action.task
+      h('p', {class: 'campaign-decision-task'}, repeatsBlocker ? 'Start with the blocker in Selected route status.' : taskPreview),
+      !repeatsBlocker && taskPreview !== result.action.task
         ? h('p', {class: 'campaign-action-meta'}, 'The full recorded steps stay in the action list.') : null,
       h('p', {class: 'campaign-decision-owner'}, result.action.ownerStatus),
       result.action.due ? h('p', {class: 'campaign-decision-date' + (targetDatePast ? ' is-overdue' : '')},
         'Proposed target: ' + new Intl.DateTimeFormat('en-AU', {dateStyle: 'medium'}).format(targetDate)
           + (targetDatePast ? ' · past — confirm or reset' : '')) : null,
-      button(result.action.actionIndex === undefined ? 'Open next actions' : 'Open full action', () => {
+      button(repeatsBlocker ? 'Review route checks' : result.action.actionIndex === undefined ? 'Open next actions' : 'Open full action', () => {
+        if (repeatsBlocker) { openRouteChecks(); return; }
         if (result.action.actionIndex !== undefined) {
           expandedActionRows ||= new WeakSet();
           const row = document.actions[result.action.actionIndex];
@@ -476,8 +485,10 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       h('p', {class: 'campaign-decision-detail'}, result.detail)), action,
       h('div', {class: 'campaign-decision-reopen'},
         h('strong', {}, 'Reopen or progress when'),
-        h('p', {}, result.reopenCriteria)),
-      h('p', {class: 'campaign-decision-note'}, 'Based only on campaign entries. Source links and assessments are not verified by Sinter; this card does not establish eligibility or permission to submit.'));
+        h('p', {}, result.reopenCriteria),
+        result.state === 'not_ready' && !repeatsBlocker
+          ? button('Review route checks', openRouteChecks, 'quiet') : null),
+      h('p', {class: 'campaign-decision-note'}, CAMPAIGN_DECISION_NOTE));
   }
   function scopeChoices() { return [['', 'Whole campaign'], ...document.opportunities.map(row => [row.name, row.name])]; }
   function addOpportunity() {

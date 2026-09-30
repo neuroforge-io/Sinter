@@ -185,6 +185,60 @@ def _source_quote(source: Source, excerpt: Excerpt) -> str:
     return "\n".join(formatted)
 
 
+def _source_caption(title: str) -> str:
+    """Keep supplied titles literal and inside the quoted metadata boundary."""
+    rendered = re.sub(r"\r\n|[\r\n\v\f\x85\u2028\u2029]", "\n", title)
+    lines = rendered.split("\n")
+    return "> Original source: " + "\n> ".join(
+        _source_text_line(literal(line)) for line in lines
+    )
+
+
+def reference_records(sources: list[Source], selected: list[Excerpt]) -> list[dict]:
+    """Name validated passages without changing canonical identities or offsets."""
+    if any(
+        not isinstance(source.id, str) or not source.id.strip() for source in sources
+    ):
+        raise ValueError("A handover source identity is missing or invalid.")
+    by_source = {source.id: source for source in sources}
+    if len(by_source) != len(sources):
+        raise ValueError("A handover source identity is ambiguous.")
+    seen = set()
+    records = []
+    for number, excerpt in enumerate(selected, 1):
+        if (
+            not isinstance(excerpt.id, str)
+            or not excerpt.id.strip()
+            or excerpt.id in seen
+        ):
+            raise ValueError("A handover passage identity is ambiguous.")
+        if not isinstance(excerpt.source_id, str) or not excerpt.source_id.strip():
+            raise ValueError(
+                "A handover passage no longer matches its original source."
+            )
+        parent = by_source.get(excerpt.source_id)
+        if (
+            parent is None
+            or type(excerpt.start) is not int
+            or type(excerpt.end) is not int
+            or not validate_excerpt(excerpt, [parent])
+        ):
+            raise ValueError(
+                "A handover passage no longer matches its original source."
+            )
+        seen.add(excerpt.id)
+        records.append(
+            {
+                "label": f"Passage {number}",
+                "excerpt_id": excerpt.id,
+                "source_id": excerpt.source_id,
+                "start": excerpt.start,
+                "end": excerpt.end,
+            }
+        )
+    return records
+
+
 def render(
     title: str,
     details: dict,
@@ -193,10 +247,9 @@ def render(
     questions: list[dict],
 ) -> str:
     """Format selected wording and question-specific checks; never mark answers."""
+    records = reference_records(sources, selected)
     by_source = {source.id: source for source in sources}
-    by_excerpt = {excerpt.id: excerpt for excerpt in selected}
-    if any(not validate_excerpt(excerpt, sources) for excerpt in selected):
-        raise ValueError("A handover passage no longer matches its original source.")
+    by_excerpt = {record["excerpt_id"]: record for record in records}
     lines = [
         "# " + literal(title),
         "Source-only handover checklist — review before using.",
@@ -225,7 +278,7 @@ def render(
         lines.append(f"### {number}. {literal(row['question'])}")
         lines.append(
             "Related wording — review required: "
-            + ", ".join("[" + identifier + "]" for identifier in references)
+            + ", ".join(by_excerpt[identifier]["label"] for identifier in references)
             + "."
             if references
             else "No wording match was found in the admitted text. The real-world "
@@ -247,16 +300,12 @@ def render(
             f"{source_count} source{'s' if source_count != 1 else ''}. All selected "
             "passages remain available in Evidence."
         )
-    for number, excerpt in enumerate(displayed, 1):
+    for excerpt in displayed:
         source = by_source[excerpt.source_id]
         lines.extend(
             [
-                "### "
-                + literal(source.title)
-                + f" — passage {number} "
-                + "["
-                + excerpt.id
-                + "]",
+                "### " + by_excerpt[excerpt.id]["label"],
+                _source_caption(source.title),
                 _source_quote(source, excerpt),
             ]
         )
@@ -270,4 +319,34 @@ def render(
             "No passages were selected. The original documents remain "
             "in the casebook; add relevant wording before drawing conclusions."
         )
+    if records:
+        lines.extend(
+            [
+                "## Passage reference key",
+                "These short labels refer to the exact selected excerpts. Offsets "
+                "count Unicode code points from zero. The start is included; the "
+                "end is excluded. Selection does not establish a verified answer.",
+            ]
+        )
+        for number, record in enumerate(records):
+            source = by_source[record["source_id"]]
+            scope = (
+                "quoted above."
+                if number < MAX_NOTES
+                else "Evidence only — not reproduced in this document. "
+                "Read its exact wording in Evidence."
+            )
+            # One quoted paragraph keeps each identity/range mapping together.
+            # The supplied title remains inside the literal metadata boundary.
+            lines.append(
+                "> **" + record["label"] + "** — "
+                + _source_caption(source.title)[2:]
+                + "\n> Excerpt ID: "
+                + _literal_code(record["excerpt_id"])
+                + "; source ID: "
+                + _literal_code(record["source_id"])
+                + ".\n> Unicode characters: "
+                + f"{record['start']}–{record['end']}; "
+                + scope
+            )
     return "\n\n".join(lines)

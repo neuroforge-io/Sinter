@@ -6,7 +6,7 @@ import {campaignActionOwnerState} from './campaign-owner.js';
 import {campaignActionPhaseLabel} from './campaign-plan.js';
 import {registerReportDraft, trackReportEdits, trackReportEditor, reportEditorDraft,
   markReportSaved, isReportDraftUnsaved} from './report-drafts.js';
-import {reportCitationReferences, reportCitationMatcher} from './report-citations.js';
+import {reportCitationIndex, reportCitationMatcher} from './report-citations.js';
 
 /** The document is the default view; provenance remains one click away. */
 export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated, onSaved, recovered = false} = {}) {
@@ -88,7 +88,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   function updateDocument() {
     const article = markdown(documentMarkdown(report));
     if (isCampaign) article.classList.add('campaign-decision-document');
-    connectCitations(article, report, sources, () => select('evidence'));
+    connectCitations(article, report, sources, () => select('evidence'), true);
     paper.replaceChildren(h('div', {class: 'paper-label'}, report.workflow === 'campaign'
       ? 'CAMPAIGN DECISION RECORD'
       : report.incomplete ? 'INCOMPLETE MODEL DRAFT' : report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'), article);
@@ -263,8 +263,8 @@ function campaignDraftLog(report, feedback, onCampaignUpdated) {
 }
 
 /** Source IDs become local disclosure controls; no navigation or HTML parsing. */
-function connectCitations(article, report, sources, beforeJump = () => {}) {
-  const references = reportCitationReferences(report);
+function connectCitations(article, report, sources, beforeJump = () => {}, includePassages = false) {
+  const {references, passages} = reportCitationIndex(report, {includePassages});
   const citationMatches = reportCitationMatcher(references);
   const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
   const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
@@ -278,12 +278,16 @@ function connectCitations(article, report, sources, beforeJump = () => {}) {
       const sourceId = match.sourceId;
       const parent = (report.sources || []).find(item => item.id === sourceId);
       const sourceNumber = (report.sources || []).findIndex(item => item.id === sourceId) + 1;
-      const jump = button('Source ' + sourceNumber, () => {
+      const passage = passages.get(match.id);
+      const jump = button(passage?.label || 'Source ' + sourceNumber, () => {
         beforeJump();
         const source = [...sources.querySelectorAll('details')].find(item => item.dataset.sourceId === sourceId);
         if (source) { source.open = true; source.scrollIntoView({block: 'center'}); source.querySelector('summary').focus({preventScroll: true}); }
       }, 'citation-link');
-      jump.setAttribute('aria-label', `Show source: ${parent?.title || sourceId}`);
+      jump.setAttribute('aria-label', passage
+        ? `Show ${passage.label}: ${parent?.title || sourceId}`
+        : `Show source: ${parent?.title || sourceId}`);
+      if (passage) jump.title = `Unicode characters ${passage.start}–${passage.end} (zero-based, end-exclusive) in the retained original.`;
       fragment.append(jump); start = match.index + match.id.length;
     }
     fragment.append(document.createTextNode(node.textContent.slice(start))); node.replaceWith(fragment);

@@ -168,8 +168,9 @@ def test_multiple_passages_from_one_source_have_distinct_titles_and_scope():
     )
     document = handover.render("Handover", {}, [source], [first, second], [])
     assert "Showing 2 of 2 selected passages from 1 source." in document
-    assert "Long source — passage 1 [Efirst]" in document
-    assert "Long source — passage 2 [Esecond]" in document
+    assert "### Passage 1" in document
+    assert "### Passage 2" in document
+    assert document.count("Original source: Long source") == 4
     assert "Not approved." in document and "Ask Jo before confirming." in document
 
 

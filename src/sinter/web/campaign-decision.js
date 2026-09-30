@@ -5,6 +5,8 @@ import {campaignActionOwnerState} from './campaign-owner.js';
 import {campaignSourceSnapshotGuidance,
   campaignSourceSnapshotIssue} from './campaign-source-state.js';
 
+export const CAMPAIGN_DECISION_NOTE = 'Based on your records. Sinter has not verified sources, eligibility or authority; this is not permission to submit.';
+
 const hasText = value => typeof value === 'string' && value.trim().length > 0;
 const WINDOW_CHECK_MAX_AGE_DAYS = 90;
 const parseDay = value => {
@@ -181,7 +183,7 @@ function routeFocus(active, requestedName) {
   return requested || active[0] || null;
 }
 
-function reopenedWhen(document, state, active, today, focus) {
+function reopenedWhen(document, state, today, focus) {
   const sources = Array.isArray(document?.sources) ? document.sources : [];
   const routes = Array.isArray(document?.opportunities) ? document.opportunities : [];
   const notMet = (Array.isArray(document?.requirements) ? document.requirements : [])
@@ -208,7 +210,7 @@ function reopenedWhen(document, state, active, today, focus) {
         : `the user-marked ${rule} is reassessed with a current dated official excerpt and applicant-specific evidence`);
       if (notMet.length > 1) criteria.push('all other recorded unmet checks are reassessed on the same evidence basis');
     }
-    return `Reopen only when ${criteria.join('; or ')}. These records are user-entered and unverified by Sinter.`;
+    return `Reopen only when ${criteria.join('; or ')}.`;
   }
   if (state === 'awaiting_decision') {
     return 'Record the funder’s decision when received. Before restarting after a decision or for another round, check the current official dates and applicant rules.';
@@ -219,11 +221,7 @@ function reopenedWhen(document, state, active, today, focus) {
   if (state === 'ready_for_review') {
     return 'Keep this at human review. Recheck the current official guidance, the applicant evidence and P&C authority before any submission.';
   }
-  const gap = focus && routeGaps(focus,
-    Array.isArray(document?.requirements) ? document.requirements : [], today, sources)[0];
-  return gap
-    ? `Resolve this recorded route gap against current official wording. ${gap} Sinter does not verify these entries.`
-    : 'Reassess after recording current official guidance and applicant-specific evidence for every route.';
+  return `After resolving the blocker above, review the remaining applicant checks and application window in Opportunities. Reassess ${focus ? `“${focus.name}”` : 'this route'} against current official wording and applicant evidence; keep unresolved checks open.`;
 }
 
 function suggestedAction(state, active, document, today, focus) {
@@ -315,12 +313,12 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
     if (focus && focusedGaps.length === 0) {
       state = 'ready_for_review';
       label = 'HUMAN REVIEW REQUIRED';
-      detail = `“${focus.name}” has complete user-entered screening records. Sinter has not verified the sources, eligibility or P&C authority; this is not clearance to apply.`;
+      detail = `“${focus.name}” has complete user-entered screening records and requires human review.`;
     } else {
       state = 'not_ready';
       label = 'NOT READY';
       const gap = focusedGaps[0] || 'current programme details or applicant-specific eligibility evidence';
-      detail = `“${focus?.name || 'The selected route'}” is not ready for human review. ${gap} Sinter has not verified these entries.`;
+      detail = `“${focus?.name || 'The selected route'}” is not ready for human review. ${gap}`;
     }
   }
 
@@ -395,5 +393,5 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
   }
 
   return {state, label, detail, action, focusOpportunity: focus?.name || '',
-    reopenCriteria: reopenedWhen(document, state, active, localToday, focus)};
+    reopenCriteria: reopenedWhen(document, state, localToday, focus)};
 }

@@ -17,6 +17,7 @@ from dataclasses import asdict
 from . import client
 from .briefs import DOCUMENT_FIELDS, prepare_document
 from .evidence import Source, Excerpt, literal, render_evidence, tokens, utc_now
+from .handover import reference_records as handover_references
 from .handover import render as render_handover
 
 MAX_FILES = 300
@@ -241,11 +242,12 @@ def build(payload, document_type=None, progress=lambda message: None):
     # Full originals remain in the separately exportable casebook to avoid huge repeated reports.
     report_sources = [asdict(s) for s in sources if s.id in selected_sources]
     if document_type == 'handover':
-        # Improve the document only. The audit above retains its original wording,
-        # selection, exact excerpts and retrieval limitations.
+        # Add presentation and local reference labels. The audit above retains
+        # its original wording, selection, exact excerpts and limitations.
         prepared['document_markdown'] = render_handover(
             book['title'], prepared['document_details'], sources, picked,
             question_index)
+        prepared['document_references'] = handover_references(sources, picked)
     return {**prepared, 'workflow': 'casebook', 'title': book['title'], 'created_at': utc_now(), 'review_status': 'draft',
             'document_type': document_type, 'markdown': '\n\n'.join(lines), 'sources': report_sources,
             'excerpts': list(selected.values()), 'question_index': question_index, 'coverage': coverage,

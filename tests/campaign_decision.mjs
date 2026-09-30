@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
-import {campaignDecision} from '../src/sinter/web/campaign-decision.js';
+import {campaignDecision, CAMPAIGN_DECISION_NOTE} from '../src/sinter/web/campaign-decision.js';
 
 const goodCheck = {
   opportunity: 'Local fund', rule: 'Applicant type accepted', status: 'met',
@@ -46,7 +46,7 @@ test('closed routes produce a time-bounded no-go with evidence-led reopen criter
   assert.equal(result.label, 'NO-GO FOR NOW');
   assert.match(result.reopenCriteria, /publishes a future round/);
   assert.match(result.reopenCriteria, /Applicant type accepted/);
-  assert.match(result.reopenCriteria, /user-entered and unverified/);
+  assert.match(CAMPAIGN_DECISION_NOTE, /Sinter has not verified sources, eligibility or authority/);
 });
 
 test('submitted routes wait for a decision and never read as rejected or awarded', () => {
@@ -107,8 +107,8 @@ test('complete user-entered screening clearly requires human review and remains 
   }, '2026-09-29');
   assert.equal(result.state, 'ready_for_review');
   assert.equal(result.label, 'HUMAN REVIEW REQUIRED');
-  assert.match(result.detail, /not verified/);
-  assert.match(result.detail, /not clearance to apply/);
+  assert.match(result.detail, /user-entered screening records and requires human review/);
+  assert.match(CAMPAIGN_DECISION_NOTE, /not permission to submit/);
   assert.match(result.action.ownerStatus, /Acceptance recorded by user/);
   assert.equal(result.action.due, '2026-10-01');
   assert.match(result.reopenCriteria, /before any submission/);
@@ -154,7 +154,8 @@ test('a past date on a route still marked open requires status confirmation', ()
   }, '2026-09-29');
   assert.equal(result.state, 'not_ready');
   assert.match(result.action.task, /recorded closing date.*has passed/);
-  assert.match(result.reopenCriteria, /closing date \(2026-09-28\) has passed/);
+  assert.match(result.detail, /closing date \(2026-09-28\) has passed/);
+  assert.match(result.reopenCriteria, /remaining applicant checks and application window in Opportunities/);
 });
 
 test('a rolling application window can be ready without inventing a closing date', () => {
@@ -360,7 +361,8 @@ test('an active route with no eligibility checks gets a specific, evidence-led n
   }, '2026-09-29');
   assert.equal(result.state, 'not_ready');
   assert.match(result.action.task, /Record the applicant eligibility checks/);
-  assert.match(result.reopenCriteria, /No applicant eligibility checks are recorded/);
+  assert.match(result.detail, /No applicant eligibility checks are recorded/);
+  assert.match(result.reopenCriteria, /remaining applicant checks/);
   assert.equal(Object.hasOwn(result.action, 'due'), false);
 });
 
@@ -426,7 +428,8 @@ test('a researching route requires confirmation of a current live round', () => 
     requirements: [goodCheck],
   }, '2026-09-29');
   assert.equal(result.state, 'not_ready');
-  assert.match(result.reopenCriteria, /current official wording.*current round is open/);
+  assert.match(result.detail, /current round is open/);
+  assert.match(result.reopenCriteria, /current official wording.*keep unresolved checks open/);
 });
 
 test('the selected route controls its suggested action and reopen evidence gate', () => {
@@ -441,7 +444,7 @@ test('the selected route controls its suggested action and reopen evidence gate'
   }, '2026-09-29', ruic.name);
   assert.equal(result.focusOpportunity, ruic.name);
   assert.match(result.action.task, /Company operating-age rule/);
-  assert.match(result.reopenCriteria, /Company operating-age rule/);
+  assert.match(result.reopenCriteria, /Reassess “CSIRO RUIC”/);
   assert.doesNotMatch(result.action.task, /regional or remote/i);
   assert.doesNotMatch(result.reopenCriteria, /regional or remote/i);
 });
@@ -461,7 +464,7 @@ test('an incomplete selected route stays not ready when another route is complet
   assert.equal(result.focusOpportunity, focused.name);
   assert.match(result.detail, /Focused route.*not ready.*Focused route eligibility/);
   assert.match(result.action.task, /Focused route eligibility/);
-  assert.match(result.reopenCriteria, /Focused route eligibility/);
+  assert.match(result.reopenCriteria, /Reassess “Focused route”/);
   assert.doesNotMatch(result.detail, /Other complete route/);
   assert.doesNotMatch(result.action.task, /Other complete route/);
   assert.doesNotMatch(result.reopenCriteria, /Other complete route/);
@@ -493,7 +496,8 @@ test('the actual garden fixture gives separate actionable eligibility instructio
   assert.equal(result.state, 'not_ready');
   assert.match(result.detail, /is not ready for human review\. Review the unresolved eligibility check:/);
   assert.match(result.detail, /“Confirm applicant conditions and exclusions” is not assessed\. Record a current official source link and a source excerpt\. Record the date this eligibility source was checked\./);
-  assert.match(result.reopenCriteria, /current official wording\. Review the unresolved eligibility check:/);
+  assert.match(result.reopenCriteria, /remaining applicant checks and application window in Opportunities/);
+  assert.doesNotMatch(result.reopenCriteria, /Confirm applicant conditions and exclusions|Record a current official source link/);
   assert.equal(result.action.source, 'recorded');
   assert.equal(result.action.actionIndex, 1);
   assert.equal(result.action.task, garden.actions[1].task);
@@ -578,4 +582,33 @@ test('unknown and clarification statuses remain blocked with complete source rec
     assert.doesNotMatch(result.action.task, /Record a source excerpt|Record the date/);
     assertReadableGuidance(result);
   }
+});
+
+test('one shared qualification replaces repeated global paragraphs across decision states', () => {
+  for (const document of [
+    {}, {opportunities: [{...readyRoute, status: 'closed'}]},
+    {opportunities: [{...readyRoute, status: 'submitted'}]},
+    {opportunities: [readyRoute], requirements: [goodCheck]},
+    {opportunities: [readyRoute], requirements: [{...goodCheck, status: 'unknown'}]},
+  ]) {
+    const result = decide(document, '2026-09-29');
+    assert.doesNotMatch(result.detail + result.reopenCriteria, /Sinter.*verif|permission to submit|clearance to apply/);
+  }
+  assert.equal((CAMPAIGN_DECISION_NOTE.match(/Sinter/g) || []).length, 1);
+  assert.match(CAMPAIGN_DECISION_NOTE, /sources, eligibility or authority/);
+  assert.match(CAMPAIGN_DECISION_NOTE, /not permission to submit/);
+});
+
+test('distinct progress guidance keeps the selected route and does not promise clearance', () => {
+  const result = decide({opportunities: [readyRoute],
+    requirements: [{...goodCheck, status: 'clarification', source_quote: ''}]}, '2026-09-29');
+  assert.equal(result.state, 'not_ready');
+  assert.match(result.detail, /Applicant type accepted.*Record a source excerpt/);
+  assert.match(result.reopenCriteria, /After resolving the blocker above/);
+  assert.match(result.reopenCriteria, /Reassess “Local fund”/);
+  assert.match(result.reopenCriteria, /keep unresolved checks open/);
+  assert.doesNotMatch(result.reopenCriteria, /Applicant type accepted|Record a source excerpt|ready to submit/);
+  assert.equal(result.action.source, 'suggested');
+  assert.equal(result.action.ownerNeeded, true);
+  assert.match(result.action.task, /Applicant type accepted.*Record a source excerpt/);
 });

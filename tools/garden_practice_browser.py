@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import sys
 import tempfile
 import threading
@@ -28,6 +30,18 @@ def main(argv: list[str] | None = None) -> None:
     out.mkdir(exist_ok=True)
     receipt = out / "garden-practice-summary.json"
     receipt.write_text(json.dumps({"passed": False, "state": "running"}))
+    implementation_paths = (
+        "src/sinter/practice.py",
+        "src/sinter/casebooks.py",
+        "src/sinter/handover.py",
+        "src/sinter/web/report-citations.js",
+        "src/sinter/web/reports.js",
+    )
+    implementation = {
+        name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
+        for name in implementation_paths
+    }
+    retained_word = None
     checks, errors, external = [], [], []
     with tempfile.TemporaryDirectory(prefix="sinter-garden-practice-") as data:
         with patch.object(
@@ -138,8 +152,10 @@ def main(argv: list[str] | None = None) -> None:
                     )
                     document.get_by_role(
                         "button",
-                        name="Show source: Review note - fictional practice conditions",
-                        exact=True,
+                        name=re.compile(
+                            r"^Show Passage \d+: Review note - "
+                            r"fictional practice conditions$"
+                        ),
                     ).first.click()
                     original_note = report.locator(".source-jump[open] pre")
                     expect(original_note).to_have_text(
@@ -155,6 +171,18 @@ def main(argv: list[str] | None = None) -> None:
                         ).click()
                     downloaded_word = out / "offline-garden-handover.docx"
                     word_download.value.save_as(downloaded_word)
+                    word_bytes = downloaded_word.read_bytes()
+                    word_sha = hashlib.sha256(word_bytes).hexdigest()
+                    retained_path = out / "garden-word-downloads" / (word_sha + ".docx")
+                    retained_path.parent.mkdir(parents=True, exist_ok=True)
+                    if retained_path.exists():
+                        assert retained_path.read_bytes() == word_bytes
+                    else:
+                        retained_path.write_bytes(word_bytes)
+                    retained_word = {
+                        "path": str(retained_path.relative_to(ROOT)),
+                        "sha256": word_sha,
+                    }
                     with zipfile.ZipFile(downloaded_word) as archive:
                         assert archive.testzip() is None
                         word = ElementTree.fromstring(archive.read("word/document.xml"))
@@ -165,6 +193,9 @@ def main(argv: list[str] | None = None) -> None:
                         item.text or "" for item in word.iter(namespace + "t")
                     )
                     assert word.find(".//" + namespace + "tbl") is not None
+                    canonical_ids = re.findall(r"\bE[a-f0-9]{24}\b", word_text)
+                    assert len(canonical_ids) == len(set(canonical_ids)) == 4
+                    assert "Passage reference key" in word_text
                     for phrase in (
                         "Handover next steps",
                         "The equipment quote has not been received.",
@@ -385,6 +416,10 @@ def main(argv: list[str] | None = None) -> None:
                 server.shutdown()
                 server.server_close()
                 server.app.close()
+    assert implementation == {
+        name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
+        for name in implementation_paths
+    }, "Garden implementation changed during this run; rerun at a stable checkpoint."
     receipt.write_text(
         json.dumps(
             {
@@ -392,6 +427,8 @@ def main(argv: list[str] | None = None) -> None:
                 "checks": checks,
                 "page_errors": errors,
                 "external_requests": external,
+                "implementation_sha256": implementation,
+                "word_download": retained_word,
             },
             indent=2,
         )
