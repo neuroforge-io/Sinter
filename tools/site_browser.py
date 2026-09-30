@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from tools._support import browser_arguments, launch_chromium
+from tools._support import browser_arguments, launch_chromium  # noqa: E402
 
 API = "https://api.github.com/repos/neuroforge-io/Sinter/releases?per_page=10"
 REPO = "https://github.com/neuroforge-io/Sinter"
@@ -51,7 +51,8 @@ def main(argv: list[str] | None = None) -> None:
     unexpected: list[str] = []
     summary = {
         "passed": False,
-        "scope": "Standalone download interface; no installers executed or platform qualification inferred.",
+        "scope": "Standalone download interface; no installers executed "
+        "or platform qualification inferred.",
         "checks": checks,
         "page_errors": errors,
         "unexpected_requests": unexpected,
@@ -115,7 +116,8 @@ def main(argv: list[str] | None = None) -> None:
                         REPO + "/releases/download/v0.5.3/"
                     )
             checks.append(
-                "Prior v0.5.3 links retain all nine exact architecture fixtures when it is the selected version"
+                "Prior v0.5.3 links retain all nine exact architecture fixtures "
+                "when it is the selected version"
             )
 
             response["json"] = [legacy, native]
@@ -135,7 +137,8 @@ def main(argv: list[str] | None = None) -> None:
             )
             page.locator("#download").screenshot(path=str(out / "linux-preview.png"))
             checks.append(
-                "Current rc preview wins over older metadata order and shows its sole Linux x64 installer with exact release notes"
+                "Current rc preview wins over older metadata order and shows "
+                "its sole Linux x64 installer with exact release notes"
             )
             for system, label in [("windows", "Windows"), ("darwin", "macOS")]:
                 page.get_by_label("Your operating system").select_option(system)
@@ -144,12 +147,14 @@ def main(argv: list[str] | None = None) -> None:
                     f"No {label} x64 installer is available here for v0.5.4rc1"
                 )
                 expect(page.locator("#downloads")).to_contain_text(
-                    "qualified targets; earlier previews remain on the all-releases page"
+                    "qualified targets; earlier previews remain "
+                    "on the all-releases page"
                 )
                 expect(page.locator("#release-status")).to_contain_text("v0.5.4rc1")
             page.locator("#download").screenshot(path=str(out / "macos-absent.png"))
             checks.append(
-                "Windows and macOS explicitly lack current preview installers and never borrow an older platform package"
+                "Windows and macOS explicitly lack current preview installers "
+                "and never borrow an older platform package"
             )
             expect(
                 page.get_by_role(
@@ -160,7 +165,8 @@ def main(argv: list[str] | None = None) -> None:
                 "do not disable security protections"
             )
             checks.append(
-                "Older previews and unsigned installation guidance remain accessible through release notes"
+                "Older previews and unsigned installation guidance remain "
+                "accessible through release notes"
             )
 
             page.set_viewport_size({"width": 390, "height": 844})
@@ -169,7 +175,8 @@ def main(argv: list[str] | None = None) -> None:
             )
             page.screenshot(path=str(out / "mobile-preview.png"), full_page=True)
             checks.append(
-                "Current preview and absent target messages fit a narrow viewport without overflow"
+                "Current preview and absent target messages fit a narrow "
+                "viewport without overflow"
             )
             page.set_viewport_size({"width": 1440, "height": 1000})
 
@@ -186,7 +193,8 @@ def main(argv: list[str] | None = None) -> None:
             page.get_by_label("Your operating system").select_option("windows")
             expect(page.locator("#downloads a")).to_have_count(3)
             checks.append(
-                "Malformed, draft and incorrectly promoted rc metadata cannot become a download version"
+                "Malformed, draft and incorrectly promoted rc metadata "
+                "cannot become a download version"
             )
 
             bad_windows = installer("v0.5.4rc1", "windows", "x64", "-setup.exe")
@@ -210,7 +218,8 @@ def main(argv: list[str] | None = None) -> None:
             page.get_by_label("Your operating system").select_option("linux")
             expect(page.locator("#downloads a")).to_have_count(1)
             checks.append(
-                "Wrong-release URLs and unsafe hosts stay unavailable while the valid current installer remains usable"
+                "Wrong-release URLs and unsafe hosts stay unavailable while "
+                "the valid current installer remains usable"
             )
 
             response["json"] = [legacy, {**native, "assets": []}]
@@ -218,7 +227,8 @@ def main(argv: list[str] | None = None) -> None:
             expect(page.locator("#release-status")).to_contain_text("v0.5.4rc1")
             expect(page.locator("#downloads a")).to_have_count(0)
             checks.append(
-                "A current preview with no installer stays current instead of silently falling back"
+                "A current preview with no installer stays current "
+                "instead of silently falling back"
             )
             for case in [
                 {"status": 200, "json": [legacy, {**native, "assets": None}]},
@@ -236,7 +246,8 @@ def main(argv: list[str] | None = None) -> None:
                 )
                 expect(page.locator("#downloads a")).to_have_count(0)
             checks.append(
-                "Six missing, malformed, unavailable or interrupted metadata cases keep only the explicit releases-page recovery route"
+                "Six missing, malformed, unavailable or interrupted metadata "
+                "cases keep only the explicit releases-page recovery route"
             )
             assert not errors, errors
             assert not unexpected, unexpected
@@ -259,7 +270,8 @@ def main(argv: list[str] | None = None) -> None:
         )
         receipt.write_text(json.dumps(summary, indent=2) + "\n")
     print(
-        f"PASS: {len(checks)} public download journeys. No binaries downloaded. {receipt}"
+        f"PASS: {len(checks)} public download journeys. "
+        f"No binaries downloaded. {receipt}"
     )
 
 

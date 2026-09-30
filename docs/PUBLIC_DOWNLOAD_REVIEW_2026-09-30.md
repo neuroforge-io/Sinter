@@ -29,6 +29,15 @@ missing-current-asset and reusable citation-matcher probes. Its inspection of th
 nine-journey browser receipt confirmed the held source hash; it did not claim a
 second browser run.
 
+The pushed page deployment at `94386868d7a98080dbd230ec96c59fb519316093`
+passed GitHub Pages deployment. A separate human-style in-app-browser check of
+`https://neuroforge-io.github.io/Sinter/` selected the current Linux preview,
+verified its exact download link, switched to macOS and confirmed that no older
+installer appeared. Screenshots are retained as
+`browser-artifacts/public-preview-human-linux.jpg` and
+`public-preview-human-macos.jpg`; the owned tab was closed. No download was
+triggered in that check.
+
 Local retained evidence is in `browser-artifacts/site-download-preview/`:
 `browser-receipt.json`, `review-summary.json` and
 `independent-critic-review.json`. Browser and server resources were closed. This
