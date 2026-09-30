@@ -34,7 +34,9 @@ class NativeProfile:
     max_output_bytes: int = 8192
     request_bytes: int = 32768
     response_bytes: int = 65536
-    deadline_seconds: float = 50.0
+    # The service contract ends at the edge; the client also budgets delivery.
+    edge_deadline_seconds: float = 50.0
+    client_deadline_seconds: float = 55.0
 
 
 NATIVE_PROFILE = NativeProfile()

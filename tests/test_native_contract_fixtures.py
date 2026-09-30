@@ -49,7 +49,7 @@ def test_public_native_fixture_version_identity_and_capabilities_are_exact():
     assert PACK["limits"] == {
         "request_body_bytes": NATIVE_PROFILE.request_bytes,
         "response_body_bytes": NATIVE_PROFILE.response_bytes,
-        "edge_deadline_ms": NATIVE_PROFILE.deadline_seconds * 1000,
+        "edge_deadline_ms": NATIVE_PROFILE.edge_deadline_seconds * 1000,
         "min_output_tokens": NATIVE_PROFILE.min_output_tokens,
         "max_output_tokens": NATIVE_PROFILE.max_output_tokens,
         "default_output_tokens": NATIVE_PROFILE.max_output_tokens,

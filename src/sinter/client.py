@@ -418,7 +418,7 @@ def _request_timeout(path: str, body: dict | None) -> float:
         return CONTROL_TIMEOUT
     if (path == "/chat/completions" and body
             and is_native_profile(body.get("model"))):
-        return NATIVE_PROFILE.deadline_seconds
+        return NATIVE_PROFILE.client_deadline_seconds
     if path in {"/chat/completions", "/messages", "/responses"} and not (body or {}).get("stream"):
         return JSON_CHAT_TIMEOUT
     return REQUEST_TIMEOUT
@@ -698,7 +698,7 @@ def list_models() -> list[dict]:
 def chat(messages: list[Message], max_tokens: int = DEFAULT_OUTPUT_TOKENS) -> ChatResult:
     body = _chat_body(messages, max_tokens)
     timeout = (STREAM_DEADLINE if selected_provider() == CHATGPT
-               else NATIVE_PROFILE.deadline_seconds if is_native_profile()
+               else NATIVE_PROFILE.client_deadline_seconds if is_native_profile()
                else JSON_CHAT_TIMEOUT)
     with _hosted_generation(timeout):
         body = _resolved_body(body)
@@ -799,7 +799,8 @@ def _events(response, *, deadline: float | None = None) -> Iterator[str]:
 def chat_stream(messages: list[Message], max_tokens: int = DEFAULT_OUTPUT_TOKENS) -> Generator[str, None, ChatResult]:
     """Yield identity-checked text; closing the iterator releases hosted admission."""
     body = _chat_body(messages, max_tokens)
-    timeout = NATIVE_PROFILE.deadline_seconds if is_native_profile() else STREAM_DEADLINE
+    timeout = (NATIVE_PROFILE.client_deadline_seconds
+               if is_native_profile() else STREAM_DEADLINE)
     with _hosted_generation(timeout):
         body = _resolved_body(body)
         native = is_native_profile(body["model"])

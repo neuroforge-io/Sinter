@@ -27,7 +27,8 @@ This pack comes from site commit `22aad400`; public worker deployment
 | Earlier history | At most three complete exchanges and 4,096 UTF-8 bytes total |
 | Prompt | Separate 512-token budget, checked by the service's tokenizer |
 | Request / response | At most 32,768 / 65,536 bytes |
-| Time budget | 50 seconds for the native buffered request |
+| Service edge time budget | 50 seconds for the native buffered request |
+| Sinter transport time budget | 55 seconds, allowing for response delivery overhead |
 | Caller system instructions | Rejected; the deployed system prompt is service-owned |
 | Sampling, tools, media, structured output | Outside the supported public native subset |
 | Completion status | `stop` is complete; `length` stays explicitly incomplete |
@@ -37,6 +38,14 @@ or call an undocumented preflight endpoint. If the service rejects a byte-admitt
 question, Sinter explains the separate prompt budget and preserves the original
 inputs. Shorten the selected scope deliberately or choose a suitable provider;
 Sinter never truncates source conditions or strips supplied system instructions.
+
+The client's 55-second budget is separate from the service edge's 50-second
+contract. It allows a response completed within the edge budget to arrive and be
+read without an equal client deadline cutting it off. A shorter enclosing task
+budget or cancellation still takes precedence. Sinter sends one request and
+never automatically retries it; other providers and saved settings retain their
+existing behavior. This source change is not installed-release qualification or
+a live latency measurement.
 
 Discovery qualifies the exact native metadata, including buffered-only text,
 deployment-owned system/sampling, input/output limits, the opaque owner runtime

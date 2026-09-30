@@ -5,6 +5,11 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Give the exact NeuroForge native buffered response a 55-second client budget,
+  distinct from the service edge's 50-second contract, so response delivery has
+  headroom. Preserve shorter task deadlines, cancellation, saved settings and
+  other providers; never automatically retry generation.
+
 - Record each funding ceiling's currency explicitly, including unconfirmed and
   unsupported other currencies. Keep project costs in AUD and withhold numeric
   ceiling comparisons across denominations; show the review needed without an

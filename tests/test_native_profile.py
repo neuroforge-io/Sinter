@@ -18,7 +18,7 @@ from sinter.model_profiles import (
     native_reply,
     native_request,
 )
-from sinter.operations import Cancelled, budget
+from sinter.operations import Cancelled, DeadlineExceeded, budget
 from sinter.preferences import Preferences, validate
 from sinter.providers import ProviderProtocolError
 
@@ -296,10 +296,102 @@ def test_native_json_response_size_and_deadline_are_profile_bound():
         client.connection_settings(connection()),
         patch.object(client, "_open", return_value=response),
     ):
-        assert client._request_timeout("/chat/completions", body) == 50.0
+        assert client._request_timeout("/chat/completions", body) == 55.0
         with pytest.raises(client.APIError, match="safety limit"):
             client._request_json("/chat/completions", body)
     assert response.closed
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_native_completed_reply_has_delivery_headroom_without_replay(stream):
+    clock = [0.0]
+    response = BufferedReply(completion())
+
+    def open_after_delivery(request, *, timeout):
+        assert request.full_url == client.BASE_URL + "/chat/completions"
+        assert json.loads(request.data)["stream"] is False
+        assert timeout == 55.0
+        clock[0] = 51.0
+        return response
+
+    with (
+        client.connection_settings(connection()),
+        patch.object(client.time, "monotonic", side_effect=lambda: clock[0]),
+        patch.object(client.urllib.request, "build_opener") as opener,
+    ):
+        opener.return_value.open.side_effect = open_after_delivery
+        messages = [client.Message("user", "Hello")]
+        if stream:
+            parts = list(client.chat_stream(messages))
+            assert parts == ["A small answer."]
+        else:
+            result = client.chat(messages)
+            assert result.content == "A small answer."
+            assert result.model == client.NATIVE_MODEL
+            assert result.finish_reason == "stop"
+    assert response.closed and opener.return_value.open.call_count == 1
+    assert NATIVE_PROFILE.edge_deadline_seconds == 50.0
+    assert NATIVE_PROFILE.client_deadline_seconds == 55.0
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_native_client_deadline_remains_bounded_without_exposing_late_text(stream):
+    clock = [0.0]
+    response = BufferedReply(completion())
+
+    def open_after_deadline(path, body):
+        clock[0] = 55.0
+        return response
+
+    with (
+        client.connection_settings(connection()),
+        patch.object(client.time, "monotonic", side_effect=lambda: clock[0]),
+        patch.object(client, "_open", side_effect=open_after_deadline) as send,
+        patch.object(response, "read", wraps=response.read) as read,
+    ):
+        messages = [client.Message("user", "Hello")]
+        with pytest.raises(DeadlineExceeded, match="overall time limit"):
+            if stream:
+                list(client.chat_stream(messages))
+            else:
+                client.chat(messages)
+        read.assert_not_called()
+    assert response.closed and send.call_count == 1
+
+
+def test_native_delivery_headroom_respects_a_shorter_enclosing_task_budget():
+    clock = [0.0]
+    response = BufferedReply(completion())
+
+    def open_after_task_deadline(path, body):
+        clock[0] = 51.0
+        return response
+
+    with (
+        client.connection_settings(connection()),
+        patch.object(client.time, "monotonic", side_effect=lambda: clock[0]),
+        budget(50.0),
+        patch.object(client, "_open", side_effect=open_after_task_deadline) as send,
+        patch.object(response, "read", wraps=response.read) as read,
+    ):
+        with pytest.raises(DeadlineExceeded, match="overall time limit"):
+            client.chat([client.Message("user", "Hello")])
+        read.assert_not_called()
+    assert response.closed and send.call_count == 1
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [connection(model=client.MODEL), connection(api_url="https://custom.example/v1")],
+)
+def test_native_headroom_does_not_change_legacy_or_custom_timeout(settings):
+    original = copy.deepcopy(settings)
+    body = {"model": settings["model"], "max_tokens": 128, "stream": False}
+    with client.connection_settings(settings):
+        assert client._request_timeout("/chat/completions", body) == 120.0
+        assert client._request_timeout("/models", None) == 10.0
+        assert client._request_timeout("/search", {}) == 30.0
+    assert settings == original
 
 
 def test_native_incomplete_json_eof_is_rejected_without_replay():
