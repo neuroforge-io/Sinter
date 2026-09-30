@@ -2,6 +2,9 @@
 
 ## Unreleased - 0.5.4rc2.dev0
 
+- Recognise current release candidates on the standalone download page. Bind each
+  installer to its exact version and target; unavailable targets and failed
+  metadata retain clear release-page recovery without borrowing an older package.
 - Open the complete fictional garden handover and campaign directly from Overview
   or Getting started. Bundle all four practice sources, actions and historical
   records; protect existing inputs and resume edits when switching the paired
