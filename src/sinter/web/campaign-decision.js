@@ -41,23 +41,18 @@ const sourceFields = [
   ['evidence', 'applicant-specific evidence'],
   ['source_url', 'a current official source link'],
   ['source_quote', 'a source excerpt'],
-  ['checked_at', 'a check date'],
 ];
 
-function missingSourceGuidance(row, today, sources = []) {
+function sourceRecordGuidance(row, today, sources = []) {
   const missing = sourceFields.filter(([key]) => !hasText(row?.[key]))
     .map(([, label]) => label);
-  const dateGap = requirementDateGap(row?.checked_at, today);
-  if (dateGap) {
-    const dateIndex = missing.indexOf('a check date');
-    if (dateIndex >= 0) missing[dateIndex] = dateGap;
-    else missing.push(dateGap);
-  }
-  const versionGap = sourceVersionGap(row, sources);
-  if (versionGap) missing.push(versionGap);
-  if (missing.length === 1) return missing[0];
-  if (missing.length === 2) return `${missing[0]} and ${missing[1]}`;
-  return `${missing.slice(0, -1).join(', ')} and ${missing.at(-1)}`;
+  const fields = missing.length < 2 ? missing[0]
+    : `${missing.slice(0, -1).join(', ')} and ${missing.at(-1)}`;
+  // Field labels are noun phrases; date and snapshot guidance are complete
+  // sentences. Keep each instruction intact instead of joining unlike parts.
+  return [fields ? `Record ${fields}.` : '',
+    requirementDateGap(row?.checked_at, today), sourceVersionGap(row, sources)]
+    .filter(Boolean).join(' ');
 }
 
 function requirementGap(check, today, sources = []) {
@@ -69,14 +64,14 @@ function requirementGap(check, today, sources = []) {
   if (check.status === 'clarification') {
     return complete
       ? `${name} has a source and applicant-evidence record but remains marked for clarification; resolve the interpretation and update its status.`
-      : `${name} remains marked for clarification; record ${missingSourceGuidance(check, today, sources)} and resolve the interpretation.`;
+      : `${name} remains marked for clarification. ${sourceRecordGuidance(check, today, sources)} Resolve the interpretation and update its status.`;
   }
   if (check.status === 'unknown') {
     return complete
       ? `${name} has a complete evidence record but remains unassessed; review it and record the applicant-specific status.`
-      : `${name} is not assessed; record ${missingSourceGuidance(check, today, sources)}.`;
+      : `${name} is not assessed. ${sourceRecordGuidance(check, today, sources)}`;
   }
-  return `${name} is marked met, but its source record is incomplete or out of date; record ${missingSourceGuidance(check, today, sources)}.`;
+  return `${name} is marked met, but its source record is incomplete or out of date. ${sourceRecordGuidance(check, today, sources)}`;
 }
 
 function windowCheckGap(checkedAt, today, label) {
@@ -227,7 +222,7 @@ function reopenedWhen(document, state, active, today, focus) {
   const gap = focus && routeGaps(focus,
     Array.isArray(document?.requirements) ? document.requirements : [], today, sources)[0];
   return gap
-    ? `Resolve this recorded route gap against current official wording: ${gap} Sinter does not verify these entries.`
+    ? `Resolve this recorded route gap against current official wording. ${gap} Sinter does not verify these entries.`
     : 'Reassess after recording current official guidance and applicant-specific evidence for every route.';
 }
 
@@ -325,7 +320,7 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
       state = 'not_ready';
       label = 'NOT READY';
       const gap = focusedGaps[0] || 'current programme details or applicant-specific eligibility evidence';
-      detail = `“${focus?.name || 'The selected route'}” is not ready for human review: ${gap} Sinter has not verified these entries.`;
+      detail = `“${focus?.name || 'The selected route'}” is not ready for human review. ${gap} Sinter has not verified these entries.`;
     }
   }
 

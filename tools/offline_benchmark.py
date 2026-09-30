@@ -22,6 +22,24 @@ from sinter import __version__, casebooks, client  # noqa: E402
 from sinter.evidence import Excerpt, Source, validate_excerpt  # noqa: E402
 
 
+def implementation_identity() -> dict:
+    """Bind profiling to all local retrieval and presentation code involved."""
+    names = (
+        "casebooks.py",
+        "briefs.py",
+        "evidence.py",
+        "document_markup.py",
+        "handover.py",
+    )
+    return {
+        "src/sinter/" + name: hashlib.sha256(path.read_bytes()).hexdigest()
+        if path.is_file()
+        else None
+        for name in names
+        for path in [ROOT / "src/sinter" / name]
+    }
+
+
 def measure(book: dict, samples: int) -> dict:
     """Time preparation independently of provenance checks and instrumentation."""
     times = []
@@ -72,6 +90,7 @@ def main(argv: list[str] | None = None) -> None:
             for n in range(300)
         ],
     }
+    implementation = implementation_identity()
     with patch.object(
         client,
         "_open",
@@ -107,6 +126,11 @@ def main(argv: list[str] | None = None) -> None:
         finally:
             tracemalloc.stop()
         network.assert_not_called()
+    if implementation_identity() != implementation:
+        raise RuntimeError(
+            "Preparation code changed during profiling; "
+            "rerun against a stable checkpoint."
+        )
     result = {
         "schema": "sinter-offline-benchmark/v1",
         "version": __version__,
@@ -118,6 +142,7 @@ def main(argv: list[str] | None = None) -> None:
         "casebooks_code_sha256": hashlib.sha256(
             (ROOT / "src/sinter/casebooks.py").read_bytes()
         ).hexdigest(),
+        "implementation_sha256": implementation,
         "workloads": workloads,
         "synthetic_peak_traced_bytes": peak,
         "synthetic_cumulative_profile": functions,

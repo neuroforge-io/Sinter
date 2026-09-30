@@ -2,6 +2,13 @@
 
 ## Unreleased - 0.5.4rc2.dev0
 
+- Present source-only handovers with question-specific checks, clearly attributed
+  notes and complete quoted action tables. Keep unmatched answers unknown and
+  retain literal fallback wording, original evidence and retrieval limitations.
+- Make admitted casebook citations open their exact local originals regardless of
+  ID length. Clear stale save reminders only after the current edits are saved;
+  keep newer edits protected during delayed saves. Readiness instructions now
+  separate source-field, date and changed-snapshot guidance into readable sentences.
 - Recognise current release candidates on the standalone download page. Bind each
   installer to its exact version and target; unavailable targets and failed
   metadata retain clear release-page recovery without borrowing an older package.

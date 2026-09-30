@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 import tempfile
 import threading
@@ -144,6 +145,20 @@ def main(argv: list[str] | None = None) -> None:
                     assert page.evaluate(
                         "document.activeElement.id === 'casebook-output'"
                     )
+                    report.get_by_role("tab", name="Evidence", exact=True).click()
+                    citation = report.get_by_role(
+                        "button", name=re.compile(r"^Show source:")
+                    ).first
+                    expect(citation).to_be_visible()
+                    citation.click()
+                    opened_source = report.locator(".source-jump[open]")
+                    expect(opened_source).to_have_count(1)
+                    expect(opened_source.locator("pre")).to_be_visible()
+                    report.get_by_role("tab", name="Document", exact=True).click()
+                    checks.append(
+                        "casebook citations open their exact original source "
+                        "despite the longer identity format"
+                    )
                     report.get_by_text("More options", exact=True).click()
                     report.get_by_role("button", name="Edit draft", exact=True).click()
                     edited = (
@@ -153,6 +168,9 @@ def main(argv: list[str] | None = None) -> None:
                     report.get_by_label("Edit your draft", exact=True).fill(edited)
                     assert page.evaluate(warn)
                     report.get_by_role("button", name="Apply edits", exact=True).click()
+                    expect(report).to_contain_text(
+                        "Edits applied. Save this draft to keep them."
+                    )
                     page.get_by_role("button", name="Save project", exact=True).click()
                     expect(
                         page.get_by_text("This saves the project inputs", exact=False)
@@ -206,6 +224,9 @@ def main(argv: list[str] | None = None) -> None:
                         "button", name="Save to this computer", exact=True
                     ).click()
                     expect(report).to_contain_text("Saved in My workspace")
+                    expect(report).not_to_contain_text(
+                        "Edits applied. Save this draft to keep them."
+                    )
                     assert not page.evaluate(warn)
                     assert (
                         server.app.store.report(server.app.store.reports()[0]["id"])[
@@ -318,6 +339,7 @@ def main(argv: list[str] | None = None) -> None:
                         "src/sinter/web/report-drafts.js",
                         "src/sinter/web/casebooks.js",
                         "src/sinter/web/reports.js",
+                        "src/sinter/web/report-citations.js",
                     ]
                 },
             },

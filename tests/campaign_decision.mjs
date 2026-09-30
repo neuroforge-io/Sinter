@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {campaignDecision} from '../src/sinter/web/campaign-decision.js';
 
@@ -395,8 +396,8 @@ test('a complete source record with a clarification status asks for a human reso
   assert.equal(result.state, 'not_ready');
   assert.match(result.detail, /source and applicant-evidence record.*remains marked for clarification/);
   assert.match(result.action.task, /resolve the interpretation and update its status/);
-  assert.doesNotMatch(result.detail, /record a source excerpt|a check date/);
-  assert.doesNotMatch(result.reopenCriteria, /record a source excerpt|a check date/);
+  assert.doesNotMatch(result.detail, /record a source excerpt|a check date/i);
+  assert.doesNotMatch(result.reopenCriteria, /record a source excerpt|a check date/i);
 });
 
 test('a complete source record with an unknown status asks for assessment, not duplicate evidence', () => {
@@ -407,7 +408,7 @@ test('a complete source record with an unknown status asks for assessment, not d
   assert.equal(result.state, 'not_ready');
   assert.match(result.detail, /complete evidence record but remains unassessed/);
   assert.match(result.action.task, /review it and record the applicant-specific status/);
-  assert.doesNotMatch(result.detail, /record a source excerpt|a check date/);
+  assert.doesNotMatch(result.detail, /record a source excerpt|a check date/i);
 });
 
 test('eligibility guidance names only source fields that are actually missing', () => {
@@ -415,7 +416,7 @@ test('eligibility guidance names only source fields that are actually missing', 
     opportunities: [readyRoute],
     requirements: [{...goodCheck, status: 'unknown', source_quote: ''}],
   }, '2026-09-29');
-  assert.match(result.detail, /record a source excerpt/);
+  assert.match(result.detail, /Record a source excerpt\./);
   assert.doesNotMatch(result.detail, /applicant-specific evidence|source link|check date/);
 });
 
@@ -475,4 +476,106 @@ test('open actions on inactive routes are surfaced as held review work', () => {
   assert.equal(result.action.source, 'suggested');
   assert.match(result.action.task, /1 open action\(s\) on inactive route\(s\)/);
   assert.doesNotMatch(result.action.task, /Submit the old application/);
+});
+
+const assertReadableGuidance = result => {
+  for (const text of [result.detail, result.reopenCriteria, result.action.task]) {
+    assert.doesNotMatch(text, /\.\.|\b(?:record|and) (?:Record|The|No)\b|\. and resolve/);
+    assert.doesNotMatch(text, /human review: Review|wording: Review/);
+  }
+};
+
+test('the actual garden fixture gives separate actionable eligibility instructions', () => {
+  const garden = JSON.parse(readFileSync(new URL(
+    '../src/sinter/web/offline-garden-campaign.json', import.meta.url), 'utf8'));
+  const original = JSON.stringify(garden);
+  const result = campaignDecision(garden, '2026-09-30');
+  assert.equal(result.state, 'not_ready');
+  assert.match(result.detail, /is not ready for human review\. Review the unresolved eligibility check:/);
+  assert.match(result.detail, /“Confirm applicant conditions and exclusions” is not assessed\. Record a current official source link and a source excerpt\. Record the date this eligibility source was checked\./);
+  assert.match(result.reopenCriteria, /current official wording\. Review the unresolved eligibility check:/);
+  assert.equal(result.action.source, 'recorded');
+  assert.equal(result.action.actionIndex, 1);
+  assert.equal(result.action.task, garden.actions[1].task);
+  assert.equal(result.action.ownerNeeded, true);
+  assert.equal(result.action.due, garden.actions[1].due);
+  assert.equal(JSON.stringify(garden), original);
+  assertReadableGuidance(result);
+});
+
+test('a missing eligibility check date is a sentence rather than a field label', () => {
+  const result = decide({opportunities: [readyRoute],
+    requirements: [{...goodCheck, checked_at: ''}]}, '2026-09-29');
+  assert.equal(result.state, 'not_ready');
+  assert.match(result.action.task, /is marked met, but its source record is incomplete or out of date\. Record the date this eligibility source was checked\.$/);
+  assert.doesNotMatch(result.detail, /applicant-specific evidence|source link|source excerpt/);
+  assertReadableGuidance(result);
+});
+
+test('invalid, future and stale date instructions remain distinct complete sentences', () => {
+  const cases = [
+    ['2026-02-30', 'Record a valid date for this eligibility source check.'],
+    ['2026-09-30', 'The eligibility source check date (2026-09-30) is in the future; correct it.'],
+    ['2026-06-30', 'The eligibility source was last checked 91 days ago; recheck it (within 90 days).'],
+  ];
+  for (const [checked_at, expected] of cases) {
+    const result = decide({opportunities: [readyRoute],
+      requirements: [{...goodCheck, checked_at}]}, '2026-09-29');
+    assert.equal(result.state, 'not_ready');
+    assert.ok(result.action.task.endsWith(expected), result.action.task);
+    assert.doesNotMatch(result.action.task, /applicant-specific evidence|source link|source excerpt/);
+    assertReadableGuidance(result);
+  }
+});
+
+test('source snapshot issues retain their exact independent instructions', () => {
+  const sourceId = 'b'.repeat(32);
+  const linked = {id: sourceId, url: goodCheck.source_url,
+    checked_at: goodCheck.checked_at};
+  const cases = [
+    [{...goodCheck, source_id: sourceId}, null,
+      'The linked campaign source is missing; reconnect it and recheck the wording.'],
+    [{...goodCheck, source_id: sourceId, source_url: ''}, linked,
+      'No source URL snapshot was saved with this wording; compare it with the linked page and recheck before use.'],
+    [{...goodCheck, source_id: sourceId}, {...linked, url: ''},
+      'The linked campaign source has no URL; add the official page and recheck the wording.'],
+    [{...goodCheck, source_id: sourceId}, {...linked, url: 'https://example.org/changed'},
+      'The saved source URL differs from the linked record; re-read the page and update the wording and check date before use.'],
+    [{...goodCheck, source_id: sourceId}, {...linked, checked_at: ''},
+      'The linked source has no check date; re-read the page and record when it was checked.'],
+    [{...goodCheck, source_id: sourceId, checked_at: ''}, linked,
+      'No source check date was saved with this wording; re-read it and record a date before use.'],
+    [{...goodCheck, source_id: sourceId}, {...linked, checked_at: '2026-09-21'},
+      'The saved check date differs from the linked record; re-read the wording and update the date before use.'],
+  ];
+  for (const [check, source, expected] of cases) {
+    const result = decide({opportunities: [readyRoute], requirements: [check],
+      sources: [windowSource, ...(source ? [source] : [])]}, '2026-09-29');
+    assert.equal(result.state, 'not_ready');
+    assert.ok(result.action.task.endsWith(expected), result.action.task);
+    assertReadableGuidance(result);
+  }
+});
+
+test('clarification combines missing fields, date and snapshot without joining sentences as labels', () => {
+  const sourceId = 'b'.repeat(32);
+  const result = decide({opportunities: [readyRoute],
+    requirements: [{...goodCheck, status: 'clarification', source_id: sourceId,
+      evidence: '', source_url: '', source_quote: '', checked_at: ''}],
+    sources: [windowSource, {id: sourceId, url: goodCheck.source_url,
+      checked_at: goodCheck.checked_at}]}, '2026-09-29');
+  assert.equal(result.state, 'not_ready');
+  assert.match(result.action.task, /remains marked for clarification\. Record applicant-specific evidence, a current official source link and a source excerpt\. Record the date this eligibility source was checked\. No source URL snapshot was saved/);
+  assert.ok(result.action.task.endsWith('Resolve the interpretation and update its status.'));
+  assertReadableGuidance(result);
+});
+
+test('unknown and clarification statuses remain blocked with complete source records', () => {
+  for (const status of ['unknown', 'clarification']) {
+    const result = decide({opportunities: [readyRoute],
+      requirements: [{...goodCheck, status}]}, '2026-09-29');
+    assert.equal(result.state, 'not_ready');
+    assert.doesNotMatch(result.action.task, /Record a source excerpt|Record the date/);
+    assertReadableGuidance(result);
+  }
 });

@@ -6,8 +6,10 @@ import json
 import sys
 import tempfile
 import threading
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -120,6 +122,61 @@ def main(argv: list[str] | None = None) -> None:
                     ).click()
                     report = page.get_by_role("region", name="Your draft report")
                     expect(report).to_be_visible()
+                    document = report.get_by_role(
+                        "tabpanel", name="Document", exact=True
+                    )
+                    expect(document).to_contain_text("Source-only handover checklist")
+                    expect(document).to_contain_text(
+                        "The real-world answer remains unknown"
+                    )
+                    expect(document.get_by_role("table")).to_have_count(1)
+                    expect(document.get_by_role("table")).to_contain_text(
+                        "Proposed target date (unconfirmed)"
+                    )
+                    expect(document).not_to_contain_text(
+                        "Action,Scope,Owner,Proposed target date"
+                    )
+                    document.get_by_role(
+                        "button",
+                        name="Show source: Review note - fictional practice conditions",
+                        exact=True,
+                    ).first.click()
+                    original_note = report.locator(".source-jump[open] pre")
+                    expect(original_note).to_have_text(
+                        bundle["casebook"]["documents"][3]["content"]
+                    )
+                    checks.append(
+                        "handover lays out question-specific checks and quoted "
+                        "table; document citations open exact original wording"
+                    )
+                    with page.expect_download() as word_download:
+                        report.get_by_role(
+                            "button", name="Download Word (.docx)", exact=True
+                        ).click()
+                    downloaded_word = out / "offline-garden-handover.docx"
+                    word_download.value.save_as(downloaded_word)
+                    with zipfile.ZipFile(downloaded_word) as archive:
+                        assert archive.testzip() is None
+                        word = ElementTree.fromstring(archive.read("word/document.xml"))
+                    namespace = (
+                        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+                    )
+                    word_text = " ".join(
+                        item.text or "" for item in word.iter(namespace + "t")
+                    )
+                    assert word.find(".//" + namespace + "tbl") is not None
+                    for phrase in (
+                        "Handover next steps",
+                        "The equipment quote has not been received.",
+                        "No person has accepted the actions.",
+                        "not a confirmed deadline or grant closing date",
+                        "The real-world answer remains unknown",
+                    ):
+                        assert phrase in word_text, phrase
+                    checks.append(
+                        "actual Word download contains table, negation, "
+                        "unconfirmed date and unknown answer"
+                    )
                     report.get_by_role("tab", name="Evidence", exact=True).click()
                     expect(report).to_contain_text("No wording match")
                     report.get_by_text("More options", exact=True).click()

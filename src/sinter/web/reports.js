@@ -6,6 +6,7 @@ import {campaignActionOwnerState} from './campaign-owner.js';
 import {campaignActionPhaseLabel} from './campaign-plan.js';
 import {registerReportDraft, trackReportEdits, trackReportEditor, reportEditorDraft,
   markReportSaved, isReportDraftUnsaved} from './report-drafts.js';
+import {reportCitationReferences, reportCitationMatcher} from './report-citations.js';
 
 /** The document is the default view; provenance remains one click away. */
 export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated, onSaved, recovered = false} = {}) {
@@ -25,6 +26,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       markReportSaved(report, documentMarkdown(snapshot));
       const newerEdits = isReportDraftUnsaved(report);
       save.disabled = !newerEdits;
+      if (!newerEdits) actions.feedback.replaceChildren();
       message.replaceChildren(notice(newerEdits
         ? 'The earlier version was saved in My workspace. Your newer edits are still unsaved; apply and save them before closing Sinter.'
         : 'Saved in My workspace, including your edits and original evidence.', newerEdits ? 'warning' : 'success'));
@@ -262,19 +264,18 @@ function campaignDraftLog(report, feedback, onCampaignUpdated) {
 
 /** Source IDs become local disclosure controls; no navigation or HTML parsing. */
 function connectCitations(article, report, sources, beforeJump = () => {}) {
-  const references = new Map((report.sources || []).map(item => [item.id, item.id]));
-  for (const item of report.excerpts || []) references.set(item.id, item.source_id);
-  for (const question of report.question_index || []) for (const item of question.matches || []) references.set(item.excerpt_id, item.source_id);
+  const references = reportCitationReferences(report);
+  const citationMatches = reportCitationMatcher(references);
   const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
   const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
   for (const node of nodes) {
     if (node.parentElement?.closest('code,pre,blockquote,a,button')) continue;
-    const matches = [...node.textContent.matchAll(/\b(?:[SE][a-f0-9]{16}|e[1-9][0-9]{0,2})\b/g)].filter(match => references.has(match[0]) && (report.sources || []).some(item => item.id === references.get(match[0])));
+    const matches = citationMatches(node.textContent);
     if (!matches.length) continue;
     const fragment = document.createDocumentFragment(); let start = 0;
     for (const match of matches) {
       fragment.append(document.createTextNode(node.textContent.slice(start, match.index)));
-      const sourceId = references.get(match[0]);
+      const sourceId = match.sourceId;
       const parent = (report.sources || []).find(item => item.id === sourceId);
       const sourceNumber = (report.sources || []).findIndex(item => item.id === sourceId) + 1;
       const jump = button('Source ' + sourceNumber, () => {
@@ -283,7 +284,7 @@ function connectCitations(article, report, sources, beforeJump = () => {}) {
         if (source) { source.open = true; source.scrollIntoView({block: 'center'}); source.querySelector('summary').focus({preventScroll: true}); }
       }, 'citation-link');
       jump.setAttribute('aria-label', `Show source: ${parent?.title || sourceId}`);
-      fragment.append(jump); start = match.index + match[0].length;
+      fragment.append(jump); start = match.index + match.id.length;
     }
     fragment.append(document.createTextNode(node.textContent.slice(start))); node.replaceWith(fragment);
   }
