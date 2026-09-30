@@ -1,6 +1,9 @@
 /** Conservative, read-only overview for the campaign workspace. */
 import {isCampaignActionCurrent, isCampaignActionScopeConfirmed,
   isOpportunityActionable} from './campaign-state.js';
+import {campaignActionOwnerState} from './campaign-owner.js';
+import {campaignSourceSnapshotGuidance,
+  campaignSourceSnapshotIssue} from './campaign-source-state.js';
 
 const hasText = value => typeof value === 'string' && value.trim().length > 0;
 const WINDOW_CHECK_MAX_AGE_DAYS = 90;
@@ -27,14 +30,8 @@ function requirementDateGap(checkedAt, today) {
 function sourceVersionGap(row, sources = []) {
   if (!hasText(row?.source_id)) return '';
   const linked = sources.find(source => source?.id === row.source_id);
-  if (!linked) return 'The linked campaign source is missing; reconnect it and recheck the excerpt.';
-  if (row.source_url !== linked.url) {
-    return 'The linked source URL changed after this excerpt was checked; recheck the excerpt and record the check date.';
-  }
-  if (!hasText(linked.checked_at) || row.checked_at !== linked.checked_at) {
-    return 'The linked source was refreshed after this excerpt was checked; re-read the wording and update the check date.';
-  }
-  return '';
+  return campaignSourceSnapshotGuidance(campaignSourceSnapshotIssue(
+    row.source_url, row.checked_at, linked));
 }
 
 const sourceComplete = (row, today, sources = []) => ['evidence', 'source_url', 'source_quote']
@@ -105,16 +102,8 @@ function applicationWindowSourceGap(opportunity, sources) {
     return 'Link a registered official source to the application window, then recheck the exact wording.';
   }
   const source = sources.find(row => row?.id === opportunity.window_source_id);
-  if (!source) {
-    return 'The registered application-window source is missing; reconnect it and recheck the wording.';
-  }
-  if (opportunity.window_source_url !== source.url) {
-    return 'The linked application-window page changed after the wording was checked; re-read it and update the source URL.';
-  }
-  if (!hasText(source.checked_at) || opportunity.window_checked_at !== source.checked_at) {
-    return 'The linked application-window source was refreshed after the wording was checked; re-read it and update the check date.';
-  }
-  return '';
+  return campaignSourceSnapshotGuidance(campaignSourceSnapshotIssue(
+    opportunity.window_source_url, opportunity.window_checked_at, source));
 }
 
 export function applicationWindowGaps(opportunity, today, sources = []) {
@@ -156,7 +145,16 @@ function routeGaps(opportunity, requirements, today, sources = []) {
   if (opportunity.status === 'researching') {
     gaps.push('Confirm that a current round is open from the official programme page.');
   } else if (opportunity.status === 'clarification') {
-    gaps.push('Resolve the outstanding programme clarification and update the route status before human review.');
+    const checks = requirements.filter(row => row.opportunity === opportunity.name);
+    const unresolved = checks.find(row => row.status === 'clarification')
+      || checks.find(row => row.status !== 'met'
+        || !sourceComplete(row, today, sources));
+    if (unresolved) {
+      gaps.push('Review the unresolved eligibility check: '
+        + requirementGap(unresolved, today, sources));
+    } else {
+      gaps.push('This route is marked for clarification, but no unresolved applicant check identifies why. Record the outstanding point in the eligibility checks before deciding whether current rules or applicant evidence resolves it.');
+    }
   }
   const applicationMode = opportunity.application_mode || 'unknown';
   if (applicationMode === 'unknown') {
@@ -242,7 +240,16 @@ function suggestedAction(state, active, document, today, focus) {
   const ordered = focus ? [focus] : active;
   for (const opportunity of ordered) {
     if (opportunity.status === 'clarification') {
-      return `Resolve the outstanding clarification for “${opportunity.name}” with the funder and update the route status before human review.`;
+      const checks = (document.requirements || []).filter(row =>
+        row.opportunity === opportunity.name);
+      const unresolved = checks.find(row => row.status === 'clarification')
+        || checks.find(row => row.status !== 'met'
+          || !sourceComplete(row, today, sources));
+      if (unresolved) {
+        return 'Review the unresolved eligibility check: '
+          + requirementGap(unresolved, today, sources);
+      }
+      return `“${opportunity.name}” is marked for clarification, but no unresolved applicant check identifies why. Record the outstanding point in the eligibility checks before deciding whether current rules or applicant evidence resolves it.`;
     }
     if (opportunity.status === 'researching') {
       return `Confirm that “${opportunity.name}” has a current round open on the official programme page.`;
@@ -346,14 +353,13 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
   let action;
   if (next) {
     const row = next.action;
-    const owner = String(row.owner || '').trim();
-    const ownerNeeded = !owner || /\bunassigned\b/i.test(owner) || row.owner_confirmed !== true;
+    const owner = campaignActionOwnerState(row.owner, row.owner_confirmed,
+      row.owner_kind);
+    const ownerNeeded = owner.kind !== 'person' || row.owner_confirmed !== true;
     action = {
       source: 'recorded', task: row.task.trim(), actionIndex: next.index, ownerNeeded,
       opportunity: row.opportunity || '',
-      ownerStatus: !owner || /\bunassigned\b/i.test(owner) ? 'Owner needed — no person is recorded.'
-        : row.owner_confirmed === true ? 'Acceptance recorded by user; verify directly.'
-          : 'Confirm whether the recorded person has accepted.',
+      ownerStatus: owner.detail,
       ...(row.due ? {due: row.due} : {}),
     };
   } else {

@@ -6,11 +6,12 @@ import {campaignActionRowsForCalendar, campaignActionRowsForPlan,
 test('campaign action exports preserve route scope and user-entered ownership state', () => {
   const rows = campaignActionRowsForPlan([
     {task: 'Check eligibility', opportunity: 'CSIRO Kick-Start',
-      owner: 'Director', owner_confirmed: false, due: '2026-10-08', status: 'open'},
+      owner: 'Director', owner_kind: 'person', owner_confirmed: false,
+      due: '2026-10-08', status: 'open'},
     {task: 'Build asset register', opportunity: '', owner: '',
       owner_confirmed: false, due: '', status: 'done'},
     {task: 'Verify match', opportunity: 'nbn Grants', owner: 'Lloyd',
-      owner_confirmed: true, due: '', status: 'open'},
+      owner_kind: 'person', owner_confirmed: true, due: '', status: 'open'},
   ], [
     {name: 'CSIRO Kick-Start', status: 'open'},
     {name: 'nbn Grants', status: 'researching'},
@@ -19,7 +20,7 @@ test('campaign action exports preserve route scope and user-entered ownership st
   assert.deepEqual(rows, [
     {action: 'Check eligibility', scope: 'CSIRO Kick-Start',
       phase: 'Before submission',
-      owner: 'Director (acceptance not recorded)', due: '2026-10-08',
+      owner: 'Director (named person; acceptance unconfirmed)', due: '2026-10-08',
       status: 'not_started'},
     {action: 'Build asset register', scope: 'Campaign-wide',
       phase: 'Not applicable · campaign-wide',
@@ -29,6 +30,15 @@ test('campaign action exports preserve route scope and user-entered ownership st
       owner: 'Lloyd (user-marked accepted; verify directly)', due: '',
       status: 'not_started'},
   ]);
+});
+
+test('action export labels suggested roles without implying a person accepted', () => {
+  const [row] = campaignActionRowsForPlan([{
+    task: 'Check who can apply', opportunity: '', scope_confirmed: true,
+    owner: 'Treasurer', owner_kind: 'role', owner_confirmed: false,
+    due: '', status: 'open',
+  }], []);
+  assert.equal(row.owner, 'Treasurer (suggested role; no person named)');
 });
 
 test('legacy actions keep unknown scope until a person confirms it', () => {

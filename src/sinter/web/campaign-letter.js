@@ -1,4 +1,6 @@
 import {hasCurrentApplicationWindowEvidence} from './campaign-state.js';
+import {campaignSourceSnapshotGuidance,
+  campaignSourceSnapshotIssue} from './campaign-source-state.js';
 
 /** Build a funder-specific clarification draft without campaign-wide context. */
 export function clarificationQuestion(requirement, context = {}) {
@@ -94,13 +96,11 @@ function campaignEvidenceLinks(campaign, opportunity) {
   const windowSource = sourceById.get(opportunity?.window_source_id);
   if (windowSource || opportunity?.window_source_quote) {
     const quoteDate = opportunity.window_checked_at || '';
-    const sourceDate = windowSource?.checked_at || 'date not recorded';
-    const changed = !windowSource || !opportunity.window_source_url
-      || opportunity.window_source_url !== windowSource.url
-      || !quoteDate || quoteDate !== windowSource.checked_at;
-    const dateNote = !quoteDate ? 'date not recorded'
-      : changed ? `checked ${quoteDate}; linked source record differs or has since changed (now ${sourceDate}), so recheck before reuse`
-        : `checked ${quoteDate}`;
+    const snapshotIssue = campaignSourceSnapshotIssue(
+      opportunity.window_source_url, quoteDate, windowSource);
+    const dateNote = snapshotIssue
+      ? campaignSourceSnapshotGuidance(snapshotIssue)
+      : `checked ${quoteDate}`;
     add(windowSource?.title || opportunity?.name,
       opportunity.window_source_url || windowSource?.url || opportunity?.url,
       `Application-window wording (user-entered, unverified; ${dateNote}): ${opportunity.window_source_quote || 'no exact wording recorded'}`,

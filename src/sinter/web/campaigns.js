@@ -4,8 +4,12 @@ import {request} from './api.js';
 import {renderReport} from './reports.js';
 import {campaignClarificationDraft, campaignIdentityFromProfile} from './campaign-letter.js';
 import {defaultCampaignOpportunityIndex, isCampaignActionCurrent,
-  isOpportunityActionable, applicationAnswerAvailability} from './campaign-state.js';
+  isCampaignActionScopeConfirmed, isOpportunityActionable,
+  applicationAnswerAvailability} from './campaign-state.js';
 import {applicationWindowGaps, campaignDecision} from './campaign-decision.js';
+import {campaignActionOwnerState, normalizeCampaignActionOwners} from './campaign-owner.js';
+import {campaignSourceSnapshotGuidance,
+  campaignSourceSnapshotIssue} from './campaign-source-state.js';
 import {campaignActionRowsForCalendar, campaignActionRowsForPlan,
   normalizeCampaignActionScopes} from './campaign-plan.js';
 
@@ -113,7 +117,8 @@ function compatibleCampaign(value) {
     row.window_checked_at ??= '';
   }
   for (const row of next.requirements || []) row.source_id ??= '';
-  next.actions = normalizeCampaignActionScopes(next.actions);
+  next.actions = normalizeCampaignActionOwners(
+    normalizeCampaignActionScopes(next.actions));
   return next;
 }
 const localDate = () => {
@@ -150,10 +155,12 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   let document = compatibleCampaign(seed.document || blank()), savedId = seed.id || null, revision = seed.revision || null;
   let dirty = Boolean(seed.dirty), selected = Number.isSafeInteger(seed.selected) && seed.selected >= 0 ? seed.selected : 0;
   let tab = campaignTabs.some(([id]) => id === seed.tab) ? seed.tab : 'overview', busy = false;
+  let expandedActionRows = null;
   let sourceQuery = typeof seed.sourceQuery === 'string' ? seed.sourceQuery : '';
   let assetQuery = typeof seed.assetQuery === 'string' ? seed.assetQuery : '';
   let pendingAssetOpenId = '';
   let pendingFocus = null;
+  let pendingActionFocus = null;
   const root = h('div', {class: 'campaign-page'}), shelf = h('div', {class: 'campaign-shelf'});
   const feedback = h('div', {'aria-live': 'polite'}), status = h('span', {class: 'campaign-save-state', role: 'status'});
   const summary = h('div', {class: 'campaign-summary'}), editor = h('div'), output = h('div', {id: 'campaign-output', class: 'campaign-output'});
@@ -261,6 +268,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const previousSourceQuery = sourceQuery;
     const previousAssetQuery = assetQuery;
     document = compatibleCampaign(next); savedId = id; revision = rev; dirty = false;
+    expandedActionRows = null;
     const retainedSelection = resumeCurrentCampaign && previousOpportunityName
       ? document.opportunities.findIndex(row => row.name === previousOpportunityName) : -1;
     selected = retainedSelection >= 0 ? retainedSelection : preferActionable
@@ -306,6 +314,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     try {
       const saved = await request('/api/campaigns/save', {data: {document, id: savedId, revision}});
       document = saved.document; savedId = saved.id; revision = saved.revision; dirty = false;
+      expandedActionRows = null;
       renderEditor(); renderSummary();
       rememberCampaign();
       status.textContent = 'Saved on this computer';
@@ -399,9 +408,13 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       && row.scope_confirmed === true && row.opportunity
       && document.opportunities.some(item => item.name === row.opportunity
         && ['closed', 'paused', 'not_pursuing'].includes(item.status))).length;
-    const ownersToConfirm = document.actions.filter(row => row.status !== 'done'
-      && isCampaignActionCurrent(row, document.opportunities)
-      && (!row.owner_confirmed || !String(row.owner || '').trim() || /\bunassigned\b/i.test(row.owner)));
+    const ownersToConfirm = document.actions.filter(row => {
+      if (row.status === 'done'
+          || !isCampaignActionCurrent(row, document.opportunities)) return false;
+      const owner = campaignActionOwnerState(row.owner, row.owner_confirmed,
+        row.owner_kind);
+      return owner.kind !== 'person' || row.owner_confirmed !== true;
+    });
     const actionReviewCount = actionScopesToConfirm + submittedActionsToReview
       + reopenedActionsToReview + inactiveRouteActionsToReview;
     shelf.replaceChildren(...(document.title ? [h('h3', {}, document.title), h('p', {class: 'fine'}, document.organisation)] : []));
@@ -433,6 +446,11 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         'Proposed target: ' + new Intl.DateTimeFormat('en-AU', {dateStyle: 'medium'}).format(targetDate)
           + (targetDatePast ? ' · past — confirm or reset' : '')) : null,
       button(result.action.actionIndex === undefined ? 'Open next actions' : 'Open full action', () => {
+        if (result.action.actionIndex !== undefined) {
+          expandedActionRows ||= new WeakSet();
+          const row = document.actions[result.action.actionIndex];
+          if (row) expandedActionRows.add(row);
+        }
         tab = 'actions'; rememberCampaign(); renderEditor();
         const recordedAction = result.action.actionIndex === undefined ? null
           : editor.querySelector(`[data-action-index="${result.action.actionIndex}"]`);
@@ -524,6 +542,16 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         target.scrollIntoView({block: 'center'});
       }
     }
+    if (pendingActionFocus) {
+      const {index, field: fieldName} = pendingActionFocus;
+      pendingActionFocus = null;
+      const target = editor.querySelector(
+        `.campaign-action[data-action-index="${index}"] [data-campaign-field="${fieldName}"]`);
+      if (target) {
+        target.focus({preventScroll: true});
+        target.scrollIntoView({block: 'center'});
+      }
+    }
     pendingAssetOpenId = '';
   }
   function opportunityPicker(change) {
@@ -576,15 +604,18 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         : h('p', {class: 'fine'}, 'Programme link not added yet.'));
       const linkedWindowSource = document.sources.find(source =>
         source.id === item.window_source_id);
-      windowSourceInfo.replaceChildren(linkedWindowSource
-        ? h('span', {}, 'Application-window source · user-entered, unverified: ',
+      if (linkedWindowSource) {
+        const snapshotIssue = campaignSourceSnapshotIssue(item.window_source_url,
+          item.window_checked_at, linkedWindowSource);
+        windowSourceInfo.replaceChildren(h('span', {},
+          'Application-window source · user-entered, unverified: ',
           linkedWindowSource.url ? safeLink(linkedWindowSource.url, linkedWindowSource.title)
             : linkedWindowSource.title,
-          item.window_source_url !== linkedWindowSource.url
-            || item.window_checked_at !== linkedWindowSource.checked_at
-            ? ' · source changed or wording not rechecked; refresh the quote and date'
-            : ` · quote checked ${displayDate(item.window_checked_at)}`)
-        : 'No registered application-window source linked; link an official page and recheck the wording.');
+          snapshotIssue ? ' · ' + campaignSourceSnapshotGuidance(snapshotIssue)
+            : ` · quote checked ${displayDate(item.window_checked_at)}`));
+      } else {
+        windowSourceInfo.textContent = 'No registered application-window source linked; link an official page and recheck the wording.';
+      }
       maximum.textContent = routeAmountLabel(item);
       const windowKind = item.application_window || (item.deadline ? 'fixed' : 'unknown');
       if (item.status === 'closed' || item.status === 'submitted') {
@@ -898,122 +929,268 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     updateTotal();
   }
   function renderActions(panel) {
+    if (expandedActionRows === null) {
+      expandedActionRows = new WeakSet();
+      const decision = campaignDecision(document, localDate(), document.opportunities[selected]?.name || '');
+      const nextIndex = decision.action?.actionIndex;
+      if (Number.isInteger(nextIndex) && document.actions[nextIndex]) {
+        expandedActionRows.add(document.actions[nextIndex]);
+      }
+    }
     panel.append(h('h3', {}, 'The next useful step'), h('p', {class: 'muted'}, 'Turn missing quotes, approvals and unanswered conditions into actions. New actions use the selected active route by default; change the scope for campaign-wide work. Submitted-route tasks only return to current work when marked as after-submission follow-up. A name or date is a planning note until the person agrees and timing is confirmed.'),
       button('Add next action', () => {
         const selectedRoute = document.opportunities[selected];
         const scopedRoute = selectedRoute && (isOpportunityActionable(selectedRoute.status)
           || selectedRoute.status === 'submitted');
-        document.actions.push({opportunity: scopedRoute ? selectedRoute.name : '',
+        const row = {opportunity: scopedRoute ? selectedRoute.name : '',
           scope_confirmed: Boolean(scopedRoute),
           submission_phase: selectedRoute?.status === 'submitted'
             ? 'post_submission' : 'pre_submission',
-          task: '', owner: '', owner_confirmed: false, due: '', status: 'open'});
+          task: '', owner: '', owner_kind: 'unassigned', owner_confirmed: false,
+          due: '', status: 'open'};
+        document.actions.push(row);
+        expandedActionRows.add(row);
+        pendingActionFocus = {index: document.actions.length - 1, field: 'task'};
         changed(); renderEditor();
       }, 'quiet'));
-    document.actions.forEach((row, actionIndex) => {
-      const task = input('Next action', 'textarea', row, 'task',
-        'Write the next step in plain language, including what to check and where to record the result.',
-        {rows: 3, maxLength: 2000});
-      const scopeChoices = [
-        ...(row.scope_confirmed === true ? [] : [['__confirm_scope__', 'Choose scope · not confirmed']]),
-        ['', 'Campaign-wide'], ...document.opportunities.map((item, index) => [`route:${index}`, item.name])];
-      const selectedScope = row.scope_confirmed === true
-        ? row.opportunity ? `route:${document.opportunities.findIndex(item => item.name === row.opportunity)}` : ''
-        : '__confirm_scope__';
-      const scope = selectField('Programme or scope', scopeChoices,
-        selectedScope);
-      scope.input.addEventListener('change', () => {
-        if (scope.input.value === '__confirm_scope__') return;
-        row.opportunity = scope.input.value.startsWith('route:')
-          ? document.opportunities[Number(scope.input.value.slice(6))]?.name || ''
-          : '';
-        row.scope_confirmed = true;
-        changed(); renderEditor();
-      });
-      if (row.scope_confirmed !== true) {
-        scope.wrap.append(notice('This older action has no recorded scope. Confirm whether it belongs to the whole campaign or a specific opportunity before using it as current work.', 'warning'));
+    function holdReason(row) {
+      if (!isCampaignActionScopeConfirmed(row)) return 'Hold reason: scope is not confirmed.';
+      if (!row.opportunity) return '';
+      const route = document.opportunities.find(item => item.name === row.opportunity);
+      if (!route) return 'Hold reason: linked route no longer exists.';
+      if (['closed', 'paused', 'not_pursuing'].includes(route.status)) {
+        const label = opportunityStates.find(([key]) => key === route.status)?.[1]
+          || 'inactive';
+        return `Hold reason: route recorded as ${label.toLowerCase()}.`;
       }
-      const scopedOpportunity = document.opportunities.find(item => item.name === row.opportunity);
-      const inactiveRoute = ['closed', 'paused', 'not_pursuing'].includes(scopedOpportunity?.status);
-      const phaseReviewable = scopedOpportunity?.status === 'submitted'
-        || row.submission_phase === 'post_submission';
-      const phaseStatus = h('div', {class: 'campaign-action-phase-status', role: 'status', 'aria-live': 'polite'});
-      function updatePhaseStatus() {
-        phaseStatus.replaceChildren();
-        if (row.status === 'done') return;
-        if (inactiveRoute) {
-          const routeStatus = opportunityStates.find(([key]) => key === scopedOpportunity.status)?.[1]
-            || 'inactive';
-          phaseStatus.append(notice(`This route is ${routeStatus.toLowerCase()}. The action is held out of current work. Move it to a current route or campaign-wide scope if it still applies, or mark it done if obsolete.`, 'warning'));
-        } else if (!phaseReviewable) return;
-        else if (scopedOpportunity?.status === 'submitted'
-            && row.submission_phase !== 'post_submission') {
-          phaseStatus.append(notice('This route is submitted. Mark an action as after-submission follow-up only when it is genuinely still needed.', 'warning'));
-        } else if (isOpportunityActionable(scopedOpportunity?.status)
-            && row.submission_phase === 'post_submission') {
-          phaseStatus.append(notice('This action is still marked as after-submission follow-up, but the route is active again. It stays out of current work until you reclassify it as before submission.', 'warning'));
-        }
+      if (route.status === 'submitted' && row.submission_phase !== 'post_submission') {
+        return 'Hold reason: submitted route; action is still marked before submission.';
       }
-      const phase = phaseReviewable
-        ? choice('Action phase', [['pre_submission', 'Before submission · held'],
-          ['post_submission', 'After-submission follow-up']], row, 'submission_phase', updatePhaseStatus)
-        : null;
-      if (phase) {
-        phase.wrap.append(phaseStatus);
+      if (isOpportunityActionable(route.status)
+          && row.submission_phase === 'post_submission') {
+        return 'Hold reason: action marked after submission; route is active again.';
       }
-      if (!phase) scope.wrap.append(phaseStatus);
-      updatePhaseStatus();
-      const ownerStatus = h('small', {class: 'campaign-action-meta', 'aria-live': 'polite'});
-      function updateOwnerStatus() {
-        const ownerText = String(row.owner || '').trim();
-        ownerStatus.textContent = !ownerText
-          ? 'Unassigned — no person is recorded.'
-          : /\bunassigned\b/i.test(ownerText)
-            ? 'Role suggestion only — a person must accept this action.'
-            : row.owner_confirmed
-              ? 'User marked accepted — confirm directly with this person.'
-              : 'Name recorded — acceptance not recorded.';
-        ownerStatus.dataset.state = !ownerText || /\bunassigned\b/i.test(ownerText) ? 'unassigned' : row.owner_confirmed ? 'accepted' : 'confirm';
-        acceptance.input.disabled = !ownerText || /\bunassigned\b/i.test(ownerText);
-        acceptance.input.checked = row.owner_confirmed === true;
-      }
-      const owner = input('Person or suggested role', 'text', row, 'owner', 'Enter a person’s name only after they agree. A role name is a suggestion until a person accepts.', {maxLength: 200}, () => { row.owner_confirmed = false; updateOwnerStatus(); });
-      owner.wrap.append(ownerStatus);
-      const acceptance = check('This person has accepted', row.owner_confirmed === true);
-      acceptance.input.disabled = !String(row.owner || '').trim() || /\bunassigned\b/i.test(row.owner);
-      acceptance.input.setAttribute('aria-label', 'This person has accepted this action');
-      acceptance.input.addEventListener('change', () => {
-        row.owner_confirmed = acceptance.input.checked; updateOwnerStatus(); changed();
-      });
-      owner.wrap.append(acceptance.wrap, h('small', {class: 'campaign-action-meta'}, 'This is your record; Sinter cannot verify agreement.'));
-
-      const dateStatus = h('p', {class: 'campaign-action-date-status', role: 'status'});
-      function updateDateStatus() {
-        if (row.status === 'done') {
-          dateStatus.textContent = row.due ? 'Completed — proposed target kept for reference.' : 'Completed — no target date was recorded.';
-          dateStatus.dataset.state = 'done';
-        } else if (!row.due) {
-          dateStatus.textContent = 'No target date set. Confirm timing with the owner.';
-          dateStatus.dataset.state = 'unset';
-        } else if (row.due < localDate()) {
-          dateStatus.textContent = `Past proposed target (${displayDate(row.due)}). Confirm whether this is still needed and agree a new date.`;
-          dateStatus.dataset.state = 'overdue';
-        } else {
-          dateStatus.textContent = `Proposed target: ${displayDate(row.due)}. Confirm timing with the owner.`;
-          dateStatus.dataset.state = 'target';
-        }
-      }
-      const due = input('Proposed target date', 'date', row, 'due', 'Planning target only, not a confirmed due date. Agree the timing with the owner.', {}, updateDateStatus);
-      due.wrap.append(dateStatus);
-      const state = choice('Action status', [['open', 'To do'], ['done', 'Done']], row, 'status', () => {
-        updateDateStatus(); updatePhaseStatus();
-      });
-      panel.append(h('article', {class: 'campaign-row campaign-action',
-        'aria-label': 'Campaign action', 'data-action-index': String(actionIndex)},
-        task.wrap, scope.wrap, h('div', {class: 'form-grid'}, owner.wrap, due.wrap, state.wrap, phase?.wrap),
-        remove(document.actions, row, 'Remove action')));
-      updateOwnerStatus(); updateDateStatus();
+      return 'Hold reason: scope or route phase needs review.';
+    }
+    const indexedActions = document.actions.map((row, index) => ({row, index}));
+    const sortByUrgency = rows => [...rows].sort((left, right) => {
+      const rank = ({row}) => !row.due ? 2 : row.due < localDate() ? 0 : 1;
+      const difference = rank(left) - rank(right);
+      return difference || (left.row.due && right.row.due
+        ? left.row.due.localeCompare(right.row.due) || left.index - right.index
+        : left.index - right.index);
     });
+    const currentActions = sortByUrgency(indexedActions.filter(({row}) =>
+      row.status !== 'done' && isCampaignActionCurrent(row, document.opportunities)));
+    const reviewActions = sortByUrgency(indexedActions.filter(({row}) =>
+      row.status !== 'done' && !isCampaignActionCurrent(row, document.opportunities)));
+    const completedActions = indexedActions.filter(({row}) => row.status === 'done');
+    const groups = [
+      {label: 'Current work', rows: currentActions},
+      {label: 'Needs review before current work', rows: reviewActions},
+      {label: 'Completed', rows: completedActions},
+    ].filter(group => group.rows.length);
+    for (const group of groups) {
+      panel.append(h('h4', {class: 'campaign-action-group-heading'},
+        `${group.label} · ${group.rows.length}`));
+      for (const {row, index: actionIndex} of group.rows) {
+        let refreshActionSummary = () => {};
+        const task = input('Next action', 'textarea', row, 'task',
+          'Write the next step in plain language, including what to check and where to record the result.',
+          {rows: 3, maxLength: 2000}, refreshActionSummary);
+        const scopeChoices = [
+          ...(row.scope_confirmed === true ? [] : [['__confirm_scope__', 'Choose scope · not confirmed']]),
+          ['', 'Campaign-wide'], ...document.opportunities.map((item, index) => [`route:${index}`, item.name])];
+        const selectedScope = row.scope_confirmed === true
+          ? row.opportunity ? `route:${document.opportunities.findIndex(item => item.name === row.opportunity)}` : ''
+          : '__confirm_scope__';
+        const scope = selectField('Programme or scope', scopeChoices,
+          selectedScope);
+        scope.input.dataset.campaignField = 'scope';
+        scope.input.addEventListener('change', () => {
+          if (scope.input.value === '__confirm_scope__') return;
+          row.opportunity = scope.input.value.startsWith('route:')
+            ? document.opportunities[Number(scope.input.value.slice(6))]?.name || ''
+            : '';
+          row.scope_confirmed = true;
+          pendingActionFocus = {index: actionIndex, field: 'scope'};
+          changed(); renderEditor();
+        });
+        if (row.scope_confirmed !== true) {
+          scope.wrap.append(notice('This older action has no recorded scope. Confirm whether it belongs to the whole campaign or a specific opportunity before using it as current work.', 'warning'));
+        }
+        const scopedOpportunity = document.opportunities.find(item => item.name === row.opportunity);
+        const inactiveRoute = ['closed', 'paused', 'not_pursuing'].includes(scopedOpportunity?.status);
+        const phaseReviewable = scopedOpportunity?.status === 'submitted'
+          || row.submission_phase === 'post_submission';
+        const phaseStatus = h('div', {class: 'campaign-action-phase-status', role: 'status', 'aria-live': 'polite'});
+        function updatePhaseStatus() {
+          phaseStatus.replaceChildren();
+          if (row.status === 'done') return;
+          if (inactiveRoute) {
+            const routeStatus = opportunityStates.find(([key]) => key === scopedOpportunity.status)?.[1]
+              || 'inactive';
+            phaseStatus.append(notice(`This route is ${routeStatus.toLowerCase()}. The action is held out of current work. Move it to a current route or campaign-wide scope if it still applies, or mark it done if obsolete.`, 'warning'));
+          } else if (!phaseReviewable) return;
+          else if (scopedOpportunity?.status === 'submitted'
+              && row.submission_phase !== 'post_submission') {
+            phaseStatus.append(notice('This route is submitted. Mark an action as after-submission follow-up only when it is genuinely still needed.', 'warning'));
+          } else if (isOpportunityActionable(scopedOpportunity?.status)
+              && row.submission_phase === 'post_submission') {
+            phaseStatus.append(notice('This action is still marked as after-submission follow-up, but the route is active again. It stays out of current work until you reclassify it as before submission.', 'warning'));
+          }
+        }
+        const phase = phaseReviewable
+          ? choice('Action phase', [['pre_submission', 'Before submission · held'],
+            ['post_submission', 'After-submission follow-up']], row, 'submission_phase', () => {
+              updatePhaseStatus(); refreshActionSummary();
+              pendingActionFocus = {index: actionIndex, field: 'submission_phase'};
+              renderEditor();
+            })
+          : null;
+        if (phase) {
+          phase.wrap.append(phaseStatus);
+        }
+        if (!phase) scope.wrap.append(phaseStatus);
+        updatePhaseStatus();
+        const ownerStatus = h('small', {class: 'campaign-action-meta', 'aria-live': 'polite'});
+        function updateOwnerStatus() {
+          const ownerText = String(row.owner || '').trim();
+          const state = campaignActionOwnerState(ownerText, row.owner_confirmed,
+            row.owner_kind);
+          ownerStatus.textContent = state.detail;
+          ownerStatus.dataset.state = state.state;
+          acceptance.input.disabled = !state.canAccept;
+          acceptance.input.checked = row.owner_confirmed === true;
+        }
+        const owner = input('Owner name or role', 'text', row, 'owner',
+          'Record a person only when you can identify them, or record a role as a suggestion. A role is never treated as a person.',
+          {maxLength: 200}, () => {
+            const ownerText = String(row.owner || '').trim();
+            if (!ownerText || /\bunassigned\b/i.test(ownerText)) {
+              row.owner_kind = 'unassigned';
+              row.owner = '';
+              owner.input.value = '';
+            }
+            else if (/\b(?:suggested|role suggestion)\b/i.test(ownerText)) {
+              row.owner_kind = 'role';
+            } else if (row.owner_kind === 'unassigned') row.owner_kind = 'unknown';
+            ownerKind.input.value = row.owner_kind;
+            row.owner_confirmed = false;
+            updateOwnerStatus(); refreshActionSummary();
+          });
+        owner.wrap.append(ownerStatus);
+        const ownerKind = selectField('Owner type', [['unknown', 'Type needs confirmation'],
+          ['person', 'Named person'], ['role', 'Suggested role'],
+          ['unassigned', 'No owner assigned']], row.owner_kind);
+        ownerKind.input.dataset.campaignField = 'owner_kind';
+        ownerKind.input.addEventListener('change', () => {
+          row.owner_kind = ownerKind.input.value;
+          let ownerTypeHint = '';
+          const ownerText = String(row.owner || '').trim();
+          if (!ownerText || /\bunassigned\b/i.test(ownerText)) {
+            row.owner_kind = 'unassigned';
+            row.owner = '';
+            owner.input.value = '';
+            ownerKind.input.value = 'unassigned';
+          } else if (row.owner_kind === 'unassigned') {
+            row.owner = '';
+            owner.input.value = '';
+          } else if (/\b(?:suggested|role suggestion)\b/i.test(ownerText)) {
+            const requestedKind = row.owner_kind;
+            row.owner_kind = 'role';
+            ownerKind.input.value = 'role';
+            if (requestedKind !== 'role') {
+              ownerTypeHint = requestedKind === 'unknown'
+                ? 'This entry is marked as a suggested role. Keep it as a role, or replace it with an individual’s name before selecting Named person.'
+                : 'This entry is marked as a suggested role. Replace it with an individual’s name before selecting Named person.';
+            }
+          }
+          if (row.owner_kind !== 'person') row.owner_confirmed = false;
+          updateOwnerStatus();
+          if (ownerTypeHint) ownerStatus.textContent = ownerTypeHint;
+          refreshActionSummary(); changed();
+        });
+        const acceptance = check('This person has accepted', row.owner_confirmed === true);
+        acceptance.input.disabled = !campaignActionOwnerState(row.owner,
+          row.owner_confirmed, row.owner_kind).canAccept;
+        acceptance.input.setAttribute('aria-label', 'This person has accepted this action');
+        acceptance.input.addEventListener('change', () => {
+          row.owner_confirmed = acceptance.input.checked;
+          updateOwnerStatus(); refreshActionSummary(); changed();
+        });
+        owner.wrap.append(ownerKind.wrap, acceptance.wrap,
+          h('small', {class: 'campaign-action-meta'}, 'This is your record; Sinter cannot verify agreement.'));
+
+        const dateStatus = h('p', {class: 'campaign-action-date-status', role: 'status'});
+        function updateDateStatus() {
+          if (row.status === 'done') {
+            dateStatus.textContent = row.due ? 'Completed — proposed target kept for reference.' : 'Completed — no target date was recorded.';
+            dateStatus.dataset.state = 'done';
+          } else if (!row.due) {
+            dateStatus.textContent = 'No target date set. Confirm timing with the owner.';
+            dateStatus.dataset.state = 'unset';
+          } else if (row.due < localDate()) {
+            dateStatus.textContent = `Past proposed target (${displayDate(row.due)}). Confirm whether this is still needed and agree a new date.`;
+            dateStatus.dataset.state = 'overdue';
+          } else {
+            dateStatus.textContent = `Proposed target: ${displayDate(row.due)}. Confirm timing with the owner.`;
+            dateStatus.dataset.state = 'target';
+          }
+        }
+        const due = input('Proposed target date', 'date', row, 'due',
+          'Planning target only, not a confirmed due date. Agree the timing with the owner.', {},
+          () => { updateDateStatus(); refreshActionSummary(); });
+        due.input.addEventListener('change', () => {
+          pendingActionFocus = {index: actionIndex, field: 'due'};
+          renderEditor();
+        });
+        due.wrap.append(dateStatus);
+        const state = choice('Action status', [['open', 'To do'], ['done', 'Done']], row, 'status', () => {
+          updateDateStatus(); updatePhaseStatus(); refreshActionSummary();
+          pendingActionFocus = {index: actionIndex, field: 'status'};
+          renderEditor();
+        });
+        const taskText = String(row.task || '').trim().replace(/\s+/g, ' ');
+        const taskSummary = h('span', {class: 'campaign-action-summary-task'},
+          taskText || `Untitled action ${actionIndex + 1}`);
+        const metaSummary = h('span', {class: 'campaign-action-summary-meta'});
+        const summary = h('summary', {class: 'campaign-action-summary'},
+          taskSummary, metaSummary);
+        refreshActionSummary = () => {
+          taskSummary.textContent = String(row.task || '').trim().replace(/\s+/g, ' ')
+            || `Untitled action ${actionIndex + 1}`;
+          const currentOwnerSummary = campaignActionOwnerState(row.owner,
+            row.owner_confirmed, row.owner_kind).summary;
+          const currentScope = row.scope_confirmed === true
+            ? row.opportunity || 'Campaign-wide' : 'Scope needs confirmation';
+          const currentDate = row.due
+            ? `${row.due < localDate() ? 'Past target' : 'Target'} ${displayDate(row.due)}`
+            : 'No target date';
+          const currentStatus = row.status === 'done' ? 'Done' : 'To do';
+          const currentHold = group.label === 'Needs review before current work'
+            ? holdReason(row) : '';
+          const metaChildren = [h('span', {},
+            `${currentScope} · ${currentOwnerSummary} · ${currentDate} · ${currentStatus}`)];
+          if (currentHold) {
+            metaChildren.push(h('strong', {class: 'campaign-action-hold-reason'}, currentHold));
+          }
+          metaSummary.replaceChildren(...metaChildren);
+        };
+        refreshActionSummary();
+        const details = h('details', {class: 'campaign-action-details', open: expandedActionRows.has(row)},
+          summary, task.wrap, scope.wrap,
+          h('div', {class: 'form-grid'}, owner.wrap, due.wrap, state.wrap, phase?.wrap),
+          remove(document.actions, row, 'Remove action'));
+        details.addEventListener('toggle', () => {
+          if (details.open) expandedActionRows.add(row);
+          else expandedActionRows.delete(row);
+        });
+        panel.append(h('article', {class: 'campaign-row campaign-action',
+          'aria-label': 'Campaign action', 'data-action-index': String(actionIndex)}, details));
+        updateOwnerStatus(); updateDateStatus();
+      }
+    }
     async function exportPlan(format) {
       try {
         const actions = format === 'calendar'

@@ -674,7 +674,7 @@ def test_default_brief_hides_source_and_inactive_detail_but_audit_retains_it():
     assert "1 cost remains unknown" in brief and "total unknown" in brief
     assert "Confirm the active route evidence" in brief
     assert "SECOND_ACTION_MUST_STAY_IN_AUDIT_ONLY" not in brief
-    assert "Owner: Grant lead (acceptance unconfirmed)" in brief
+    assert "· Owner: Owner type not confirmed: Grant lead" in brief
     assert "Proposed date: 2 Oct 2026 (proposed, not confirmed)" in brief
     assert campaigns.NOTICE in brief
 
@@ -1347,29 +1347,117 @@ def test_role_suggestions_are_not_counted_as_confirmed_action_owners():
 def test_owner_needs_an_explicit_user_confirmation():
     document = campaign(actions=[{
         "opportunity": "", "task": "Confirm school approval", "owner": "P&C Treasurer",
+        "owner_kind": "person",
         "due": "2026-10-02", "status": "open",
     }])
     report = campaigns.prepare(document)
     assert report["readiness"]["actions_without_owner"] == 1
-    assert "P&amp;C Treasurer (acceptance not recorded)" in report["markdown"]
+    assert "Named person: P&amp;C Treasurer; acceptance unconfirmed" in report["markdown"]
     assert "Proposed target: 2026-10-02 · proposed target, not confirmed" in report["markdown"]
     assert "Proposed date: 2 Oct 2026 (proposed, not confirmed)" in report["document_markdown"]
+    assert "Named person: P&amp;C Treasurer; acceptance unconfirmed" in report["document_markdown"]
 
     document["actions"][0]["owner_confirmed"] = True
     report = campaigns.prepare(document)
     assert report["readiness"]["actions_without_owner"] == 0
-    assert "P&amp;C Treasurer (user-marked accepted; confirm directly)" in report["markdown"]
+    assert "Named person: P&amp;C Treasurer; user-marked accepted, not independently verified" in report["markdown"]
+    assert "Named person: P&amp;C Treasurer; user-marked accepted, not independently verified" in report["document_markdown"]
+
+
+def test_action_owner_type_is_explicit_validated_and_migrated_conservatively():
+    document = campaign(actions=[{
+        "opportunity": "", "task": "Confirm who can apply", "owner": "Treasurer",
+        "owner_kind": "role", "owner_confirmed": False, "due": "", "status": "open",
+    }])
+    validated = campaigns.validate(document)
+    assert validated["actions"][0]["owner_kind"] == "role"
+    report = campaigns.prepare(document)
+    assert report["readiness"]["actions_without_owner"] == 1
+    assert "Suggested role only; no person named" in report["document_markdown"]
+
+    document["actions"][0]["owner_confirmed"] = True
+    with pytest.raises(ValueError, match="named person's agreement"):
+        campaigns.validate(document)
+
+    legacy = campaign(actions=[{
+        "opportunity": "", "task": "Confirm who can apply", "owner": "Treasurer",
+        "owner_confirmed": False, "due": "", "status": "open",
+    }])
+    assert campaigns.validate(legacy)["actions"][0]["owner_kind"] == "unknown"
+
+    ambiguous_legacy = campaign(actions=[{
+        "opportunity": "", "task": "Confirm who can apply", "owner": "Casey",
+        "owner_confirmed": True, "due": "", "status": "open",
+    }])
+    migrated_ambiguous = campaigns.validate(ambiguous_legacy)["actions"][0]
+    assert migrated_ambiguous["owner_kind"] == "unknown"
+    assert migrated_ambiguous["owner_confirmed"] is False
+
+    marked_unknown = campaign(actions=[{
+        "opportunity": "", "task": "Confirm who can apply",
+        "owner": "Treasurer (suggested)", "owner_kind": "unknown",
+        "owner_confirmed": False, "due": "", "status": "open",
+    }])
+    assert campaigns.validate(marked_unknown)["actions"][0]["owner_kind"] == "role"
+    marked_person = copy.deepcopy(marked_unknown)
+    marked_person["actions"][0]["owner_kind"] = "person"
+    with pytest.raises(ValueError, match="suggested role"):
+        campaigns.validate(marked_person)
+
+    accepted_role_legacy = campaign(actions=[{
+        "opportunity": "", "task": "Confirm who can apply",
+        "owner": "Treasurer (suggested)", "owner_confirmed": True,
+        "due": "", "status": "open",
+    }])
+    migrated_role = campaigns.validate(accepted_role_legacy)["actions"][0]
+    assert migrated_role["owner_kind"] == "role"
+    assert migrated_role["owner_confirmed"] is False
+
+
+def test_action_brief_does_not_claim_acceptance_without_a_named_person():
+    document = campaign(actions=[{
+        "opportunity": "Fictional access fund", "task": "Get the school approval",
+        "owner": "", "due": "", "status": "open",
+    }])
+    report = campaigns.prepare(document)
+    assert "Owner: No person named; owner needed" in report["document_markdown"]
+    assert "acceptance unconfirmed" not in report["document_markdown"]
+
+    document["actions"][0]["owner"] = "P&C Treasurer (suggested)"
+    report = campaigns.prepare(document)
+    assert ("Suggested role only; no person named (P&amp;C Treasurer)"
+            in report["document_markdown"])
+    assert "P&amp;C Treasurer (suggested) (suggested role" not in report["document_markdown"]
+    assert "acceptance unconfirmed" not in report["document_markdown"]
+
+
+def test_decision_brief_surfaces_next_action_before_the_portfolio_register():
+    report = campaigns.prepare(campaign(
+        actions=[{"opportunity": "Fictional access fund",
+                  "task": "Confirm the match against the current funder rules",
+                  "owner": "", "due": "2026-10-02", "status": "open"}],
+        assets=[{"name": "Sinter"}],
+    ))
+    brief = report["document_markdown"]
+    assert brief.index("## Next recorded open action") < brief.index(
+        "## Portfolio IP workstream")
+    assert "Confirm the match against the current funder rules" in brief
 
 
 def test_owner_confirmation_rejects_unassigned_or_non_boolean_values():
     document = campaign(actions=[{
         "task": "Confirm school approval", "owner": "Unassigned",
-        "owner_confirmed": True, "due": "", "status": "open",
+        "owner_kind": "unassigned", "owner_confirmed": True,
+        "due": "", "status": "open",
     }])
-    with pytest.raises(ValueError, match="person's name"):
+    with pytest.raises(ValueError, match="named person's agreement"):
         campaigns.prepare(document)
     document["actions"][0].update(owner="Alex", owner_confirmed="yes")
     with pytest.raises(ValueError, match="true or false"):
+        campaigns.prepare(document)
+    document["actions"][0].update(owner="Treasurer", owner_kind="role",
+                                  owner_confirmed=True)
+    with pytest.raises(ValueError, match="named person's agreement"):
         campaigns.prepare(document)
 
 
@@ -1559,6 +1647,24 @@ def test_store_reopens_same_identity_with_unknown_costs_and_new_revision(tmp_pat
     assert set(listing[0]) == {"id", "revision", "title", "updated_at"}
     assert (tmp_path / "campaigns.sqlite3").exists()
     assert campaigns.prepare(second["document"])["budget_summary"]["total"] == "625.50"
+
+
+def test_store_reopens_legacy_role_suggestion_with_stale_acceptance_flag(tmp_path):
+    store = campaigns.CampaignStore(tmp_path)
+    saved = store.save(campaign())
+    legacy = copy.deepcopy(saved["document"])
+    action = legacy["actions"][0]
+    action.update(owner="Treasurer (suggested)", owner_confirmed=True)
+    action.pop("owner_kind")
+    with store._connect() as db:
+        db.execute("UPDATE campaigns SET document=? WHERE id=?",
+                   (json.dumps(legacy), saved["id"]))
+
+    reopened = store.get(saved["id"])
+    migrated = reopened["document"]["actions"][0]
+    assert migrated["owner"] == "Treasurer (suggested)"
+    assert migrated["owner_kind"] == "role"
+    assert migrated["owner_confirmed"] is False
 
 
 def test_invalid_save_and_stale_save_leave_latest_document_untouched(tmp_path):

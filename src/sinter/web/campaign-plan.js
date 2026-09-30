@@ -1,4 +1,5 @@
 import {isCampaignActionCurrent, isCampaignActionScopeConfirmed} from './campaign-state.js';
+import {campaignActionOwnerState} from './campaign-owner.js';
 
 const ACTIVE_ROUTE_STATES = new Set(['researching', 'open', 'upcoming', 'clarification']);
 
@@ -42,6 +43,8 @@ function scopeLabel(row, currentNames, opportunities) {
 
 function planRow(row, currentNames, opportunities) {
   const confirmedScope = isCampaignActionScopeConfirmed(row);
+  const owner = campaignActionOwnerState(row.owner, row.owner_confirmed,
+    row.owner_kind);
   return {
     action: row.task,
     scope: scopeLabel(row, currentNames, opportunities),
@@ -49,9 +52,7 @@ function planRow(row, currentNames, opportunities) {
       : !row.opportunity ? 'Not applicable · campaign-wide'
         : row.submission_phase === 'post_submission'
           ? 'After-submission follow-up' : 'Before submission',
-    owner: row.owner_confirmed
-      ? `${row.owner} (user-marked accepted; verify directly)`
-      : row.owner ? `${row.owner} (acceptance not recorded)` : 'Unassigned',
+    owner: owner.export,
     due: row.due,
     status: row.status === 'done' ? 'done' : 'not_started',
   };

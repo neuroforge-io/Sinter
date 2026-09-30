@@ -102,7 +102,7 @@ test('complete user-entered screening clearly requires human review and remains 
   const result = decide({
     opportunities: [readyRoute], requirements: [goodCheck],
     actions: [{opportunity: '', task: 'P&C review of evidence', owner: 'Casey Example',
-      owner_confirmed: true, due: '2026-10-01', status: 'open'}],
+      owner_kind: 'person', owner_confirmed: true, due: '2026-10-01', status: 'open'}],
   }, '2026-09-29');
   assert.equal(result.state, 'ready_for_review');
   assert.equal(result.label, 'HUMAN REVIEW REQUIRED');
@@ -111,6 +111,14 @@ test('complete user-entered screening clearly requires human review and remains 
   assert.match(result.action.ownerStatus, /Acceptance recorded by user/);
   assert.equal(result.action.due, '2026-10-01');
   assert.match(result.reopenCriteria, /before any submission/);
+});
+
+test('the decision card describes owner type consistently with the saved action', () => {
+  const result = decide({actions: [{opportunity: '', scope_confirmed: true,
+    task: 'Confirm the applicant', owner: 'Treasurer', owner_kind: 'role',
+    owner_confirmed: false, status: 'open'}]}, '2026-09-29');
+  assert.equal(result.action.ownerNeeded, true);
+  assert.match(result.action.ownerStatus, /role suggestion, not a named person/);
 });
 
 test('an unknown application workflow blocks a route until its application lead is recorded', () => {
@@ -207,6 +215,24 @@ test('a future-dated source-window check cannot qualify as current evidence', ()
     '2026-09-29');
   assert.equal(result.state, 'not_ready');
   assert.match(result.detail, /check date \(2026-09-30\) is in the future/);
+});
+
+test('missing source snapshots are not described as changed sources', () => {
+  const route = {...readyRoute, window_source_url: ''};
+  const routeResult = decide({opportunities: [route], requirements: [goodCheck]},
+    '2026-09-29');
+  assert.match(routeResult.detail, /No source URL snapshot was saved/);
+  assert.doesNotMatch(routeResult.detail, /page changed after/);
+
+  const sourceId = 'b'.repeat(32);
+  const check = {...goodCheck, source_id: sourceId, source_url: '',
+    checked_at: '2026-09-20'};
+  const requirementResult = decide({opportunities: [readyRoute],
+    requirements: [check], sources: [windowSource,
+      {id: sourceId, url: 'https://example.org/rules', checked_at: '2026-09-20'}]},
+  '2026-09-29');
+  assert.match(requirementResult.detail, /No source URL snapshot was saved/);
+  assert.doesNotMatch(requirementResult.detail, /URL changed after this excerpt/);
 });
 
 test('eligibility evidence checked in the future cannot qualify as current', () => {
@@ -343,9 +369,10 @@ test('a route marked needs clarification does not imply that the programme round
     requirements: [{...goodCheck, status: 'clarification', source_quote: ''}],
   }, '2026-09-29');
   assert.equal(result.state, 'not_ready');
-  assert.match(result.action.task, /outstanding clarification/);
+  assert.match(result.action.task, /Review the unresolved eligibility check: “Applicant type accepted”/);
+  assert.doesNotMatch(result.action.task, /contact the funder/i);
   assert.doesNotMatch(result.reopenCriteria, /Confirm the route is open/);
-  assert.match(result.reopenCriteria, /outstanding programme clarification/);
+  assert.doesNotMatch(result.reopenCriteria, /recorded clarification reason/);
 });
 
 test('a route with an unresolved clarification cannot be ready even when every check is complete', () => {
@@ -355,9 +382,9 @@ test('a route with an unresolved clarification cannot be ready even when every c
   }, '2026-09-29');
   assert.equal(result.state, 'not_ready');
   assert.equal(result.label, 'NOT READY');
-  assert.match(result.detail, /Local fund.*not ready.*outstanding programme clarification/);
-  assert.match(result.action.task, /Resolve the outstanding clarification for “Local fund”/);
-  assert.match(result.reopenCriteria, /outstanding programme clarification/);
+  assert.match(result.detail, /Local fund.*not ready.*no unresolved applicant check identifies why/);
+  assert.match(result.action.task, /no unresolved applicant check identifies why/);
+  assert.doesNotMatch(result.reopenCriteria, /recorded clarification reason/);
 });
 
 test('a complete source record with a clarification status asks for a human resolution, not duplicate evidence', () => {

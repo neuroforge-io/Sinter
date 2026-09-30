@@ -42,6 +42,7 @@ COMMUNICATION_STATUSES = frozenset({"draft", "received", "sent"})
 COMMUNICATION_CHANNELS = frozenset({"email", "letter", "phone", "meeting",
                                     "portal", "other"})
 ACTION_SUBMISSION_PHASES = frozenset({"pre_submission", "post_submission"})
+ACTION_OWNER_KINDS = frozenset({"unknown", "person", "role", "unassigned"})
 MAX_COMMUNICATION_EVIDENCE_LINKS = 10
 MAX_ASSET_REFERENCES = 20
 ASSET_KINDS = frozenset({"product", "service", "research", "prototype",
@@ -192,6 +193,40 @@ def _reference(row: dict, names: set[str], optional: bool = False) -> str:
         raise ValueError("An opportunity reference does not match an opportunity "
                          "name. Use the exact name, including capitalisation.")
     return name
+
+
+def _action_owner_is_role_suggestion(owner: str) -> bool:
+    return bool(re.search(r"(?i)\b(?:suggested|role suggestion)\b", owner))
+
+
+def _action_owner_label(owner: str) -> str:
+    return re.sub(r"(?i)\s*\((?:suggested|suggested role)\)\s*$", "",
+                  owner.strip()).strip()
+
+
+def _infer_action_owner_kind(owner: str) -> str:
+    if not owner.strip() or re.search(r"(?i)\bunassigned\b", owner):
+        return "unassigned"
+    if _action_owner_is_role_suggestion(owner):
+        return "role"
+    # Historical records used one field for both roles and people, so even a
+    # checked legacy acceptance flag cannot safely establish the owner type.
+    return "unknown"
+
+
+def _action_owner_summary(owner: str, kind: str, accepted: bool) -> str:
+    value = owner.strip()
+    if kind == "unassigned" or not value or re.search(r"(?i)\bunassigned\b", value):
+        return "No person named; owner needed"
+    if kind == "role":
+        label = _action_owner_label(value) or value
+        return "Suggested role only; no person named (" + _inline(label) + ")"
+    if kind == "unknown":
+        return "Owner type not confirmed: " + _inline(value)
+    if accepted:
+        return ("Named person: " + _inline(value)
+                + "; user-marked accepted, not independently verified")
+    return "Named person: " + _inline(value) + "; acceptance unconfirmed"
 
 
 def _action_is_current(row: dict, opportunities: list[dict]) -> bool:
@@ -374,18 +409,37 @@ def validate(data: object) -> dict:
         })
     for row in _rows(data, "actions", {
         "opportunity", "scope_confirmed", "submission_phase", "task", "owner",
-        "owner_confirmed", "due", "status",
+        "owner_kind", "owner_confirmed", "due", "status",
     }):
         owner = _text(row.get("owner", ""), "Action owner", 300)
         owner_confirmed = row.get("owner_confirmed", False)
         if type(owner_confirmed) is not bool:
             raise ValueError("Action owner confirmation must be true or false.")
+        has_owner_kind = "owner_kind" in row
+        owner_kind = (_infer_action_owner_kind(owner)
+                      if not has_owner_kind else
+                      _status(row["owner_kind"], ACTION_OWNER_KINDS,
+                              "action owner type"))
+        if not has_owner_kind and owner_kind != "person":
+            # Earlier releases let a role suggestion carry a checked acceptance
+            # box. Preserve the suggestion but discard that invalid old signal.
+            owner_confirmed = False
+        if owner_kind == "unknown" and _action_owner_is_role_suggestion(owner):
+            owner_kind = "role"
+        if not owner.strip() or re.search(r"(?i)\bunassigned\b", owner):
+            owner_kind = "unassigned"
+        if owner_kind in {"person", "role", "unknown"} and not owner.strip():
+            raise ValueError("Enter an owner entry or choose no owner assigned.")
+        if owner_kind == "unassigned" and owner.strip() and not re.search(
+                r"(?i)\bunassigned\b", owner):
+            raise ValueError("Choose a named person or suggested role for this owner entry.")
+        if owner_kind == "person" and _action_owner_is_role_suggestion(owner):
+            raise ValueError("A suggested role cannot be recorded as a named person.")
         scope_confirmed = row.get("scope_confirmed", "opportunity" in row)
         if type(scope_confirmed) is not bool:
             raise ValueError("Action scope confirmation must be true or false.")
-        if owner_confirmed and (not owner.strip()
-                                or re.search(r"(?i)\bunassigned\b", owner)):
-            raise ValueError("Confirm an action owner only after recording the person's name.")
+        if owner_confirmed and owner_kind != "person":
+            raise ValueError("Confirm acceptance only after recording a named person's agreement.")
         result["actions"].append({
             "opportunity": _reference(row, names, optional=True),
             "scope_confirmed": scope_confirmed,
@@ -394,6 +448,7 @@ def validate(data: object) -> dict:
                 ACTION_SUBMISSION_PHASES, "action submission phase"),
             "task": _text(row.get("task", ""), "Action", 4000, True),
             "owner": owner,
+            "owner_kind": owner_kind,
             "owner_confirmed": owner_confirmed,
             "due": _date(row.get("due", ""), "Action deadline"),
             "status": _status(row.get("status", "open"),
@@ -819,8 +874,7 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
                                  + actions_inactive_route_review),
         "actions_without_owner": sum(
             (
-                not row["owner_confirmed"] or not row["owner"].strip()
-                or re.search(r"(?i)\bunassigned\b", row["owner"]) is not None)
+                row["owner_kind"] != "person" or not row["owner_confirmed"])
             for row in current_actions),
     }
     if core_missing or any(value for key, value in result.items()
@@ -1298,6 +1352,32 @@ def _render_decision_brief(document: dict, readiness: dict,
     lines.extend(["## Open review items",
                   *["- " + item for item in review_items]])
 
+    next_action = _next_open_action(document, focused_opportunity)
+    if next_action:
+        owner = _action_owner_summary(next_action["owner"],
+                                      next_action["owner_kind"],
+                                      next_action["owner_confirmed"])
+        route = next((item for item in document["opportunities"]
+                      if item["name"] == next_action["opportunity"]), None)
+        scope = (_inline(next_action["opportunity"])
+                 + (" (submitted route)" if route and route["status"] == "submitted" else "")
+                 if next_action["opportunity"] else "Campaign-wide")
+        phase = (" · Phase: After-submission follow-up"
+                 if next_action["submission_phase"] == "post_submission" else "")
+        target = (_display_date(next_action["due"]) + " (proposed, not confirmed)"
+                  if next_action["due"] else "not set")
+        lines.extend(["## Next recorded open action",
+                      "- " + _inline(next_action["task"])
+                      + " · Scope: " + scope
+                      + phase
+                      + " · Owner: " + owner
+                      + " · Proposed date: " + target])
+    else:
+        lines.extend(["## Next recorded open action",
+                      ("No current open action is recorded. Review held tasks above before treating them as current."
+                       if readiness["actions_to_classify"] else
+                       "No current open action is recorded.")])
+
     if document["assets"]:
         portfolio = _portfolio_summary(document["assets"])
         lines.extend([
@@ -1318,35 +1398,6 @@ def _render_decision_brief(document: dict, readiness: dict,
                 + " · Prior art: " + ASSET_PRIOR_ART_LABELS[asset["prior_art_status"]]
                 + " · First public date: "
                 + (asset["first_public_date"] or "Not recorded"))
-
-    next_action = _next_open_action(document, focused_opportunity)
-    if next_action:
-        owner = _inline(next_action["owner"].strip() or "Not recorded")
-        route = next((item for item in document["opportunities"]
-                      if item["name"] == next_action["opportunity"]), None)
-        scope = (_inline(next_action["opportunity"])
-                 + (" (submitted route)" if route and route["status"] == "submitted" else "")
-                 if next_action["opportunity"] else "Campaign-wide")
-        phase = (" · Phase: After-submission follow-up"
-                 if next_action["submission_phase"] == "post_submission" else "")
-        if next_action["owner_confirmed"]:
-            acceptance = ("acceptance not independently verified; the record is "
-                          "user-marked accepted")
-        else:
-            acceptance = "acceptance unconfirmed"
-        target = (_display_date(next_action["due"]) + " (proposed, not confirmed)"
-                  if next_action["due"] else "not set")
-        lines.extend(["## Next recorded open action",
-                      "- " + _inline(next_action["task"])
-                      + " · Scope: " + scope
-                      + phase
-                      + " · Owner: " + owner + " (" + acceptance + ")"
-                      + " · Proposed date: " + target])
-    else:
-        lines.extend(["## Next recorded open action",
-                      ("No current open action is recorded. Review held tasks above before treating them as current."
-                       if readiness["actions_to_classify"] else
-                       "No current open action is recorded.")])
 
     lines.extend(["## Review notice", NOTICE])
     return "\n\n".join(lines) + "\n"
@@ -1549,14 +1600,8 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
     if not document["actions"]:
         lines.append("No actions have been recorded yet.")
     for row in document["actions"]:
-        owner_text = row["owner"].strip()
-        owner = _inline(owner_text or "Unassigned")
-        explicitly_unassigned = (not owner_text or re.search(
-            r"(?i)\bunassigned\b", owner_text) is not None)
-        if row["owner_confirmed"]:
-            owner += " (user-marked accepted; confirm directly)"
-        elif not explicitly_unassigned:
-            owner += " (acceptance not recorded)"
+        owner = _action_owner_summary(row["owner"], row["owner_kind"],
+                                      row["owner_confirmed"])
         target = (row["due"] + " · proposed target, not confirmed"
                   if row["due"] else "not set")
         scope = ("Not confirmed" if not row["scope_confirmed"] else
