@@ -240,7 +240,8 @@ def validate(document: dict) -> dict:
             artifact_id = _string(row.get('artifact_id', ''), 'Node artifact ID', 300)
             if artifact_id and artifact_id not in paths:
                 raise ValueError('An RKC node references an artifact absent from this bundle.')
-            source = _source(row.get('source'), artifact_id=artifact_id, paths=paths)
+            source = _source(row.get('source'), path=paths.get(artifact_id, ''),
+                             artifact_id=artifact_id, paths=paths)
             path = _string((source or {}).get('path', paths.get(artifact_id, '')), 'Source path', 4000)
             citation = hashlib.sha256((snapshot + '\0node\0' + identifier).encode()).hexdigest()
             items.append({'id': citation, 'object_id': identifier, 'object_type': 'node', 'title': title,

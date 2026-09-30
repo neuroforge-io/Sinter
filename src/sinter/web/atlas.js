@@ -3,7 +3,7 @@ import {h, field, check, button, notice, markdown, download, announce, safeLink}
 import {request, waitForJob} from './api.js';
 
 export function atlasPage({setBusy, remember, seed = {}}) {
-  let document = seed.document || null, job = null;
+  let document = seed.document || null, job = null, selectionVersion = 0, active = true;
   const question = field('What would you like to find out?', 'text', seed.question || '', 'Use names and terms likely to occur in your sources.', {maxLength: 2000});
   const input = field('Import an RKC atlas or context packet', 'file', '', 'Choose bundle.json or an RKC context JSON export. Up to 4 MB; no paths or scripts inside it are executed.', {accept: '.json,application/json'});
   const summary = h('div', {'aria-live': 'polite'}, notice('Start with an exported atlas, or connect to RKC running on this computer.'));
@@ -11,20 +11,29 @@ export function atlasPage({setBusy, remember, seed = {}}) {
   const consent = check('Send selected source excerpts and my question to my configured model API for an unverified draft.');
   const root = h('div', {class: 'stack'});
   const controls = [];
-  const rememberNow = () => remember('atlas', {title: 'Knowledge atlas', document, question: question.input.value});
+  const rememberNow = () => { if (active) remember('atlas', {title: 'Knowledge atlas', document, question: question.input.value}); };
+  root.dispose = () => { active = false; ++selectionVersion; };
   question.input.addEventListener('input', () => { consent.input.checked = false; rememberNow(); });
-  async function accept(value) {
-    const info = await request('/api/atlas/inspect', {data: {document: value}});
+  async function accept(value, version = ++selectionVersion) {
+    if (!active) return false;
+    let info;
+    try { info = await request('/api/atlas/inspect', {data: {document: value}}); }
+    catch (error) { if (!active || version !== selectionVersion) return false; throw error; }
+    // Remembered sources are inspected outside the task lock. A newer selection
+    // owns the page even when that older inspection succeeds or fails later.
+    if (!active || version !== selectionVersion) return false;
     document = value; consent.input.checked = false; rememberNow();
     summary.replaceChildren(notice(`${info.item_count} indexed items. Snapshot: ${info.snapshot_id}. Producer integrity: ${info.producer_integrity}.`),
       h('details', {}, h('summary', {}, 'Provenance and limitations'), ...info.warnings.map(w => h('p', {}, w))));
     result.replaceChildren();
+    return true;
   }
   async function task(action) {
+    if (!active) return;
     controls.forEach(b => { b.disabled = true; }); setBusy(true);
     try { await action(); }
-    catch (error) { result.replaceChildren(notice(error.message, 'error')); }
-    finally { controls.forEach(b => { b.disabled = false; }); setBusy(false); job = null; }
+    catch (error) { if (active) result.replaceChildren(notice(error.message, 'error')); }
+    finally { if (active) { controls.forEach(b => { b.disabled = false; }); setBusy(false); } job = null; }
   }
   function show(value) {
     result.replaceChildren(value.review_status === 'unverified_model_draft' ? notice('AI draft, not verified. Check every claim against the cited material.') : notice('Source packet only. No factual answer has been inferred.'),
@@ -45,7 +54,7 @@ export function atlasPage({setBusy, remember, seed = {}}) {
   const local = button('Read context from local RKC', () => task(async () => {
     consent.input.checked = false;
     const value = await request('/api/atlas/retrieve', {data: {question: question.input.value}});
-    await accept(value.document); show(await request('/api/atlas/context', {data: {document, question: question.input.value}}));
+    if (await accept(value.document)) show(await request('/api/atlas/context', {data: {document, question: question.input.value}}));
   }), 'quiet');
   const draft = button('Draft with your model', () => task(async () => {
     if (!document || !consent.input.checked) throw new Error('Import sources and approve the excerpt transfer before generating a draft.');
@@ -64,8 +73,9 @@ export function atlasPage({setBusy, remember, seed = {}}) {
     const rows = await Promise.all(chosen.map(async file => ({name: file.name, content: await file.text()})));
     job = (await request('/api/atlas/compile', {data: {files: rows, consent: true}})).id;
     const output = await waitForJob(job, status => { result.replaceChildren(notice(status.message || 'Compiling locally...')); });
-    await accept(output.document);
-    result.append(notice('RKC produced this bundle locally. Download it to keep it.'), button('Download RKC bundle', () => download('bundle.json', JSON.stringify(document, null, 2), 'application/json')));
+    if (await accept(output.document)) {
+      result.append(notice('RKC produced this bundle locally. Download it to keep it.'), button('Download RKC bundle', () => download('bundle.json', JSON.stringify(document, null, 2), 'application/json')));
+    }
   }));
   controls.push(search, local, draft, compile, input.input, files.input);
   root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'OPTIONAL RKC CONNECTION'), h('h2', {}, 'Make your shared knowledge useful.'),
@@ -76,6 +86,11 @@ export function atlasPage({setBusy, remember, seed = {}}) {
       h('p', {}, 'Set the absolute RKC executable path in Settings. RKC controls its own compilation and resource limits. No model is needed to compile.'),
       safeLink('https://github.com/neuroforge-io/RKC', 'RKC installation and documentation')),
     result);
-  if (document) accept(document).catch(error => summary.replaceChildren(notice(error.message, 'error')));
+  if (document) {
+    const version = ++selectionVersion;
+    accept(document, version).catch(error => {
+      if (active && version === selectionVersion) summary.replaceChildren(notice(error.message, 'error'));
+    });
+  }
   return root;
 }

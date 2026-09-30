@@ -350,6 +350,107 @@ def test_duplicate_bundle_evidence_cannot_supply_an_ambiguous_binding():
         atlas.validate(document)
 
 
+@pytest.mark.parametrize("node_kind", ["document_section", "symbol"])
+@pytest.mark.parametrize("source_id", ["omitted", "empty", "present"])
+@pytest.mark.parametrize("document_id", ["omitted", "empty", "present"])
+def test_known_node_artifact_path_rejects_contradictory_optional_source(
+    node_kind, source_id, document_id
+):
+    document = bundle()
+    node = document["nodes"][0]
+    node["kind"] = node_kind
+    if source_id == "omitted":
+        node["source"].pop("artifact_id")
+    elif source_id == "empty":
+        node["source"]["artifact_id"] = ""
+    node["source"]["path"] = "fictional-other-book.md"
+    document["documents"][0]["path"] = "fictional-other-book.md"
+    if document_id == "omitted":
+        document["documents"][0]["attributes"].pop("artifact_id")
+    elif document_id == "empty":
+        document["documents"][0]["attributes"]["artifact_id"] = ""
+    original = copy.deepcopy(document)
+    with pytest.raises(ValueError, match="path"):
+        atlas.validate(document)
+    with pytest.raises(ValueError, match="path"):
+        atlas.context(document, "renewals")
+    assert document == original
+
+
+@pytest.mark.parametrize("omission", ["documents", "document_path", "node_artifact"])
+def test_known_artifact_path_is_checked_without_document_or_node_metadata(omission):
+    document = bundle()
+    node = document["nodes"][0]
+    node["source"]["path"] = "fictional-other-book.md"
+    if omission == "node_artifact":
+        node.pop("artifact_id")
+    else:
+        node["source"].pop("artifact_id")
+    if omission == "documents":
+        document.pop("documents")
+    else:
+        document["documents"][0].pop("path")
+    with pytest.raises(ValueError, match="path"):
+        atlas.validate(document)
+
+
+@pytest.mark.parametrize("omit", ["source_artifact", "document_artifact", "both"])
+def test_consistent_optional_artifact_metadata_remains_supported(omit):
+    document = bundle()
+    node = document["nodes"][0]
+    if omit in {"source_artifact", "both"}:
+        node["source"].pop("artifact_id")
+    if omit in {"document_artifact", "both"}:
+        document["documents"][0]["attributes"].pop("artifact_id")
+    result = atlas.context(document, "renewals")
+    assert (
+        result["items"][0]["text"]
+        == document["documents"][0]["sections"][0]["markdown"]
+    )
+    assert result["items"][0]["source"] == node["source"]
+
+
+@pytest.mark.parametrize("binding", ["no_artifact_identity", "unknown_artifact_path"])
+def test_unavailable_optional_artifact_binding_is_not_invented(binding):
+    document = bundle()
+    node = document["nodes"][0]
+    node["source"].pop("artifact_id")
+    document["documents"][0]["attributes"].pop("artifact_id")
+    if binding == "no_artifact_identity":
+        node.pop("artifact_id")
+    else:
+        document["artifacts"][0].pop("path")
+    result = atlas.context(document, "renewals")
+    assert result["items"][0]["source"] == node["source"]
+    assert result["items"][0]["path"] == "handbook.md"
+    assert "artifact_id" not in result["items"][0]["source"]
+
+
+@pytest.mark.parametrize("source_value", [None, "omitted"])
+def test_absent_source_metadata_preserves_valid_legacy_node_binding(source_value):
+    document = bundle()
+    node = document["nodes"][0]
+    if source_value is None:
+        node["source"] = None
+    else:
+        node.pop("source")
+    result = atlas.context(document, "renewals")
+    assert result["items"][0]["path"] == "handbook.md"
+    assert "source" not in result["items"][0]
+
+
+def test_identity_free_path_only_legacy_bundle_remains_supported():
+    document = bundle()
+    document["artifacts"] = []
+    node = document["nodes"][0]
+    node.pop("artifact_id")
+    node["source"].pop("artifact_id")
+    document["documents"][0]["attributes"].pop("artifact_id")
+    result = atlas.context(document, "renewals")
+    assert result["items"][0]["source"] == node["source"]
+    assert "Lantern renewals are allowed once." in result["items"][0]["text"]
+
+
 @pytest.mark.parametrize("version", ["before", "after", "old_retained"])
 def test_current_rkc_document_source_and_evidence_bindings_are_retained(version):
     fixture = json.loads(

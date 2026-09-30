@@ -84,6 +84,7 @@ jobs:
       - run: python tools/native_browser.py
       - run: python tools/provider_readiness_browser.py
       - run: python tools/atlas_source_browser.py
+      - run: node --experimental-default-type=module tests/atlas_async.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

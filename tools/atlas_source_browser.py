@@ -16,6 +16,7 @@ import sys
 import tempfile
 import threading
 from contextlib import ExitStack
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
@@ -228,6 +229,7 @@ class AtlasSourceChecks(DeliverableChecks):
         self.source_bound_packets = source_bound_packets
         self.bundle = bundle
         self.downloads = []
+        self.delayed_inspections = []
 
     def open_atlas(self, page):
         self.goto(page, "atlas")
@@ -576,6 +578,212 @@ class AtlasSourceChecks(DeliverableChecks):
         self.fixture.header_mismatch = False
         self.screenshot(page, "atlas-loopback-header-update")
 
+    def reject_omitted_artifact_provenance(self, page):
+        from playwright.sync_api import expect
+
+        region = self.open_atlas(page)
+        original = self.source_bound_packets["after"]
+        self.import_document(page, original, "fictional-current-provenance.json")
+        self.find(page)
+        good_raw = self.retained_download(
+            page, "Download context JSON", "provenance-current.json"
+        )
+        attack = copy.deepcopy(self.bundle)
+        node, document = attack["nodes"][0], attack["documents"][0]
+        node["source"].pop("artifact_id")
+        document["attributes"].pop("artifact_id")
+        node["source"]["path"] = document["path"] = "fictional-other-book.md"
+        assert node["artifact_id"] == attack["artifacts"][0]["id"]
+        assert attack["artifacts"][0]["path"] == "handbook.md"
+        self.consent(page).check()
+        self.upload(page, attack, "fictional-omitted-artifact-provenance.json")
+        expect(region).to_contain_text(
+            "The RKC source path disagrees with its object path."
+        )
+        expect(self.consent(page)).not_to_be_checked()
+        expect(
+            page.get_by_text(f"Snapshot: {original['snapshot_id']}.", exact=False)
+        ).to_be_visible()
+        expect(
+            page.get_by_role("button", name="Find supporting material", exact=True)
+        ).to_be_enabled()
+        self.find(page)
+        expect(region).to_contain_text("Lantern lending period is 21 days.")
+        expect(region).not_to_contain_text("fictional-other-book.md")
+        retained = self.retained_download(
+            page, "Download context JSON", "provenance-retained-good.json"
+        )
+        current, kept = json.loads(good_raw), json.loads(retained)
+        # A new local search stamps a new context creation time; source content,
+        # snapshot, references and all other metadata must remain identical.
+        current_time = datetime.fromisoformat(current.pop("created_at"))
+        kept_time = datetime.fromisoformat(kept.pop("created_at"))
+        assert current_time.tzinfo is not None and kept_time.tzinfo is not None
+        assert kept_time >= current_time
+        assert kept == current
+        self.screenshot(page, "atlas-omitted-artifact-provenance-refusal")
+
+    def delayed_remembered_packet(self, page, *, failed, disposed=False):
+        """Delay a real inspection response while a newer import is accepted."""
+        from playwright.sync_api import expect
+
+        outcome = ("disposed-" if disposed else "") + (
+            "failure" if failed else "success"
+        )
+        before, after = (
+            self.source_bound_packets["before"],
+            self.source_bound_packets["after"],
+        )
+        region = self.open_atlas(page)
+        self.import_document(page, before, f"fictional-remembered-{outcome}.json")
+        self.find(page)
+        old_raw = self.retained_download(
+            page, "Download context JSON", f"delayed-{outcome}-old.json"
+        )
+        assert json.loads(old_raw)["snapshot_id"] == before["snapshot_id"]
+        held = {}
+        pattern = "**/api/atlas/inspect"
+
+        def hold_inspection(route):
+            packet = route.request.post_data_json["document"]
+            if not held and packet.get("snapshot_id") == before["snapshot_id"]:
+                # The actual Sinter server validates the fictional packet first.
+                # Only delivery of that response is postponed, or fault-injected.
+                held.update(route=route, response=route.fetch())
+            else:
+                route.continue_()
+
+        page.route(pattern, hold_inspection)
+        page.evaluate(
+            """snapshot => {
+                const original = window.fetch;
+                window.__atlasDelayedInspectionDone = false;
+                window.__atlasDelayedInspectionStarted = false;
+                window.fetch = async (url, options) => {
+                    const body = options?.body ? JSON.parse(options.body) : null;
+                    const tracked = url === '/api/atlas/inspect' &&
+                        body?.document?.snapshot_id === snapshot &&
+                        !window.__atlasDelayedInspectionStarted;
+                    if (tracked) window.__atlasDelayedInspectionStarted = true;
+                    const response = await original(url, options);
+                    if (tracked) {
+                        const read = response.json.bind(response);
+                        response.json = async () => {
+                            try { return await read(); }
+                            finally {
+                                setTimeout(() => {
+                                    window.__atlasDelayedInspectionDone = true;
+                                }, 0);
+                            }
+                        };
+                    }
+                    return response;
+                };
+            }""",
+            before["snapshot_id"],
+        )
+        try:
+            self.goto(page, "home")
+            self.open_atlas(page)
+            page.wait_for_function(
+                "() => window.__atlasDelayedInspectionStarted === true"
+            )
+            if disposed:
+                # app.js calls this page's disposal hook on actual navigation;
+                # the replacement page shares the app's remembered draft map.
+                self.goto(page, "home")
+                self.open_atlas(page)
+                expect(
+                    page.get_by_text(f"Snapshot: {before['snapshot_id']}.", exact=False)
+                ).to_be_visible()
+            # A normal UI replacement remains available while remembered data
+            # is being checked; this is the independently reviewed race.
+            self.import_document(page, after, f"fictional-current-{outcome}.json")
+            assert held and held["response"].status == 200
+            self.find(page)
+            expect(region).to_contain_text("Lantern lending period is 21 days.")
+            current_raw = self.retained_download(
+                page, "Download context JSON", f"delayed-{outcome}-current.json"
+            )
+            current = json.loads(current_raw)
+            assert current["snapshot_id"] == after["snapshot_id"]
+            self.consent(page).check()
+            visible = region.inner_text()
+            if failed:
+                held["route"].fulfill(
+                    status=400,
+                    json={"error": "Fictional delayed remembered-packet rejection"},
+                )
+            else:
+                held["route"].fulfill(response=held["response"])
+            held["released"] = True
+            page.wait_for_function("() => window.__atlasDelayedInspectionDone === true")
+            expect(
+                page.get_by_text(f"Snapshot: {after['snapshot_id']}.", exact=False)
+            ).to_be_visible()
+            expect(region).to_contain_text("Lantern lending period is 21 days.")
+            assert region.inner_text() == visible
+            expect(region).not_to_contain_text(
+                "Fictional delayed remembered-packet rejection"
+            )
+            # Superseded responses cannot silently change the approved selection.
+            expect(self.consent(page)).to_be_checked()
+            retained_raw = self.retained_download(
+                page, "Download context JSON", f"delayed-{outcome}-retained.json"
+            )
+            assert json.loads(retained_raw) == current
+            self.find(page)
+            searched = json.loads(
+                self.retained_download(
+                    page, "Download context JSON", f"delayed-{outcome}-next-search.json"
+                )
+            )
+            assert searched["snapshot_id"] == after["snapshot_id"]
+            assert searched["items"] == current["items"]
+            self.screenshot(page, f"atlas-delayed-remembered-{outcome}")
+            page.unroute(pattern, hold_inspection)
+            # Leaving and reopening uses the app's actual remembered state.
+            self.goto(page, "home")
+            self.open_atlas(page)
+            expect(
+                page.get_by_text(f"Snapshot: {after['snapshot_id']}.", exact=False)
+            ).to_be_visible()
+            self.find(page)
+            expect(region).to_contain_text("Lantern lending period is 21 days.")
+            expect(region).not_to_contain_text("Lantern lending period is 14 days.")
+            assert (self.artifacts / f"delayed-{outcome}-old.json").read_text(
+                encoding="utf-8"
+            ) == old_raw
+            self.delayed_inspections.append(
+                {
+                    "outcome": outcome,
+                    "page_disposed_and_reopened": disposed,
+                    "held_snapshot": before["snapshot_id"],
+                    "accepted_snapshot": after["snapshot_id"],
+                    "actual_server_inspection_status": held["response"].status,
+                    "injected_response_status": 400 if failed else None,
+                    "results_and_download_preserved": True,
+                    "next_search_and_remembered_snapshot": searched["snapshot_id"],
+                    "consent_unchanged_by_superseded_response": True,
+                }
+            )
+        finally:
+            if held and not held.get("released"):
+                held["route"].abort()
+            page.unroute(pattern, hold_inspection)
+
+    def delayed_remembered_success(self, page):
+        self.delayed_remembered_packet(page, failed=False)
+
+    def delayed_remembered_failure(self, page):
+        self.delayed_remembered_packet(page, failed=True)
+
+    def disposed_remembered_success(self, page):
+        self.delayed_remembered_packet(page, failed=False, disposed=True)
+
+    def disposed_remembered_failure(self, page):
+        self.delayed_remembered_packet(page, failed=True, disposed=True)
+
 
 def main(argv=None):
     args = browser_arguments(__doc__, argv)
@@ -634,6 +842,26 @@ def main(argv=None):
                             ("explicit-snapshot-update", checks.explicit_update),
                             ("question-edit-consent", checks.question_edit_consent),
                             (
+                                "omitted-artifact-provenance-refusal",
+                                checks.reject_omitted_artifact_provenance,
+                            ),
+                            (
+                                "delayed-remembered-success",
+                                checks.delayed_remembered_success,
+                            ),
+                            (
+                                "delayed-remembered-failure",
+                                checks.delayed_remembered_failure,
+                            ),
+                            (
+                                "disposed-remembered-success",
+                                checks.disposed_remembered_success,
+                            ),
+                            (
+                                "disposed-remembered-failure",
+                                checks.disposed_remembered_failure,
+                            ),
+                            (
                                 "corrupt-identity-refusal",
                                 checks.reject_corrupt_identity,
                             ),
@@ -652,6 +880,16 @@ def main(argv=None):
                             or row["check"] == "recorded-loopback-transport"
                             and row.get("url", "").endswith("/api/atlas/retrieve")
                             and "400" in row["error"]
+                            or row["check"] == "omitted-artifact-provenance-refusal"
+                            and row.get("url", "").endswith("/api/atlas/inspect")
+                            and "400" in row["error"]
+                            or row["check"]
+                            in {
+                                "delayed-remembered-failure",
+                                "disposed-remembered-failure",
+                            }
+                            and row.get("url", "").endswith("/api/atlas/inspect")
+                            and "400" in row["error"]
                         ]
                         unexpected = [
                             row for row in checks.errors if row not in expected
@@ -666,6 +904,7 @@ def main(argv=None):
                             "checks": checks.results,
                             "screenshots": checks.screenshots,
                             "downloads": checks.downloads,
+                            "delayed_inspections": checks.delayed_inspections,
                             "expected_http_errors": expected,
                             "unexpected_browser_errors": unexpected,
                             "external_browser_requests": checks.external,
@@ -699,7 +938,7 @@ def main(argv=None):
     if not receipt or not receipt["passed"]:
         raise SystemExit("FAIL: inspect receipt.json")
     print(
-        "PASS: six fictional Atlas source journeys; "
+        "PASS: eleven fictional Atlas source journeys; "
         "no model/search/credential or external calls"
     )
 
