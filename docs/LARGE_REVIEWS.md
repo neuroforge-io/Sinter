@@ -28,6 +28,15 @@ python -m sinter review ./src --consent --max-parts 8 -o self-review.md
 python -m sinter review ./src --consent --max-parts 8 --resume -o self-review.md
 ```
 
+Online review requires an explicitly selected model capable of the full review
+prompt. The native ERAIS preview supports compact source questions, not full
+collection review: Sinter refuses before any generation request or checkpoint
+change. Automatic selection is refused immediately, without model discovery;
+it cannot replace an explicit identity for resumable reviews.
+Use `--offline` for a local coverage plan, **Short source answer** for one selected
+excerpt, or explicitly choose a capable provider. Offline planning does not discover
+a model or send source text.
+
 Progress is stored in `<output>.checkpoint.json`. Keep the same `-o` path when
 resuming. Review output must be outside a folder being reviewed so it cannot be
 admitted as new source material on the next run. The default output is a sibling
@@ -105,9 +114,12 @@ Interrupted follow-ups retain the count and earlier received commentary; explici
 retrying an uncertain request cannot reset the follow-up budget.
 No run automatically retries generation or continues issuing requests after
 a provider failure. Partial results that need follow-up return exit code 3;
-failed or uncertain provider outcomes return 1, while invalid command-line usage
-remains 2. All incomplete results retain earlier work and distinguish complete,
-failed, partial, uncertain and not-attempted batches. These five counts are disjoint. `not_reviewed` is the
+failed or uncertain provider outcomes and runtime validation errors return 1.
+Runtime validation includes an unsupported native full review or an invalid flag
+combination such as `--retry-uncertain --offline`. Missing arguments and invalid
+command syntax return 2. All incomplete results retain earlier work and distinguish
+complete, failed, partial, uncertain and not-attempted batches. These five counts
+are disjoint. `not_reviewed` is the
 aggregate of the last four, not a sixth state. A run limited by `--max-parts` can
 return 0 while leaving batches unattempted, provided every received answer passed
 the commentary gate. Inspect the coverage ledger rather than interpreting that

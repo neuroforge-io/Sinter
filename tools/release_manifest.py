@@ -11,8 +11,11 @@ import shutil
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from sinter import __version__
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))
+from sinter import __version__  # noqa: E402
+from tools.native_licences import library_records, verify_debian_archive  # noqa: E402
 
 EXPECTED = (
     {("windows", arch) for arch in ("x64", "x86", "arm64")}
@@ -163,6 +166,21 @@ def assemble(output: Path, source: Path, commit: str):
             raise ValueError("Installed-app validation is missing.")
         verify_installed_receipt(row)
         verify_account_capability(row, key)
+        if system == "linux":
+            if row.get("linux_shared_library_notices_verified") is not True:
+                raise ValueError("Bundled Linux library notices were not verified.")
+            try:
+                declared = library_records(row.get("bundled_dependencies", []))
+            except RuntimeError as error:
+                raise ValueError(str(error)) from error
+            if row.get("native_shared_library_files") != declared:
+                raise ValueError(
+                    "Bundled Linux library notice coverage does not match."
+                )
+            try:
+                verify_debian_archive(package, row["bundled_dependencies"])
+            except RuntimeError as error:
+                raise ValueError(str(error)) from error
         records.append(row)
     if targets != EXPECTED:
         raise ValueError("Not all required installer targets passed.")

@@ -50,6 +50,11 @@ Release promotion requires the advertised platform's installed and upgrade
 evidence, a useful local walkthrough and clear unsupported-feature representation.
 Hosted AI quality and availability remain optional, separately reported limits.
 
+The [operator evidence](releases/PREVIEW_0.5.4rc1_OPERATOR_EVIDENCE.md) records
+the actual fictional save/stop/reopen/export/restore sequence and one useful
+public native source answer. Its provisional source identity is explicit;
+final install receipts remain authoritative for distributed assets.
+
 ## Independent critic
 
 The scoped offline source/campaign assessment is UX **7.5/10**, functionality

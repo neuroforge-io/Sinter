@@ -30,6 +30,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 from sinter import __version__  # noqa: E402
 from tools._support import require_module  # noqa: E402
+from tools.native_licences import collect_linux_libraries, library_records  # noqa: E402
 
 AUTH_PACKAGES = ("PyJWT", "cryptography", "cffi", "pycparser") + (
     ("typing_extensions",) if sys.version_info < (3, 11) else ()
@@ -119,7 +120,7 @@ def icon(folder: Path) -> tuple[Path, Path]:
     return ico, icns
 
 
-def collect_licences(notices, *, accounts=True):
+def collect_licences(notices, *, accounts=True, runtime=None):
     notices.mkdir(parents=True, exist_ok=True)
     for name in ("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"):
         shutil.copy2(ROOT / name, notices / name)
@@ -165,12 +166,17 @@ def collect_licences(notices, *, accounts=True):
                 "licences": package_licences,
             }
         )
+    native = []
+    if runtime is not None and sys.platform.startswith("linux"):
+        native = collect_linux_libraries(runtime, notices)
+        inventory.extend(native)
     (notices / "bundled-dependencies.json").write_text(
         json.dumps(
             {
                 "schema": "sinter-native-dependencies/v1",
                 "packages": inventory,
                 "account_auth_bundled": accounts,
+                "linux_shared_library_notices_verified": bool(native),
             },
             indent=2,
         ),
@@ -258,6 +264,8 @@ def freezer_arguments(account_auth=True):
         "tkinter",
         "--exclude-module",
         "faster_whisper",
+        "--exclude-module",
+        "readline",
         "--add-data",
         str(ROOT / "LICENSE") + os.pathsep + ".",
         "--add-data",
@@ -363,7 +371,7 @@ def main(argv: list[str] | None = None) -> None:
             app / ("Sinter.exe" if sys.platform == "win32" else "Sinter"),
             app / "licenses",
         )
-    dependencies = collect_licences(notices, accounts=account_auth)
+    dependencies = collect_licences(notices, accounts=account_auth, runtime=app)
     if sys.platform == "darwin":
         run("codesign", "--force", "--deep", "--sign", "-", app)
     prefix = f"Sinter-{__version__}-{platform.system().lower()}-{args.arch}"
@@ -386,8 +394,14 @@ def main(argv: list[str] | None = None) -> None:
             "speech_bundled": False,
             "source_commit": os.environ.get("GITHUB_SHA", "local"),
             "bundled_dependencies": dependencies,
+            "linux_shared_library_notices_verified": (
+                sys.platform.startswith("linux")
+                and any(row.get("libraries") for row in dependencies)
+            ),
         }
     )
+    if sys.platform.startswith("linux"):
+        receipt["native_shared_library_files"] = library_records(dependencies)
     if sys.platform == "win32":
         iscc = shutil.which("ISCC")
         if not iscc:

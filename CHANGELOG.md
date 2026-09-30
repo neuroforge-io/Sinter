@@ -30,8 +30,14 @@ does not contain the following changes.
 - Strengthen installer source/asset identity, dependency notices, account-runtime
   receipts and retained installed-app tests. Add copied-workspace upgrade checks
   from the actual v0.5.3 source, without touching an operator's workspace.
-- Clarify current review exit codes: complete/offline plan 0, provider failure or
-  uncertainty 1, invalid command usage 2, substantive follow-up needed 3.
+  Linux shared-library notices include proven original library hashes, package
+  versions and referenced licence texts; unused readline support is excluded.
+- Refuse unsupported native collection reviews before changing checkpoints or
+  recording a remote attempt. Local refusal cannot create a false uncertain
+  outcome. Offline coverage planning remains available.
+- Clarify current review exit codes: complete/offline plan 0, provider failure,
+  uncertainty or runtime validation error 1, argument syntax error 2,
+  substantive follow-up needed 3.
 
 Native protocol qualification is not general-chat quality qualification. This
 candidate does not add autonomous submissions, outgoing email, hosted multiuser

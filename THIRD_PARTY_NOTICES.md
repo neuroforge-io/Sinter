@@ -33,6 +33,14 @@ provided by the packaged dependencies are included in `licenses/`. Build tools
 are not a grant of rights to the user's sources, RKC atlases, recordings or model
 assets.
 
+Linux packages also record every copied shared library's byte-matched origin.
+The inventory includes the owning Debian/Ubuntu package's version, original
+copyright notice and referenced common licence texts, with file digests.
+The Python shared library is bound to its originating interpreter and Python
+licence. Unused Python readline support is excluded from desktop bundles.
+Missing or altered notices and incomplete library coverage stop packaging and
+the release gate; this Linux-specific check does not qualify other platforms.
+
 Optional faster-whisper, CTranslate2, PyAV, tokenizers, Hugging Face components,
 speech model assets and the optional RKC application retain their own licences.
 Core installers do not bundle those packages, speech models or RKC. No proprietary

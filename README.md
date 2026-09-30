@@ -89,9 +89,11 @@ is cut at statement and line boundaries and asked targeted questions about the r
 symbols, imports and risk-shaped lines in its own excerpt. A received but unsupported
 answer is recorded as a defined partial batch that an explicit resume may re-review
 with a bounded follow-up question. Coverage reports partials separately and returns
-exit code 3 when follow-up is needed; failed or uncertain provider outcomes return
-1, and invalid command-line usage remains 2. Checkpoints embed the review engine so
-older plans are rejected cleanly.
+exit code 3 when follow-up is needed; failed or uncertain provider outcomes and
+runtime validation errors return 1. Missing arguments or invalid command syntax
+return 2. The native ERAIS preview refuses full collection review before generation
+or checkpoint changes; offline coverage planning remains available. Checkpoints
+embed the review engine so older plans are rejected cleanly.
 
 ## Reliability update: 0.5.1
 
@@ -207,7 +209,7 @@ Model assistance works **beside** RKC: Sinter sends a bounded, approved excerpt 
 | --- | --- |
 | Local examples, deterministic reports, plans, comparisons and atlas imports | Your computer |
 | Explicitly saved reports, watches and preferences | `~/.sinter`, or `SINTER_DATA_DIR`; not encrypted |
-| Search and recurring search watches | The exact query goes to your configured search API |
+| Search and recurring search watches | The exact query goes to NeuroForge’s search API |
 | Optional ranking, generative templates, chat or atlas drafting | The selected question/context goes to your configured API |
 | Optional speech recognition | Audio remains local; authorised model downloads contact the model host |
 | Session key entered in Settings | Process memory only; not saved into preferences or exports |

@@ -18,6 +18,13 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
+@pytest.fixture(autouse=True)
+def synthetic_receipt_packages(monkeypatch):
+    # These nine files model platform receipts, not OS archives. Actual Debian
+    # byte inspection has separate real-package regression tests.
+    monkeypatch.setattr(module, "verify_debian_archive", lambda *args: None)
+
+
 def artifacts(tmp_path):
     output = tmp_path / "out"
     source = tmp_path / "source"
@@ -64,6 +71,23 @@ def artifacts(tmp_path):
                 }
                 for key in module.AUTH_PACKAGES
             ]
+        if system == "linux":
+            libraries = [{"path": "_internal/libfixture.so.1", "sha256": "b" * 64}]
+            row["linux_shared_library_notices_verified"] = True
+            row["native_shared_library_files"] = {
+                item["path"]: item["sha256"] for item in libraries
+            }
+            row.setdefault("bundled_dependencies", []).append(
+                {
+                    "name": "Debian-libfixture1",
+                    "version": "1.2-3",
+                    "purpose": "bundled_shared_library",
+                    "libraries": libraries,
+                    "licences": [
+                        {"path": "system/libfixture1/copyright", "sha256": "c" * 64}
+                    ],
+                }
+            )
         proof = {
             key: value
             for key, value in row.items()
@@ -75,6 +99,8 @@ def artifacts(tmp_path):
                 "installer_sha256",
                 "target_arch",
                 "source_commit",
+                "linux_shared_library_notices_verified",
+                "native_shared_library_files",
             }
         }
         row["frozen_test"] = dict(proof)
@@ -241,5 +267,26 @@ def test_release_requires_matching_actual_installed_proof(tmp_path, mutation):
             phase["pointer_bits"] = 8
     path.write_text(json.dumps(row))
     with pytest.raises(ValueError):
+        module.assemble(output, source, "fixture-commit")
+    assert not (output / "build-manifest.json").exists()
+
+
+@pytest.mark.parametrize(
+    "mutation", ["missing_gate", "missing_coverage", "lost_notice"]
+)
+def test_release_refuses_unproven_linux_shared_library_notices(tmp_path, mutation):
+    output, source = artifacts(tmp_path)
+    path = output / "linux-x64-test.json"
+    row = json.loads(path.read_text())
+    if mutation == "missing_gate":
+        row.pop("linux_shared_library_notices_verified")
+    elif mutation == "missing_coverage":
+        row["native_shared_library_files"] = {}
+    else:
+        for record in row["bundled_dependencies"]:
+            if record.get("purpose") == "bundled_shared_library":
+                record["licences"] = []
+    path.write_text(json.dumps(row))
+    with pytest.raises(ValueError, match="librar"):
         module.assemble(output, source, "fixture-commit")
     assert not (output / "build-manifest.json").exists()

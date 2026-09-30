@@ -155,13 +155,14 @@ class LocalAPI:
         return json.loads(raw)
 
 
-def check_preserved(api: LocalAPI, expected: dict) -> list[str]:
+def check_preserved(api: LocalAPI, expected: dict, *, legacy=False) -> list[str]:
     settings = api.request("/api/settings")
     if settings.get("warning"):
         raise AssertionError("Prior preferences fell back to defaults.")
     for key, value in expected["settings"].items():
         assert settings["settings"][key] == value, f"Changed preference: {key}"
-    assert settings["settings"]["provider"] == "openai-compatible"
+    if not legacy:
+        assert settings["settings"]["provider"] == "openai-compatible"
     assert not settings["has_session_key"]
     campaign = expected["campaign"]
     campaign_current = api.request("/api/campaigns/" + campaign["id"])
@@ -203,7 +204,8 @@ def check_preserved(api: LocalAPI, expected: dict) -> list[str]:
     assert api.request("/api/casebooks/" + book["id"]) == book_current
     return [
         "prior profile and appearance preferences retained",
-        "explicit legacy model selection retained with compatible provider",
+        "explicit legacy model selection retained"
+        + (" by prior application" if legacy else " with compatible provider"),
         "campaign and casebook identities, revisions and original data retained",
         "saved report, source evidence and user edits retained",
         "disabled watch retained without a search request",
@@ -211,8 +213,8 @@ def check_preserved(api: LocalAPI, expected: dict) -> list[str]:
     ]
 
 
-def qualify(args) -> dict:
-    output = args.output.resolve()
+def prepare_fixture(prior_source: Path, output: Path):
+    output = output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     original, copied = output / "prior-workspace", output / "candidate-workspace"
     if original.exists() or copied.exists():
@@ -225,7 +227,7 @@ def qualify(args) -> dict:
             sys.executable,
             "-c",
             SEED,
-            str(args.prior_source.resolve()),
+            str(prior_source.resolve()),
             str(original),
             str(expected_path),
         ],
@@ -235,14 +237,27 @@ def qualify(args) -> dict:
     expected = json.loads(expected_path.read_text(encoding="utf-8"))
     original_hashes = hashes(original)
     shutil.copytree(original, copied)
-    preferences_hash = hashes(copied)["preferences.json"]
-    capture = output / "capture-browser-url.py"
+    return expected, original, copied, original_hashes
+
+
+def run_native(
+    binary: Path,
+    directory: Path,
+    expected: dict,
+    output: Path,
+    version: str,
+    *,
+    legacy=False,
+):
+    label = "prior" if legacy else "candidate"
+    preferences_hash = hashes(directory)["preferences.json"]
+    capture = output / f"capture-{label}-browser-url.py"
     capture.write_text(
         "import sys\nfrom pathlib import Path\n"
         "Path(sys.argv[1]).write_text(sys.argv[2], encoding='utf-8')\n",
         encoding="utf-8",
     )
-    captured = output / "candidate-loopback-url.txt"
+    captured = output / f"{label}-loopback-url.txt"
     environment = dict(os.environ)
     for name in (
         "NEUROFORGE_BASE_URL",
@@ -252,11 +267,11 @@ def qualify(args) -> dict:
         "ANTHROPIC_API_KEY",
     ):
         environment.pop(name, None)
-    environment["SINTER_DATA_DIR"] = str(copied)
+    environment["SINTER_DATA_DIR"] = str(directory)
     environment["BROWSER"] = shlex.join(
         [sys.executable, str(capture), str(captured), "%s"]
     )
-    binary = args.candidate_binary.resolve()
+    binary = binary.resolve()
     actual = subprocess.run(
         [str(binary), "--version"],
         capture_output=True,
@@ -264,9 +279,9 @@ def qualify(args) -> dict:
         check=True,
         timeout=10,
     ).stdout.strip()
-    assert actual == args.expected_version, "Candidate binary version did not match."
+    assert actual == version, "Candidate binary version did not match."
     api = None
-    with (output / "candidate-process.log").open("w", encoding="utf-8") as log:
+    with (output / f"{label}-process.log").open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
             [str(binary)], env=environment, stdout=log, stderr=log
         )
@@ -284,13 +299,10 @@ def qualify(args) -> dict:
                 )
             api = LocalAPI(captured.read_text(encoding="utf-8"))
             session = api.request("/api/session")
-            assert (
-                session["version"] == args.expected_version
-                and session["desktop"] is True
-            )
+            assert session["version"] == version and session["desktop"] is True
             api.token = session["token"]
-            checks = check_preserved(api, expected)
-            assert hashes(copied)["preferences.json"] == preferences_hash
+            checks = check_preserved(api, expected, legacy=legacy)
+            assert hashes(directory)["preferences.json"] == preferences_hash
             checks.append(
                 "opening candidate did not rewrite the prior preferences file"
             )
@@ -308,6 +320,16 @@ def qualify(args) -> dict:
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=5)
+    return actual, checks
+
+
+def qualify(args) -> dict:
+    output = args.output.resolve()
+    expected, original, copied, original_hashes = prepare_fixture(
+        args.prior_source, output
+    )
+    binary = args.candidate_binary.resolve()
+    actual, checks = run_native(binary, copied, expected, output, args.expected_version)
     assert hashes(original) == original_hashes
     checks.append("untouched prior workspace retains every original file digest")
     return {

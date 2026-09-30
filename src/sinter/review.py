@@ -960,8 +960,20 @@ def run(payload, *, question='Review this material for mistakes, gaps and incons
     if type(retry_uncertain) is not bool or (retry_uncertain and (resume is None or offline)):
         raise ValueError('Retrying uncertain requests requires an explicit online resume.')
     language = _text(language, 'Language hint', 100).strip()
-    if not offline and client.selected_model() == client.AUTO_MODEL:
-        raise ValueError('Resumable model reviews require an explicit model identifier in Settings or NEUROFORGE_MODEL. Check the connection to discover it; offline planning remains available.')
+    if not offline:
+        selected = client.selected_model()
+        if selected == client.AUTO_MODEL:
+            raise ValueError(
+                'Resumable model reviews require an explicit model identifier in Settings '
+                'or NEUROFORGE_MODEL. Use --offline for a local coverage plan; '
+                'the native preview supports Short source answer for one selected excerpt. '
+                'No generation request was sent and no checkpoint was changed.')
+        if client.is_native_profile(selected):
+            raise ValueError(
+                'The native ERAIS preview does not support full collection review. '
+                'Use --offline to inspect a local coverage plan, choose Short source answer '
+                'for one selected excerpt, or explicitly configure a capable provider. '
+                'No generation request was sent and no checkpoint was changed.')
     book, question, chunks, fingerprint = plan(payload, question, language)
     created_at = utc_now()
     results = {}
