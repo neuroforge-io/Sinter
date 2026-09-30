@@ -26,7 +26,12 @@ def request_headers(preferences, ui: bool) -> dict[str, str]:
     context = (client.connection_settings(preferences.connection())
                if ui else nullcontext())
     with context, patch.object(urllib.request, "build_opener") as factory:
-        factory.return_value.open.return_value = io.BytesIO(b'{"data": []}')
+        factory.return_value.open.return_value = urllib.response.addinfourl(
+            io.BytesIO(b'{"data": []}'),
+            {"Content-Type": "application/json"},
+            client._endpoint("/models"),
+            200,
+        )
         assert client.list_models() == []
     assert isinstance(factory.call_args.args[0], client._NoRedirect)
     return dict(factory.return_value.open.call_args.args[0].header_items())

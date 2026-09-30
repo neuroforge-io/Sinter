@@ -488,7 +488,7 @@ def _open(path: str, body: dict | None = None):
                     503: "The configured service is temporarily unavailable (HTTP 503). Try again later; local tools remain available.",
                     504: "The configured service took too long to respond (HTTP 504). Try again later; local tools remain available."}
         raise APIError(messages.get(code, f"The API returned HTTP {code}."),
-                       429 if code == 429 else 502) from exc
+                       429 if code == 429 else 502, upstream_status=code) from exc
     except DeadlineExceeded:
         raise
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
@@ -500,13 +500,26 @@ def _open(path: str, body: dict | None = None):
 def _request_json(path: str, body: dict | None = None) -> dict:
     native = (path == "/chat/completions" and body
               and is_native_profile(body.get("model")))
+    public_catalog = path == "/models" and _uses_public_api()
     maximum = NATIVE_PROFILE.response_bytes if native else MAX_RESPONSE
     deadline = time.monotonic() + _request_timeout(path, body)
     try:
         with _open(path, body) as response:
-            if native:
-                content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+            if native or public_catalog:
+                content_type = (
+                    getattr(response, "headers", {})
+                    .get("Content-Type", "")
+                    .split(";", 1)[0]
+                    .strip()
+                    .lower()
+                )
                 if content_type != "application/json":
+                    if public_catalog:
+                        raise APIError(
+                            "The NeuroForge model catalogue requires a JSON response. "
+                            "Its identity or capabilities could not be verified. "
+                            "No generation request was sent."
+                        )
                     raise APIError("Native ERAIS requires a buffered JSON response. "
                                    "The output was rejected; no request was replayed.")
             parts, size = [], 0
@@ -668,6 +681,11 @@ def validate_chat_request(messages: list[Message],
     Automatic NeuroForge selection needs discovery during execution to check
     profile-specific limits. No context is silently removed at either stage.
     """
+    if selected_model() == AUTO_MODEL and not _uses_public_api():
+        raise ValueError(
+            "Choose the model identifier supplied by your custom provider; "
+            "automatic selection is only available at NeuroForge."
+        )
     body = _chat_body(messages, max_tokens)
     _transport().request_body(body, _endpoint(""))
 
@@ -936,9 +954,14 @@ def health_check() -> tuple[bool, str]:
         if not models:
             return False, "The API returned no available models. Local workflows remain available."
         model = resolve_model(models)
-        label = ("dense Gemma 4 E4B; text preview" if model == DENSE_MODEL
-                 else "native ERAIS; short text preview" if model == NATIVE_MODEL
-                 else "Fracture hybrid" if model == MODEL else "configured model")
+        public_api = _uses_public_api()
+        label = (
+            "dense Gemma 4 E4B; text preview" if public_api and model == DENSE_MODEL
+            else "native ERAIS; short text preview"
+            if public_api and model == NATIVE_MODEL
+            else "Fracture hybrid" if public_api and model == MODEL
+            else "configured model"
+        )
         return True, f"Connected. Selected model: {model} ({label}). " \
                      "Model discovery succeeded; generation has not been tested."
     except (APIError, ValueError) as exc:

@@ -82,6 +82,7 @@ jobs:
       - run: python tools/garden_practice_browser.py
       - run: python tools/campaign_guidance_browser.py
       - run: python tools/native_browser.py
+      - run: python tools/provider_readiness_browser.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

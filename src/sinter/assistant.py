@@ -118,8 +118,10 @@ def preview(store: CampaignStore, payload: dict) -> dict:
                'The selected context fits the known connection limits.'}
     except ValueError as exc:
         fit = {'allowed': False, 'message': str(exc)}
-    if (connection['api_url'] == client.BASE_URL
-            and connection['model'] == client.AUTO_MODEL and size > 2048):
+    if (connection['provider'] == client.OPENAI_COMPATIBLE
+            and client.uses_neuroforge_api(connection['api_url'])
+            and connection['model'] == client.AUTO_MODEL
+            and size > client.NATIVE_PROFILE.max_question_bytes):
         fit = {'allowed': False, 'message':
                'This context exceeds the native ERAIS preview size. Select fewer '
                'records, or check and choose an exact model in Settings '
