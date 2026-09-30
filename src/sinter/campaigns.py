@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Iterator
 
 from .client import safe_url
+from .campaign_capacity import text_characters
 from .evidence import literal, utc_now
 
 SCHEMA = "sinter-campaign/v1"
@@ -655,19 +656,7 @@ def validate(data: object) -> dict:
             "evidence_links": evidence_links,
         })
     # Field and row limits bound validation before any combined encoding occurs.
-    strings = [result["title"], result["organisation"], result["objective"]]
-    strings.extend(value for key in ROW_LIMITS for row in result[key]
-                   for value in row.values() if isinstance(value, str))
-    strings.extend(value for row in result["communications"]
-                   for link in row["evidence_links"]
-                   for value in link.values() if isinstance(value, str))
-    strings.extend(value for row in result["assets"] for value in row.values()
-                   if isinstance(value, str))
-    strings.extend(value for row in result["assets"] for reference in row["references"]
-                   for value in reference.values() if isinstance(value, str))
-    strings.extend(opportunity for row in result["assets"]
-                   for opportunity in row["funding_opportunities"])
-    if sum(map(len, strings)) > MAX_TEXT_CHARACTERS:
+    if text_characters(result) > MAX_TEXT_CHARACTERS:
         raise ValueError("The campaign exceeds 200,000 text characters. "
                          "Split it into smaller campaigns.")
     encoded = json.dumps(result, ensure_ascii=False, allow_nan=False)

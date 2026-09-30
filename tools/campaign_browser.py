@@ -78,6 +78,56 @@ class CampaignChecks(DeliverableChecks):
         page.get_by_role('button', name='Save campaign', exact=True).click()
         expect(page.get_by_text('Campaign saved. Answers, costs, checks and actions will be here when you return.', exact=True)).to_be_visible()
 
+    def capacity_and_recovery(self, page):
+        from playwright.sync_api import expect
+        document = {
+            'title': 'Fictional large product portfolio',
+            'assets': [{'name': f'Fictional product {index}',
+                        'public_summary': 'x' * 3000} for index in range(55)],
+            'sources': [{'title': f'Fictional retained source {index}',
+                         'notes': 's' * 6000} for index in range(4)],
+        }
+        self.import_fixture(page, document)
+        capacity = page.get_by_label('Campaign capacity', exact=True)
+        expect(capacity).to_have_attribute('data-capacity-state', 'near')
+        expect(capacity).to_contain_text('Nearly full')
+        expect(capacity).to_contain_text('Saving checks normalized data')
+        self.save(page)
+        page.get_by_role('tab', name='Communications', exact=True).click()
+        page.get_by_role('button', name='Add communication', exact=True).click()
+        message = page.get_by_label('Message text or summary', exact=True)
+        message.fill('Fictional unsaved evidence ' + 'x' * 19000)
+        expect(capacity).to_have_attribute('data-capacity-state', 'over')
+        with page.expect_response(lambda response: response.url.endswith('/api/campaigns/save')
+                                  and response.status == 400) as rejected:
+            page.get_by_role('button', name='Save campaign', exact=True).click()
+        assert '200,000 text characters' in rejected.value.json()['error']
+        expect(page.get_by_role('alert')).to_contain_text('200,000 text characters')
+        expect(message).to_have_value('Fictional unsaved evidence ' + 'x' * 19000)
+        self.transfers(page)
+        with page.expect_download() as downloaded:
+            page.get_by_role('button', name='Export campaign backup', exact=True).click()
+        backup = self.artifacts / 'campaign-capacity-unsaved-backup.json'
+        downloaded.value.save_as(str(backup))
+        retained = json.loads(backup.read_text())
+        assert len(retained['assets']) == 55
+        assert retained['communications'][0]['content'] == 'Fictional unsaved evidence ' + 'x' * 19000
+        message.fill('Explicitly reduced fictional scope; original oversized backup retained.')
+        self.save(page)
+        self.goto(page, 'campaigns')
+        expect(page.get_by_label('Campaign capacity', exact=True)).to_have_attribute(
+            'data-capacity-state', 'near')
+        page.get_by_role('tab', name='Communications', exact=True).click()
+        page.locator('.campaign-communication summary').click()
+        expect(page.get_by_label('Message text or summary', exact=True)).to_have_value(
+            'Explicitly reduced fictional scope; original oversized backup retained.')
+        self.screenshot(page, 'capacity-recovered', full_page=True)
+        # Only this asserted rejection is expected; unrelated browser errors fail.
+        self.errors[:] = [row for row in self.errors if not (
+            row.get('check') == 'campaign-capacity-and-recovery'
+            and row.get('url') == self.base + '/api/campaigns/save'
+            and row['error'] == 'Failed to load resource: the server responded with a status of 400 (Bad Request)')]
+
     def workflow(self, page):
         from playwright.sync_api import expect
         self.import_fixture(page)
@@ -815,8 +865,10 @@ def main(argv=None):
                 checks.check('campaign-clarification-signer-isolation', checks.clarification_signer_is_campaign_scoped)
                 checks.check('campaign-communications-and-clarification-link', checks.communications_and_clarification_link)
                 checks.check('campaign-communication-source-snapshot', checks.communication_source_snapshot)
+                checks.check('campaign-capacity-and-recovery', checks.capacity_and_recovery)
                 receipt = {'schema': 'sinter-campaign-browser/v1', 'checks': checks.results,
-                           'expected_rejections': ['A stale campaign revision returns HTTP 400 and preserves the user’s edits.'],
+                           'expected_rejections': ['A stale campaign revision returns HTTP 400 and preserves the user’s edits.',
+                                                   'An oversized campaign returns HTTP 400; a backup retains all pending text and an explicit reduced-scope retry succeeds.'],
                            'screenshots': checks.screenshots, 'browser_errors': checks.errors, 'external_requests': checks.external,
                            'passed': all(row['passed'] for row in checks.results) and not checks.errors and not checks.external}
                 (artifacts / 'campaign-summary.json').write_text(json.dumps(receipt, indent=2), encoding='utf-8')

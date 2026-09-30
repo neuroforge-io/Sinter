@@ -15,6 +15,8 @@ import {campaignActionRowsForCalendar, campaignActionRowsForPlan,
 import {gardenGuide, GARDEN_PRACTICE} from './garden-practice.js';
 import {campaignCommunicationView, COMMUNICATION_ORDERS}
   from './campaign-communication-view.js';
+import {campaignCapacity, CAMPAIGN_TEXT_LIMIT, CAMPAIGN_BYTE_LIMIT}
+  from './campaign-capacity.js';
 
 const blank = () => ({schema: 'sinter-campaign/v1', title: '', organisation: '', objective: '',
   signatory: '', sender_role: '', contact_details: '',
@@ -175,6 +177,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   const root = h('div', {class: 'campaign-page'}), shelf = h('div', {class: 'campaign-shelf'});
   const feedback = h('div', {'aria-live': 'polite'}), status = h('span', {class: 'campaign-save-state', role: 'status'});
   const summary = h('div', {class: 'campaign-summary'}), editor = h('div'), output = h('div', {id: 'campaign-output', class: 'campaign-output'});
+  const capacity = h('p', {class: 'fine', 'aria-label': 'Campaign capacity'});
   const decisionCard = h('section', {class: 'campaign-decision-card', 'aria-label': 'Campaign decision and next move'});
   const savedList = h('div', {class: 'campaign-saved-list'});
   let knownCampaigns = [];
@@ -398,6 +401,15 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   });
 
   function renderSummary() {
+    const size = campaignCapacity(document);
+    const number = value => new Intl.NumberFormat('en-AU').format(value);
+    capacity.dataset.capacityState = size.state;
+    capacity.className = size.state === 'within' ? 'fine' : 'notice warning';
+    capacity.textContent = `Editor estimate: ${number(size.characters)} of ${number(CAMPAIGN_TEXT_LIMIT)} text characters; `
+      + `${number(size.bytes)} of ${number(CAMPAIGN_BYTE_LIMIT)} bytes. `
+      + (size.state === 'over' ? 'Above the save limit. Export a backup to keep every edit, then split the work into smaller campaigns. '
+        : size.state === 'near' ? 'Nearly full. Back up before adding more material; consider a separate campaign for the next case. ' : '')
+      + 'Saving checks normalized data and may add record fields. Backups retain unsaved edits.';
     const actionable = new Map(document.opportunities
       .filter(row => isOpportunityActionable(row.status))
       .map(row => [row.name, row]));
@@ -1788,7 +1800,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }, 'danger')));
   root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'CAMPAIGNS'), h('h2', {}, 'Keep the whole application together.'),
     h('p', {}, 'Compare opportunities, map products and IP questions to funding routes, prepare answers and turn missing details into next actions. Saved locally, with your sources beside the work.')),
-    practiceGuide, decisionCard, savedPanel, shelf, summary, editor, h('div', {class: 'campaign-save-bar'}, h('div', {class: 'button-row'}, saveButton, prepareButton), status), feedback, transfers, output);
+    practiceGuide, decisionCard, savedPanel, shelf, summary, capacity, editor, h('div', {class: 'campaign-save-bar'}, h('div', {class: 'button-row'}, saveButton, prepareButton), status), feedback, transfers, output);
   status.textContent = dirty ? 'Unsaved changes' : savedId ? 'Saved on this computer' : 'Not saved yet';
   renderEditor(); renderSummary();
   const existing = await refreshShelf();
