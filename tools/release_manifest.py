@@ -133,6 +133,51 @@ def verify_account_capability(row, target):
                 raise ValueError("Bundled account licence provenance is invalid.")
 
 
+def verify_target_receipt(
+    path: Path, output: Path, commit: str, version: str = __version__
+) -> dict:
+    """Validate one actual installer without granting full-release qualification."""
+    row = json.loads(path.read_text(encoding="utf-8"))
+    system = row["system"].lower()
+    arch = row["target_arch"]
+    key = (system, arch)
+    if key not in EXPECTED:
+        raise ValueError("Unexpected or duplicate installer target.")
+    if row.get("pointer_bits") != (32 if arch in {"x86", "armv7"} else 64):
+        raise ValueError("An installer runtime has the wrong pointer size.")
+    if (
+        row.get("passed") is not True
+        or row.get("frozen") is not True
+        or row.get("version") != version
+        or row.get("source_commit") != commit
+    ):
+        raise ValueError("An installer receipt does not match the release source.")
+    name = row["installer"]
+    if Path(name).name != name or not name.startswith(f"Sinter-{version}-"):
+        raise ValueError("Invalid installer filename.")
+    package = output / name
+    if hashlib.sha256(package.read_bytes()).hexdigest() != row["installer_sha256"]:
+        raise ValueError("An installer digest does not match its test receipt.")
+    if not row.get("installer_test"):
+        raise ValueError("Installed-app validation is missing.")
+    verify_installed_receipt(row)
+    verify_account_capability(row, key)
+    if system == "linux":
+        if row.get("linux_shared_library_notices_verified") is not True:
+            raise ValueError("Bundled Linux library notices were not verified.")
+        try:
+            declared = library_records(row.get("bundled_dependencies", []))
+        except RuntimeError as error:
+            raise ValueError(str(error)) from error
+        if row.get("native_shared_library_files") != declared:
+            raise ValueError("Bundled Linux library notice coverage does not match.")
+        try:
+            verify_debian_archive(package, row["bundled_dependencies"])
+        except RuntimeError as error:
+            raise ValueError(str(error)) from error
+    return row
+
+
 def assemble(output: Path, source: Path, commit: str):
     receipts = sorted(output.glob("*-test.json"))
     if len(receipts) != len(EXPECTED):
@@ -140,47 +185,11 @@ def assemble(output: Path, source: Path, commit: str):
     targets = set()
     records = []
     for path in receipts:
-        row = json.loads(path.read_text(encoding="utf-8"))
-        system = row["system"].lower()
-        arch = row["target_arch"]
-        key = (system, arch)
-        if key not in EXPECTED or key in targets:
+        row = verify_target_receipt(path, output, commit)
+        key = (row["system"].lower(), row["target_arch"])
+        if key in targets:
             raise ValueError("Unexpected or duplicate installer target.")
-        if row.get("pointer_bits") != (32 if arch in {"x86", "armv7"} else 64):
-            raise ValueError("An installer runtime has the wrong pointer size.")
         targets.add(key)
-        if (
-            row.get("passed") is not True
-            or row.get("frozen") is not True
-            or row.get("version") != __version__
-            or row.get("source_commit") != commit
-        ):
-            raise ValueError("An installer receipt does not match the release source.")
-        name = row["installer"]
-        if Path(name).name != name or not name.startswith(f"Sinter-{__version__}-"):
-            raise ValueError("Invalid installer filename.")
-        package = output / name
-        if hashlib.sha256(package.read_bytes()).hexdigest() != row["installer_sha256"]:
-            raise ValueError("An installer digest does not match its test receipt.")
-        if not row.get("installer_test"):
-            raise ValueError("Installed-app validation is missing.")
-        verify_installed_receipt(row)
-        verify_account_capability(row, key)
-        if system == "linux":
-            if row.get("linux_shared_library_notices_verified") is not True:
-                raise ValueError("Bundled Linux library notices were not verified.")
-            try:
-                declared = library_records(row.get("bundled_dependencies", []))
-            except RuntimeError as error:
-                raise ValueError(str(error)) from error
-            if row.get("native_shared_library_files") != declared:
-                raise ValueError(
-                    "Bundled Linux library notice coverage does not match."
-                )
-            try:
-                verify_debian_archive(package, row["bundled_dependencies"])
-            except RuntimeError as error:
-                raise ValueError(str(error)) from error
         records.append(row)
     if targets != EXPECTED:
         raise ValueError("Not all required installer targets passed.")
