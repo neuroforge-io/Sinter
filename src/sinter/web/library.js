@@ -1,17 +1,27 @@
 import {h, button, field, check, notice, selectField, safeLink, dateTime, announce, download} from './ui.js';
 import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
+import {unsavedReportDrafts} from './report-drafts.js';
 
 export async function library({onEditProject} = {}) {
   const root = h('div');
   const list = h('div', {class: 'stack non-print'}), opened = h('div');
   const feedback = h('div', {class: 'non-print', 'aria-live': 'polite'});
+  const pending = h('section', {class: 'card stack non-print', 'aria-label': 'Unsaved document edits'});
   async function refresh() {
+    const drafts = unsavedReportDrafts();
+    pending.hidden = !drafts.length;
+    pending.replaceChildren(h('h3', {}, 'Draft edits in this session'),
+      notice('These edits are kept while you move between pages. Open each draft, apply any pending text, then choose Save to this computer before closing Sinter.'),
+      ...drafts.map(({report, editor}) => h('article', {}, h('strong', {}, report.document_title || report.title || 'Untitled draft'),
+        h('p', {class: 'muted'}, editor ? 'Text is still waiting to be applied.' : 'Applied edits have not been saved.'),
+        button('Open unsaved draft', () => { opened.replaceChildren(renderReport(report, {recovered: true,
+          onSaved: () => refresh().catch(error => feedback.replaceChildren(notice('The draft was saved, but refreshing the list failed: ' + error.message, 'error')))})); opened.scrollIntoView({block: 'start'}); }))));
     const {reports} = await request('/api/reports');
     list.replaceChildren(...reports.map(report => h('article', {class: 'card'},
       h('h3', {}, report.title), h('p', {class: 'muted'}, 'Saved ' + dateTime(report.created_at)),
       h('div', {class: 'button-row'}, button('Open draft', async () => {
-        try { const document = await request(`/api/reports/${report.id}`); opened.replaceChildren(...[document.input_snapshot && onEditProject ? h('div', {class: 'button-row non-print'}, button('Edit project inputs', () => onEditProject(document.input_snapshot))) : null, renderReport(document)].filter(Boolean)); opened.scrollIntoView({block: 'start'}); }
+        try { const document = await request(`/api/reports/${report.id}`); opened.replaceChildren(...[document.input_snapshot && onEditProject ? h('div', {class: 'button-row non-print'}, button('Edit project inputs', () => onEditProject(document.input_snapshot))) : null, renderReport(document, {onSaved: () => refresh().catch(error => feedback.replaceChildren(notice('The draft was saved, but refreshing the list failed: ' + error.message, 'error')))} )].filter(Boolean)); opened.scrollIntoView({block: 'start'}); }
         catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
       }), button('Delete saved copy', async () => {
         if (!window.confirm(`Delete the saved copy of "${report.title}"? Downloaded copies are not deleted.`)) return;
@@ -24,7 +34,7 @@ export async function library({onEditProject} = {}) {
   root.append(h('header', {class: 'page-intro non-print'}, h('h2', {}, 'My workspace'),
     h('p', {}, 'Explicitly saved drafts, with their original evidence packs.')),
     h('div', {class: 'non-print'}, notice('Saved reports stay in your local Sinter folder, not a cloud account. They are not encrypted. Export important work and protect access to this computer.')),
-    feedback, list, opened);
+    feedback, pending, list, opened);
   await refresh();
   return root;
 }

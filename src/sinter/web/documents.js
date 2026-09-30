@@ -147,10 +147,10 @@ export function downloadDocument(report) {
 }
 
 /** Shared copy, readable export and explicit editing for every kind of document. */
-export function documentActions(report, {onChange = () => {}, save} = {}) {
+export function documentActions(report, {onChange = () => {}, onEditorChange = () => {}, editorSeed, save} = {}) {
   const isCampaign = report.workflow === 'campaign';
   const feedback = h('div', {class: 'document-feedback', 'aria-live': 'polite'});
-  const editor = h('div', {class: 'document-editor non-print', hidden: true});
+  const editor = h('div', {class: 'document-editor non-print', hidden: !editorSeed?.open});
   const privateExport = isCampaign
     ? check('Include full communication records and personal contact details '
       + 'in this download', false)
@@ -164,15 +164,16 @@ export function documentActions(report, {onChange = () => {}, save} = {}) {
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
     finally { word.disabled = false; }
   });
-  const input = field(isCampaign ? 'Edit the decision brief' : 'Edit your draft', 'textarea', '', 'Changes are saved with the draft. The original output and source evidence are retained.', {rows: 18, maxLength: 500000});
-  const edit = button(isCampaign ? 'Edit decision brief' : 'Edit draft', () => { input.input.value = documentMarkdown(report); editor.hidden = false; input.input.focus(); }, 'quiet');
+  const input = field(isCampaign ? 'Edit the decision brief' : 'Edit your draft', 'textarea', editorSeed?.text || '', 'Apply edits, then save the draft to keep them after closing Sinter. The original output and source evidence are retained.', {rows: 18, maxLength: 500000});
+  input.input.addEventListener('input', () => onEditorChange(input.input.value, true));
+  const edit = button(isCampaign ? 'Edit decision brief' : 'Edit draft', () => { if (editor.hidden) input.input.value = documentMarkdown(report); editor.hidden = false; input.input.focus(); }, 'quiet');
   const apply = button('Apply edits', () => {
     if (!input.input.value.trim()) { feedback.replaceChildren(notice('Keep some document text, or cancel to retain the current draft.', 'error')); return; }
     if (input.input.value.length > input.input.maxLength) { feedback.replaceChildren(notice('Keep this draft under 500,000 characters before applying edits.', 'error')); return; }
     report.document_edits = {markdown: input.input.value, edited_at: new Date().toISOString(), author: 'user'};
     editor.hidden = true; onChange(); feedback.replaceChildren(notice('Edits applied. Save this draft to keep them.', 'success')); announce('Draft updated. Original evidence retained.'); exports.querySelector('summary').focus();
   }, 'primary');
-  editor.append(input.wrap, h('div', {class: 'button-row'}, apply, button('Cancel edits', () => { editor.hidden = true; exports.querySelector('summary').focus(); })));
+  editor.append(input.wrap, h('div', {class: 'button-row'}, apply, button('Cancel edits', () => { editor.hidden = true; onEditorChange('', false); exports.querySelector('summary').focus(); })));
   const evidencePack = button(
     isCampaign ? 'Download redacted evidence pack' : 'Download evidence pack', () => {
     const includedPrivate = Boolean(privateExport?.input.checked);

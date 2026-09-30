@@ -12,6 +12,7 @@ import {library, watches} from './library.js';
 import {playground} from './playground.js';
 import {tools, buildNavigation, installToolFinder} from './navigation.js';
 import {rememberDraft, shouldWarnBeforeExit} from './draft-state.js';
+import {hasUnsavedReportDrafts, clearReportDrafts} from './report-drafts.js';
 
 const view = document.getElementById('view');
 const drafts = new Map();
@@ -113,12 +114,12 @@ document.querySelector('.skip-link').addEventListener('click', event => {
   event.preventDefault(); document.getElementById('content').focus();
 });
 window.addEventListener('hashchange', route);
-window.addEventListener('beforeunload', event => { if (shouldWarnBeforeExit(dirtyDrafts, busy)) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (shouldWarnBeforeExit(dirtyDrafts, busy) || hasUnsavedReportDrafts()) { event.preventDefault(); event.returnValue = ''; } });
 session().then(value => {
   document.getElementById('version').textContent = `v${value.version} / Apache 2.0`;
   if (value.desktop) navigation.append(button('Quit Sinter', async () => {
-    if (shouldWarnBeforeExit(dirtyDrafts, busy) && !confirm('Quit Sinter? Download or save your work first. Unsaved work will be lost.')) return;
-    try { await request('/api/desktop/quit', {data: {}}); busy = false; drafts.clear(); dirtyDrafts.clear(); view.replaceChildren(notice('Sinter has stopped. You can close this window.')); }
+    if ((shouldWarnBeforeExit(dirtyDrafts, busy) || hasUnsavedReportDrafts()) && !confirm('Quit Sinter? Download or save your work first. Unsaved work will be lost.')) return;
+    try { await request('/api/desktop/quit', {data: {}}); busy = false; drafts.clear(); dirtyDrafts.clear(); clearReportDrafts(); view.replaceChildren(notice('Sinter has stopped. You can close this window.')); }
     catch (error) { announce(error.message); }
   }, 'quiet'));
 }).catch(() => {});

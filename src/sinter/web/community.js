@@ -5,7 +5,24 @@ import {request} from './api.js';
 export function communityPage({remember, seed = {}}) {
   const title = field('Plan name', 'text', seed.title || '', 'For a volunteer roster, event checklist or committee action list.', {maxLength: 200});
   const rows = h('div', {class: 'stack'}), entries = [], output = h('div', {'aria-live': 'polite'});
-  const changed = () => remember('tools', {title: title.input.value, actions: entries.map(row => ({action: row.action.input.value, owner: row.owner.input.value, due: row.due.input.value, status: row.status.input.value}))});
+  const planStatus = h('div', {'aria-live': 'polite'});
+  let inputRevision = 0, preparedRevision = null, preparing = false;
+  function updatePlanControls() {
+    const stale = preparedRevision !== null && preparedRevision !== inputRevision;
+    output.dataset.stale = String(stale);
+    for (const control of output.querySelectorAll('button')) control.disabled = stale || preparing;
+  }
+  function invalidatePlan() {
+    updatePlanControls();
+    if (preparedRevision !== null && preparedRevision !== inputRevision) {
+      planStatus.replaceChildren(notice('This plan reflects earlier inputs. Prepare my action plan again before saving or downloading it. Your current edits and the earlier plan are kept here.', 'warning'));
+    }
+  }
+  const changed = () => {
+    inputRevision++;
+    remember('tools', {title: title.input.value, actions: entries.map(row => ({action: row.action.input.value, owner: row.owner.input.value, due: row.due.input.value, status: row.status.input.value}))});
+    invalidatePlan();
+  };
   title.input.addEventListener('input', changed);
   function add(value = {}) {
     if (entries.length >= 200) return;
@@ -20,16 +37,20 @@ export function communityPage({remember, seed = {}}) {
   }
   (seed.actions?.length ? seed.actions : [{}]).forEach(add);
   const prepare = button('Prepare my action plan', async () => {
-    prepare.disabled = true;
+    const submittedRevision = inputRevision;
+    preparing = true; prepare.disabled = true; updatePlanControls();
+    planStatus.replaceChildren(notice('Preparing from the current inputs. Editing them will require a new plan before you save or download.'));
     try {
       const result = await request('/api/community/plan', {data: {title: title.input.value, actions: entries.map(row => ({action: row.action.input.value, owner: row.owner.input.value, due: row.due.input.value, status: row.status.input.value}))}});
       output.replaceChildren(h('div', {class: 'button-row'}, button('Download spreadsheet CSV', () => download('sinter-action-plan.csv', result.csv, 'text/csv')),
         button('Download calendar dates', () => download('sinter-action-plan.ics', result.calendar, 'text/calendar')),
         button('Download plan JSON', () => download('sinter-action-plan.json', JSON.stringify(result, null, 2), 'application/json')),
         button('Save plan in My workspace', async () => { try { await request('/api/reports', {data: {report: result}}); announce('Plan saved.'); } catch (error) { output.prepend(notice(error.message, 'error')); } })), markdown(result.markdown));
-      announce('Action plan ready.');
-    } catch (error) { output.replaceChildren(notice(error.message, 'error')); }
-    finally { prepare.disabled = false; }
+      preparedRevision = submittedRevision;
+      planStatus.replaceChildren(); invalidatePlan();
+      announce(submittedRevision === inputRevision ? 'Action plan ready.' : 'Inputs changed during preparation. Prepare the plan again before saving or downloading.');
+    } catch (error) { planStatus.replaceChildren(notice(error.message + ' Your inputs and any earlier prepared plan are still here.', 'error')); }
+    finally { preparing = false; prepare.disabled = false; updatePlanControls(); }
   }, 'primary');
   const before = field('Earlier wording', 'textarea'), after = field('Updated wording', 'textarea'), comparison = h('div', {'aria-live': 'polite'});
   const compare = button('Show exactly what changed', async () => {
@@ -43,7 +64,7 @@ export function communityPage({remember, seed = {}}) {
   });
   return h('div', {class: 'stack'}, h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'LESS ADMIN. MORE DOING.'),
     h('h2', {}, 'Small tools. Real time saved.'), h('p', {}, 'Organise volunteers and tasks, export proposed dates and compare document revisions. Everything here stays local.')),
-    title.wrap, rows, h('div', {class: 'button-row'}, button('Add another action', () => { add(); changed(); }), prepare), output,
+    title.wrap, rows, h('div', {class: 'button-row'}, button('Add another action', () => { add(); changed(); }), prepare), planStatus, output,
     h('details', {class: 'card'}, h('summary', {}, 'Compare two versions of a document'),
       h('div', {class: 'form-grid'}, before.wrap, after.wrap), compare, comparison));
 }

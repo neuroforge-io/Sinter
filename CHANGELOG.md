@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased - 0.5.4rc2.dev0
+
+- Preserve a pending casebook source's title, text, date and link while changing
+  pages. Saving, preparing and exporting explicitly require adding or clearing
+  that source, preventing silent omissions. Pending text protects application exit.
+- Keep applied and unapplied document edits available in My workspace during the
+  browser session. Protect them independently of saved project inputs; retain
+  originals and incomplete status. Recovered drafts explain that later input
+  changes are not included. Failed and delayed saves leave newer edits unsaved.
+- Retire action-plan downloads and saves after input changes, including edits
+  during preparation. Retain the previous result and current inputs until explicit
+  preparation succeeds. Focus a completed casebook report so it is easy to find.
+- These changes follow the frozen `cd928ba` 0.5.4rc1 candidate. They do not modify
+  that candidate's assets or inherit its installed-platform qualification.
+
 ## 0.5.4rc1 - local workflow and native API candidate
 
 This is a new candidate, not an update to the published v0.5.3 tag. Candidate

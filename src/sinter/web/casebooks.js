@@ -3,6 +3,7 @@ import {h, field, selectField, check, button, notice, download, dateTime} from '
 import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
 import {senderFields} from './profile.js';
+import {hasPendingSource, PENDING_SOURCE_MESSAGE} from './casebook-drafts.js';
 
 const example = () => ({schema: 'sinter-casebook/v1', title: 'Fictional P&C community evening',
   questions: 'Has the hall booking been confirmed?\nWhat access arrangements need checking?\nWho agreed to organise the volunteer roster?\nWhat is the insurance excess?',
@@ -17,11 +18,12 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   const sender = senderFields(seed.book || {}, settings);
   const recipient = field('Recipient or audience', 'text', seed.book?.recipient || '', '', {maxLength: 200});
   let savedId = seed.savedId || null, revision = seed.revision || null;
+  let bookDirty = Boolean(seed.dirty);
   let docs = [...(seed.book?.documents || [])], busy = false, activeJob = null;
   const title = field('Project name', 'text', seed.book?.title || '', 'For example: school garden proposal or volunteer handover.', {maxLength: 200});
   const questions = field('What do you need to find out?', 'textarea', seed.book?.questions || '', 'One question per line, up to 20. Missing answers stay visible.', {maxLength: 12000, rows: 5});
   const format = selectField('Prepare a', [['brief', 'Briefing note'], ['enquiry', 'Enquiry letter'], ['agenda', 'Agenda item'], ['handover', 'Volunteer handover']], seed.book?.document_type || 'brief');
-  const status = h('div', {'aria-live': 'polite'}), output = h('div', {class: 'stack'}), sources = h('div', {class: 'stack'});
+  const status = h('div', {'aria-live': 'polite'}), output = h('div', {class: 'stack', id: 'casebook-output'}), sources = h('div', {class: 'stack'});
   const catalogue = h('div', {class: 'casebook-shelf'}), totals = h('p', {class: 'muted'});
   const stop = button('Stop this task', async () => {
     if (!activeJob) return;
@@ -32,16 +34,42 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
     } catch (error) { stop.disabled = false; status.replaceChildren(notice(error.message + ' Check Recent activity before starting another task.', 'error')); }
   }, 'quiet');
   stop.hidden = true;
-  const name = field('Source title', 'text', '', 'Give each note or reference an identifiable name.', {maxLength: 300});
-  const contents = field('Paste a note, policy or reference', 'textarea', '', 'Original wording is preserved. Links are not followed automatically.', {maxLength: 200000, rows: 5});
-  const sourceDate = field('Source date (optional)', 'date'), sourceURL = field('Source link (optional)', 'url', '', 'Only add a link you trust. The text above is the actual evidence.');
+  const name = field('Source title', 'text', seed.pendingSource?.title || '', 'Give each note or reference an identifiable name.', {maxLength: 300});
+  const contents = field('Paste a note, policy or reference', 'textarea', seed.pendingSource?.content || '', 'Original wording is preserved. Links are not followed automatically.', {maxLength: 200000, rows: 5});
+  const sourceDate = field('Source date (optional)', 'date', seed.pendingSource?.date || ''), sourceURL = field('Source link (optional)', 'url', seed.pendingSource?.url || '', 'Only add a link you trust. The text above is the actual evidence.');
   const upload = field('Add text files', 'file', '', 'TXT, Markdown, UTF-8 notes or code. Up to 300 documents and 2 million characters. No PDF/DOCX extraction.', {multiple: true});
   const backup = field('Restore a casebook backup', 'file', '', 'Opens as a new unsaved project; existing casebooks are not overwritten.', {accept: '.json'});
   const editor = h('fieldset', {class: 'casebook-editor'});
   const value = () => ({schema: 'sinter-casebook/v1', title: title.input.value, questions: questions.input.value,
     document_type: format.input.value, recipient: recipient.input.value, ...sender.values(), documents: docs});
+  const pendingSource = () => ({title: name.input.value, content: contents.input.value,
+    date: sourceDate.input.value, url: sourceURL.input.value});
+  const sourcePanel = h('details', {class: 'card', open: !docs.length || hasPendingSource(pendingSource())});
+  const pendingNotice = h('p', {class: 'muted', role: 'status'});
+  const pendingMessage = () => hasPendingSource(pendingSource())
+    ? 'This source is waiting to be added. Its text is kept while you move between pages.' : '';
+  pendingNotice.textContent = pendingMessage();
+  function rememberCurrent() {
+    const pending = pendingSource();
+    pendingNotice.textContent = pendingMessage();
+    remember?.('casebooks', {book: value(), savedId, revision, dirty: bookDirty, pendingSource: pending},
+      {dirty: bookDirty || hasPendingSource(pending)});
+  }
+  function clearPending() {
+    name.input.value = ''; contents.input.value = ''; sourceDate.input.value = ''; sourceURL.input.value = '';
+    rememberCurrent();
+  }
+  function admitPending() {
+    if (!hasPendingSource(pendingSource())) return;
+    sourcePanel.open = true; contents.input.focus();
+    throw new Error(PENDING_SOURCE_MESSAGE);
+  }
+  function canReplace() {
+    return !(bookDirty || hasPendingSource(pendingSource()))
+      || confirm('Replace the unsaved editor? Save your project and add or clear the pending source first if you need to keep it.');
+  }
   function changed({dirty = true} = {}) {
-    remember?.('casebooks', {book: value(), savedId, revision}, {dirty});
+    bookDirty = dirty; rememberCurrent();
     output.replaceChildren();
   }
   function drawSources() {
@@ -60,6 +88,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
     recipient.input.value = book.recipient || '';
     for (const [key, entry] of Object.entries(sender.entries)) entry.input.value = book[key] ?? '';
     savedId = id; revision = rev;
+    clearPending(); sourcePanel.open = !docs.length;
     sender.panel.dispatchEvent(new Event('input', {bubbles: true}));
     changed({dirty: !id}); drawSources();
   }
@@ -70,15 +99,16 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
       h('strong', {}, row.title), h('small', {class: 'muted'}, `Revision ${row.revision} / ${dateTime(row.updated_at)}`),
       button('Open project', async () => {
         if (busy) return;
-        if (docs.length && !confirm('Open this saved project? Export or save any current edits first.')) return;
+        if (!canReplace()) return;
         try { const result = await request('/api/casebooks/' + row.id); load(result.document, result.id, result.revision); status.replaceChildren(notice('Opened locally. Originals remain available below.')); }
         catch (error) { status.replaceChildren(notice(error.message, 'error')); }
       }, 'quiet')));
   }
   async function save() {
+    admitPending();
     const result = await request('/api/casebooks/save', {data: {document: value(), id: savedId, revision}});
     savedId = result.id; revision = result.revision; docs = result.document.documents;
-    remember?.('casebooks', {book: value(), savedId, revision}, {dirty: false});
+    bookDirty = false; rememberCurrent();
     await refresh(); drawSources(); return result;
   }
   function lock(active) { busy = active; editor.disabled = active; setBusy?.(active); }
@@ -93,6 +123,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
       status.replaceChildren(notice('Task started. You can recover its result in Recent activity if this window loses contact.'));
       const report = await waitForJob(result.id, job => status.replaceChildren(notice(job.message)));
       drawReport(report); status.replaceChildren(notice('Ready to review. Source matches do not establish answers.', 'success'));
+      output.tabIndex = -1; output.scrollIntoView({block: 'start'}); output.focus({preventScroll: true});
     } catch (error) { status.replaceChildren(notice(error.message, 'error')); }
     finally { activeJob = null; stop.hidden = true; lock(false); }
   }
@@ -120,6 +151,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   recipient.input.addEventListener('input', changed);
   sender.panel.addEventListener('input', changed);
   format.input.addEventListener('change', changed);
+  for (const entry of [name, contents, sourceDate, sourceURL]) entry.input.addEventListener('input', rememberCurrent);
   upload.input.addEventListener('change', async () => {
     if (busy) return;
     const batch = [], files = [...upload.input.files];
@@ -147,7 +179,7 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
     try {
       const file = backup.input.files[0]; if (!file) return;
       if (file.size > 10000000) throw new Error('This backup is too large.');
-      if (docs.length && !confirm('Replace the current unsaved editor with this backup? Saved projects are unchanged.')) return;
+      if (!canReplace()) return;
       const result = await request('/api/casebooks/validate', {data: {document: JSON.parse(await file.text())}});
       load(result.document); status.replaceChildren(notice('Backup opened as a new unsaved project.'));
     } catch (error) { status.replaceChildren(notice(error.message, 'error')); }
@@ -155,26 +187,28 @@ export async function casebooksPage({setBusy, remember, seed = {}} = {}) {
   });
   editor.append(h('legend', {}, 'Bring the fragments together'), title.wrap, questions.wrap,
     h('div', {class: 'casebook-actions'}, button('Try a fictional community example', () => {
-      if (docs.length && !confirm('Replace the unsaved editor with a fictional example? Saved projects are unchanged.')) return;
+      if (!canReplace()) return;
       load(example()); status.replaceChildren(notice('Fictional example. No real venue, person or decision is represented.'));
-    }), button('New project', () => { if (!docs.length || confirm('Clear the editor? Save or export edits first.')) load({title: '', questions: '', documents: []}); }, 'quiet')),
-    h('details', {class: 'card', open: !docs.length}, h('summary', {}, 'Add notes and references'), name.wrap, contents.wrap,
-      h('div', {class: 'form-grid'}, sourceDate.wrap, sourceURL.wrap),
-      button('Add this source', () => {
-        if (!name.input.value.trim() || !contents.input.value.trim()) { status.replaceChildren(notice('Give the source a title and some original text.', 'error')); return; }
-        if (docs.length >= 300 || docs.reduce((n, row) => n + row.content.length, contents.input.value.length) > 2000000) { status.replaceChildren(notice('The collection limit is reached. Start a separate casebook.', 'error')); return; }
-        docs.push({title: name.input.value, content: contents.input.value, date: sourceDate.input.value, url: sourceURL.input.value});
-        name.input.value = ''; contents.input.value = ''; sourceDate.input.value = ''; sourceURL.input.value = ''; changed(); drawSources();
-      }), upload.wrap), totals, sources, format.wrap, recipient.wrap, sender.panel,
+    }), button('New project', () => { if (canReplace()) load({title: '', questions: '', documents: []}); }, 'quiet')),
+    sourcePanel,
+    totals, sources, format.wrap, recipient.wrap, sender.panel,
     h('div', {class: 'casebook-actions'}, button('Prepare source-only report', () => perform('build'), 'primary'),
-      button('Save project', async () => { lock(true); try { await save(); status.replaceChildren(notice(`Saved revision ${revision}. Local storage is not encrypted.`, 'success')); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } finally { lock(false); } }),
-      button('Export project backup', () => download('sinter-casebook.json', JSON.stringify(value(), null, 2), 'application/json'))),
+      button('Save project', async () => { lock(true); try { await save(); status.replaceChildren(notice(`Saved revision ${revision}. This saves the project inputs; use Save to this computer on an edited report to keep that draft. Local storage is not encrypted.`, 'success')); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } finally { lock(false); } }),
+      button('Export project backup', () => { try { admitPending(); download('sinter-casebook.json', JSON.stringify(value(), null, 2), 'application/json'); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } })),
     h('details', {class: 'card'}, h('summary', {}, 'Backups and project removal'), backup.wrap,
       button('Remove saved project', async () => {
         if (!savedId || !confirm('Remove this saved project? Export a backup first. The current editor is kept.')) return;
         try { await request('/api/casebooks/delete', {data: {id: savedId, revision}}); savedId = null; revision = null; changed(); await refresh(); }
         catch(error) { status.replaceChildren(notice(error.message, 'error')); }
       }, 'quiet')));
+  sourcePanel.append(h('summary', {}, 'Add notes and references'), name.wrap, contents.wrap,
+      h('div', {class: 'form-grid'}, sourceDate.wrap, sourceURL.wrap),
+      button('Add this source', () => {
+        if (!name.input.value.trim() || !contents.input.value.trim()) { status.replaceChildren(notice('Give the source a title and some original text.', 'error')); return; }
+        if (docs.length >= 300 || docs.reduce((n, row) => n + row.content.length, contents.input.value.length) > 2000000) { status.replaceChildren(notice('The collection limit is reached. Start a separate casebook.', 'error')); return; }
+        docs.push({title: name.input.value, content: contents.input.value, date: sourceDate.input.value, url: sourceURL.input.value});
+        clearPending(); changed(); drawSources();
+      }), button('Clear pending source', () => { if (!hasPendingSource(pendingSource()) || confirm('Clear this pending source? It has not been added or saved.')) clearPending(); }, 'quiet'), pendingNotice, upload.wrap);
   drawSources(); await refresh();
   return h('div', {class: 'stack casebooks-page'}, h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'LESS CHASING. MORE CONTEXT.'),
     h('h2', {}, 'All the bits. One useful picture.'), h('p', {}, 'Gather scattered notes, replies, policies and past decisions. Find the original wording behind each question and keep the gaps visible.')),

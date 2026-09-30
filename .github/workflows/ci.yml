@@ -68,6 +68,8 @@ jobs:
       - run: python tools/deliverable_browser.py
       - run: python tools/campaign_browser.py
       - run: python tools/quality_browser.py
+      - run: python tools/community_recovery_browser.py
+      - run: python tools/report_recovery_browser.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

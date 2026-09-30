@@ -4,18 +4,32 @@ import {documentActions, documentMarkdown, plainDocument} from './documents.js';
 import {campaignCommunicationFromDraft, campaignDraftLogBlockReason} from './campaign-letter.js';
 import {campaignActionOwnerState} from './campaign-owner.js';
 import {campaignActionPhaseLabel} from './campaign-plan.js';
+import {registerReportDraft, trackReportEdits, trackReportEditor, reportEditorDraft,
+  markReportSaved, isReportDraftUnsaved} from './report-drafts.js';
 
 /** The document is the default view; provenance remains one click away. */
-export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated} = {}) {
+export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated, onSaved, recovered = false} = {}) {
+  registerReportDraft(report, documentMarkdown(report));
   const result = h('section', {class: 'report-area', 'aria-label': 'Your draft report'});
   const message = h('div', {class: 'non-print', 'aria-live': 'polite'});
   const campaignLog = report.campaign_link ? campaignDraftLog(report, message, onCampaignUpdated) : null;
   const save = button('Save to this computer', async () => {
+    if (reportEditorDraft(report)) {
+      message.replaceChildren(notice('Apply or cancel your pending draft edits before saving. Your text is still in the editor.', 'error'));
+      return;
+    }
     save.disabled = true;
     try {
-      await request('/api/reports', {data: {report}});
-      message.replaceChildren(notice('Saved in My workspace, including your edits and original evidence.', 'success'));
+      const snapshot = structuredClone(report);
+      await request('/api/reports', {data: {report: snapshot}});
+      markReportSaved(report, documentMarkdown(snapshot));
+      const newerEdits = isReportDraftUnsaved(report);
+      save.disabled = !newerEdits;
+      message.replaceChildren(notice(newerEdits
+        ? 'The earlier version was saved in My workspace. Your newer edits are still unsaved; apply and save them before closing Sinter.'
+        : 'Saved in My workspace, including your edits and original evidence.', newerEdits ? 'warning' : 'success'));
       announce('Report saved to My workspace.');
+      onSaved?.();
     } catch (error) { message.replaceChildren(notice(error.message, 'error')); save.disabled = false; }
   }, 'quiet');
   const paper = h('div', {class: 'document-paper'});
@@ -95,9 +109,12 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       : 'Source records establish provenance, not truth.')),
     (report.warnings || []).length ? h('details', {class: 'report-notes'}, h('summary', {}, 'Source limits and review notes'), h('ul', {}, report.warnings.map(item => h('li', {}, item)))) : null,
     h('div', {class: 'report-layout'}, evidenceArticle, sources)].filter(Boolean));
-  const actions = documentActions(report, {save, onChange: () => { updateDocument(); select('document'); }});
+  const actions = documentActions(report, {save, editorSeed: reportEditorDraft(report),
+    onEditorChange: (text, open) => trackReportEditor(report, text, open),
+    onChange: () => { trackReportEdits(report, documentMarkdown(report)); updateDocument(); select('document'); }});
   const missing = report.missing_fields || [];
-  result.append(...[h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'CAMPAIGN PREVIEW' : 'YOUR DOCUMENT'),
+  result.append(...[recovered ? notice('Recovered draft from an earlier preparation. It retains the original inputs and evidence; later project changes are not included. Check the current saved project before using this draft.', 'warning') : null,
+    h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'CAMPAIGN PREVIEW' : 'YOUR DOCUMENT'),
     h('h2', {}, isCampaign ? 'Decision brief' : (report.document_title || report.title)), h('p', {class: 'muted'}, isCampaign
       ? 'Review the decision and privacy before sharing. The full audit trail and source notes are in Audit & evidence.'
       : 'Review the wording, make it yours, then copy or download.'))),
@@ -111,6 +128,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       const cleanCheck = '\n\n### Requirement check\n\n' + last.field.replaceAll('_', ' ') + ': **' + last.status.replaceAll('_', ' ') + '**. ' + last.reason;
       if (report.document_edits) report.document_edits.markdown += cleanCheck;
       else if (report.document_markdown) report.document_markdown += cleanCheck;
+      trackReportEdits(report, documentMarkdown(report));
       updateDocument(); message.replaceChildren(notice('Requirement checks updated. Save a copy to keep them.'));
     }));
   }
