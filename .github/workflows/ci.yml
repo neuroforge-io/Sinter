@@ -65,6 +65,7 @@ jobs:
       - run: python tools/desktop_browser.py
       - run: python tools/site_browser.py
       - run: python tools/casebook_browser.py
+      - run: python tools/casebook_save_state_browser.py
       - run: python tools/handover_appendix_browser.py
       - run: python tools/deliverable_browser.py
       - run: python tools/campaign_browser.py

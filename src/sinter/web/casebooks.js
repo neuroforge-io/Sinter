@@ -36,6 +36,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   showHandoverEvidence();
   const status = h('div', {'aria-live': 'polite'}), output = h('div', {class: 'stack', id: 'casebook-output'}), sources = h('div', {class: 'stack'});
   const catalogue = h('div', {class: 'casebook-shelf'}), totals = h('p', {class: 'muted'});
+  const saveState = h('p', {class: 'muted', role: 'status', 'aria-label': 'Project save state'});
   const stop = button('Stop this task', async () => {
     if (!activeJob) return;
     stop.disabled = true;
@@ -61,9 +62,21 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   const pendingMessage = () => hasPendingSource(pendingSource())
     ? 'This source is waiting to be added. Its text is kept while you move between pages.' : '';
   pendingNotice.textContent = pendingMessage();
+  function updateSaveState(pending = pendingSource()) {
+    const pendingExists = hasPendingSource(pending);
+    const message = pendingExists
+      ? 'Pending source is not added or saved. Add this source or clear it before saving.'
+      : bookDirty
+        ? 'Unsaved project changes.' + (savedId ? ` Based on revision ${revision}.` : '')
+          + ' Use Save project to keep these inputs.'
+        : savedId ? `Project inputs saved at revision ${revision}.`
+          : 'Project not saved yet. Use Save project to keep these inputs.';
+    if (saveState.textContent !== message) saveState.textContent = message;
+    if (bookDirty || pendingExists) status.querySelector('[data-casebook-save-success]')?.remove();
+  }
   function rememberCurrent() {
     const pending = pendingSource();
-    pendingNotice.textContent = pendingMessage();
+    pendingNotice.textContent = pendingMessage(); updateSaveState(pending);
     remember?.('casebooks', {book: value(), savedId, revision, dirty: bookDirty, pendingSource: pending, practice, report: preparedReport},
       {dirty: bookDirty || hasPendingSource(pending)});
   }
@@ -209,9 +222,9 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
       load(example()); status.replaceChildren(notice('Fictional example. No real venue, person or decision is represented.'));
     }), button('New project', () => { if (canReplace()) load({title: '', questions: '', documents: []}); }, 'quiet')),
     sourcePanel,
-    totals, sources, format.wrap, handoverEvidence.wrap, recipient.wrap, sender.panel,
+    totals, saveState, sources, format.wrap, handoverEvidence.wrap, recipient.wrap, sender.panel,
     h('div', {class: 'casebook-actions'}, button('Prepare source-only report', () => perform('build'), 'primary'),
-      button('Save project', async () => { lock(true); try { await save(); status.replaceChildren(notice(`Saved revision ${revision}. This saves the project inputs; use Save to this computer on an edited report to keep that draft. Local storage is not encrypted.`, 'success')); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } finally { lock(false); } }),
+      button('Save project', async () => { lock(true); try { await save(); const savedNotice = notice(`Saved revision ${revision}. This saves the project inputs; use Save to this computer on an edited report to keep that draft. Local storage is not encrypted.`, 'success'); savedNotice.dataset.casebookSaveSuccess = 'true'; status.replaceChildren(savedNotice); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } finally { lock(false); if (hasPendingSource(pendingSource())) contents.input.focus(); } }),
       button('Export project backup', () => { try { admitPending(); download('sinter-casebook.json', JSON.stringify(value(), null, 2), 'application/json'); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } })),
     h('details', {class: 'card'}, h('summary', {}, 'Backups and project removal'), backup.wrap,
       button('Remove saved project', async () => {
@@ -227,7 +240,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
         docs.push({title: name.input.value, content: contents.input.value, date: sourceDate.input.value, url: sourceURL.input.value});
         clearPending(); changed(); drawSources();
       }), button('Clear pending source', () => { if (!hasPendingSource(pendingSource()) || confirm('Clear this pending source? It has not been added or saved.')) clearPending(); }, 'quiet'), pendingNotice, upload.wrap);
-  drawSources(); await refresh();
+  updateSaveState(); drawSources(); await refresh();
   if (preparedReport) drawReport(preparedReport);
   return h('div', {class: 'stack casebooks-page'}, h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'LESS CHASING. MORE CONTEXT.'),
     h('h2', {}, 'All the bits. One useful picture.'), h('p', {}, 'Gather scattered notes, replies, policies and past decisions. Find the original wording behind each question and keep the gaps visible.')),

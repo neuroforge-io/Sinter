@@ -76,6 +76,12 @@ source evidence and previously saved reports remain available separately.
 
 Data is stored without encryption in `~/.sinter/workspace.sqlite3` (or your `SINTER_DATA_DIR`). Back it up responsibly. Unsaved inputs are retained only during this browser session; reload or closing the app can lose them. Returning to Overview lets you continue an unsaved real project without erasing its inputs.
 
+In a casebook, **Project save state** beside the document count describes the
+project inputs. A pending source must be added or cleared before saving; it is
+not silently included in the saved project. Changes after a save are labelled
+unsaved. An edited report has its own **Save to this computer** action; saving
+that draft does not update the original project inputs or its revision.
+
 ## Community tools and knowledge
 
 **Community tools** prepares action lists from details you enter. Keep unassigned owners and unconfirmed dates blank, export CSV/calendar/JSON or save the result locally. A separate line-oriented comparison shows changed wording; line-ending style and final-newline differences are ignored.

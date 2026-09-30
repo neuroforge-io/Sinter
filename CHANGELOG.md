@@ -5,6 +5,11 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Show whether casebook inputs are saved, unsaved or still pending in the source
+  editor. Keep report saving separate. Clear only the earlier project-save
+  confirmation when new input changes; retain recovery errors and restore focus
+  to pending source text after a refused save.
+
 - Keep campaign Save, preview and current status visible during long local
   workflows, with keyboard-accessible recovery messages in short windows.
   Clear an earlier save-success notice when edits become unsaved; retain

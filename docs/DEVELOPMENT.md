@@ -22,6 +22,7 @@ python tools/campaign_currency_browser.py
 python tools/campaign_action_bar_browser.py
 python tools/communication_view_browser.py
 python tools/handover_appendix_browser.py
+python tools/casebook_save_state_browser.py
 python tools/document_export_browser.py
 python tools/document_page_break_browser.py
 python tools/quality_browser.py
@@ -35,7 +36,8 @@ Windows activation: `.venv\Scripts\activate`. Browser integration uses fictional
 
 Every browser integration tool accepts `--help` without Playwright installed.
 The same setup runs `browser_smoke.py`, `studio_browser.py`, `desktop_browser.py`,
-`casebook_browser.py`, `deliverable_browser.py`, `campaign_browser.py`,
+`casebook_browser.py`, `casebook_save_state_browser.py`,
+`deliverable_browser.py`, `campaign_browser.py`,
 `campaign_source_picker_browser.py`,
 `campaign_currency_browser.py`,
 `campaign_action_bar_browser.py`,
