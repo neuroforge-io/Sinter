@@ -21,7 +21,7 @@ The two files serve different purposes:
 
 ## Open the example
 
-On `0.5.4rc2.dev0` source development, open **Overview** or **Getting started**
+On `0.5.4rc2` candidate source, open **Overview** or **Getting started**
 and choose **Open garden handover** or **Open garden campaign**. Each opens a
 new unsaved copy of this bundled data; the on-page guide links to its paired
 editor. Switching between them resumes your session edits. Existing saved work

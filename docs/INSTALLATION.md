@@ -66,7 +66,7 @@ Checks install the package, start the installed executable, serve its assets and
 
 Choose **Try an example** for a fictional offline demonstration. Use **Settings** for reading size, theme, motion and connection choices.
 
-On subsequent `0.5.4rc2.dev0` source development, Overview and Getting started
+On the subsequent [0.5.4rc2 candidate source](PREVIEW_0.5.4rc2.md), Overview and Getting started
 also offer **Open garden handover** and **Open garden campaign**. These open the
 complete bundled fictional project without a file picker. Saved projects stay
 unchanged; opening starts an unsaved copy and switching the paired editors resumes

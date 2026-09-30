@@ -44,9 +44,10 @@ def _write_checksums(folder: Path) -> None:
 
 def release_notes(version: str, commit: str) -> str:
     """Keep public prose bound to the same qualified scope as its manifest."""
+    if version == "0.5.4rc2":
+        return _rc2_release_notes(commit)
     status = (
-        "This is a separate prerelease; "
-        "the published v0.5.3 preview remains unchanged."
+        "This is a separate prerelease; the published v0.5.3 preview remains unchanged."
     )
     return f"""# Sinter {version} — Linux x64 preview
 
@@ -80,6 +81,48 @@ never disable OS protections. Local work and backups are unencrypted. This is a
 single trusted user's workbench, not hosted collaboration or an autonomous sender.
 Customer-device acceptance and other-platform qualification remain outstanding.
 """
+
+
+def _rc2_release_notes(commit: str) -> str:
+    """Extend the next candidate's scope without rewriting frozen RC1 notes."""
+    notes = release_notes("0.5.4rc1", commit)
+    notes = notes.replace("Sinter 0.5.4rc1", "Sinter 0.5.4rc2")
+    notes = notes.replace(
+        "sinter-0.5.4rc1-qualification.zip", "sinter-0.5.4rc2-qualification.zip"
+    )
+    notes = notes.replace("`0.5.4~rc1`", "`0.5.4~rc2`")
+    notes = notes.replace(
+        "the published v0.5.3 preview remains unchanged.",
+        "the published v0.5.3 and v0.5.4rc1 previews remain unchanged.",
+    )
+    notes = notes.replace(
+        "with a clean offline install and actual v0.5.3 package replacement "
+        "retaining a copied\n"
+        "fictional workspace, preferences, explicit model selection and "
+        "saved source evidence.",
+        "with a clean offline install and separate actual v0.5.3 and "
+        "published v0.5.4rc1\n"
+        "package replacements retaining copied fictional workspaces, "
+        "preferences, explicit\n"
+        "model selection and saved source evidence.",
+    )
+    notes = notes.replace(
+        "The fictional walkthrough is `examples/offline-garden/README.md` "
+        "in the source ZIP.",
+        "The fictional walkthrough is `examples/offline-garden/README.md` "
+        "in the source ZIP.\n"
+        "The installed offline browser qualification retains exact "
+        "source navigation, edits,\n"
+        "save/quit/restart/reopen, Word and JSON exports, "
+        "separate restored copies and\n"
+        "unconfirmed owners, proposed dates and historical correspondence. "
+        "Its eight\n"
+        "named artifacts are bound to the installer and source in the "
+        "qualification ZIP.\n"
+        "No model operation was requested by this workflow; "
+        "this is not live AI validation.",
+    )
+    return notes
 
 
 def verify_plan(path: Path, repository: Path = ROOT) -> dict:

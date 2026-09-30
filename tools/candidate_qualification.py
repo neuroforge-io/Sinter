@@ -11,10 +11,12 @@ import sys
 import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
+from tools.qualified_priors import QUALIFIED_PRIORS, PriorRelease  # noqa: E402
 from tools.release_manifest import EXPECTED, verify_target_receipt  # noqa: E402
 
 SCHEMA = "sinter-scoped-candidate-release/v1"
@@ -39,6 +41,36 @@ QUALIFIED_PRIOR_INSTALLER_SHA = (
 QUALIFIED_PRIOR_SOURCE_SHA = (
     "ec4abbc0ed4e121c50a5d383296c4b84d4a2a2b2ea981688e1c80c29333f8f6d"
 )
+CANDIDATE_PRIORS = MappingProxyType(
+    {
+        "0.5.4rc1": (QUALIFIED_PRIORS["0.5.3"],),
+        "0.5.4rc2": (QUALIFIED_PRIORS["0.5.3"], QUALIFIED_PRIORS["0.5.4rc1"]),
+    }
+)
+
+
+def candidate_priors(version: str) -> tuple[PriorRelease, ...]:
+    """Select reviewed requirements from policy, never from supplied receipts."""
+    if version not in CANDIDATE_PRIORS:
+        raise ValueError("This candidate version has no explicit qualification policy.")
+    return CANDIDATE_PRIORS[version]
+
+
+def prior_roles(prior: PriorRelease) -> tuple[str, str, str, str]:
+    """Name the closed source/checksum/copied/native roles for a pinned prior."""
+    if prior.version == "0.5.3":
+        return (
+            "prior-source-verification.json",
+            "prior-release-SHA256SUMS.txt",
+            "copied-upgrade-test.json",
+            "native-installer-upgrade-test.json",
+        )
+    return (
+        "published-rc1-source-verification.json",
+        "published-rc1-SHA256SUMS.txt",
+        "published-rc1-copied-upgrade-test.json",
+        "published-rc1-native-installer-upgrade-test.json",
+    )
 
 
 def digest(path: Path) -> str:
@@ -118,6 +150,7 @@ def _identity(version: str, commit: str) -> None:
         raise ValueError("Scoped candidates require an explicit rc version.")
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Use the full lowercase candidate source commit.")
+    candidate_priors(version)
 
 
 def _source(folder: Path, version: str, commit: str, repository: Path) -> dict:
@@ -195,7 +228,7 @@ def _runtime_members(
     return result
 
 
-def _native_payload(folder: Path, version: str, files: dict, receipt: dict) -> None:
+def _native_payload(folder: Path, version: str, files: dict, receipt: dict) -> str:
     installer = folder / receipt["installer"]
     fields = subprocess.run(
         [
@@ -255,6 +288,10 @@ def _native_payload(folder: Path, version: str, files: dict, receipt: dict) -> N
             digest(path),
         ):
             raise ValueError("An exported notice differs from the actual installer.")
+    executable = debian.get("Sinter", ())
+    if len(executable) != 3 or executable[0] != "file" or not executable[2] & 0o111:
+        raise ValueError("The native package has no executable Sinter binary.")
+    return executable[1]
 
 
 def _canonical_roles(folder: Path, version: str, receipt: dict) -> None:
@@ -287,6 +324,12 @@ def _canonical_roles(folder: Path, version: str, receipt: dict) -> None:
     for dependency in receipt["bundled_dependencies"]:
         for notice in dependency.get("licences", []):
             expected.add("licenses/" + _safe_name(notice["path"]))
+    if version == "0.5.4rc2":
+        from tools.installed_workflow_contract import ARTIFACT_PATHS
+
+        expected.update(prior_roles(QUALIFIED_PRIORS["0.5.4rc1"]))
+        expected.add("installed-workflow-browser.json")
+        expected.update(ARTIFACT_PATHS.values())
     if set(_files(folder)) != expected:
         raise ValueError(
             "The canonical bundle contains missing or unexpected artifact roles."
@@ -313,31 +356,140 @@ def _prior_identity(folder: Path, qualification: dict) -> str:
         raise ValueError(
             "The prior release differs from the explicitly qualified upgrade pin."
         )
-    source = _json(folder / "prior-source-verification.json")
+    _prior_source_records(folder, QUALIFIED_PRIORS["0.5.3"])
+    return QUALIFIED_PRIOR_COMMIT
+
+
+def _prior_source_records(folder: Path, prior: PriorRelease) -> None:
+    source_name, checksum_name, _, _ = prior_roles(prior)
+    source = _json(folder / source_name)
     if (
         source.get("schema") != "sinter-prior-release-source/v1"
-        or source.get("version") != QUALIFIED_PRIOR_VERSION
-        or source.get("source_commit") != QUALIFIED_PRIOR_COMMIT
-        or source.get("archive") != f"sinter-{QUALIFIED_PRIOR_VERSION}-source.zip"
-        or source.get("archive_sha256") != QUALIFIED_PRIOR_SOURCE_SHA
+        or source.get("version") != prior.version
+        or source.get("source_commit") != prior.source_commit
+        or source.get("archive") != f"sinter-{prior.version}-source.zip"
+        or source.get("archive_sha256") != prior.source_archive_sha256
         or source.get("sha256sums_verified") is not True
         or source.get("tracked_archive_and_local_commit_files_match") is not True
     ):
         raise ValueError(
             "Preserved prior source verification does not match the qualified release."
         )
-    checksums = _checksum_entries(folder / "prior-release-SHA256SUMS.txt")
+    checksums = _checksum_entries(folder / checksum_name)
     if (
-        checksums.get(f"Sinter-{QUALIFIED_PRIOR_VERSION}-linux-x64.deb")
-        != QUALIFIED_PRIOR_INSTALLER_SHA
-        or checksums.get(f"sinter-{QUALIFIED_PRIOR_VERSION}-source.zip")
-        != QUALIFIED_PRIOR_SOURCE_SHA
+        checksums.get(f"Sinter-{prior.version}-linux-x64.deb") != prior.installer_sha256
+        or checksums.get(f"sinter-{prior.version}-source.zip")
+        != prior.source_archive_sha256
     ):
         raise ValueError(
             "Preserved prior checksums do not identify the reviewed "
             "source and installer."
         )
-    return QUALIFIED_PRIOR_COMMIT
+
+
+def _has_checks(value: object, required: set[str]) -> bool:
+    return (
+        isinstance(value, list)
+        and all(isinstance(item, str) for item in value)
+        and required <= set(value)
+    )
+
+
+def _upgrade_records(
+    folder: Path,
+    prior: PriorRelease,
+    version: str,
+    commit: str,
+    receipt: dict,
+    binary_sha256: str,
+) -> None:
+    """Bind each independent copied/native run to its exact published prior."""
+    _, _, copied_name, native_name = prior_roles(prior)
+    for filename, native in ((copied_name, False), (native_name, True)):
+        upgrade = _json(folder / filename)
+        schema = (
+            "sinter-native-installer-upgrade/v1"
+            if native
+            else "sinter-copied-upgrade-test/v1"
+        )
+        candidate_field = "candidate_app_version" if native else "candidate_version"
+        prior_field = "prior_app_version" if native else "prior_version"
+        if (
+            upgrade.get("schema") != schema
+            or upgrade.get("passed") is not True
+            or upgrade.get("candidate_source_commit") != commit
+            or upgrade.get(candidate_field) != version
+            or upgrade.get("prior_source_commit") != prior.source_commit
+            or upgrade.get(prior_field) != prior.version
+            or not upgrade.get("original_fixture_hashes")
+            or not upgrade.get("checks")
+        ):
+            raise ValueError(
+                "Matching original-preserving upgrade evidence is missing."
+            )
+        if native and (
+            upgrade.get("candidate_installer_sha256") != receipt["installer_sha256"]
+            or upgrade.get("prior_installer_sha256") != prior.installer_sha256
+            or upgrade.get("candidate_package_version") != version.replace("rc", "~rc")
+        ):
+            raise ValueError("The native replacement did not test this installer.")
+        if version == "0.5.4rc2" and (
+            upgrade.get("prior_source_archive_sha256") != prior.source_archive_sha256
+            or upgrade.get("candidate_binary_sha256") != binary_sha256
+            or (
+                native
+                and upgrade.get("prior_package_version")
+                != prior.version.replace("rc", "~rc")
+            )
+        ):
+            raise ValueError(
+                "The upgrade does not bind its source and installed binary."
+            )
+        hashes = upgrade["original_fixture_hashes"]
+        if (
+            not isinstance(hashes, dict)
+            or set(hashes)
+            != {"campaigns.sqlite3", "preferences.json", "workspace.sqlite3"}
+            or any(
+                not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{64}", sha)
+                for sha in hashes.values()
+            )
+        ):
+            raise ValueError(
+                "The upgrade does not identify its original fictional workspace."
+            )
+        required = {
+            "prior profile and appearance preferences retained",
+            "explicit legacy model selection retained with compatible provider",
+            "campaign and casebook identities, revisions and original data retained",
+            "saved report, source evidence and user edits retained",
+            "disabled watch retained without a search request",
+            "retained source-only casebook completed through installed API",
+            "opening candidate did not rewrite the prior preferences file",
+        }
+        if version == "0.5.4rc2" and not native:
+            required.add("untouched prior workspace retains every original file digest")
+        observed = (
+            upgrade.get("candidate_native_checks", []) if native else upgrade["checks"]
+        )
+        if not _has_checks(observed, required):
+            raise ValueError(
+                "The upgrade is missing required work, preferences "
+                "or source preservation."
+            )
+        native_required = {
+            f"checksum-verified published v{prior.version} installer "
+            "installed and launched",
+            "copied fictional workspace used by actual prior native application",
+            "candidate installer replaced prior package without prior uninstall",
+            "candidate reopened retained data and ran source-only workflow",
+            "original prior fixture file digests remain unchanged",
+            "replacement candidate removed and installed executable absent",
+        }
+        if native and not _has_checks(upgrade["checks"], native_required):
+            raise ValueError(
+                "The actual published-package replacement sequence is incomplete."
+            )
 
 
 def verify_candidate(
@@ -436,87 +588,18 @@ def verify_candidate(
             "The qualification runtime baseline differs from its installed proof."
         )
     source = _source(folder, version, commit, repository)
-    _native_payload(folder, version, source, receipt)
-    prior = _prior_identity(folder, qualification)
-    for filename, schema, version_field in (
-        (
-            "copied-upgrade-test.json",
-            "sinter-copied-upgrade-test/v1",
-            "candidate_version",
-        ),
-        (
-            "native-installer-upgrade-test.json",
-            "sinter-native-installer-upgrade/v1",
-            "candidate_app_version",
-        ),
-    ):
-        upgrade = _json(folder / filename)
-        prior_version_field = (
-            "prior_app_version" if filename.startswith("native-") else "prior_version"
+    binary_sha256 = _native_payload(folder, version, source, receipt)
+    _prior_identity(folder, qualification)
+    for prior in candidate_priors(version):
+        if prior.version != QUALIFIED_PRIOR_VERSION:
+            _prior_source_records(folder, prior)
+        _upgrade_records(folder, prior, version, commit, receipt, binary_sha256)
+    if version == "0.5.4rc2":
+        from tools.installed_workflow_qualification import verify_installed_workflow
+
+        verify_installed_workflow(
+            folder, version, commit, sums, source, receipt, binary_sha256
         )
-        if (
-            upgrade.get("schema") != schema
-            or upgrade.get("passed") is not True
-            or upgrade.get("candidate_source_commit") != commit
-            or upgrade.get(version_field) != version
-            or upgrade.get("prior_source_commit") != prior
-            or upgrade.get(prior_version_field) != QUALIFIED_PRIOR_VERSION
-            or not upgrade.get("original_fixture_hashes")
-            or not upgrade.get("checks")
-        ):
-            raise ValueError(
-                "Matching original-preserving upgrade evidence is missing."
-            )
-        if filename.startswith("native-") and (
-            upgrade.get("candidate_installer_sha256") != receipt["installer_sha256"]
-            or upgrade.get("prior_installer_sha256")
-            != qualification.get("prior_native_installer_sha256")
-            or upgrade.get("candidate_package_version") != version.replace("rc", "~rc")
-        ):
-            raise ValueError("The native replacement did not test this installer.")
-        hashes = upgrade["original_fixture_hashes"]
-        if (
-            not isinstance(hashes, dict)
-            or set(hashes)
-            != {"campaigns.sqlite3", "preferences.json", "workspace.sqlite3"}
-            or any(
-                not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{64}", sha)
-                for sha in hashes.values()
-            )
-        ):
-            raise ValueError(
-                "The upgrade does not identify its original fictional workspace."
-            )
-        required_upgrade = {
-            "prior profile and appearance preferences retained",
-            "explicit legacy model selection retained with compatible provider",
-            "campaign and casebook identities, revisions and original data retained",
-            "saved report, source evidence and user edits retained",
-            "disabled watch retained without a search request",
-            "retained source-only casebook completed through installed API",
-            "opening candidate did not rewrite the prior preferences file",
-        }
-        observed = (
-            upgrade.get("candidate_native_checks", [])
-            if filename.startswith("native-")
-            else upgrade["checks"]
-        )
-        if not isinstance(observed, list) or not required_upgrade <= set(observed):
-            raise ValueError(
-                "The upgrade is missing required work, preferences "
-                "or source preservation."
-            )
-        if filename.startswith("native-") and not {
-            "checksum-verified published v0.5.3 installer installed and launched",
-            "copied fictional workspace used by actual prior native application",
-            "candidate installer replaced prior package without prior uninstall",
-            "candidate reopened retained data and ran source-only workflow",
-            "original prior fixture file digests remain unchanged",
-            "replacement candidate removed and installed executable absent",
-        } <= set(upgrade["checks"]):
-            raise ValueError(
-                "The actual published-package replacement sequence is incomplete."
-            )
     independent = _json(review / "final-artifact-review.json")
     required_checks = (
         "source_commit_matches_with_declared_windows_CRLF",

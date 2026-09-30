@@ -58,18 +58,24 @@ def seal(folder):
 
 
 @pytest.fixture
-def bundle(tmp_path):
+def bundle(tmp_path, request):
+    version = getattr(request, "param", VERSION)
     if not shutil.which("dpkg-deb"):
         pytest.skip("Actual Debian artifact fixtures require dpkg-deb.")
     repository = tmp_path / "repo"
     repository.mkdir()
     files = {
-        "src/sinter/__init__.py": f'__version__ = "{VERSION}"\n',
+        "src/sinter/__init__.py": f'__version__ = "{version}"\n',
         "src/sinter/cli.py": "def launch():\n    pass\n",
         "src/sinter/web/app.js": "// Fictional fixture only.\n",
         "LICENSE": "Fixture licence\n",
         "NOTICE": "Fixture notice\n",
     }
+    if version == "0.5.4rc2":
+        for name in ("offline-garden-casebook.json", "offline-garden-campaign.json"):
+            files["src/sinter/web/" + name] = (
+                qualification.ROOT / "src/sinter/web" / name
+            ).read_text()
     for name, value in files.items():
         path = repository / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -99,7 +105,9 @@ def bundle(tmp_path):
     review.mkdir()
     runtime = package / "opt/neuroforge/sinter"
     (runtime / "_internal/sinter/web").mkdir(parents=True)
-    (runtime / "_internal/sinter/web/app.js").write_text(files["src/sinter/web/app.js"])
+    for name, value in files.items():
+        if name.startswith("src/sinter/web/"):
+            (runtime / "_internal" / name.removeprefix("src/")).write_text(value)
     (runtime / "Sinter").write_bytes(b"fixture executable, never executed")
     (runtime / "Sinter").chmod(0o755)
     dependencies = []
@@ -181,27 +189,28 @@ def bundle(tmp_path):
     )
     (package / "DEBIAN").mkdir()
     (package / "DEBIAN/control").write_text(
-        "Package: sinter\nVersion: 0.5.4~rc1\nArchitecture: amd64\n"
+        f"Package: sinter\nVersion: {version.replace('rc', '~rc')}\n"
+        "Architecture: amd64\n"
         "Maintainer: Fixture <fixture@example.invalid>\n"
         "Depends: libc6 (>= 2.35), zlib1g\n"
         "Description: Fictional verification fixture\n"
     )
-    installer = folder / f"Sinter-{VERSION}-linux-x64.deb"
+    installer = folder / f"Sinter-{version}-linux-x64.deb"
     subprocess.run(
         ["dpkg-deb", "--build", "--root-owner-group", str(package), str(installer)],
         check=True,
         capture_output=True,
     )
-    native = folder / f"Sinter-{VERSION}-linux-x64.tar.gz"
+    native = folder / f"Sinter-{version}-linux-x64.tar.gz"
     with tarfile.open(native, "w:gz") as archive:
         archive.add(runtime, arcname="Sinter")
-    archive = folder / f"sinter-{VERSION}-source.zip"
+    archive = folder / f"sinter-{version}-source.zip"
     archive.write_bytes(
         subprocess.check_output(
             ["git", "archive", "--format=zip", commit], cwd=repository
         )
     )
-    with zipfile.ZipFile(folder / f"sinter-{VERSION}.pyz", "w") as portable:
+    with zipfile.ZipFile(folder / f"sinter-{version}.pyz", "w") as portable:
         for name, content in files.items():
             portable.writestr(name.removeprefix("src/"), content)
         portable.writestr(
@@ -211,7 +220,7 @@ def bundle(tmp_path):
     (folder / "SOURCE-COMMIT.txt").write_text(commit + "\n")
     installed = {
         "schema": "sinter-native-test/v1",
-        "version": VERSION,
+        "version": version,
         "system": "Linux",
         "machine": "x86_64",
         "pointer_bits": 64,
@@ -233,7 +242,7 @@ def bundle(tmp_path):
         "target_arch": "x64",
         "execution": "native",
         "signed_by_publisher": False,
-        "package_version": "0.5.4~rc1",
+        "package_version": version.replace("rc", "~rc"),
         "glibc_minimum": "2.35",
         "bundled_dependencies": dependencies,
         "linux_shared_library_notices_verified": True,
@@ -244,7 +253,7 @@ def bundle(tmp_path):
         "frozen_test": installed,
         "installed_test": installed,
     }
-    write_json(folder / f"Sinter-{VERSION}-linux-x64-test.json", receipt)
+    write_json(folder / f"Sinter-{version}-linux-x64-test.json", receipt)
     upgrade = {
         "passed": True,
         "prior_source_commit": PRIOR,
@@ -260,7 +269,7 @@ def bundle(tmp_path):
             **upgrade,
             "schema": "sinter-copied-upgrade-test/v1",
             "prior_version": "0.5.3",
-            "candidate_version": VERSION,
+            "candidate_version": version,
             "checks": UPGRADE_CHECKS,
         },
     )
@@ -270,8 +279,8 @@ def bundle(tmp_path):
             **upgrade,
             "schema": "sinter-native-installer-upgrade/v1",
             "prior_app_version": "0.5.3",
-            "candidate_app_version": VERSION,
-            "candidate_package_version": "0.5.4~rc1",
+            "candidate_app_version": version,
+            "candidate_package_version": version.replace("rc", "~rc"),
             "candidate_installer_sha256": candidate.digest(installer),
             "prior_installer_sha256": qualification.QUALIFIED_PRIOR_INSTALLER_SHA,
             "candidate_native_checks": UPGRADE_CHECKS,
@@ -282,7 +291,7 @@ def bundle(tmp_path):
         folder / "candidate-qualification.json",
         {
             "schema": "sinter-preview-qualification/v1",
-            "version": VERSION,
+            "version": version,
             "source_commit": commit,
             "prior_source_commit": PRIOR,
             "prior_native_installer_sha256": (
@@ -321,6 +330,66 @@ def bundle(tmp_path):
             },
         },
     )
+    if version == "0.5.4rc2":
+        for prior in qualification.candidate_priors(version):
+            source_name, sums_name, copied_name, native_name = (
+                qualification.prior_roles(prior)
+            )
+            write_json(
+                folder / source_name,
+                {
+                    "schema": "sinter-prior-release-source/v1",
+                    "version": prior.version,
+                    "source_commit": prior.source_commit,
+                    "archive": f"sinter-{prior.version}-source.zip",
+                    "archive_sha256": prior.source_archive_sha256,
+                    "sha256sums_verified": True,
+                    "tracked_archive_and_local_commit_files_match": True,
+                },
+            )
+            (folder / sums_name).write_text(
+                f"{prior.installer_sha256}  Sinter-{prior.version}-linux-x64.deb\n"
+                f"{prior.source_archive_sha256}  sinter-{prior.version}-source.zip\n"
+            )
+            base = {
+                **upgrade,
+                "prior_source_commit": prior.source_commit,
+                "prior_source_archive_sha256": prior.source_archive_sha256,
+                "candidate_binary_sha256": candidate.digest(runtime / "Sinter"),
+            }
+            write_json(
+                folder / copied_name,
+                {
+                    **base,
+                    "schema": "sinter-copied-upgrade-test/v1",
+                    "prior_version": prior.version,
+                    "candidate_version": version,
+                    "checks": [
+                        *UPGRADE_CHECKS,
+                        "untouched prior workspace retains every original file digest",
+                    ],
+                },
+            )
+            native_checks = [*NATIVE_CHECKS]
+            native_checks[0] = (
+                f"checksum-verified published v{prior.version} installer "
+                "installed and launched"
+            )
+            write_json(
+                folder / native_name,
+                {
+                    **base,
+                    "schema": "sinter-native-installer-upgrade/v1",
+                    "prior_app_version": prior.version,
+                    "prior_package_version": prior.version.replace("rc", "~rc"),
+                    "candidate_app_version": version,
+                    "candidate_package_version": version.replace("rc", "~rc"),
+                    "candidate_installer_sha256": candidate.digest(installer),
+                    "prior_installer_sha256": prior.installer_sha256,
+                    "candidate_native_checks": UPGRADE_CHECKS,
+                    "checks": native_checks,
+                },
+            )
     seal(folder)
     checks = {
         name: True
@@ -342,13 +411,13 @@ def bundle(tmp_path):
         review / "final-artifact-review.json",
         {
             "schema": "sinter-independent-final-artifact-review/v1",
-            "version": VERSION,
+            "version": version,
             "source_commit": commit,
             "checks": checks,
             "installer_sha256": candidate.digest(installer),
             "native_archive_sha256": candidate.digest(native),
             "source_archive_sha256": candidate.digest(archive),
-            "portable_sha256": candidate.digest(folder / f"sinter-{VERSION}.pyz"),
+            "portable_sha256": candidate.digest(folder / f"sinter-{version}.pyz"),
         },
     )
     write_json(review / "clean-ubuntu-installed-test.json", installed)
@@ -356,7 +425,7 @@ def bundle(tmp_path):
         review / "qualification-context.json",
         {
             "source_commit": commit,
-            "version": VERSION,
+            "version": version,
             "installer_sha256": candidate.digest(installer),
             "container": "ubuntu:22.04",
             "network": "disabled",
@@ -615,6 +684,23 @@ def test_newer_working_tree_version_never_changes_frozen_candidate_identity(bund
     )
     result = candidate.verify_candidate(folder, review, VERSION, commit, repository)
     assert result["native_target"] == "linux-x64"
+
+
+def test_published_rc1_notes_remain_byte_identical():
+    notes = candidate.release_notes(
+        "0.5.4rc1", "cd928ba7561a09c477b3555e64aa6a3c4cc122b4"
+    )
+    assert hashlib.sha256(notes.encode()).hexdigest() == (
+        "163b5afd0b2f777022f44e453660a678fe68d3bcbc2cc35f34f2fcfa4dc95708"
+    )
+
+
+def test_rc1_cannot_admit_new_candidate_roles(bundle):
+    folder, review, repository, commit = bundle
+    write_json(folder / "installed-workflow-browser.json", {"passed": True})
+    seal(folder)
+    with pytest.raises(ValueError, match="unexpected artifact roles"):
+        candidate.verify_candidate(folder, review, VERSION, commit, repository)
 
 
 @pytest.mark.parametrize(

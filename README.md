@@ -24,9 +24,9 @@ candidate. [Publication evidence](docs/releases/PREVIEW_0.5.4rc1_PUBLICATION_REC
 records the exact public downloads and installed/upgrade scope.
 
 The candidate is frozen at `cd928ba7561a09c477b3555e64aa6a3c4cc122b4`.
-Current `main` is subsequent `0.5.4rc2.dev0` development; its newer recovery
-changes are not included in or qualified by the frozen candidate installers.
-Development now exposes the complete paired garden example directly on Overview
+Current `main` prepares the subsequent [0.5.4rc2 candidate](docs/PREVIEW_0.5.4rc2.md);
+its newer recovery changes are not included in or qualified by the rc1 installers.
+The next candidate exposes the complete paired garden example directly on Overview
 and Getting started, including original sources, handover and editable actions.
 
 The published v0.5.3 installer predates the latest campaign and connection

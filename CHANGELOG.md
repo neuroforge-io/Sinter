@@ -1,7 +1,17 @@
 # Changelog
 
-## Unreleased - 0.5.4rc2.dev0
+## 0.5.4rc2 - next local workflow candidate
 
+Candidate source version; fresh installation and upgrade receipts establish
+platform qualification and published assets. Prior previews remain unchanged.
+
+- Pin both published preview sources and Linux installers for independent copied
+  and actual package-upgrade checks. Reject changed or oversized extracted prior
+  inputs before fixture imports. Keep each original fictional workspace intact.
+- Add a source-bound installed-browser qualification path that operates the frozen
+  Linux app, quits and restarts its process, and retains actual Word/JSON exports
+  and restored copies. Scope the new candidate gate to both prior upgrades and
+  this fresh evidence; preserve the earlier preview's verification policy.
 - Use consistent short passage labels in source-only handovers, with an exact
   source/excerpt identity and Unicode-range key. Admit local passage links only
   when the retained quote still matches its unique original. Keep older reports,
