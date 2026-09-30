@@ -257,3 +257,32 @@ an uncontrolled shared host. They are not customer latency guarantees or an A/B
 speedup. The first attempt could not locate its default browser and produced no
 samples; it remains a failed setup receipt. The successful run explicitly used
 the existing installed Chromium binary. All owned profiling resources closed.
+
+### Complete Word references without a nearly empty final page
+
+The actual Linux Australia operator pack initially used six pages, with only the
+last reference mapping on its final page. Bounded paragraph spacing now applies
+only to complete generated passage-key records. Its final export uses five pages,
+keeps all five complete mappings on page five, and has pixel-identical first four
+pages. Fonts, words, identities, Unicode ranges, non-key paragraph XML and other
+package members remain exact. The other two real packs retain ten and seven
+pages, with their front page on page one and supporting handover on page two.
+
+The independent reviewer found both a nested-quote lookalike and an equal-wording
+quote elsewhere that could wrongly admit a mapping. Final admission checks bind
+each raw quote to its actual position in the key section. **222 focused Python
+checks and 48 additional adversarial probes passed**. The three actual retained
+downloads matched the final compiler exactly and passed **473 fidelity/layout
+checks**, with visual review of front and reference pages. This is layout
+qualification of those local packs, not a quality decision about their sources,
+eligibility, IP or funding.
+
+A clean source copy of the preceding pushed checkpoint plus these two reviewed
+fixes passed the full Python suite: **1,989 tests with five platform-inapplicable
+skips**. The copy's exact source hashes are retained in its local qualification
+receipt. Concurrent unfinished provider/readiness edits owned by another active
+chat were excluded and retained untouched; a separate mixed-tree run had twelve
+failures in its catalogue-response mocks and is not reported as a pass. Fatal
+Ruff, whitespace and the narrow public-boundary checks passed. No new installed
+preview, hosted model result or whole-product 10/10 follows from this source
+checkpoint.

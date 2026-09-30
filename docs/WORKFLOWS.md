@@ -88,6 +88,11 @@ inside quotations, code, lists or table cells remain literal source text.
 Copying readable draft text omits the page-boundary label. Original report text,
 source evidence and previously saved reports remain available separately.
 
+Complete generated passage-reference records use tighter paragraph spacing in
+Word. This is a layout hint, not verification of sources or citations. All words,
+identities and character ranges remain present; edited or lookalike records may
+retain ordinary spacing. Check the actual exported pages before sharing them.
+
 Data is stored without encryption in `~/.sinter/workspace.sqlite3` (or your `SINTER_DATA_DIR`). Back it up responsibly. Unsaved inputs are retained only during this browser session; reload or closing the app can lose them. Returning to Overview lets you continue an unsaved real project without erasing its inputs.
 
 In a casebook, **Project save state** beside the document count describes the

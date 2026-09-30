@@ -5,6 +5,11 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Use bounded spacing for complete generated passage-reference mappings in Word.
+  Preserve every source identity, Unicode range, word and font. Reject nested,
+  duplicate or lookalike mappings for this layout hint; ordinary document bytes
+  and other paragraph formatting stay unchanged.
+
 - Keep a requirement's explanatory note when linking, changing or clearing its
   source. Preserve unknown and clarification states; invalidate a met/not-met
   assessment and old quoted wording when the source changes. Explain the

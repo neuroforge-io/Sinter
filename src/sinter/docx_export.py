@@ -20,6 +20,18 @@ MAX_MARKDOWN = 500_000
 # Keep one bounded source note together, never an arbitrary quote dossier.
 _MAX_SOURCE_NOTE_GROUP_CHARS = 2400
 _MAX_SOURCE_NOTE_GROUP_LINES = 20
+_REFERENCE_KEY_HEADING = "Passage reference key"
+_REFERENCE_KEY_INTRO = (
+    "These short labels refer to the exact selected excerpts. Offsets count "
+    "Unicode code points from zero. The start is included; the end is excluded. "
+    "Selection does not establish a verified answer."
+)
+_REFERENCE_SCOPES = {
+    "quoted above.",
+    "quoted in the selected evidence appendix.",
+    "Evidence only — not reproduced in this document. "
+    "Read its exact wording in Evidence.",
+}
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 REL = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -126,6 +138,110 @@ def _source_note_keep_next(blocks: tuple[Block, ...]) -> frozenset[int]:
     return frozenset(keep)
 
 
+def _reference_key_spacing(markdown: str, blocks: tuple[Block, ...]) -> frozenset[int]:
+    """Admit complete generated mappings for layout, never identity validation."""
+
+    def wording(block: Paragraph) -> str:
+        return "".join(span.text for span in block.spans)
+
+    headings = [
+        index
+        for index, block in enumerate(blocks)
+        if isinstance(block, Paragraph)
+        and block.heading == 2
+        and not (block.quote or block.code or block.list_id)
+        and wording(block) == _REFERENCE_KEY_HEADING
+    ]
+    # A single raw top-level heading also excludes flattened nested headings.
+    normalized = markdown.replace("\r\n", "\n").replace("\r", "\n")
+    raw_headings = list(re.finditer(r"(?m)^## Passage reference key$", normalized))
+    if len(headings) != 1 or len(raw_headings) != 1:
+        return frozenset()
+    index = headings[0]
+    prefix = parse(normalized[: raw_headings[0].end()])
+    if len(prefix) != index + 1 or prefix[-1] != blocks[index]:
+        return frozenset()
+    if index + 1 >= len(blocks):
+        return frozenset()
+    intro = blocks[index + 1]
+    if not isinstance(intro, Paragraph) or intro != Paragraph(
+        (Span(_REFERENCE_KEY_INTRO),)
+    ):
+        return frozenset()
+
+    # Walk the raw section in the same order as its parsed mappings. Typed
+    # quotes omit nesting depth; equal wording elsewhere cannot admit this row.
+    remaining = normalized[raw_headings[0].end() :].lstrip("\n")
+    raw_intro = _REFERENCE_KEY_INTRO + "\n\n"
+    if not remaining.startswith(raw_intro):
+        return frozenset()
+    remaining = remaining[len(raw_intro) :].lstrip("\n")
+
+    admitted, identities = set(), set()
+    for position in range(index + 2, len(blocks)):
+        block = blocks[position]
+        if not isinstance(block, Paragraph) or block.heading or not block.quote:
+            break
+        raw_quote = re.match(r"(?:> [^\n]*(?:\n|$))+", remaining)
+        if raw_quote is None or re.search(r"(?m)^> *>", raw_quote[0]):
+            return frozenset()
+        if parse(raw_quote[0]) != (block,):
+            return frozenset()
+        remaining = remaining[raw_quote.end() :].lstrip("\n")
+        text = wording(block)
+        lines = text.split("\n")
+        number = len(admitted) + 1
+        label = f"Passage {number}"
+        if (
+            block.code
+            or block.list_id
+            or len(text) > _MAX_SOURCE_NOTE_GROUP_CHARS
+            or not 3 <= len(lines) <= _MAX_SOURCE_NOTE_GROUP_LINES
+            or not block.spans
+            or block.spans[0] != Span(label, bold=True)
+            or not lines[0].startswith(label + " — Original source: ")
+            or not "\n".join(lines[:-2])[len(label + " — Original source: ") :].strip()
+        ):
+            return frozenset()
+        identity = re.fullmatch(
+            r"Excerpt ID: ([^;\s]+); source ID: ([^\s]+)\.", lines[-2]
+        )
+        offsets = re.fullmatch(
+            r"Unicode characters: (0|[1-9][0-9]{0,8})–"
+            r"(0|[1-9][0-9]{0,8}); (.+)",
+            lines[-1],
+        )
+        if (
+            identity is None
+            or offsets is None
+            or int(offsets[1]) >= int(offsets[2])
+            or offsets[3] not in _REFERENCE_SCOPES
+            or identity[1] in identities
+        ):
+            return frozenset()
+        # IDs must be literal inline-code fields, not source-title text or links.
+        metadata_start = len("\n".join(lines[:-2])) + 1
+        literal_fields = {
+            (
+                metadata_start + identity.start(group),
+                metadata_start + identity.end(group),
+                identity[group],
+            )
+            for group in (1, 2)
+        }
+        start = 0
+        for span in block.spans:
+            end = start + len(span.text)
+            if span.code and not (span.bold or span.italic or span.href):
+                literal_fields.discard((start, end, span.text))
+            start = end
+        if literal_fields:
+            return frozenset()
+        identities.add(identity[1])
+        admitted.add(position)
+    return frozenset(admitted)
+
+
 class _Package:
     def __init__(self) -> None:
         self.document = ET.Element(f"{{{W}}}document")
@@ -228,6 +344,7 @@ class _Package:
         title: bool = False,
         align: str | None = None,
         keep_next: bool = False,
+        compact_reference: bool = False,
     ) -> None:
         node = _element(parent, "p")
         properties = _element(node, "pPr")
@@ -247,6 +364,12 @@ class _Package:
             _element(properties, "keepLines")
         if keep_next:
             _element(properties, "keepNext")
+        if compact_reference:
+            # Leave fonts/runs and intact-record pagination unchanged. Only
+            # generated reference mappings use tighter line/paragraph spacing.
+            _element(
+                properties, "spacing", before=0, after=80, line=240, lineRule="auto"
+            )
         if paragraph.list_id:
             number = _element(properties, "numPr")
             _element(number, "ilvl", val=paragraph.list_level)
@@ -361,6 +484,7 @@ def export_docx(payload: object) -> WordDocument:
     package = _Package()
     blocks = parse(markdown)
     keep_next = _source_note_keep_next(blocks)
+    compact_references = _reference_key_spacing(markdown, blocks)
     for index, block in enumerate(blocks):
         if isinstance(block, PageBreak):
             package.page_break()
@@ -372,6 +496,7 @@ def export_docx(payload: object) -> WordDocument:
                 block,
                 title=index == 0 and block.heading == 1,
                 keep_next=index in keep_next,
+                compact_reference=index in compact_references,
             )
     package.numbering.extend(package.numbers)
     section = _element(package.body, "sectPr")
