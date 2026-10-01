@@ -171,6 +171,66 @@ def native_window_build_info(info=None):
     return info
 
 
+def windows_toolkit_notice(info, name: str, directory: Path) -> Path | None:
+    """Recognize CPython's original combined notice, bound to this interpreter.
+
+    PCbuild/regen.targets concatenates tcllicense.terms and tklicense.terms
+    into LICENSE.txt; Windows installers do not retain those separate files.
+    Preserve that entire original file, never reconstruct a notice from markers.
+    """
+    prefix = Path(sys.base_prefix).resolve()
+    origins = (
+        directory,
+        Path(info.tkinter_extension_file),
+        Path(info.tcl_shared_library),
+        Path(info.tk_shared_library),
+    )
+    if any(not path.resolve().is_relative_to(prefix) for path in origins):
+        return None
+    notice = prefix / "LICENSE.txt"
+    if not notice.is_file():
+        return None
+    text = " ".join(notice.read_text(encoding="utf-8").split())
+    # These distinct upstream Tcl/Tk notices have the same grant/disclaimers,
+    # but different copyright holders and restricted-rights clause numbers.
+    holder = (
+        "Corporation and other parties."
+        if name == "Tcl"
+        else "Corporation, Apple Inc. and other parties."
+    )
+    clause = "252.227-7014" if name == "Tcl" else "252.227-7013"
+    markers = (
+        "This software is copyrighted by the Regents of the University of "
+        "California, Sun Microsystems, Inc., Scriptics Corporation, ActiveState "
+        + holder,
+        "The following terms apply to all files associated with the software "
+        "unless explicitly disclaimed in individual files.",
+        "The authors hereby grant permission to use, copy, modify, distribute, "
+        "and license this software and its documentation for any purpose, provided",
+        "this notice is included verbatim in any distributions.",
+        "Modifications to this software may be copyrighted by their authors",
+        "IN NO EVENT SHALL THE AUTHORS OR DISTRIBUTORS BE LIABLE TO ANY PARTY",
+        "THE AUTHORS AND DISTRIBUTORS SPECIFICALLY DISCLAIM ANY WARRANTIES,",
+        'IS PROVIDED ON AN "AS IS" BASIS,',
+        "GOVERNMENT USE: If you are acquiring this software on behalf of the",
+        clause + " (b) (3) of DFARs.",
+        "terms specified in this license.",
+    )
+    # All markers must belong to one complete notice, not separate unrelated
+    # sections or a passing mention of Tcl/Tk in Python's own licence.
+    for section in text.split("This software is copyrighted by ")[1:]:
+        section = "This software is copyrighted by " + section
+        position = 0
+        for marker in markers:
+            position = section.find(marker, position)
+            if position < 0:
+                break
+            position += len(marker)
+        else:
+            return notice
+    return None
+
+
 def collect_toolkit_licences(
     info,
     notices,
@@ -204,15 +264,17 @@ def collect_toolkit_licences(
                 )
             )
         else:
-            # Official Python installers normally preserve upstream license.terms
-            # beside Tcl/Tk's scripts. Do not substitute Python's own licence.
             candidates = [directory, directory.parent, directory.parent.parent]
             sources = [
                 path
                 for parent in candidates
-                for filename in ("license.terms",)
+                for filename in (name.lower() + "license.terms", "license.terms")
                 if (path := parent / filename).is_file()
             ][:1]
+            if not sources and sys.platform == "win32":
+                combined = windows_toolkit_notice(info, name, directory)
+                if combined is not None:
+                    sources = [combined]
         if not sources:
             raise RuntimeError(
                 f"{name} original runtime licence could not be collected"

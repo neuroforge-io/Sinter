@@ -208,6 +208,7 @@ def test_debian_prerelease_order_allows_normal_upgrade_to_final():
 
 @pytest.fixture
 def licence_environment(tmp_path, monkeypatch):
+    monkeypatch.setattr(package.sys, "platform", "linux")
     root = tmp_path / "source"
     root.mkdir()
     for name in ("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"):
@@ -250,7 +251,10 @@ def test_collect_licences_preserves_each_upstream_variant_and_provenance(
     inventory = package.collect_licences(notices)
     crypto = next(row for row in inventory if row["name"] == "cryptography")
     assert len(crypto["licences"]) == 3
-    assert len(list((notices / "cryptography").rglob("LICENSE*"))) == 3
+    assert (
+        sum(path.is_file() for path in (notices / "cryptography").rglob("LICENSE*"))
+        == 3
+    )
     for row in inventory:
         for record in row["licences"]:
             assert (

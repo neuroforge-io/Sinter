@@ -290,3 +290,131 @@ def test_python_licence_is_not_substituted_for_toolkit_notices(
     )
     with pytest.raises(RuntimeError, match="Tcl original runtime licence"):
         package.collect_toolkit_licences(toolkit, notices, runtime)
+
+
+# Public upstream Tcl 8.6 licence fixture, not interpreter or customer data.
+# https://github.com/tcltk/tcl/blob/core-8-6-branch/license.terms
+TCL_NOTICE = """This software is copyrighted by the Regents of the University of
+California, Sun Microsystems, Inc., Scriptics Corporation, ActiveState
+Corporation and other parties.  The following terms apply to all files
+associated with the software unless explicitly disclaimed in
+individual files.
+
+The authors hereby grant permission to use, copy, modify, distribute,
+and license this software and its documentation for any purpose, provided
+that existing copyright notices are retained in all copies and that this
+notice is included verbatim in any distributions. No written agreement,
+license, or royalty fee is required for any of the authorized uses.
+Modifications to this software may be copyrighted by their authors
+and need not follow the licensing terms described here, provided that
+the new terms are clearly indicated on the first page of each file where
+they apply.
+
+IN NO EVENT SHALL THE AUTHORS OR DISTRIBUTORS BE LIABLE TO ANY PARTY
+FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES
+ARISING OUT OF THE USE OF THIS SOFTWARE, ITS DOCUMENTATION, OR ANY
+DERIVATIVES THEREOF, EVEN IF THE AUTHORS HAVE BEEN ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+THE AUTHORS AND DISTRIBUTORS SPECIFICALLY DISCLAIM ANY WARRANTIES,
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.  THIS SOFTWARE
+IS PROVIDED ON AN "AS IS" BASIS, AND THE AUTHORS AND DISTRIBUTORS HAVE
+NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
+MODIFICATIONS.
+
+GOVERNMENT USE: If you are acquiring this software on behalf of the
+U.S. government, the Government shall have only "Restricted Rights"
+in the software and related documentation as defined in the Federal
+Acquisition Regulations (FARs) in Clause 52.227.19 (c) (2).  If you
+are acquiring the software on behalf of the Department of Defense, the
+software shall be classified as "Commercial Computer Software" and the
+Government shall have only "Restricted Rights" as defined in Clause
+252.227-7014 (b) (3) of DFARs.  Notwithstanding the foregoing, the
+authors grant the U.S. Government and others acting in its behalf
+permission to use and distribute the software in accordance with the
+terms specified in this license.
+"""
+# The corresponding public Tk notice differs in these two exact places.
+TK_NOTICE = TCL_NOTICE.replace(
+    "Corporation and other parties.", "Corporation, Apple Inc. and other parties."
+).replace("252.227-7014", "252.227-7013")
+
+
+@pytest.fixture
+def windows_script_bundle(script_bundle, monkeypatch):
+    toolkit, runtime, notices, _ = script_bundle
+    monkeypatch.setattr(package.sys, "platform", "win32")
+    prefix = Path(toolkit.tcl_data_dir).parent
+    monkeypatch.setattr(package.sys, "base_prefix", str(prefix))
+    notice = prefix / "LICENSE.txt"
+    notice.write_bytes(("Python fixture notice\n" + TCL_NOTICE + TK_NOTICE).encode())
+    return toolkit, runtime, notices, notice
+
+
+def test_windows_combined_original_notice_retains_both_toolkit_provenance(
+    windows_script_bundle,
+):
+    toolkit, runtime, notices, original = windows_script_bundle
+    rows = package.collect_toolkit_licences(toolkit, notices, runtime)
+    assert {row["name"] for row in rows} == {"Tcl", "Tk"}
+    for row in rows:
+        assert len(row["licences"]) == 1
+        item = row["licences"][0]
+        assert item["sha256"] == package.digest(original)
+        assert (notices / item["path"]).read_bytes() == original.read_bytes()
+        for script in row["scripts"]:
+            assert script["sha256"] == package.digest(Path(script["origin"]))
+            assert script["sha256"] == package.digest(runtime / script["path"])
+
+
+@pytest.mark.parametrize(
+    "contents",
+    [
+        "Python-only fixture notice with a passing Tcl/Tk mention",
+        TCL_NOTICE,
+        TK_NOTICE,
+        TCL_NOTICE + TK_NOTICE.replace("The authors hereby grant permission", ""),
+        TCL_NOTICE + TK_NOTICE.replace("SPECIFICALLY DISCLAIM ANY WARRANTIES,", ""),
+        TCL_NOTICE + TK_NOTICE.replace("terms specified in this license.", ""),
+        TCL_NOTICE + TK_NOTICE.replace("Apple Inc.", "Unrelated fixture vendor"),
+    ],
+    ids=["python-only", "tcl-only", "tk-only", "grant", "warranty", "end", "holder"],
+)
+def test_windows_combined_notice_does_not_substitute_missing_toolkit_terms(
+    windows_script_bundle, contents
+):
+    toolkit, runtime, notices, original = windows_script_bundle
+    original.write_text(contents)
+    with pytest.raises(RuntimeError, match="original runtime licence"):
+        package.collect_toolkit_licences(toolkit, notices, runtime)
+
+
+@pytest.mark.parametrize(
+    "field", ["tcl_data_dir", "tkinter_extension_file", "tk_shared_library"]
+)
+def test_windows_combined_notice_must_belong_to_the_toolkit_interpreter(
+    windows_script_bundle, field, tmp_path
+):
+    toolkit, runtime, notices, _ = windows_script_bundle
+    outside = tmp_path / "unrelated-interpreter"
+    outside.mkdir()
+    setattr(toolkit, field, str(outside))
+    with pytest.raises(RuntimeError, match="original runtime licence"):
+        package.collect_toolkit_licences(toolkit, notices, runtime)
+
+
+def test_windows_separate_original_toolkit_notices_remain_supported(
+    windows_script_bundle,
+):
+    toolkit, runtime, notices, combined = windows_script_bundle
+    combined.unlink()
+    prefix = Path(toolkit.tcl_data_dir).parent
+    for name, contents in (("tcl", TCL_NOTICE), ("tk", TK_NOTICE)):
+        (prefix / (name + "license.terms")).write_text(contents)
+    rows = package.collect_toolkit_licences(toolkit, notices, runtime)
+    for row in rows:
+        item = row["licences"][0]
+        original = prefix / (row["name"].lower() + "license.terms")
+        assert item["sha256"] == package.digest(original)
+        assert (notices / item["path"]).read_bytes() == original.read_bytes()
