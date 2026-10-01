@@ -859,6 +859,7 @@ def qualify(args: argparse.Namespace, inputs: dict) -> dict:
                     "--network=none",
                     "--name",
                     name,
+                    *transport.qualification_container_labels(),
                     "--env",
                     f"SINTER_TEST_UID={os.getuid()}",
                     "--env",

@@ -83,6 +83,18 @@ def test_source_launch_retains_interpreter_and_module():
     assert prefix == ["fictional-python", "-m", "sinter.desktop"]
 
 
+def test_optional_container_owner_is_validated_without_changing_default(monkeypatch):
+    monkeypatch.delenv("SINTER_QUALIFICATION_OWNER", raising=False)
+    assert workflow.qualification_container_labels() == []
+    monkeypatch.setenv("SINTER_QUALIFICATION_OWNER", "a" * 32)
+    assert workflow.qualification_container_labels() == [
+        "--label", "sinter.qualification.owner=" + "a" * 32
+    ]
+    monkeypatch.setenv("SINTER_QUALIFICATION_OWNER", "untrusted --privileged")
+    with pytest.raises(ValueError, match="ownership"):
+        workflow.qualification_container_labels()
+
+
 @pytest.mark.parametrize("version", ["0.4.9", "0.5.3", "0.5.4rc1", "0.5.4rc2"])
 def test_older_browser_default_candidates_do_not_receive_new_flags(version):
     assert workflow.browser_launch_command(["Sinter"], version) == ["Sinter"]

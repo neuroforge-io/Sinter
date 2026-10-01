@@ -80,6 +80,16 @@ def browser_launch_command(
     return [*executable, *(["--mode", "browser"] if native_default and not legacy else [])]
 
 
+def qualification_container_labels() -> list[str]:
+    """Allow a supervising runner to clean only its explicitly owned containers."""
+    owner = os.environ.get("SINTER_QUALIFICATION_OWNER", "")
+    if not owner:
+        return []
+    if not re.fullmatch(r"[0-9a-f]{32}", owner):
+        raise ValueError("Qualification ownership must be an exact task UUID.")
+    return ["--label", f"sinter.qualification.owner={owner}"]
+
+
 def digest(path: Path) -> str:
     """Hash an exact retained file without printing its contents."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -1009,6 +1019,7 @@ def qualify(args: argparse.Namespace, fixture: dict) -> dict:
                 "--network=none",
                 "--name",
                 name,
+                *qualification_container_labels(),
                 "--env",
                 f"SINTER_TEST_UID={os.getuid()}",
                 "--env",
