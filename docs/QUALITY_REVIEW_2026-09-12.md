@@ -1104,3 +1104,35 @@ unobserved. Regular-file snapshots are not final stream hashes, and retained
 samples are bounded without claiming a hard disk bound for fixture spooling.
 Application wrappers, runtime, workflow and old receipt schemas are unchanged.
 No Windows reproduction, causal repair, installed pass or rating follows.
+
+### 2 October: native cleanup test branches and uploaded child evidence
+
+The hosted Windows failure assumed a live listener would always receive a second
+shutdown call. The retained job log shows the listener already stopped after
+failed cleanup. The replacement controls both live/stopped states and requires
+their exact cleanup sequences, retained owner/runtime, unchanged unsaved inputs,
+saved records and explicit retry. It does not widen an assertion to accept an
+arbitrary call count or change application shutdown behavior.
+
+The original macOS five-second whole-child timeout had no stage evidence; its
+cause remains unknown. A separate finite 20-second process harness now covers
+imports, fixture setup and process exit. Deterministic controls retain the
+unchanged default five-second product deadline, while the real failed-GUI child
+measures its deliberately short 0.02-second close refusal. No failed exit is
+presented as durable recovery of in-memory inputs.
+
+Current-main composition passes all 40 native-module tests in 18.47 seconds.
+Independent current-source review also passes those 40 tests, five focused cases
+and 16 byte/numeric bounds probes. Fourteen deliberately timed-out children retain
+the identical primary exception, reversible partial bytes, stage snapshots and
+secondary I/O/parse/write errors in actual uploaded-format XML. Prefixes are
+bounded to 8,192 bytes, file reads to 8,193 bytes and cleanup measurements to four;
+mutable file totals and an unobserved exit remain explicitly unknown.
+Independent receipt:
+`c55dbc0a22674f5c407982790c9b90b798679369726003071ab864114a5a29a0`.
+
+Three default-xunit2 `record_property` compatibility warnings remain visible.
+The actual XML retains the properties; strict schema compatibility is not
+claimed. Production source, existing workflow and published receipts are
+unchanged. Hosted Windows/macOS replay, actual installed/native/browser-owner
+proof and final candidate qualification remain separate requirements.

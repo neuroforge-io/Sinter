@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import copy
 import json
+import math
 import os
 import signal
 import subprocess
@@ -26,6 +28,137 @@ BOOK = {
     "questions": "Who approved the order?",
     "documents": [{"title": "Original note", "content": "No approval — é."}],
 }
+
+
+def _record_launcher_child(
+    record_property, workspace, *, stdout, stderr, returncode=None, timeout=None
+):
+    """Keep bounded fictional-child evidence in the XML that CI uploads."""
+    limit = 8192
+
+    def byte_record(data):
+        retained = data[:limit]
+        total = len(data)
+        return {
+            "encoding": "base64",
+            "total_bytes": total,
+            "retained_bytes": len(retained),
+            "truncated": total > len(retained),
+            "data": base64.b64encode(retained).decode("ascii"),
+        }
+
+    def file_snapshot(name):
+        path = workspace / name
+        data = b""
+        snapshot = {
+            "size_before_bytes": None,
+            "size_after_bytes": None,
+            "read_bytes": 0,
+            "read_limit_bytes": limit + 1,
+            "read_succeeded": False,
+            "observed_eof": None,
+            "final_size_known": False,
+            "final_total_bytes": None,
+            "io_errors": [],
+        }
+
+        def secondary_error(operation, error):
+            snapshot["io_errors"].append(
+                {
+                    "operation": operation,
+                    "error_type": type(error).__name__,
+                    "errno": error.errno,
+                }
+            )
+
+        try:
+            snapshot["size_before_bytes"] = path.stat().st_size
+        except OSError as error:
+            secondary_error("stat_before", error)
+        operation = "open"
+        try:
+            with path.open("rb") as stream:
+                operation = "read"
+                data = stream.read(limit + 1)
+                snapshot["read_succeeded"] = True
+                snapshot["observed_eof"] = len(data) < limit + 1
+                operation = "close"
+        except OSError as error:
+            secondary_error(operation, error)
+        try:
+            snapshot["size_after_bytes"] = path.stat().st_size
+        except OSError as error:
+            secondary_error("stat_after", error)
+        snapshot.update(
+            {
+                "encoding": "base64",
+                "data": base64.b64encode(data[:limit]).decode("ascii"),
+                "read_bytes": len(data),
+                "retained_bytes": min(len(data), limit),
+                "observed_prefix_truncated": len(data) > limit,
+                "metadata_changed_during_read": (
+                    None
+                    if None
+                    in (snapshot["size_before_bytes"], snapshot["size_after_bytes"])
+                    else snapshot["size_before_bytes"] != snapshot["size_after_bytes"]
+                ),
+            }
+        )
+        return data, snapshot
+
+    _, stages = file_snapshot("child-stages.json")
+    observation_bytes, observations = file_snapshot("before-process-exit.json")
+    cleanup_seconds = None
+    observation_error = None
+    if observations["read_succeeded"] and observations["observed_eof"]:
+        try:
+            values = json.loads(observation_bytes)
+            if not isinstance(values, dict):
+                observation_error = {
+                    "error_type": "unexpected_top_level",
+                    "type": type(values).__name__,
+                }
+            else:
+                seconds = values.get("cleanup_seconds")
+                if isinstance(seconds, list) and all(
+                    (
+                        type(value) is int
+                        or (type(value) is float and math.isfinite(value))
+                    )
+                    and value >= 0
+                    for value in seconds
+                ):
+                    cleanup_seconds = seconds[:4]
+                else:
+                    observation_error = {"error_type": "invalid_cleanup_measurements"}
+        except (UnicodeDecodeError, ValueError) as error:
+            observation_error = {"error_type": type(error).__name__}
+    record_property(
+        "native_launcher_child",
+        json.dumps(
+            {
+                "schema": "sinter-fictional-native-child-junit/v1",
+                "stream_byte_limit": limit,
+                "stdout": byte_record(stdout),
+                "stderr": byte_record(stderr),
+                "stage_journal": stages,
+                "actual_process_exit_code": returncode,
+                "actual_harness_timeout_seconds": timeout,
+                "configured_harness_timeout_seconds": 20,
+                "configured_product_close_seconds": 0.02,
+                "product_default_max_close_seconds": 5,
+                "observed_cleanup_seconds": cleanup_seconds,
+                "cleanup_measurement_limit": 4,
+                "observation_snapshot": {
+                    key: value
+                    for key, value in observations.items()
+                    if key not in {"data", "encoding"}
+                },
+                "observation_parse_error": observation_error,
+            },
+            sort_keys=True,
+        ),
+    )
 
 
 @pytest.fixture
@@ -520,31 +653,80 @@ def test_native_edits_during_wait_keep_window_open_after_listener_stops(window):
         workbench.app.campaigns.save = actual
 
 
-def test_shutdown_failure_retains_owner_and_runtime_and_retries(window):
-    window.open_workbench()
-    workbench = window._browser_workbench
-    actual = workbench.server.shutdown
-    calls = []
+@pytest.mark.parametrize("listener_stops_on_close", [False, True])
+def test_shutdown_failure_retains_owner_and_runtime_and_retries(
+    window, listener_stops_on_close
+):
+    """Both thread states are controlled; OS selector timing is not an assertion."""
 
-    def once():
-        calls.append(True)
-        if len(calls) == 1:
-            raise OSError("Fictional one-time shutdown failure")
-        return actual()
+    class ControlledListener(native_browser.OwnedLocalServer):
+        def __init__(self, *args):
+            self.entered = threading.Event()
+            self.stop_listener = threading.Event()
+            self.calls = []
+            super().__init__(*args)
 
-    workbench.server.shutdown = once
+        def serve_forever(self):
+            self.entered.set()
+            self.stop_listener.wait()
+
+        def shutdown(self):
+            self.calls.append("shutdown")
+            if self.calls.count("shutdown") == 1:
+                raise OSError("Fictional one-time shutdown failure")
+            self.stop_listener.set()
+
+        def server_close(self):
+            self.calls.append("server_close")
+            if listener_stops_on_close:
+                self.stop_listener.set()
+            super().server_close()
+
+    window.controller.edit_document(BOOK)
+    saved = window.controller.save()
+    window.controller.edit_document({**BOOK, "title": "Unsaved exact original — 🐝"})
+    window.controller.variables = {"excerpt": "Separate unsaved answer — é."}
+    original = copy.deepcopy(window.controller.document)
+    answer = copy.deepcopy(window.controller.variables)
+    runtime = window.controller.runtime
+    workbench = native_browser.NativeBrowserWorkbench(
+        runtime.app, server_factory=ControlledListener
+    )
+    window._browser_workbench = workbench
+    assert workbench.server.entered.wait(2)
     try:
         window.close()
         finish_close(window)
         assert not window.closed and not window.controller.runtime._closed
         assert workbench.phase == "failed" and not workbench.closed
         assert workbench.app.desktop_shutdown is workbench._quit_callback
+        assert workbench.app.native_browser_owner is workbench
+        assert window.controller.document == original and window.controller.dirty
+        assert window.controller.variables == answer
+        assert runtime.app.casebooks.get(saved["id"]) == saved
+        assert workbench._cleanup_done.is_set()
+        assert isinstance(workbench._cleanup_error, OSError)
+        assert workbench.server.calls == ["shutdown", "server_close"]
+        assert workbench.thread.is_alive() is (not listener_stops_on_close)
         window.close()
         finish_close(window)
         assert window.closed and workbench.closed
-        assert not workbench.thread.is_alive() and len(calls) == 2
+        assert not workbench.thread.is_alive()
+        expected = ["shutdown", "server_close"]
+        if not listener_stops_on_close:
+            expected.append("shutdown")
+        expected.append("server_close")
+        assert workbench.server.calls == expected
+        assert workbench._cleanup_error is None
+        assert workbench.app.desktop_shutdown is None
+        assert not hasattr(workbench.app, "native_browser_owner")
+        assert window.controller.runtime._closed
+        assert window.controller.document == original
+        assert window.controller.variables == answer
+        with Runtime(workbench.workspace) as reopened:
+            assert reopened.app.casebooks.get(saved["id"]) == saved
     finally:
-        workbench.server.shutdown = actual
+        workbench.server.stop_listener.set()
         if not workbench.closed:
             workbench.close()
 
@@ -655,6 +837,139 @@ def test_lost_tk_emergency_refuses_without_runtime_close_or_losing_drafts(window
         workbench.app.campaigns.save = actual
 
 
+def test_default_emergency_cleanup_obeys_five_second_deadline_not_process_budget(
+    window, monkeypatch, record_property
+):
+    """Advance the deadline deterministically while a real admitted save is held."""
+    window.controller.edit_document(BOOK)
+    window.answer = False
+    window.open_workbench()
+    _, _, release, done, worker, _, actual = pending_save(window)
+    workbench = window._browser_workbench
+    original = copy.deepcopy(window.controller.document)
+    window.controller.variables = {"excerpt": "Unchanged local answer — é."}
+    answer = copy.deepcopy(window.controller.variables)
+    clock, waits = [100.0], []
+
+    def deadline_wait(seconds):
+        waits.append(seconds)
+        clock[0] += seconds
+        return False
+
+    try:
+        with monkeypatch.context() as controlled:
+            controlled.setattr(
+                native_browser, "time", SimpleNamespace(monotonic=lambda: clock[0])
+            )
+            controlled.setattr(workbench._cleanup_done, "wait", deadline_wait)
+            try:
+                with pytest.raises(NativeWindowError, match="only in process memory"):
+                    window._emergency_close()
+            finally:
+                record_property(
+                    "native_default_emergency_cleanup",
+                    json.dumps(
+                        {
+                            "held": "admitted_request",
+                            "expected_seconds": 5,
+                            "logical_elapsed_seconds": clock[0] - 100,
+                            "phase": workbench.phase,
+                        },
+                        sort_keys=True,
+                    ),
+                )
+        assert 105 <= clock[0] < 105.02
+        assert waits and all(seconds == 0.01 for seconds in waits)
+        assert workbench.phase == "refused" and not workbench.closed
+        assert workbench.server.active_requests == 1
+        assert workbench._cleanup_thread is None
+        assert not window.closed and not window.controller.runtime._closed
+        assert workbench.app.native_browser_owner is workbench
+        assert workbench.app.desktop_shutdown is workbench._quit_callback
+        assert window.controller.document == original and window.controller.dirty
+        assert window.controller.variables == answer
+        release.set()
+        assert done.wait(2)
+        worker.join()
+        window._emergency_close()
+        assert window.closed and workbench.closed
+        assert not workbench.thread.is_alive()
+    finally:
+        release.set()
+        worker.join(3)
+        workbench.app.campaigns.save = actual
+
+
+def test_default_emergency_cleanup_deadline_also_bounds_blocked_listener_cleanup(
+    window, monkeypatch, record_property
+):
+    window.controller.edit_document(BOOK)
+    window.answer = False
+    window.open_workbench()
+    workbench = window._browser_workbench
+    original = copy.deepcopy(window.controller.document)
+    window.controller.variables = {"excerpt": "Exact separate answer — é."}
+    answer = copy.deepcopy(window.controller.variables)
+    entered, release = threading.Event(), threading.Event()
+    actual_shutdown = workbench.server.shutdown
+    calls, clock = [], [200.0]
+
+    def held_shutdown():
+        calls.append("shutdown")
+        entered.set()
+        release.wait()
+        actual_shutdown()
+
+    def deadline_wait(seconds):
+        assert entered.wait(2)
+        clock[0] += seconds
+        return False
+
+    workbench.server.shutdown = held_shutdown
+    try:
+        with monkeypatch.context() as controlled:
+            controlled.setattr(
+                native_browser, "time", SimpleNamespace(monotonic=lambda: clock[0])
+            )
+            controlled.setattr(workbench._cleanup_done, "wait", deadline_wait)
+            try:
+                with pytest.raises(NativeWindowError, match="only in process memory"):
+                    window._emergency_close()
+            finally:
+                record_property(
+                    "native_default_emergency_cleanup",
+                    json.dumps(
+                        {
+                            "held": "cleanup_worker",
+                            "expected_seconds": 5,
+                            "logical_elapsed_seconds": clock[0] - 200,
+                            "phase": workbench.phase,
+                        },
+                        sort_keys=True,
+                    ),
+                )
+        assert 205 <= clock[0] < 205.02
+        assert calls == ["shutdown"]
+        assert workbench.phase == "failed" and not workbench.closed
+        assert workbench._cleanup_thread.is_alive()
+        assert not workbench._cleanup_done.is_set()
+        assert workbench.server.active_requests == 0
+        assert not window.closed and not window.controller.runtime._closed
+        assert workbench.app.native_browser_owner is workbench
+        assert window.controller.document == original and window.controller.dirty
+        assert window.controller.variables == answer
+        release.set()
+        assert workbench._cleanup_done.wait(2)
+        window._emergency_close()
+        assert calls == ["shutdown"]  # Consume the completed attempt, never replay it.
+        assert window.closed and workbench.closed
+        assert not workbench.thread.is_alive()
+        assert window.controller.variables == answer
+    finally:
+        release.set()
+        workbench.server.shutdown = actual_shutdown
+
+
 @pytest.mark.parametrize("timeout", [True, 0, -1, float("nan"), float("inf"), 6])
 def test_invalid_wait_cannot_turn_bounded_close_into_unbounded_work(
     controller, timeout
@@ -738,11 +1053,21 @@ def test_initial_heartbeat_scheduling_error_runs_bounded_emergency_cleanup(windo
     assert signal.getsignal(signal.SIGTERM) == previous
 
 
-def test_failed_tk_launcher_exit_does_not_claim_durable_in_memory_recovery(tmp_path):
+def test_failed_tk_launcher_exit_does_not_claim_durable_in_memory_recovery(
+    tmp_path, record_property
+):
     """A real subprocess exits; daemon requests and unsaved memory are not a backup."""
     script = r"""
-import copy, json, signal, sys, threading
+import json, sys, time
 from pathlib import Path
+root = Path(sys.argv[1])
+root.mkdir(parents=True)
+stages = []
+def checkpoint(stage):
+    stages.append({'stage':stage, 'monotonic':time.monotonic()})
+    (root/'child-stages.json').write_text(json.dumps(stages), encoding='utf-8')
+checkpoint('child_started')
+import signal, threading
 from http.client import HTTPConnection
 from types import SimpleNamespace
 from urllib.parse import urlsplit
@@ -750,7 +1075,7 @@ from sinter import client, desktop, native_window
 from sinter.native_browser import NativeBrowserWorkbench
 from sinter.native_window import NativeController, NativeWindow
 from sinter.runtime import Runtime
-root = Path(sys.argv[1])
+checkpoint('imports_complete')
 def refuse(*args, **kwargs):
     raise AssertionError('No provider or credential request')
 for key in ('_open', '_load_key', 'chat', 'search'):
@@ -764,17 +1089,18 @@ controller.edit_document({**controller.document, 'title':'Unsaved in memory'})
 controller.variables = {'excerpt':'Unsaved answer — é.'}
 workbench = NativeBrowserWorkbench(runtime.app)
 saved = runtime.app.campaigns.save({'title':'Saved fictional campaign'})
+checkpoint('fixture_saved')
 actual_save = runtime.app.campaigns.save
 entered = threading.Event()
 never_release = threading.Event()
 def waiting_save(*args, **kwargs):
     entered.set()
-    never_release.wait(10)
+    never_release.wait()
     return actual_save(*args, **kwargs)
 runtime.app.campaigns.save = waiting_save
 def submit():
     url = urlsplit(workbench.url)
-    conn = HTTPConnection(url.hostname, url.port, timeout=10)
+    conn = HTTPConnection(url.hostname, url.port, timeout=30)
     conn.request('POST', '/api/campaigns/save', json.dumps({
        'document':{**saved['document'], 'title':'Unfinished explicit save'},
        'id':saved['id'], 'revision':saved['revision']}),
@@ -785,6 +1111,7 @@ def submit():
 worker = threading.Thread(target=submit, daemon=True)
 worker.start()
 assert entered.wait(2)
+checkpoint('request_admitted')
 window = NativeWindow.__new__(NativeWindow)
 window.controller = controller
 window.closed = False
@@ -792,11 +1119,21 @@ window._browser_workbench = workbench
 window.root = SimpleNamespace(after=lambda *args:'heartbeat',
                              mainloop=lambda:None, winfo_exists=lambda:False)
 old_close = workbench.close
-workbench.close = lambda:old_close(timeout=0.02)
+cleanup_seconds = []
+def short_close():
+    checkpoint('cleanup_started')
+    started = time.monotonic()
+    try:
+        return old_close(timeout=0.02)
+    finally:
+        cleanup_seconds.append(time.monotonic()-started)
+        checkpoint('cleanup_finished')
+workbench.close = short_close
 native_window.run_native = lambda directory:window.run()
 previous = signal.getsignal(signal.SIGTERM)
 code = desktop.main(['--mode','native','--directory',str(root)])
 assert code == 1
+checkpoint('launcher_returned')
 observations = {'exit_code':code, 'runtime_closed_before_exit':runtime._closed,
  'native_title_in_memory_before_exit':controller.document['title'],
  'answer_in_memory_before_exit':controller.variables,
@@ -804,34 +1141,84 @@ observations = {'exit_code':code, 'runtime_closed_before_exit':runtime._closed,
  'live_saved_campaign':runtime.app.campaigns.get(saved['id']),
  'active_requests_before_exit':workbench.server.active_requests,
  'request_thread_alive_before_exit':worker.is_alive(),
+ 'cleanup_seconds':cleanup_seconds, 'cleanup_timeout':0.02,
  'signal_restored':signal.getsignal(signal.SIGTERM)==previous}
-(root/'before-process-exit.json').write_text(json.dumps(observations))
+(root/'before-process-exit.json').write_text(json.dumps(observations), encoding='utf-8')
+checkpoint('observations_saved')
 raise SystemExit(code)
 """
     environment = dict(os.environ)
     environment["PYTHONPATH"] = str(Path(native_browser.__file__).resolve().parents[1])
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     workspace = tmp_path / "failed-gui-fictional"
-    result = subprocess.run(
-        [sys.executable, "-B", "-c", script, str(workspace)],
-        env=environment,
-        capture_output=True,
-        timeout=5,
-        text=True,
+    # Whole child setup/import/storage and process teardown have their own finite
+    # allowance. This is not the product's five-second emergency-close deadline:
+    # that default is checked separately; this child times its 0.02s refusal.
+    try:
+        result = subprocess.run(
+            [sys.executable, "-B", "-c", script, str(workspace)],
+            env=environment,
+            capture_output=True,
+            timeout=20,
+        )
+    except subprocess.TimeoutExpired as exc:
+        _record_launcher_child(
+            record_property,
+            workspace,
+            stdout=exc.stdout or b"",
+            stderr=exc.stderr or b"",
+            timeout=exc.timeout,
+        )
+        # Preserve any exact captured bytes and last completed child stage.
+        try:
+            (tmp_path / "launcher.stdout").write_bytes(exc.stdout or b"")
+            (tmp_path / "launcher.stderr").write_bytes(exc.stderr or b"")
+            (tmp_path / "launcher-timeout.json").write_text(
+                json.dumps({"harness_timeout_seconds": exc.timeout}), encoding="utf-8"
+            )
+        except OSError as error:
+            record_property(
+                "native_launcher_artifact_write_error",
+                json.dumps({"error_type": type(error).__name__, "errno": error.errno}),
+            )
+        raise
+    _record_launcher_child(
+        record_property,
+        workspace,
+        stdout=result.stdout,
+        stderr=result.stderr,
+        returncode=result.returncode,
     )
-    (tmp_path / "launcher.stdout").write_text(result.stdout)
-    (tmp_path / "launcher.stderr").write_text(result.stderr)
+    (tmp_path / "launcher.stdout").write_bytes(result.stdout)
+    (tmp_path / "launcher.stderr").write_bytes(result.stderr)
     (tmp_path / "launcher-exit.json").write_text(
-        json.dumps({"actual_process_exit_code": result.returncode})
+        json.dumps({"actual_process_exit_code": result.returncode}), encoding="utf-8"
     )
+    stderr = result.stderr.decode("utf-8")
     assert result.returncode == 1
-    assert "graphical launcher exits with an error" in result.stderr
-    assert "only in process memory" in result.stderr
+    assert "graphical launcher exits with an error" in stderr
+    assert "only in process memory" in stderr
     assert (
-        "not guaranteed" in result.stderr and "No request was replayed" in result.stderr
+        "not guaranteed" in stderr and "No request was replayed" in stderr
     )
-    assert "Traceback" not in result.stderr
-    before = json.loads((workspace / "before-process-exit.json").read_text())
+    assert "Traceback" not in stderr
+    before = json.loads(
+        (workspace / "before-process-exit.json").read_text(encoding="utf-8")
+    )
+    stages = json.loads((workspace / "child-stages.json").read_text(encoding="utf-8"))
+    assert [row["stage"] for row in stages] == [
+        "child_started",
+        "imports_complete",
+        "fixture_saved",
+        "request_admitted",
+        "cleanup_started",
+        "cleanup_finished",
+        "launcher_returned",
+        "observations_saved",
+    ]
+    assert len(before["cleanup_seconds"]) == 1
+    assert before["cleanup_timeout"] == 0.02
+    assert 0.02 <= before["cleanup_seconds"][0] < 5
     assert not before["runtime_closed_before_exit"]
     assert before["native_title_in_memory_before_exit"] == "Unsaved in memory"
     assert before["answer_in_memory_before_exit"] == {"excerpt": "Unsaved answer — é."}

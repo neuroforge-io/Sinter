@@ -5,6 +5,12 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Exercise both live and stopped listener retries deterministically in native
+  cleanup tests, preserving ownership, saved records and unsaved inputs. Keep the
+  five-second product deadline separate from finite subprocess startup/teardown,
+  and retain bounded child diagnostics in CI XML without replacing a timeout.
+  Runtime behavior is unchanged; hosted platform replay remains required.
+
 - Retain bounded launcher-fixture diagnostics in the uploaded test report before
   assertions, including partial output after a timeout. The five-second fixture
   wait and application wrappers are unchanged. This helps diagnose an intermittent
