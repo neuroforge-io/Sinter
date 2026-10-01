@@ -592,3 +592,56 @@ The combined source, its deliberate merges and its regression results receive
 a separate frozen receipt before commit. Optional hosted generation, additional
 platforms and RC3 installed-release qualification remain outside these repairs.
 No whole-product 10/10 claim is made.
+
+## Quoted-budget foundation — 1 October 2026
+
+Source commit `6e631e59a985295810206d989ca9d8613149e733` separates entered
+quote amounts from an application-budget decision. The five campaign/v1 budget
+fields, original prices, references, unknown amounts and historical costs remain
+unchanged. Raw arithmetic above an entered AUD cash ceiling is an observation;
+`over_ceiling` stays `null` because v1 does not qualify application amounts,
+eligible costs or GST bases. Quote-basis review information is displayed separately
+from readiness and currency review. It cannot be dismissed through a checkbox.
+
+The Budget view uses compact cost disclosures, an explicit next-cost action,
+exact-cent local arithmetic and current-answer review invalidation when active
+costs change. Removing active costs also invalidates current answer reviews;
+historical reviews remain retained. Newly derived briefs, reports and Word files
+label quoted subtotals and explain unknown or mixed amount bases. Historical
+saved JSON and literal user edits are not rewritten as new evidence.
+
+The exact committed archive matched all **373** source-file hashes in the
+qualification freeze after incorporating upstream launch/recovery fixes. That
+combined source passed **2,735 Python tests, with eight skipped**, **280
+JavaScript tests**, and **76/76** browser budget checks. The initial browser
+attempt could not locate the environment's configured Chromium cache; its failure
+was retained, and the successful rerun explicitly selected the existing installed
+Chromium. Fatal Python lint and the public-boundary checks passed. Separate
+independent reviews contributed **32** desktop/phone UI checks and **102**
+hostile Decimal-context probes; the precision reviewer also ran **45** copied
+regressions. These are source tests, not installed-platform passes.
+
+A real campaign reopened at its saved revision with the original costs and
+unpriced line intact. A read-only comparison against the stopped-server backup
+found every row in the five local tables and the preferences bytes unchanged.
+The brief clearly displayed the quoted-amount caveat. The in-app browser did not
+confirm Word file delivery after the first attempt and one explicit cached retry,
+even though Word capture passed in Chromium qualification. The existing local
+exporter produced a validated private Word recovery file; that recovery is not
+an in-app-browser delivery pass. No hosted generation or grant submission was
+performed during this qualification.
+
+Warm local processing observations used 100 fictional samples per action:
+preparing the small fixture had a **0.240 ms** median, and preparing 200 cost rows
+had a **2.730 ms** median. Word compilation medians were **2.691 ms** and
+**2.830 ms** respectively. These are Python processing observations, not browser
+load times, installed timings or guarantees.
+
+The independent bounded-feature rating remains **experience 7 / functionality 8
+/ appearance 7**. Open items include disclosure continuity after navigation,
+brief count wording and embedded-browser Word delivery. A separately attacked
+application-budget/v2 domain proposal passed its private checks but has no product
+UI, guarded persistence, durable review history or installed qualification yet.
+The full design gates remain open in [the application-budget design](APPLICATION_BUDGET_V2_DESIGN.md).
+The published Linux-only 0.5.4rc2 preview is unchanged; this is unreleased
+0.5.4rc3.dev0 source. No whole-product 10/10 or new installer claim is made.
