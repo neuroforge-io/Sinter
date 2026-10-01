@@ -51,13 +51,16 @@ def test_latest_edit_keeps_identity_and_moves_older_campaign_first(tmp_path):
 
 
 @pytest.mark.parametrize("clock", [CLOCK, "2026-09-30T11:00:00+00:00"])
-def test_legacy_second_timestamp_and_clock_rollback_keep_latest_save(tmp_path, clock):
+@pytest.mark.parametrize("legacy_stamp", [CLOCK, CLOCK.replace("+00:00", "Z")])
+def test_legacy_second_timestamp_and_clock_rollback_keep_latest_save(
+    tmp_path, clock, legacy_stamp
+):
     store = campaigns.CampaignStore(tmp_path)
     with patch.object(campaigns.uuid, "uuid4", return_value=UUID(hex="1" * 32)):
         legacy = store.save(document("Fictional legacy campaign"))
     with store._connect() as db:
         db.execute(
-            "UPDATE campaigns SET updated_at=? WHERE id=?", (CLOCK, legacy["id"])
+            "UPDATE campaigns SET updated_at=? WHERE id=?", (legacy_stamp, legacy["id"])
         )
         columns = [row["name"] for row in db.execute("PRAGMA table_info(campaigns)")]
     with patch.object(campaigns, "utc_now", return_value=clock), patch.object(
@@ -71,13 +74,38 @@ def test_legacy_second_timestamp_and_clock_rollback_keep_latest_save(tmp_path, c
     assert (
         datetime.fromisoformat(listing[0]["updated_at"]) > datetime.fromisoformat(CLOCK)
     )
-    assert listing[1]["updated_at"] == CLOCK
+    assert listing[1]["updated_at"] == legacy_stamp
     assert reopened.get(legacy["id"]) == legacy
     with reopened._connect() as db:
         reopened_columns = [
             row["name"] for row in db.execute("PRAGMA table_info(campaigns)")
         ]
         assert reopened_columns == columns
+
+
+def test_mixed_legacy_utc_spellings_order_by_instant_without_rewriting(tmp_path):
+    store = campaigns.CampaignStore(tmp_path)
+    with patch.object(campaigns.uuid, "uuid4", side_effect=[
+        UUID(hex="1" * 32), UUID(hex="f" * 32), UUID(hex="e" * 32)
+    ]):
+        earlier = store.save(document("Fictional legacy Z"))
+        later = store.save(document("Fictional legacy fractional UTC"))
+        stamps = [CLOCK.replace("+00:00", "Z"), "2026-10-01T12:00:00.000010+00:00"]
+        with store._connect() as db:
+            for saved, stamp in zip([earlier, later], stamps):
+                db.execute("UPDATE campaigns SET updated_at=? WHERE id=?",
+                           (stamp, saved["id"]))
+        assert [row["id"] for row in store.list()] == [later["id"], earlier["id"]]
+        with patch.object(campaigns, "utc_now", return_value=CLOCK):
+            latest = store.save(document("Fictional saved after both UTC forms"))
+
+    assert [row["id"] for row in store.list()] == [
+        latest["id"], later["id"], earlier["id"]
+    ]
+    assert store.list()[0]["updated_at"] == "2026-10-01T12:00:00.000011+00:00"
+    assert [row["updated_at"] for row in store.list()[1:]] == stamps[::-1]
+    assert store.get(earlier["id"]) == earlier
+    assert store.get(later["id"]) == later
 
 
 def test_failed_stale_save_does_not_change_latest_order_or_saved_metadata(tmp_path):

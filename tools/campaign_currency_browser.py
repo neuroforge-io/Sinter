@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import sys
 import tempfile
 import threading
@@ -108,15 +109,18 @@ class CurrencyChecks(CampaignChecks):
             self.import_fixture(page, fixture("Fictional latest tied other", "other"))
             latest = self.save_snapshot(page)
 
-        assert older["id"] != latest["id"]
-        assert self.app.campaigns.get(older["id"]) == older
+        assert older["id"] != latest["id"], f"Import reused campaign ID: {latest['id']}"
+        retained_older = self.app.campaigns.get(older["id"])
+        assert retained_older == older, f"Older campaign changed: {retained_older!r}"
         page.reload()
         expect(page.get_by_label("Campaign name", exact=True)).to_have_value(
             latest["document"]["title"]
         )
         expect(self.details(page)).to_have_value("other")
-        assert self.app.campaigns.get(latest["id"]) == latest
-        assert self.app.campaigns.get(older["id"]) == older
+        assert (
+            self.app.campaigns.get(latest["id"]) == latest
+        ), "Latest snapshot changed."
+        assert self.app.campaigns.get(older["id"]) == older, "Older snapshot changed."
         self.screenshot(page, "currency-same-second-latest", full_page=True)
 
     def details(self, page):
@@ -433,7 +437,12 @@ def main(argv: list[str] | None = None) -> None:
         and unchanged
         and all(resources.values()),
     }
-    (artifacts / "browser-receipt.json").write_text(json.dumps(receipt, indent=2))
+    receipt_path = artifacts / "browser-receipt.json"
+    receipt_path.write_text(json.dumps(receipt, indent=2))
+    retained = ROOT / "browser-artifacts" / "campaign-currency"
+    retained.mkdir(parents=True, exist_ok=True)
+    for path in [receipt_path, *(artifacts / name for name in checks.screenshots)]:
+        shutil.copyfile(path, retained / path.name)
     print(artifacts / "browser-receipt.json")
     if not receipt["passed"]:
         raise SystemExit("FAIL: inspect retained fictional currency receipt.")

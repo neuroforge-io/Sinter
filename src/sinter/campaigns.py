@@ -10,7 +10,7 @@ import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterator
@@ -1888,15 +1888,24 @@ class CampaignStore:
         return value
 
     @staticmethod
-    def _next_updated_at(db: sqlite3.Connection) -> str:
+    def _parse_updated_at(value: str) -> datetime:
+        """Read legacy UTC Z stamps on Python 3.10 without rewriting saved rows."""
+        return datetime.fromisoformat(value.removesuffix("Z") + "+00:00"
+                                      if value.endswith("Z") else value)
+
+    def _next_updated_at(self, db: sqlite3.Connection) -> str:
         """Order successful saves inside the existing serialized write transaction."""
-        now = datetime.fromisoformat(utc_now())
-        latest = db.execute("SELECT MAX(updated_at) FROM campaigns").fetchone()[0]
-        if latest:
+        now = self._parse_updated_at(utc_now())
+        latest = max(
+            (self._parse_updated_at(row[0])
+             for row in db.execute("SELECT updated_at FROM campaigns")),
+            default=None,
+        )
+        if latest is not None:
             # Existing stores use second-resolution UTC stamps. Keep those rows
             # intact; ties or a clock rollback must not reopen an older campaign.
-            now = max(now, datetime.fromisoformat(latest) + timedelta(microseconds=1))
-        return now.isoformat(timespec="microseconds")
+            now = max(now, latest + timedelta(microseconds=1))
+        return now.astimezone(timezone.utc).isoformat(timespec="microseconds")
 
     def save(self, document: object, id: str | None = None,
              revision: int | None = None) -> dict:
@@ -1934,9 +1943,13 @@ class CampaignStore:
     def list(self) -> list[dict]:
         """List saved campaign identities and revisions without their private text."""
         with self._connect() as db:
-            return [dict(row) for row in db.execute(
+            rows = [dict(row) for row in db.execute(
                 "SELECT id,revision,title,updated_at FROM campaigns "
-                "ORDER BY updated_at DESC,id")]
+                "ORDER BY id")]
+        # Parse at most 50 metadata rows: Z and +00:00 are equivalent instants,
+        # but their text ordering differs. Stable sorting retains legacy ID ties.
+        return sorted(rows, key=lambda row: self._parse_updated_at(row["updated_at"]),
+                      reverse=True)
 
     def get(self, id: str) -> dict:
         """Read one campaign; a removed identity raises KeyError."""
