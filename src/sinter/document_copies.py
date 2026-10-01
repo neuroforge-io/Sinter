@@ -127,12 +127,16 @@ def save_word_copy(directory: Path, payload: object) -> dict:
             folder_fd = os.open("exports", flags, dir_fd=root_fd)
             resources.callback(os.close, folder_fd)
             _private_directory(folder_fd)
-            lock_fd = os.open(
-                _LOCK,
-                os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK,
-                0o600,
-                dir_fd=folder_fd,
-            )
+            lock_flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK
+            try:
+                lock_fd = os.open(
+                    _LOCK,
+                    lock_flags | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                    dir_fd=folder_fd,
+                )
+            except FileExistsError:
+                lock_fd = os.open(_LOCK, lock_flags, dir_fd=folder_fd)
             resources.callback(os.close, lock_fd)
             lock_info = os.fstat(lock_fd)
             if (
