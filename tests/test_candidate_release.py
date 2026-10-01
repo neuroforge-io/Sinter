@@ -21,6 +21,22 @@ from tools import release_manifest, release_tag
 
 VERSION = "0.5.4rc1"
 PRIOR = qualification.QUALIFIED_PRIOR_COMMIT
+PUBLISHED_RC2_CHECKSUM_DOCUMENT = (
+    "dad6fc834090a2a0692672abcd4e9b5364444dcfb41d87869c6144b7e1081c8d"
+    "  RELEASE-NOTES.md\n"
+    "eaf318d142e68e942fa17f0881f52bf98bbf0cee30e4bb9fdb84b7002c56b7f0"
+    "  Sinter-0.5.4rc2-linux-x64.deb\n"
+    "1f787528f9df4ec97b1a469fb877a8f04d0f8087aaf65c979a0be65f656265f4"
+    "  Sinter-0.5.4rc2-linux-x64.tar.gz\n"
+    "5d173a7cb3a2fbba5ffb5fa390241713dcc6e9fcd3ba6bffbce7dd6031a3a31c"
+    "  candidate-release-manifest.json\n"
+    "ab3d3464b834276679a39ed2989509ac636e914ffa832a0b02ead4c058fa549d"
+    "  sinter-0.5.4rc2-qualification.zip\n"
+    "d53690e159ca4a21e9ec71a0997115bc96bec2486269807f97d8ed92a7301bfc"
+    "  sinter-0.5.4rc2-source.zip\n"
+    "f2d8ccdc3421ee899241eb6f48da4a136684f757dc129df8aea86de277c0b7c9"
+    "  sinter-0.5.4rc2.pyz\n"
+)
 UPGRADE_CHECKS = [
     "prior profile and appearance preferences retained",
     "explicit legacy model selection retained with compatible provider",
@@ -71,7 +87,7 @@ def bundle(tmp_path, request):
         "LICENSE": "Fixture licence\n",
         "NOTICE": "Fixture notice\n",
     }
-    if version == "0.5.4rc2":
+    if version in {"0.5.4rc2", "0.5.4rc3"}:
         for name in ("offline-garden-casebook.json", "offline-garden-campaign.json"):
             files["src/sinter/web/" + name] = (
                 qualification.ROOT / "src/sinter/web" / name
@@ -330,7 +346,7 @@ def bundle(tmp_path, request):
             },
         },
     )
-    if version == "0.5.4rc2":
+    if version in {"0.5.4rc2", "0.5.4rc3"}:
         for prior in qualification.candidate_priors(version):
             source_name, sums_name, copied_name, native_name = (
                 qualification.prior_roles(prior)
@@ -351,12 +367,24 @@ def bundle(tmp_path, request):
                 f"{prior.installer_sha256}  Sinter-{prior.version}-linux-x64.deb\n"
                 f"{prior.source_archive_sha256}  sinter-{prior.version}-source.zip\n"
             )
+            if prior.version == "0.5.4rc2":
+                (folder / sums_name).write_bytes(
+                    PUBLISHED_RC2_CHECKSUM_DOCUMENT.encode()
+                )
             base = {
                 **upgrade,
                 "prior_source_commit": prior.source_commit,
                 "prior_source_archive_sha256": prior.source_archive_sha256,
                 "candidate_binary_sha256": candidate.digest(runtime / "Sinter"),
             }
+            rich = (
+                [
+                    "rich prior source snapshots, stale marked review "
+                    "and unknown/unassigned owners retained"
+                ]
+                if prior.version == "0.5.4rc2"
+                else []
+            )
             write_json(
                 folder / copied_name,
                 {
@@ -367,7 +395,18 @@ def bundle(tmp_path, request):
                     "checks": [
                         *UPGRADE_CHECKS,
                         "untouched prior workspace retains every original file digest",
+                        *rich,
                     ],
+                    **(
+                        {
+                            "fixture_notice": (
+                                "Fictional workspace only. No live model access "
+                                "or real account proof."
+                            )
+                        }
+                        if prior.version == "0.5.4rc2"
+                        else {}
+                    ),
                 },
             )
             native_checks = [*NATIVE_CHECKS]
@@ -386,8 +425,24 @@ def bundle(tmp_path, request):
                     "candidate_package_version": version.replace("rc", "~rc"),
                     "candidate_installer_sha256": candidate.digest(installer),
                     "prior_installer_sha256": prior.installer_sha256,
-                    "candidate_native_checks": UPGRADE_CHECKS,
+                    "candidate_native_checks": [*UPGRADE_CHECKS, *rich],
                     "checks": native_checks,
+                    **(
+                        {
+                            "fixture_notice": (
+                                "Fictional source-created workspace; actual native "
+                                "package replacement."
+                            ),
+                            "prior_native_checks": [
+                                check.replace(
+                                    " with compatible provider", " by prior application"
+                                )
+                                for check in [*UPGRADE_CHECKS, *rich]
+                            ],
+                        }
+                        if prior.version == "0.5.4rc2"
+                        else {}
+                    ),
                 },
             )
     seal(folder)
@@ -877,3 +932,36 @@ def test_scoped_plan_cannot_authorise_stable_tag(monkeypatch, tmp_path):
         release_tag.ensure_release_tag(
             candidate.REPOSITORY, "v0.5.3", "a" * 40, tmp_path / "manifest.json"
         )
+
+
+@pytest.mark.parametrize(
+    "kind", [0o120000, 0o010000, 0o020000, 0o040000, 0o060000, 0o140000]
+)
+def test_resealed_qualification_zip_refuses_nonregular_member_types(
+    bundle, tmp_path, kind
+):
+    folder, review, repository, commit = bundle
+    manifest = candidate.prepare(
+        folder, review, tmp_path / "stage", VERSION, commit, repository
+    )
+    archive_path = manifest.parent / f"sinter-{VERSION}-qualification.zip"
+    with zipfile.ZipFile(archive_path) as archive:
+        members = [(item, archive.read(item)) for item in archive.infolist()]
+    with zipfile.ZipFile(
+        archive_path, "w", compression=zipfile.ZIP_DEFLATED
+    ) as archive:
+        for item, data in members:
+            if item.filename == "canonical/prior-source-verification.json":
+                item.create_system = 3
+                item.external_attr = (kind | 0o600) << 16
+            archive.writestr(item, data)
+    plan = json.loads(manifest.read_text())
+    for row in plan["assets"]:
+        if row["path"] == archive_path.name:
+            row.update(
+                sha256=candidate.digest(archive_path), bytes=archive_path.stat().st_size
+            )
+    write_json(manifest, plan)
+    candidate._write_checksums(manifest.parent)
+    with pytest.raises(ValueError, match="entry types"):
+        candidate.verify_plan(manifest, repository)

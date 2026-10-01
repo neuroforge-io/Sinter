@@ -95,7 +95,7 @@ def small_source(monkeypatch, tmp_path, version="0.5.4rc1"):
 
 
 def test_only_exact_published_prior_identities_are_qualified():
-    assert set(upgrade.QUALIFIED_PRIORS) == {"0.5.3", "0.5.4rc1"}
+    assert set(upgrade.QUALIFIED_PRIORS) == {"0.5.3", "0.5.4rc1", "0.5.4rc2"}
     assert upgrade.QUALIFIED_PRIORS["0.5.3"] == (
         "0.5.3",
         "07bf7df8f233b555218b7957060968c7cdb29d99",
@@ -107,6 +107,12 @@ def test_only_exact_published_prior_identities_are_qualified():
         "cd928ba7561a09c477b3555e64aa6a3c4cc122b4",
         "873d539cb7d7d1de9b983283f3c5f20b28f6585b84c16b320920a236bf1dcf96",
         "31f64e2af6693a21b31c6296ee41aad68516238d6a9d4f34990e91632eb2a08d",
+    )
+    assert upgrade.QUALIFIED_PRIORS["0.5.4rc2"] == (
+        "0.5.4rc2",
+        "256d38fa4b61a4d548472ce5abfd0bf513789090",
+        "d53690e159ca4a21e9ec71a0997115bc96bec2486269807f97d8ed92a7301bfc",
+        "eaf318d142e68e942fa17f0881f52bf98bbf0cee30e4bb9fdb84b7002c56b7f0",
     )
     with pytest.raises(TypeError):
         upgrade.QUALIFIED_PRIORS["9.9.9"] = upgrade.QUALIFIED_PRIORS["0.5.3"]
@@ -151,7 +157,7 @@ def test_source_archive_and_every_extracted_file_must_match(
     (source / "src" / "prior.py").write_bytes(
         original.replace(b"Fictional", b"Different")
     )
-    with pytest.raises(ValueError, match="Extracted prior source differs"):
+    with pytest.raises(ValueError, match="Extracted prior source.*differs"):
         upgrade.verify_prior_source(source, archive, prior)
 
 
@@ -344,7 +350,7 @@ def test_rc1_path_cannot_qualify_an_unselected_candidate(candidate):
     args = SimpleNamespace(
         prior_version="0.5.4rc1", prior_commit=None, expected_version=candidate
     )
-    with pytest.raises(ValueError, match="targets 0.5.4rc2 only"):
+    with pytest.raises(ValueError, match="explicitly qualified upgrade path"):
         upgrade.prior_for_arguments(args)
 
 
@@ -371,7 +377,7 @@ def test_upgrade_help_is_dependency_independent_and_requires_source_archive(
     )
     assert help_result.returncode == 0, help_result.stderr
     assert "--prior-source-archive" in help_result.stdout
-    assert "--prior-version {0.5.3,0.5.4rc1}" in help_result.stdout
+    assert "--prior-version {0.5.3,0.5.4rc1,0.5.4rc2}" in help_result.stdout
     missing = subprocess.run(
         [upgrade.sys.executable, "-I", "-S", str(path)],
         cwd=tmp_path,
@@ -384,3 +390,166 @@ def test_upgrade_help_is_dependency_independent_and_requires_source_archive(
     assert "--prior-source-archive" in missing.stderr
     assert "Traceback" not in missing.stderr
     assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize(
+    "prior,candidate,admitted",
+    [
+        (prior, candidate, candidate in targets)
+        for prior, targets in {
+            "0.5.3": {"0.5.4rc1", "0.5.4rc2", "0.5.4rc3"},
+            "0.5.4rc1": {"0.5.4rc2", "0.5.4rc3"},
+            "0.5.4rc2": {"0.5.4rc3"},
+        }.items()
+        for candidate in (
+            "0.5.4rc1",
+            "0.5.4rc2",
+            "0.5.4rc3",
+            "0.5.4rc4",
+            "0.5.4rc3.dev0",
+            "9.9.9",
+        )
+    ],
+)
+def test_upgrade_policy_has_no_implicit_candidate_paths(prior, candidate, admitted):
+    args = SimpleNamespace(
+        prior_version=prior, prior_commit=None, expected_version=candidate
+    )
+    if admitted:
+        assert upgrade.prior_for_arguments(args) == upgrade.QUALIFIED_PRIORS[prior]
+    else:
+        with pytest.raises(ValueError, match="explicitly qualified upgrade path"):
+            upgrade.prior_for_arguments(args)
+
+
+@pytest.mark.parametrize("version", ["0.5.4rc1", "0.5.4rc2"])
+def test_seed_rich_prior_semantics_without_publishing_fixture_evidence(
+    tmp_path, version
+):
+    """Execute seed logic on copied current source; never call it a prior install."""
+    import shutil
+
+    from sinter import campaigns
+
+    source = tmp_path / "synthetic-source"
+    shutil.copytree(
+        Path(__file__).parents[1] / "src" / "sinter",
+        source / "src" / "sinter",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+    (source / "src/sinter/__init__.py").write_text(f'__version__ = "{version}"\n')
+    workspace, output = tmp_path / "workspace", tmp_path / "fixture.json"
+    subprocess.run(
+        [
+            upgrade.sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            "-c",
+            upgrade.SEED,
+            str(source),
+            str(workspace),
+            str(output),
+            version,
+        ],
+        check=True,
+        capture_output=True,
+        timeout=20,
+    )
+    expected = json.loads(output.read_text())
+    document = expected["campaign"]["document"]
+    assert expected["prior_version"] == version
+    assert len(document["sources"]) == 1 and len(document["actions"]) == 2
+    assert (
+        document["requirements"][0]["source_id"]
+        == document["sources"][0]["id"]
+        == "a" * 32
+    )
+    assert document["requirements"][0]["source_url"] != document["sources"][0]["url"]
+    assert document["requirements"][0]["checked_at"] == "2026-09-12"
+    assert document["sources"][0]["checked_at"] == "2026-09-29"
+    assert [row["owner_kind"] for row in document["actions"]] == [
+        "unknown",
+        "unassigned",
+    ]
+    assert all(row["owner_confirmed"] is False for row in document["actions"])
+    assert document["requirements"][0]["status"] == (
+        "met" if version == "0.5.4rc2" else "unknown"
+    )
+    if version == "0.5.4rc2":
+        result = campaigns.prepare(document)
+        assert result["readiness"]["claims_without_evidence"] == 1
+        assert result["readiness"]["requirements_unresolved"] == 1
+    assert expected["report"]["document_edits"]["author"] == "user"
+    assert expected["source_text"] == expected["report"]["excerpts"][0]["quote"]
+    assert not list(source.rglob("*.pyc"))
+
+
+def test_rc2_archive_pin_still_uses_complete_source_admission(monkeypatch, tmp_path):
+    source, archive, prior = small_source(monkeypatch, tmp_path, "0.5.4rc2")
+    assert upgrade.verify_prior_source(source, archive, prior) == upgrade.hashes(source)
+    (source / "src/prior.py").write_text("Replacement source")
+    with pytest.raises(ValueError, match="Extracted prior source.*differs"):
+        upgrade.verify_prior_source(source, archive, prior)
+
+
+def test_rich_rc2_preservation_check_uses_actual_local_routes(tmp_path, monkeypatch):
+    """Exercise source APIs only; no published/native application qualification."""
+    import shutil
+    import threading
+
+    from sinter import client
+    from sinter.server import Application, LocalServer
+
+    source = tmp_path / "synthetic-source"
+    shutil.copytree(
+        Path(__file__).parents[1] / "src" / "sinter",
+        source / "src" / "sinter",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+    (source / "src/sinter/__init__.py").write_text('__version__ = "0.5.4rc2"\n')
+    workspace, output = tmp_path / "workspace", tmp_path / "fixture.json"
+    subprocess.run(
+        [
+            upgrade.sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            "-c",
+            upgrade.SEED,
+            str(source),
+            str(workspace),
+            str(output),
+            "0.5.4rc2",
+        ],
+        check=True,
+        capture_output=True,
+        timeout=20,
+    )
+    expected = json.loads(output.read_text())
+    monkeypatch.setattr(
+        client,
+        "chat",
+        lambda *a, **k: pytest.fail("No model call belongs in local upgrade recovery"),
+    )
+    app = Application(workspace)
+    server = LocalServer(("127.0.0.1", 0), app)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    api = upgrade.LocalAPI("http://127.0.0.1:" + str(server.server_port))
+    api.token = app.token
+    try:
+        checks = upgrade.check_preserved(api, expected)
+        assert (
+            "rich prior source snapshots, stale marked review "
+            "and unknown/unassigned owners retained"
+            in checks
+        )
+        assert app.campaigns.get(expected["campaign"]["id"]) == expected["campaign"]
+        assert app.store.report(expected["report_id"]) == expected["report"]
+    finally:
+        server.shutdown()
+        thread.join(3)
+        server.server_close()
+        app.close()
+    assert not thread.is_alive()

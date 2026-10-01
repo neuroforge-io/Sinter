@@ -50,8 +50,8 @@ def png(chunk_type=b"IEND", extra=b""):
     )
 
 
-def source_files(folder):
-    with zipfile.ZipFile(folder / f"sinter-{VERSION}-source.zip") as archive:
+def source_files(folder, version=VERSION):
+    with zipfile.ZipFile(folder / f"sinter-{version}-source.zip") as archive:
         return {
             item.filename: archive.read(item)
             for item in archive.infolist()
@@ -73,7 +73,10 @@ def refresh_artifacts(folder):
 @pytest.fixture
 def completed(bundle):
     folder, review, repository, commit = bundle
-    source = source_files(folder)
+    version = json.loads((folder / "candidate-qualification.json").read_text())[
+        "version"
+    ]
+    source = source_files(folder, version)
     original_book, original_campaign, book, campaign = workflow.fictional_documents(
         source
     )
@@ -100,13 +103,13 @@ def completed(bundle):
             write_json(path, campaign)
         else:
             path.write_bytes(png())
-    native_name = f"Sinter-{VERSION}-linux-x64-test.json"
+    native_name = f"Sinter-{version}-linux-x64-test.json"
     native = json.loads((folder / native_name).read_text())
     normalized_book = casebooks.validate(book)
     receipt = {
         "schema": SCHEMA,
         "passed": True,
-        "version": VERSION,
+        "version": version,
         "source_commit": commit,
         "system": "Linux",
         "target_arch": "x64",
@@ -117,7 +120,7 @@ def completed(bundle):
         "installed_executable": "/opt/neuroforge/sinter/Sinter",
         "installer_sha256": native["installer_sha256"],
         "source_archive_sha256": candidate.digest(
-            folder / f"sinter-{VERSION}-source.zip"
+            folder / f"sinter-{version}-source.zip"
         ),
         "native_receipt_sha256": candidate.digest(folder / native_name),
         "installed_binary_sha256": hashlib.sha256(
@@ -457,7 +460,7 @@ def test_new_ui_json_duplicate_keys_are_rejected(completed):
 def test_unknown_candidate_policy_cannot_reuse_rc2_evidence(completed):
     with pytest.raises(ValueError, match="explicit qualification policy"):
         qualification.verify_candidate(
-            *completed[:2], "0.5.4rc3", completed[3], completed[2]
+            *completed[:2], "0.5.4rc4", completed[3], completed[2]
         )
 
 

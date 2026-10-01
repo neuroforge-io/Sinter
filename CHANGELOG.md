@@ -5,6 +5,15 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Add an explicit Linux RC3 qualification policy, with pinned upgrades from
+  v0.5.3, RC1 and RC2. Require the existing installed workflow plus actual held
+  action, cold reopening, calendar exclusion and complete stopped-server backup
+  recovery evidence. Source rehearsals cannot satisfy installed qualification.
+  Reject special-file ZIP entries, unrelated data in the new prior receipts and
+  oversized recovery artifacts before reading their content. See the
+  [qualification requirements](docs/PREVIEW_0.5.4rc3_QUALIFICATION.md); no RC3
+  installer or additional platform is qualified by these tooling changes.
+
 - Preserve completed atlas results and current consent during a background check
   of the remembered source packet. Keep inspection errors visible. Explicit
   imports, retrievals and compilation still replace the selected packet and
