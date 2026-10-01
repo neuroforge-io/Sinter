@@ -237,7 +237,7 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
       refreshLocalCopy();
       feedback.replaceChildren(notice('Word copy saved on this computer. Its exact file path is below. This does not confirm a browser download.', 'success'));
       savedPath.input.focus(); savedPath.input.select();
-      announce('Word copy saved on this computer. File path selected.');
+      announce('Word copy saved on this computer.');
     } catch (error) {
       feedback.replaceChildren(notice(error.message + ' The local save was not confirmed. Your text is retained. Check Sinter’s exports folder before explicitly trying again; a copy may already exist.', 'error'));
       refreshLocalCopy();
