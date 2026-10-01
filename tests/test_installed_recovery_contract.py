@@ -207,6 +207,19 @@ def test_complete_synthetic_rc3_admission_and_local_stage(recovered, tmp_path):
         candidate.release_notes("0.5.4rc4", recovered[3])
 
 
+@pytest.mark.parametrize(
+    "check", ["readline_excluded", "terminal_library_notices_verified"]
+)
+def test_rc3_legacy_exclusion_cannot_replace_required_terminal_review(recovered, check):
+    path = recovered[1] / "final-artifact-review.json"
+    row = json.loads(path.read_text())
+    row["checks"].pop(check)
+    row["checks"]["readline_and_tinfo_excluded"] = True
+    write_json(path, row)
+    with pytest.raises(ValueError, match="independent installed-artifact review"):
+        verify(recovered)
+
+
 @pytest.mark.parametrize("role", list(recovery.ARTIFACT_PATHS))
 def test_rc3_rejects_missing_mandatory_artifact_even_after_resealing(recovered, role):
     (recovered[0] / recovery.ARTIFACT_PATHS[role]).unlink()

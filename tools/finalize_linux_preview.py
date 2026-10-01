@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
-import subprocess
 import sys
 import tarfile
 import time
 import uuid
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -29,6 +27,7 @@ from tools.candidate_qualification import (  # noqa: E402
 )
 from tools.candidate_release import prepare, verify_plan  # noqa: E402
 from tools.qualified_priors import QUALIFIED_PRIORS  # noqa: E402
+from tools.qualify_linux_preview import run as run_owned  # noqa: E402
 from tools.release_manifest import assemble  # noqa: E402
 
 VERSION = "0.5.4rc3"
@@ -87,18 +86,34 @@ def write(path: Path, value: dict) -> None:
 
 
 def command(args: list[str], *, timeout=120, log: Path | None = None) -> str:
-    with log.open("w", encoding="utf-8") if log else open(os.devnull, "w") as sink:
-        result = subprocess.run(
-            args,
-            cwd=ROOT,
-            capture_output=log is None,
-            stdout=sink if log else None,
-            stderr=subprocess.STDOUT if log else None,
-            text=True,
-            timeout=timeout,
-            check=True,
-        )
-    return (result.stdout or "").strip()
+    return run_owned(args, timeout=timeout, log=log)
+
+
+def cleanup_owned(owner: str) -> None:
+    """Remove only resources bearing this invocation's unique ownership label."""
+    selector = "label=sinter.qualification.owner=" + owner
+    containers = command(
+        ["docker", "ps", "--all", "--no-trunc", "--quiet", "--filter", selector]
+    ).splitlines()
+    for identity in containers:
+        if len(identity) != 64 or any(c not in "0123456789abcdef" for c in identity):
+            raise ValueError("Invalid owned container identity during cleanup.")
+        command(["docker", "rm", "--force", identity], timeout=30)
+    images = command(
+        ["docker", "image", "ls", "--no-trunc", "--quiet", "--filter", selector]
+    ).splitlines()
+    for identity in set(images):
+        if (
+            not identity.startswith("sha256:")
+            or len(identity) != 71
+            or any(c not in "0123456789abcdef" for c in identity[7:])
+        ):
+            raise ValueError("Invalid owned image identity during cleanup.")
+        command(["docker", "image", "rm", identity], timeout=30)
+    if command(["docker", "ps", "--all", "--quiet", "--filter", selector]) or command(
+        ["docker", "image", "ls", "--quiet", "--filter", selector]
+    ):
+        raise ValueError("Owned clean-install resource remains.")
 
 
 def admit_archive(path: Path) -> None:
@@ -112,12 +127,13 @@ def admit_archive(path: Path) -> None:
     with zipfile.ZipFile(path) as archive:
         seen, total = set(), 0
         for row in archive.infolist():
-            parts = Path(row.filename).parts
+            archive_path = PurePosixPath(row.filename)
+            parts = archive_path.parts
             total += row.file_size
             if (
                 row.filename in seen
                 or not parts
-                or Path(row.filename).is_absolute()
+                or archive_path.is_absolute()
                 or ".." in parts
                 or "\\" in row.filename
                 or ":" in row.filename
@@ -179,50 +195,52 @@ def clean_install(candidate: Path, proof: Path, native: dict, binary: str) -> di
     runner.write_text(CLEAN_SCRIPT)
     owner = uuid.uuid4().hex
     image = "sinter-rc3-clean:" + owner
-    command(
-        [
-            "docker",
-            "build",
-            "--tag",
-            image,
-            "--file",
-            str(ROOT / "tools/clean-qualification-image.Dockerfile"),
-            str(ROOT / "tools"),
-        ],
-        log=proof / "image-build.log",
-    )
-    image_id = command(["docker", "image", "inspect", image, "--format", "{{.Id}}"])
-    name = "sinter-rc3-clean-" + owner
-    container = command(
-        [
-            "docker",
-            "create",
-            "--name",
-            name,
-            "--pull",
-            "never",
-            "--network",
-            "none",
-            "--memory",
-            "384m",
-            "--cpus",
-            "1",
-            "--pids-limit",
-            "128",
-            "--label",
-            "sinter.qualification.owner=" + owner,
-            "--mount",
-            f"type=bind,src={candidate.resolve()},dst=/candidate,readonly",
-            "--mount",
-            f"type=bind,src={proof.resolve()},dst=/proof",
-            image_id,
-            "/bin/sh",
-            "/proof/clean-install.sh",
-        ]
-    )
-    if len(container) != 64 or any(c not in "0123456789abcdef" for c in container):
-        raise ValueError("No owned container identity.")
     try:
+        command(
+            [
+                "docker",
+                "build",
+                "--tag",
+                image,
+                "--label",
+                "sinter.qualification.owner=" + owner,
+                "--file",
+                str(ROOT / "tools/clean-qualification-image.Dockerfile"),
+                str(ROOT / "tools"),
+            ],
+            log=proof / "image-build.log",
+        )
+        image_id = command(["docker", "image", "inspect", image, "--format", "{{.Id}}"])
+        name = "sinter-rc3-clean-" + owner
+        container = command(
+            [
+                "docker",
+                "create",
+                "--name",
+                name,
+                "--pull",
+                "never",
+                "--network",
+                "none",
+                "--memory",
+                "384m",
+                "--cpus",
+                "1",
+                "--pids-limit",
+                "128",
+                "--label",
+                "sinter.qualification.owner=" + owner,
+                "--mount",
+                f"type=bind,src={candidate.resolve()},dst=/candidate,readonly",
+                "--mount",
+                f"type=bind,src={proof.resolve()},dst=/proof",
+                image_id,
+                "/bin/sh",
+                "/proof/clean-install.sh",
+            ]
+        )
+        if len(container) != 64 or any(c not in "0123456789abcdef" for c in container):
+            raise ValueError("No owned container identity.")
         observed = json.loads(command(["docker", "inspect", container]))[0]
         if (
             observed["HostConfig"]["NetworkMode"] != "none"
@@ -235,19 +253,25 @@ def clean_install(candidate: Path, proof: Path, native: dict, binary: str) -> di
         )
         result = validate_clean(proof, native, binary)
     finally:
-        command(["docker", "rm", "--force", container], timeout=30)
-    remaining = command(
-        ["docker", "ps", "--all", "--quiet", "--filter", "name=^" + name + "$"]
-    )
-    if remaining:
-        raise ValueError("Owned clean-install container remains.")
+        cleanup_owned(owner)
+        write(
+            proof / "cleanup.json", {"container_removed": True, "image_removed": True}
+        )
     write(
         proof / "container.json",
         {
             "image_id": image_id,
+            "image_recipe_sha256": digest(
+                ROOT / "tools/clean-qualification-image.Dockerfile"
+            ),
+            "base_image": (ROOT / "tools/clean-qualification-image.Dockerfile")
+            .read_text()
+            .splitlines()[0]
+            .removeprefix("FROM "),
             "container_id": container,
-            "network": "none",
+            "network": observed["HostConfig"]["NetworkMode"],
             "container_removed": True,
+            "image_removed": True,
             "memory_mib": 384,
             "cpu_limit": 1,
             "private_workspace_used": False,
@@ -346,6 +370,25 @@ def canonical(raw: Path, folder: Path) -> dict:
     return native
 
 
+def publisher_negative(candidate: Path) -> dict:
+    """Exercise the unchanged all-target gate with one genuine target input."""
+    if len(list(candidate.glob("*-test.json"))) != 1:
+        raise ValueError("Publisher input is not a single Linux architecture.")
+    try:
+        assemble(candidate, ROOT, COMMIT)
+    except ValueError as error:
+        if str(error) != "A required architecture receipt is missing or duplicated.":
+            raise
+        return {
+            "schema": "sinter-preview-publisher-gate/v1",
+            "linux_only_promotion_refused": True,
+            "returncode": 1,
+            "architecture_receipts": 1,
+            "message": str(error),
+        }
+    raise ValueError("All-platform publisher accepted Linux-only evidence.")
+
+
 def finalize(artifact: Path, output: Path) -> None:
     admit_archive(artifact)
     output.mkdir()
@@ -361,22 +404,9 @@ def finalize(artifact: Path, output: Path) -> None:
     started = time.monotonic()
     clean_install(folder, proof, native, binary)
     clean_seconds = round(time.monotonic() - started, 3)
-    try:
-        assemble(folder, ROOT, COMMIT)
-    except ValueError as error:
-        if str(error) != "A required architecture receipt is missing or duplicated.":
-            raise
-        write(
-            folder / "full-publisher-gate.json",
-            {
-                "schema": "sinter-preview-publisher-gate/v1",
-                "linux_only_promotion_refused": True,
-                "returncode": 1,
-                "message": str(error),
-            },
-        )
-    else:
-        raise ValueError("All-platform publisher accepted Linux-only evidence.")
+    # The original candidate contains exactly one architecture receipt. Upgrade
+    # receipts in the canonical folder must not contaminate this negative test.
+    write(folder / "full-publisher-gate.json", publisher_negative(raw / "candidate"))
     os_release = (proof / "os-release.txt").read_text()
     baseline = {
         key: native[key] for key in ("system", "machine", "pointer_bits", "python")
@@ -461,6 +491,7 @@ def finalize(artifact: Path, output: Path) -> None:
             "product_edits": False,
             "preinstalled_python": False,
             "preinstalled_account_packages": False,
+            "clean_container": json.loads((proof / "container.json").read_bytes()),
         },
     )
     checks = independent_review_checks(VERSION)

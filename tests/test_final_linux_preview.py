@@ -73,13 +73,19 @@ def test_absence_claim_or_hidden_path_cannot_replace_independent_proof(
         final.validate_clean(tmp_path, native, BINARY)
 
 
-@pytest.mark.parametrize("path", ["../escape", "/escape", "a\\b", "a:b"])
+@pytest.mark.parametrize(
+    "path", ["../escape", "/escape", "a\\b", "a:b", "C:/escape", "//server/share"]
+)
 def test_archive_rejects_unsafe_paths_even_after_digest_admission(
     tmp_path, monkeypatch, path
 ):
     target = tmp_path / "toy.zip"
     with zipfile.ZipFile(target, "w") as bundle:
-        bundle.writestr(path, b"fictional")
+        # ZipInfo's constructor normalises os.sep on Windows; retain the actual
+        # adversarial member bytes so the fixture tests admission on every host.
+        member = zipfile.ZipInfo("placeholder")
+        member.filename = path
+        bundle.writestr(member, b"fictional")
     monkeypatch.setattr(
         final, "ARTIFACT_SHA", hashlib.sha256(target.read_bytes()).hexdigest()
     )
@@ -137,6 +143,101 @@ def test_clean_image_has_no_python_tooling_and_app_is_not_source_mode():
     assert "github.event.pull_request.head.repo.full_name == github.repository" in job
     assert "gh release" not in job
     assert final.COMMIT == "d9b36a6853bab0d715dc91e726f984a8ab16a747"
+
+
+def test_single_linux_target_is_rejected_by_unchanged_full_publisher(tmp_path):
+    (tmp_path / "Sinter-0.5.4rc3-linux-x64-test.json").write_text("{}")
+    result = final.publisher_negative(tmp_path)
+    assert result["linux_only_promotion_refused"] is True
+    assert result["architecture_receipts"] == 1
+    (tmp_path / "copied-prior-test.json").write_text("{}")
+    with pytest.raises(ValueError, match="single Linux architecture"):
+        final.publisher_negative(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "fault", ["build", "create", "identity", "network", "start", "none"]
+)
+def test_owned_resources_are_cleaned_on_partial_setup_and_run_failure(
+    tmp_path, monkeypatch, fault
+):
+    container_id, image_id = "b" * 64, "sha256:" + "c" * 64
+    state = {"container": False, "image": False}
+    owner = []
+    proof_dir = tmp_path / "proof"
+    native = {"installed_test": {"frozen": True, "passed": True, "version": "0.5.4rc3"}}
+
+    def simulated_docker(args, **kwargs):
+        if args[1] in {"build", "create"}:
+            label = args[args.index("--label") + 1]
+            if owner:
+                assert label == owner[0]
+            else:
+                owner.append(label)
+            state["image" if args[1] == "build" else "container"] = True
+            if args[1] == fault:
+                raise subprocess.TimeoutExpired(args, 120)
+            if args[1] == "create":
+                return "interrupted response" if fault == "identity" else container_id
+            return ""
+        if args[1:3] == ["image", "inspect"]:
+            return image_id
+        if args[1] == "inspect":
+            return json.dumps(
+                [
+                    {
+                        "Image": image_id,
+                        "HostConfig": {
+                            "NetworkMode": "bridge" if fault == "network" else "none"
+                        },
+                    }
+                ]
+            )
+        if args[1] == "start":
+            if fault == "start":
+                raise subprocess.CalledProcessError(1, args)
+            proof(proof_dir)
+            return ""
+        if args[1] == "ps" or args[1:3] == ["image", "ls"]:
+            # A pre-existing unrelated resource is deliberately outside this UUID
+            # selector; broad cleanup must fail this assertion.
+            assert args[-2:] == ["--filter", "label=" + owner[0]]
+            kind = "container" if args[1] == "ps" else "image"
+            return (
+                (container_id if kind == "container" else image_id)
+                if state[kind]
+                else ""
+            )
+        if args[1] == "rm":
+            assert args[-1] == container_id
+            state["container"] = False
+            return ""
+        if args[1:3] == ["image", "rm"]:
+            assert args[-1] == image_id
+            state["image"] = False
+            return ""
+        raise AssertionError(args)
+
+    monkeypatch.setattr(final, "command", simulated_docker)
+    if fault == "none":
+        assert (
+            final.clean_install(tmp_path, proof_dir, native, BINARY)
+            == native["installed_test"]
+        )
+        context = json.loads((proof_dir / "container.json").read_text())
+        assert context["network"] == "none"
+        assert context["image_id"] == image_id
+        assert context["container_removed"] is context["image_removed"] is True
+    else:
+        with pytest.raises(
+            (ValueError, subprocess.TimeoutExpired, subprocess.CalledProcessError)
+        ):
+            final.clean_install(tmp_path, proof_dir, native, BINARY)
+    assert state == {"container": False, "image": False}
+    assert json.loads((proof_dir / "cleanup.json").read_text()) == {
+        "container_removed": True,
+        "image_removed": True,
+    }
 
 
 @pytest.mark.parametrize(
