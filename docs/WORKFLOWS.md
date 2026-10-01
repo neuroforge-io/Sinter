@@ -12,7 +12,15 @@ Use **Search watches** for hourly, daily or weekly checks. Watches resume overdu
 
 ## Funding campaigns
 
-**Funding campaigns** keep several opportunities, application answers, quotes and next actions in one local record. Statuses, costs and requirement checks are entered by a person. A requirement is only treated as checked when its status, evidence, source link, source wording and check date are all present. A budget total is incomplete while any item lacks a numeric unit cost or a quote reference. Unknowns remain visible in the prepared brief.
+**Funding campaigns** keep several opportunities, application answers, quotes and
+next actions in one local record. Statuses, costs and requirement checks are
+entered by a person. A requirement is only treated as checked when its status,
+evidence, source link, source wording and check date are all present.
+
+The recorded quoted subtotal is incomplete while any row lacks a unit cost.
+Missing quote references are listed separately; priced rows do not establish
+reviewed or eligible application amounts. Unknowns remain visible in the prepared
+brief. See [what recorded quote amounts mean](CAMPAIGN_BUDGETS.md).
 
 Each opportunity has its own **Funding ceiling currency**. Choose AUD, USD, EUR,
 GBP, NZD or CAD from the official funding terms; new opportunities start with
