@@ -1469,5 +1469,40 @@ it does not strip, normalize or broaden installed Linux stderr policy. Independe
 review `21be4443f637f6b4e2a8a04493c64b9ab9181db332aba7543df9b3c9ee6249d0`
 checks all original collection references and passes the affected 56 Linux cases
 without skips. Root's affected suite also passes 56 cases in 4.03 seconds. Fresh
-repaired Windows execution remains pending. No product source, user workspace,
+repaired Windows execution is recorded below. No product source, user workspace,
 installed receipt or published asset changes; the physical app remains closed.
+
+### Exact-source hosted replay and unadopted upgrade blockers, 2 October
+
+Run `36924989879` binds source
+`b720b4a074b5d5d26b181e2db4f59d1c7a67b993`. All six Python jobs contain 3,686
+cases. Linux passes 3,677 with nine resource skips, macOS passes 3,358 with 328
+skips, and Windows passes 3,295 with 391 skips. The new actual isolated Unicode
+reader check executes successfully in every job. The four additional Linux native
+Tk source controls, Chromium workflows, RKC and local speech also pass. This is
+source/portable execution, not an installed-platform qualification.
+
+The first Windows 3.10 attempt has one older no-argument batch-wrapper timeout
+at the unchanged five-second deadline. Its marker and expected stdout exist, but
+the parent has not exited; surviving descendants are not measured. The original
+failed XML and full logs remain unchanged. A single debug replay of that job at
+the same source succeeds; the observed wrapper finishes in 1.915 seconds. No
+assertion, deadline or skip changes. The timeout's cause remains unresolved.
+Other successful jobs are retained from their original execution, not counted as
+new repetitions. The final run's twelve job conclusions are successful.
+
+Original and repeated artifact names coexist in GitHub. The retained positive
+repeat is pinned by its actual upload-log artifact ID and API digest, rather than
+choosing a filename. Both earlier collector assumptions and their raw downloads
+remain separate failed collection attempts; they do not replace observed results.
+
+Independent review refuses the separate, unadopted four-path replacement proposal.
+Eight actual source lifetimes and 408 focused tests pass, but nine adversarial
+witnesses expose four blocker families: legitimate removal diagnostics rejected,
+cleanup hiding primary failures, inadequate visible saved-wording/uncertainty
+checks, and unbound package/filesystem raw streams. Actual source rendering is
+correct in those observations; the false admissions occur at verifier seams.
+The proposal stays out of main pending repair and another independent review.
+Fresh installed recovery, replacement, native handoff and canonical RC4 admission
+remain required. No new installer is published; Sinter model requests remain zero
+and the physical user app stays intentionally closed.

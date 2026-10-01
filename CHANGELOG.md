@@ -32,11 +32,14 @@ qualification and does not change any published RC3 asset or historical receipt.
   paths separate from host paths. All archive-origin refusals also run as portable
   byte controls; actual process-group checks retain their explicit resource limits.
   Independent source review and a fresh ten-lifetime offline rehearsal pass.
-  Repaired Windows replay and installed qualification remain pending.
+  Repaired reader checks now pass in all six Linux/macOS/Windows source jobs.
+  Installed qualification remains pending.
 
 - Match the actual host's exact line endings in the isolated CLI reader test.
   Windows progress retains its original carriage returns; no application output,
   source evidence or installed Linux diagnostic policy is normalized or changed.
+  The exact-source hosted run passes after an unchanged replay of one older
+  Windows launcher timeout; its first failure remains recorded and unexplained.
 
 - Save source-recovery evidence with explicit UTF-8 and stable newlines, keeping
   complete literal Unicode originals and atomic replacement. Reproduce the Windows
