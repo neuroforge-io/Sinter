@@ -503,6 +503,19 @@ def verify_native_window_receipt(receipt, enabled=True):
         )
 
 
+def linux_desktop_entry(native_window=True):
+    """Launch the presentation included in this Linux package."""
+    command = "/opt/neuroforge/sinter/Sinter"
+    if not native_window:
+        command += " app --mode browser"
+    return (
+        "[Desktop Entry]\nType=Application\nName=Sinter\n"
+        "Comment=Community workbench by NeuroForge\n"
+        f"Exec={command}\nIcon=sinter\n"
+        "Terminal=false\nCategories=Office;Utility;\n"
+    )
+
+
 def freeze_runtime(arguments, build, ico, icns):
     """Keep one console-capable executable, including inside the macOS app."""
     entry = ROOT / "packaging" / "desktop_entry.py"
@@ -782,10 +795,7 @@ def main(argv: list[str] | None = None) -> None:
         icons.mkdir(parents=True)
         shutil.copy2(ROOT / "src" / "sinter" / "web" / "icon.svg", icons / "sinter.svg")
         (stage / "usr" / "share" / "applications" / "sinter.desktop").write_text(
-            "[Desktop Entry]\nType=Application\nName=Sinter\n"
-            "Comment=Community workbench by NeuroForge\n"
-            "Exec=/opt/neuroforge/sinter/Sinter\nIcon=sinter\n"
-            "Terminal=false\nCategories=Office;Utility;\n",
+            linux_desktop_entry(native_window),
             encoding="utf-8",
         )
         control = stage / "DEBIAN"

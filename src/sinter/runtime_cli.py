@@ -24,6 +24,16 @@ COMMANDS = {"operations", "run", "status", "app", "import", "export"}
 MAX_INPUT = 36 * 1024 * 1024
 
 
+def _casebook_capability(operation):
+    # This current adapter preserves the whole JSON document. Older adapters
+    # using the new runtime do not acquire this capability implicitly.
+    return (
+        {"casebook_schema": "sinter-casebook/v2"}
+        if operation.startswith("casebooks.")
+        else {}
+    )
+
+
 def add_parsers(sub):
     operations = sub.add_parser(
         "operations", help="Discover shared UI, CLI and Python operations"
@@ -230,11 +240,17 @@ def dispatch(args):
         elif args.command == "import":
             value, _ = _read_input(args.file)
             with Runtime(args.directory) as runtime:
-                result = runtime.call(operation, _import_payload(args.kind, value))
+                result = runtime.call(
+                    operation,
+                    _import_payload(args.kind, value),
+                    **_casebook_capability(operation),
+                )
         elif args.command == "export":
             sources = _export_sources(args.directory, args.output)
             with Runtime(args.directory) as runtime:
-                saved = runtime.call(operation, {"id": args.id})
+                saved = runtime.call(
+                    operation, {"id": args.id}, **_casebook_capability(operation)
+                )
                 value = saved["document"] if args.kind == "casebook" else saved
                 if args.format == "markdown":
                     if args.kind == "casebook":
@@ -242,6 +258,7 @@ def dispatch(args):
                             "casebooks.build",
                             {"id": saved["id"], "revision": saved["revision"]},
                             progress=lambda message: print(message, file=sys.stderr),
+                            casebook_schema="sinter-casebook/v2",
                         )
                     content = value["markdown"]
                 else:
@@ -268,6 +285,7 @@ def dispatch(args):
                     operation,
                     payload,
                     progress=lambda message: print(message, file=sys.stderr),
+                    **_casebook_capability(operation),
                 )
             if output:
                 atomic_write_text(

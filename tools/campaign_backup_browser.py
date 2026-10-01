@@ -307,6 +307,7 @@ def main(argv=None):
     artifacts = Path(tempfile.mkdtemp(prefix="sinter-campaign-backup-proof-"))
     files = (
         "src/sinter/web/campaign-backup.js",
+        "src/sinter/web/local-backup.js",
         "src/sinter/web/campaigns.js",
         "tools/campaign_backup_browser.py",
     )

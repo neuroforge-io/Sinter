@@ -4,9 +4,17 @@ import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
 import {senderFields} from './profile.js';
 import {hasPendingSource, PENDING_SOURCE_MESSAGE} from './casebook-drafts.js';
+import {casebookBackupControls} from './casebook-backup.js';
 import {gardenGuide, GARDEN_PRACTICE} from './garden-practice.js';
 import {HANDOVER_EVIDENCE_OPTIONS, handoverEvidenceMode,
   handoverExportNotice} from './casebook-handover.js';
+import {casebookSchema, explicitScopeClear, questionScopeIssue, questionScopeControls,
+  casebookDraftContext} from './casebook-scope.js';
+
+// Only this scope-aware caller opts in. A cached older page using the current
+// shared request helper must still be refused before it receives scoped work.
+const casebookRequest = (path, options = {}) => request(path, {...options,
+  headers: {'X-Sinter-Casebook-Schema': 'sinter-casebook/v2'}});
 
 const example = () => ({schema: 'sinter-casebook/v1', title: 'Fictional P&C community evening',
   questions: 'Has the hall booking been confirmed?\nWhat access arrangements need checking?\nWho agreed to organise the volunteer roster?\nWhat is the insurance excess?',
@@ -27,6 +35,8 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   const practiceGuide = onOpenGarden ? gardenGuide('casebooks', onOpenGarden) : h('div');
   practiceGuide.hidden = practice !== GARDEN_PRACTICE;
   let docs = [...(seed.book?.documents || [])], busy = false, activeJob = null;
+  let questionScopes = structuredClone(seed.book?.question_scopes || []);
+  let scopesExplicitlyCleared = explicitScopeClear(seed.book);
   const title = field('Project name', 'text', seed.book?.title || '', 'For example: school garden proposal or volunteer handover.', {maxLength: 200});
   const questions = field('What do you need to find out?', 'textarea', seed.book?.questions || '', 'One question per line, up to 20. Missing answers stay visible.', {maxLength: 12000, rows: 5});
   const format = selectField('Prepare a', [['brief', 'Briefing note'], ['enquiry', 'Enquiry letter'], ['agenda', 'Agenda item'], ['handover', 'Volunteer handover']], seed.book?.document_type || 'brief');
@@ -34,7 +44,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     handoverEvidenceMode(seed.book), 'Word exports the document text you review or edit. The appendix carries selected passages, not all original sources; it does not establish answers.');
   const showHandoverEvidence = () => { handoverEvidence.wrap.hidden = format.input.value !== 'handover'; };
   showHandoverEvidence();
-  const status = h('div', {'aria-live': 'polite'}), output = h('div', {class: 'stack', id: 'casebook-output'}), sources = h('div', {class: 'stack'});
+  const status = h('div', {'aria-live': 'polite'}), output = h('div', {class: 'stack', id: 'casebook-output'}), sources = h('div', {class: 'stack', style: 'grid-template-columns:minmax(0,1fr)'});
   const catalogue = h('div', {class: 'casebook-shelf'}), totals = h('p', {class: 'muted'});
   const saveState = h('p', {class: 'muted', role: 'status', 'aria-label': 'Project save state'});
   const stop = button('Stop this task', async () => {
@@ -52,8 +62,13 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   const upload = field('Add text files', 'file', '', 'TXT, Markdown, UTF-8 notes or code. Up to 300 documents and 2 million characters. No PDF/DOCX extraction.', {multiple: true});
   const backup = field('Restore a casebook backup', 'file', '', 'Opens as a new unsaved project; existing casebooks are not overwritten.', {accept: '.json'});
   const editor = h('fieldset', {class: 'casebook-editor'});
-  const value = () => ({schema: 'sinter-casebook/v1', title: title.input.value, questions: questions.input.value,
+  const scopeContents = h('div');
+  const scopePanel = h('details', {class: 'card'},
+    h('summary', {}, 'Choose sources for each question'), scopeContents);
+  const value = () => ({schema: casebookSchema(questionScopes), title: title.input.value, questions: questions.input.value,
     document_type: format.input.value, recipient: recipient.input.value, ...sender.values(), documents: docs,
+    ...(questionScopes.length || scopesExplicitlyCleared
+      ? {question_scopes: structuredClone(questionScopes)} : {}),
     ...(handoverEvidence.input.value === 'selected_appendix' ? {handover_evidence: 'selected_appendix'} : {})});
   const pendingSource = () => ({title: name.input.value, content: contents.input.value,
     date: sourceDate.input.value, url: sourceURL.input.value});
@@ -106,10 +121,21 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
       details.addEventListener('toggle', () => { if (details.open && !preview.firstChild) preview.append(h('pre', {class: 'plain-wrap'}, row.content)); });
       sources.append(details);
     }
+    drawScopes();
+  }
+  function drawScopes() {
+    scopeContents.replaceChildren(questionScopeControls({text: questions.input.value,
+      scopes: questionScopes, documents: docs,
+      onChange: scopes => {
+        scopesExplicitlyCleared = scopes.length ? false
+          : scopesExplicitlyCleared || questionScopes.length > 0;
+        questionScopes = scopes; changed(); }}));
   }
   function load(book, id = null, rev = null) {
     practice = null; practiceGuide.hidden = true;
     docs = book.documents; title.input.value = book.title; questions.input.value = book.questions || '';
+    questionScopes = structuredClone(book.question_scopes || []);
+    scopesExplicitlyCleared = explicitScopeClear(book);
     format.input.value = book.document_type || 'brief';
     handoverEvidence.input.value = handoverEvidenceMode(book); showHandoverEvidence();
     recipient.input.value = book.recipient || '';
@@ -120,21 +146,25 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     changed({dirty: !id}); drawSources();
   }
   async function refresh() {
-    const result = await request('/api/casebooks'); catalogue.replaceChildren();
+    const result = await casebookRequest('/api/casebooks'); catalogue.replaceChildren();
     if (!result.casebooks.length) catalogue.append(h('p', {class: 'muted'}, 'Your saved projects will appear here. Start with an example or add your own notes.'));
     for (const row of result.casebooks) catalogue.append(h('article', {class: 'casebook-tile'},
       h('strong', {}, row.title), h('small', {class: 'muted'}, `Revision ${row.revision} / ${dateTime(row.updated_at)}`),
       button('Open project', async () => {
         if (busy) return;
         if (!canReplace()) return;
-        try { const result = await request('/api/casebooks/' + row.id); load(result.document, result.id, result.revision); status.replaceChildren(notice('Opened locally. Originals remain available below.')); }
+        try { const result = await casebookRequest('/api/casebooks/' + row.id); load(result.document, result.id, result.revision); status.replaceChildren(notice('Opened locally. Originals remain available below.')); }
         catch (error) { status.replaceChildren(notice(error.message, 'error')); }
       }, 'quiet')));
   }
   async function save() {
     admitPending();
-    const result = await request('/api/casebooks/save', {data: {document: value(), id: savedId, revision}});
+    const scopeProblem = questionScopeIssue(questions.input.value, questionScopes, docs);
+    if (scopeProblem) { scopePanel.open = true; scopeContents.scrollIntoView({block: 'center'}); throw new Error(scopeProblem); }
+    const result = await casebookRequest('/api/casebooks/save', {data: {document: value(), id: savedId, revision}});
     savedId = result.id; revision = result.revision; docs = result.document.documents;
+    questionScopes = structuredClone(result.document.question_scopes || []);
+    scopesExplicitlyCleared = false;
     bookDirty = false; rememberCurrent();
     await refresh(); drawSources(); return result;
   }
@@ -144,14 +174,14 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     lock(true); status.replaceChildren(notice('Saving your local project before starting...'));
     try {
       await save();
-      const result = await request(`/api/casebooks/${kind}`, {data: {id: savedId, revision, document_type: format.input.value,
+      const result = await casebookRequest(`/api/casebooks/${kind}`, {data: {id: savedId, revision, document_type: format.input.value,
         ...(kind === 'draft' ? {consent: true, fingerprint} : {})}});
       activeJob = result.id; stop.hidden = false; stop.disabled = false;
       status.replaceChildren(notice('Task started. You can recover its result in Recent activity if this window loses contact.'));
       const report = await waitForJob(result.id, job => status.replaceChildren(notice(job.message)));
       drawReport(report); status.replaceChildren(notice('Ready to review. Source matches do not establish answers.', 'success'));
       output.tabIndex = -1; output.scrollIntoView({block: 'start'}); output.focus({preventScroll: true});
-    } catch (error) { status.replaceChildren(notice(error.message, 'error')); }
+    } catch (error) { if (error.partialResult) drawReport(error.partialResult); status.replaceChildren(notice(error.message, 'error')); }
     finally { activeJob = null; stop.hidden = true; lock(false); }
   }
   function drawReport(report) {
@@ -166,8 +196,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
       h('ul', {}, coverage.unrepresented_documents.map(name => h('li', {}, name))));
     const preview = h('details', {class: 'card'}, h('summary', {}, 'Optional: preview the exact context sent for a richer draft'),
       notice('Only these first eight questions and up to eight excerpts are sent. The result is an unverified suggestion, not a replacement for the source-only report.'),
-      h('pre', {class: 'plain-wrap'}, JSON.stringify({questions: report.question_index.slice(0, 8).map(row => row.question),
-        excerpts: report.excerpts.slice(0, 8).map(row => ({id: row.id, text: row.quote}))}, null, 2)));
+      h('pre', {class: 'plain-wrap'}, JSON.stringify(casebookDraftContext(report), null, 2)));
     const consent = check('I approve sending the previewed context to my configured API and will review the draft.');
     const draftButton = button('Prepare an optional AI draft', () => perform('draft', report.casebook_fingerprint), 'quiet'); draftButton.disabled = true;
     consent.input.addEventListener('change', () => draftButton.disabled = !consent.input.checked);
@@ -177,7 +206,8 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
       ? [notice(exportScope)] : []), renderReport(report));
     if (report.excerpts.length && !report.model_draft) output.append(preview);
   }
-  title.input.addEventListener('input', changed); questions.input.addEventListener('input', changed);
+  title.input.addEventListener('input', changed);
+  questions.input.addEventListener('input', () => { changed(); drawScopes(); });
   recipient.input.addEventListener('input', changed);
   sender.panel.addEventListener('input', changed);
   format.input.addEventListener('change', () => { showHandoverEvidence(); changed(); });
@@ -211,12 +241,14 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
       const file = backup.input.files[0]; if (!file) return;
       if (file.size > 10000000) throw new Error('This backup is too large.');
       if (!canReplace()) return;
-      const result = await request('/api/casebooks/validate', {data: {document: JSON.parse(await file.text())}});
-      load(result.document); status.replaceChildren(notice('Backup opened as a new unsaved project.'));
+      const original = JSON.parse(await file.text());
+      const result = await casebookRequest('/api/casebooks/validate', {data: {document: original}});
+      load({...result.document, ...(explicitScopeClear(original) ? {question_scopes: []} : {})});
+      status.replaceChildren(notice('Backup opened as a new unsaved project.'));
     } catch (error) { status.replaceChildren(notice(error.message, 'error')); }
     finally { backup.input.value = ''; lock(false); }
   });
-  editor.append(h('legend', {}, 'Bring the fragments together'), title.wrap, questions.wrap,
+  editor.append(h('legend', {}, 'Bring the fragments together'), title.wrap, questions.wrap, scopePanel,
     h('div', {class: 'casebook-actions'}, button('Try a fictional community example', () => {
       if (!canReplace()) return;
       load(example()); status.replaceChildren(notice('Fictional example. No real venue, person or decision is represented.'));
@@ -227,9 +259,10 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
       button('Save project', async () => { lock(true); try { await save(); const savedNotice = notice(`Saved revision ${revision}. This saves the project inputs; use Save to this computer on an edited report to keep that draft. Local storage is not encrypted.`, 'success'); savedNotice.dataset.casebookSaveSuccess = 'true'; status.replaceChildren(savedNotice); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } finally { lock(false); if (hasPendingSource(pendingSource())) contents.input.focus(); } }),
       button('Export project backup', () => { try { admitPending(); download('sinter-casebook.json', JSON.stringify(value(), null, 2), 'application/json'); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } })),
     h('details', {class: 'card'}, h('summary', {}, 'Backups and project removal'), backup.wrap,
+      casebookBackupControls(() => { admitPending(); return value(); }),
       button('Remove saved project', async () => {
         if (!savedId || !confirm('Remove this saved project? Export a backup first. The current editor is kept.')) return;
-        try { await request('/api/casebooks/delete', {data: {id: savedId, revision}}); savedId = null; revision = null; changed(); await refresh(); }
+        try { await casebookRequest('/api/casebooks/delete', {data: {id: savedId, revision}}); savedId = null; revision = null; changed(); await refresh(); }
         catch(error) { status.replaceChildren(notice(error.message, 'error')); }
       }, 'quiet')));
   sourcePanel.append(h('summary', {}, 'Add notes and references'), name.wrap, contents.wrap,

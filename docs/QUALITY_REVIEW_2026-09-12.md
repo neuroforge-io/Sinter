@@ -381,3 +381,127 @@ public-boundary check. Its runtime/test bytes are bound to the reviewed source
 and retained hash receipt. Qualification counts were added to this document
 after the run; no executable or test bytes changed. These are source results,
 not a new installer, customer-device or overall 10/10 qualification.
+
+## 1 October — explicit casebook source choices and local backup recovery
+
+Current development remains `0.5.4rc3.dev0`; the following changes are source
+qualification, separate from published v0.5.4rc2 installers. A question can use
+all supplied sources, explicitly chosen original sources, or none. Empty choices
+remain unanswered. Exact question anchors and stable source identities prevent
+changed questions, removed sources and reordered questions from silently widening
+an earlier choice. V2 projects occupy separate storage so older previews cannot
+save an unscoped reconstruction over them. Deliberately clearing every choice
+permits a return to v1; retained workspace copies and historical reports remain
+separate.
+
+The first broad run passed 2,322 tests but was rejected after independent
+witnesses found inconsistent reads during concurrent v1/v2 moves, invalid Unicode
+preventing delivery of recovery results, and lost keyboard focus after source
+mode/anchor confirmation. The repaired source uses one read snapshot, explicitly
+labelled reversible escaping only for invalid code units, and retained question
+focus. Direct inspection shows each original source without selecting it. Fresh
+actual SQLite interleavings in both directions, UTF-8 HTTP jobs and report
+save/reopen tests, and desktop/mobile keyboard and inspection journeys retested
+those failures. Raw valid response text stays unchanged; retained incomplete
+responses are not accepted answers and do not trigger automatic replay.
+
+A real operator's casebook download produced no notification or observed file;
+that attempt remains unverified. Selectable project backup text now provides a
+local alternative. Campaigns and casebooks share the same recovery component.
+It preserves current assembled inputs and unsaved source choices without
+truncation or server admission; a pending source must first be added or cleared.
+A separate adversarial probe found an older stalled clipboard request could
+replace a failed-refresh warning. Every explicit capture attempt now invalidates
+older completions, including failed attempts. Denied/stalled clipboard tests
+retain full selectable text and the correct warning and focus. A successful copy
+does not save the project or prove that a file exists; invalid scopes still refuse
+restore rather than broadening the selection.
+
+The isolated repaired source copy on the earlier `0f94301` base passed **2,338 Python tests with five platform
+skips**, **22 JavaScript cases**, fatal Ruff, whitespace and the narrow
+public-boundary check. Independent review separately passed 69 focused Python
+checks, both fresh concurrency interleavings, actual Unicode recovery delivery,
+16 shared/casebook/private race checks and desktop/mobile full-backup restore
+journeys. The existing campaign recovery producer also passed four actual UI
+journeys after the shared refactor. New receipts bind the shared dependency as
+well as the component. The minimal prior-reader fixture was tidied only at EOF;
+its closed identity and test pin were updated, preserving the original source
+nodes and all four format/output fixtures. Final executable and test bytes are
+bound to the corresponding qualification receipts. These are historical passes;
+the cached-interface witnesses below supersede their source acceptance.
+
+Capacity checks cover 20 questions and 300 fictional sources, duplicate source
+identities, lazy 0/300/0 checkbox rendering, and both fresh mobile and desktop-to-
+390px resize. A reproduced cached-width overflow was repaired without changing
+source text or choices. Repeated performance checks still found first original
+inspection can require substantial browser layout work. A private causal
+comparison isolated nested preview virtualization. Making only the opened
+inspection visible left residual layout spikes. The current source removes
+casebook source-card virtualization as well; repeated and capacity checks must
+qualify this further change.
+Timings include scrolling and automation variation; a passing capacity test is
+not a latency guarantee. Long picker scanning, singular/plural wording and document usefulness
+remain refinement work. Independent bounded ratings are **7.5 for experience,
+8 for functionality and 7 for appearance**, not a whole-product or 10/10 score.
+
+The real Science Week casebook retained all 11 originals and every earlier
+project field while three dated, bounded registration/mailbox/scientific
+background records were added. A second SubjectNest casebook retained six
+originals while the complete displayed public programme section was added as a
+clearly described selection. Earlier notes and prepared reports remain history;
+registration does not establish authority, a mailbox search does not establish
+membership or delivery, and a source-only checklist does not establish
+eligibility. Saved-database fidelity was verified independently of the failed
+user-export observation. This operator/review cycle made no hosted generation,
+outgoing communication or grant submission. Preferences and explicit model
+selection stayed unchanged. Private business material is outside the repository.
+
+RC3 preparation guards now reject non-regular or oversized manifests before
+hashing and remove only a container whose exact ownership and policy were
+verified. Independent synthetic refusal and source-map checks passed. This is
+preparation evidence: no RC3 source seal, built assets, installed workflow or
+upgrade qualification, clean-machine result or publication is claimed here.
+
+### Current-main integration and cached-interface recovery
+
+Two additional negative witnesses override the earlier green suite: an old open
+casebook page could clear v2 choices with a same-revision v1 save, and could
+restore a v2 backup as a silently broadened new v1 project. The original scoped
+project survived the second path, but the new copy lost its choices. Neither is
+acceptable recovery behavior. The witnesses used fictional workspaces only.
+
+The current repair requires explicit format capability before returning scoped
+projects or validating scoped backups. Shared request code never infers that
+capability for old page modules. Scoped get/save/build/draft operations, including
+the current stored document during a downgrade, use the same gate in HTTP and
+the shared runtime. Returning an existing project to v1 additionally requires a
+typed empty scope list. The current editor carries deliberate clearing through
+navigation and backup recovery, and resets it only after successful saving.
+Lossless current CLI operations opt in; Python callers declare capability;
+the native source editor refuses scoped projects it cannot yet preserve.
+
+Sinter pulled merged main `262235e0effc1c0252f6c13534333fb65216a0a8`, retaining
+every pending runtime/test path and merging the overlapping documentation. This
+introduces the shared runtime and native source window. Combined-source tests
+and independent cached-interface probes remain separate from the earlier
+receipts. No earlier browser pass qualifies the new installed native interface.
+
+The Linux browser-only package menu command now explicitly selects browser mode
+when Tk is omitted. Its source tests exercise the generated command through the
+real launch adapters; default native packages retain their prior command. This
+does not prove a package installation or graphical launch. Default native builds
+need a matching toolkit and notices, an inspected build environment and actual
+installed workflow evidence. The older private RC3 preparation is historical.
+
+The operator used Sinter to edit and save the SubjectNest handover with a clearer
+next decision, a category-context warning and four unassigned preparation
+actions with unconfirmed internal dates. The complete prior document remains an
+unchanged suffix; every prior report field and the earlier saved report remain
+intact. The latest narrow read of the two supplier conversations returned only
+their original SENT messages, not replies or quotations. No delivery, eligibility,
+membership, quote, accepted action or model-quality conclusion is inferred.
+
+The ERAIS per-completion runtime-identity proposal was retrieved from its exact
+GitHub blob and matched the supplied 12-case fixture hash. It remains explicitly
+pending installed-origin verification; current public 57-case compatibility
+fixtures and live Sinter behavior were not changed by that proposal.

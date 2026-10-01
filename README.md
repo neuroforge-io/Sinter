@@ -31,8 +31,8 @@ save, quit, restart, reopen, Word/JSON export and separate restored copies witho
 a model request. Separate actual package upgrades from v0.5.3 and v0.5.4rc1 retain
 copied fictional workspaces, preferences and explicit model selections.
 
-Current development reports `0.5.4rc3.dev0`. Its communications search/order and
-unmet-check guidance changes are source-only and are not qualified installers.
+Current development reports `0.5.4rc3.dev0`. Its newer campaign recovery and
+casebook source-choice features are source-only and are not qualified installers.
 
 Unreleased development also adds a native source workspace and shared CLI/Python
 operations. See [one portable runtime](docs/PORTABLE_RUNTIME.md) for launch modes,
@@ -130,6 +130,13 @@ See the [changelog](CHANGELOG.md) and [recovery guide](docs/LARGE_REVIEWS.md).
 revisioned project. Ask your questions, keep the original wording, and prepare a
 briefing, enquiry, agenda item or volunteer handover with explicit coverage and gaps.
 Optional AI drafting uses a previewed excerpt pack, never a silent upload of the collection.
+
+In current development, **Choose sources for each question** limits related-wording
+matches to your explicit selections. Choosing none leaves that question unanswered;
+all original inputs remain in the project backup. Changing questions or removing
+selected sources requires reviewing those choices. Scoped projects use casebook v2:
+older previews cannot show them or restore their backups. Keep a separate workspace
+copy before switching versions.
 
 **Recent activity** recovers results after a lost browser connection. **Bounded reviews**
 process large text collections in small batches with checkpoints and an honest coverage

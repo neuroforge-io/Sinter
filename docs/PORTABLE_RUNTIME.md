@@ -146,6 +146,22 @@ validation, provider calls and consent gates. The catalogue declares input and
 effect for each exposed operation. Account/session and settings mutations remain
 in the existing UI; no credential export operation is added.
 
+Casebooks with per-question source choices use `sinter-casebook/v2`. Current
+lossless CLI import, export and casebook operations preserve these choices. A
+Python caller must explicitly pass `casebook_schema="sinter-casebook/v2"` to
+`app.call()` for a scoped operation and retain `question_scopes` when editing.
+Without that capability, scoped reads and writes are refused before mutation.
+The native source editor currently supports unscoped v1 projects; open scoped work
+in the current web workbench. Its refusal does not convert or delete the project.
+
+The local HTTP interface requires exactly one
+`X-Sinter-Casebook-Schema: sinter-casebook/v2` header for scoped operations. This
+is a format-preservation declaration, not authentication or a hosted provider
+header. Existing scoped projects can return to v1 only with both capability and
+an explicit empty `question_scopes` list. A missing field never authorizes that
+change. Keep the current revision and reconcile conflicts before deliberately
+saving. Ordinary v1 requests retain their existing shape.
+
 JSON mode writes one `sinter-operation-result/v1` envelope to stdout, containing
 `operation`, `ok`, and `result` or `error`. Progress goes to stderr. Domain results
 retain original schemas and citation packets. File exports contain domain objects

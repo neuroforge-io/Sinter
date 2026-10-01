@@ -22,6 +22,38 @@ without wording matches and documents not represented in the selection. A lexica
 match **does not mean a question was answered**, and no match does not prove absence.
 Read the originals for qualifications, negation, contradictions and chronology.
 
+## Choose sources for each question in development
+
+The unreleased development version offers **Choose sources for each question**.
+Save newly added sources first to give them stable references, then choose
+**Choose sources** for a question. Choosing no sources deliberately leaves it
+without evidence; Sinter does not substitute other documents. **All supplied
+sources** restores the unscoped search for that question.
+
+These choices bound wording searches and optional draft context. They do not
+select exact passages, answer questions or establish a complete source review.
+Inspect the retrieved wording and its original context. All originals stay in the
+project, including sources not represented in the report. Changed questions,
+question positions and removed sources require reviewing the affected choices
+before saving or preparing again. Earlier reports keep their earlier evidence.
+
+Explicit choices use casebook v2 and separate local storage. Older previews cannot
+show these projects or restore their backups. Keep an unchanged workspace copy
+before switching versions; return to a supporting version for newer work. These
+controls are not in the published 0.5.4rc2 installers.
+
+An older open page must not erase or widen these choices. The current server
+refuses scoped projects and backups from interfaces that cannot preserve them.
+Reload the current web workbench before opening newer work; the native source
+window cannot edit these choices yet. Restoring a scoped backup still opens an
+unsaved copy. Clearing every choice is deliberate and must be saved successfully
+before the project returns to the older unscoped format. A conflict or refusal
+keeps the saved source choices and your working copy intact.
+
+Within a question's choices, **Inspect this local source** opens the retained original text
+without selecting it or changing the project. Use its stable reference to tell
+apart sources with the same title, date or link.
+
 ## Choose what a source-only handover carries
 
 The default **Compact notes** handover quotes up to four selected passages. Its
@@ -66,17 +98,43 @@ Local data and exports are unencrypted. Check permissions and private material b
 sharing. There is no shared-account synchronization, background cloud backup or
 automatic publication. Removing a saved project does not erase exported copies.
 
+In development, **Copy backup text** under **Backups and project removal** offers
+complete JSON for manual recovery if the browser download does not arrive. Add or
+clear a pending source first. **Refresh backup text** captures current project
+inputs without writing to the clipboard; **Select backup text** lets you copy it
+manually when clipboard access is missing or stalls. Paste and keep the text
+yourself. These actions do not save the project or establish that a file exists.
+Backup text preserves work awaiting admission, including stale source choices;
+restoring or saving still requires resolving those choices explicitly.
+
 ## Optional model assistance
 
 First prepare the source-only report. Expand the exact-transfer preview: up to eight
 questions and eight selected passages, not the entire collection. Approve transfer
-before asking the configured Fracture-compatible API for a richer draft. Changing
+before asking an explicitly configured capable provider for a richer draft. Changing
 the project removes the previous preview and requires preparing it again.
+
+For a scoped project, each previewed question shows its own allowed passages.
+An answer section cannot cite another question's passages; a question with no
+previewed evidence remains unanswered. The eight-question/eight-passage limit can
+exclude additional material from the draft even when the source-only report
+contains it. The preview shows what will actually be sent.
 
 Unknown or missing excerpt IDs cause the generated draft to be withheld. Valid IDs
 establish only that references exist: they do not prove an assertion follows from
 its source. The generated draft is labelled unverified and is kept separate from
 original evidence. No official communication is sent automatically.
+
+A provider or model profile may refuse a task that exceeds its input/output or
+request-field limits. NeuroForge's compact native profile does not establish
+support for a long structured casebook draft. Retain the useful local report and
+choose a smaller task or explicitly configure a capable provider. Incomplete or
+invalid response text is retained locally when available, with an incomplete
+status rather than accepted answers. No uncertain request is replayed
+automatically; inspect Recent activity before deliberately trying again.
+Invalid Unicode code units use a labelled, reversible escaped representation so
+the recovery result remains readable and can be saved; valid response text stays
+unchanged. A retained response is not a validated answer.
 
 ## Large inputs and recovery
 

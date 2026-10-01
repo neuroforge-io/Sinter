@@ -40,6 +40,23 @@ class RouteDispatch:
     def _resolve_template(self, name):
         return resolve_template(name)
 
+    def _casebook_schema_capability(self):
+        return self.headers.get_all("X-Sinter-Casebook-Schema", [])
+
+    def _admit_casebook_reader(self, document):
+        if (
+            isinstance(document, dict)
+            and document.get("schema") == casebooks.SCOPED_SCHEMA
+            and self._casebook_schema_capability() != [casebooks.SCOPED_SCHEMA]
+        ):
+            raise ValueError(
+                "This project has saved source choices that this interface "
+                "cannot preserve. "
+                "Reload Sinter and reopen the project in the current interface. "
+                "Keep the original project or backup unchanged; "
+                "no choices were cleared."
+            )
+
     def _request_connection(self, path, body=None):
         """Local work never depends on an optional account token supplier.
 
@@ -47,6 +64,15 @@ class RouteDispatch:
         their destination-bound snapshot through the existing context capture.
         Search is a separate tool whose transport never uses model credentials.
         """
+        # Refuse an incompatible scoped draft caller before an optional account
+        # refresh/connection is resolved, as well as before queueing the job.
+        if (
+            path == "/api/casebooks/draft"
+            and body is not None
+            and self._casebook_schema_capability() != [casebooks.SCOPED_SCHEMA]
+        ):
+            saved = self.app.casebooks.get(body.get("id"))
+            self._admit_casebook_reader(saved["document"])
         model = (
             path in {"/api/models", "/api/health"}
             if body is None
@@ -144,7 +170,9 @@ class RouteDispatch:
         elif path.startswith("/api/campaigns/"):
             self._json(self.app.campaigns.get(path.removeprefix("/api/campaigns/")))
         elif path.startswith("/api/casebooks/"):
-            self._json(self.app.casebooks.get(path.removeprefix("/api/casebooks/")))
+            saved = self.app.casebooks.get(path.removeprefix("/api/casebooks/"))
+            self._admit_casebook_reader(saved["document"])
+            self._json(saved)
         elif path.startswith("/api/jobs/"):
             self._json(self.app.jobs.get(path.removeprefix("/api/jobs/")))
         elif path == "/api/reports":
@@ -228,7 +256,9 @@ class RouteDispatch:
             self._json({"ok": True})
             threading.Thread(target=self.app.desktop_shutdown, daemon=True).start()
         elif path == "/api/casebooks/validate":
-            self._json({"document": casebooks.validate(body.get("document"))})
+            document = casebooks.validate(body.get("document"))
+            self._admit_casebook_reader(document)
+            self._json({"document": document})
         elif path == "/api/campaigns/prepare":
             self._json(
                 campaigns.prepare(
@@ -245,6 +275,10 @@ class RouteDispatch:
             self.app.campaigns.delete(body.get("id"), body.get("revision"))
             self._json({"ok": True})
         elif path == "/api/casebooks/save":
+            self._admit_casebook_reader(body.get("document"))
+            if body.get("id") is not None:
+                current = self.app.casebooks.get(body["id"])
+                self._admit_casebook_reader(current["document"])
             self._json(
                 self.app.casebooks.save(
                     body.get("document"), body.get("id"), body.get("revision")
@@ -255,6 +289,7 @@ class RouteDispatch:
             self._json({"ok": True})
         elif path in {"/api/casebooks/build", "/api/casebooks/draft"}:
             saved = self.app.casebooks.get(body.get("id"))
+            self._admit_casebook_reader(saved["document"])
             if saved["revision"] != body.get("revision"):
                 raise ValueError(
                     "The project changed. Reopen or save it before preparing a report."

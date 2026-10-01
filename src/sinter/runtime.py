@@ -595,10 +595,14 @@ def _public_error(exc):
 
 
 class _Capture(RouteDispatch):
-    def __init__(self, app):
+    def __init__(self, app, *, casebook_schema=None):
         self.app = app
+        self.casebook_schema = casebook_schema
         self.result = None
         self.status = 200
+
+    def _casebook_schema_capability(self):
+        return [] if self.casebook_schema is None else [self.casebook_schema]
 
     def _json(self, value, status=200):
         self.result, self.status = value, status
@@ -702,10 +706,10 @@ class Runtime:
             ),
         }
 
-    def _dispatch(self, method, route, body):
+    def _dispatch(self, method, route, body, *, casebook_schema=None):
         """One route adapter for domain calls and trusted presentation settings."""
         parsed = urlsplit(route)
-        capture = _Capture(self.app)
+        capture = _Capture(self.app, casebook_schema=casebook_schema)
         with capture._request_connection(
             parsed.path, body if method == "POST" else None
         ):
@@ -779,8 +783,20 @@ class Runtime:
         except Exception as exc:
             raise _public_error(exc) from None
 
-    def call(self, operation_id, payload=None, *, wait=True, progress=None):
-        """Return existing domain JSON; wait for this runtime's jobs by default."""
+    def call(
+        self,
+        operation_id,
+        payload=None,
+        *,
+        wait=True,
+        progress=None,
+        casebook_schema=None,
+    ):
+        """Return domain JSON; wait for this runtime's jobs by default.
+
+        Scoped casebook callers must explicitly pass
+        casebook_schema='sinter-casebook/v2' and preserve question_scopes.
+        """
         if self._closed:
             raise OperationError(
                 "This runtime is closed. Open a new Runtime before starting work.",
@@ -827,7 +843,9 @@ class Runtime:
                 route = route.replace("{id}", quote(identifier, safe=""))
             if operation_id == "workbench.example":
                 route += "?" + urlencode({"workflow": body.get("workflow", "brief")})
-            capture = self._dispatch(operation["method"], route, body)
+            capture = self._dispatch(
+                operation["method"], route, body, casebook_schema=casebook_schema
+            )
             if capture.status == 202 and wait:
                 identifier = capture.result.get("id") or capture.result.get("job_id")
                 return self.wait(identifier, progress=progress)

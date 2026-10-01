@@ -1,0 +1,41 @@
+{
+  "schema": "sinter-casebook-v1-compatibility-fixture/v1",
+  "source_commit": "a0fcdbf14da1e31e65632fe144e7a4fbcaea9154",
+  "source_path": "src/sinter/casebooks.py",
+  "original_source_sha256": "7dd36048872907794c61a8affbf8d582a73078c4b912367cb9a199d85e9d77bc",
+  "reader_fixture_sha256": "52d0fb3c579f34043268e3d1032c6863c4cb34d917ebb08a955224943d136d31",
+  "reader_scope": "Exact named constants, _text, validate and Casebooks source nodes; required test imports only.",
+  "clock": "2026-10-01T00:00:00Z",
+  "serialization": "json.dumps(value, ensure_ascii=False) as UTF-8, preserving insertion order",
+  "fictional_input_sha256": "1e6d21e8460e5fade7eac5a7f9f4e348b1f87029b4b9b46c7197e072d5139546",
+  "formats": {
+    "brief": {
+      "normalized_sha256": "0efebf71bd166f2bb61d241a9ba9581cf32a7ffa64c68a22993899ea88e14dab",
+      "report_sha256": "92c3830680ed60ae6a836f5cd95323453156c345b024eaece77066d680548cd9",
+      "packet_sha256": "b400911ec690b35485f02bdd3a3bbfb5181e902a94592105b3f5d7174e078f4f",
+      "draft_sha256": "c5046c63dc32560524a788e6e0d9399d2bb323af8db6b8c660b506d20efe6e90",
+      "request_sha256": "5a975e9f2a423aae04ef8bc5e8e2b828d072b5846b0c3f1f9d7b791c03b43511"
+    },
+    "enquiry": {
+      "normalized_sha256": "b52cd5e8fefa35e3afdc606303f260fc49e2908127d5f02c6a85b5a120d2f22a",
+      "report_sha256": "f5e7e8c09e2571b23913ac480efbb2c94effc99b232561a012dcace0cdfe09dc",
+      "packet_sha256": "b400911ec690b35485f02bdd3a3bbfb5181e902a94592105b3f5d7174e078f4f",
+      "draft_sha256": "03ca65f5d5234f2178f40c61c01dbe78cf9721fdcad03826656691fb48a8815d",
+      "request_sha256": "5a975e9f2a423aae04ef8bc5e8e2b828d072b5846b0c3f1f9d7b791c03b43511"
+    },
+    "agenda": {
+      "normalized_sha256": "acca5b7bb46e5865cf5ac23a796f53fd21228237f91ebc206d45453fe7431e13",
+      "report_sha256": "a562fa73da896833bf11bd0271c493cd3468b871fe375fe158d358109b026b4e",
+      "packet_sha256": "b400911ec690b35485f02bdd3a3bbfb5181e902a94592105b3f5d7174e078f4f",
+      "draft_sha256": "d274d9b116bd4860627ee0e324d90b13c882a9457f7fb02a7f855baaafefa847",
+      "request_sha256": "5a975e9f2a423aae04ef8bc5e8e2b828d072b5846b0c3f1f9d7b791c03b43511"
+    },
+    "handover": {
+      "normalized_sha256": "8de204b2ae6bc1b9312aa961c8131243caabaaeb9d0b90c1c2c104783bc64ad6",
+      "report_sha256": "c793b8d5b4df96b6dd7eb17cdd8551cc4ed840cc701e8af3521c80d2d5bdf529",
+      "packet_sha256": "b400911ec690b35485f02bdd3a3bbfb5181e902a94592105b3f5d7174e078f4f",
+      "draft_sha256": "4508bba40ddc8f7869aca5bc1e31361abcf9a39d2de56f6dd4788299869fc0f2",
+      "request_sha256": "5a975e9f2a423aae04ef8bc5e8e2b828d072b5846b0c3f1f9d7b791c03b43511"
+    }
+  }
+}
