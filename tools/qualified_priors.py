@@ -29,7 +29,19 @@ QUALIFIED_PRIORS = MappingProxyType(
             "873d539cb7d7d1de9b983283f3c5f20b28f6585b84c16b320920a236bf1dcf96",
             "31f64e2af6693a21b31c6296ee41aad68516238d6a9d4f34990e91632eb2a08d",
         ),
+        "0.5.4rc2": PriorRelease(
+            "0.5.4rc2",
+            "256d38fa4b61a4d548472ce5abfd0bf513789090",
+            "d53690e159ca4a21e9ec71a0997115bc96bec2486269807f97d8ed92a7301bfc",
+            "eaf318d142e68e942fa17f0881f52bf98bbf0cee30e4bb9fdb84b7002c56b7f0",
+        ),
     }
+)
+
+# Public v0.5.4rc2 SHA256SUMS.txt: 655 exact bytes, independently fetched and
+# compared with the reviewed publication stage. Older receipt policies stay frozen.
+QUALIFIED_CHECKSUM_DOCUMENTS = MappingProxyType(
+    {"0.5.4rc2": "492e82f8972d7ee23d191dd0888bcf43d140a5ff9f24d4b5c7786ebaaefc2ff5"}
 )
 
 

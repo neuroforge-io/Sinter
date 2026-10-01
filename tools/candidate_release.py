@@ -6,6 +6,7 @@ import argparse
 import json
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -46,6 +47,10 @@ def release_notes(version: str, commit: str) -> str:
     """Keep public prose bound to the same qualified scope as its manifest."""
     if version == "0.5.4rc2":
         return _rc2_release_notes(commit)
+    if version == "0.5.4rc3":
+        return _rc3_release_notes(commit)
+    if version != "0.5.4rc1":
+        raise ValueError("This candidate version has no explicit release notes policy.")
     status = (
         "This is a separate prerelease; the published v0.5.3 preview remains unchanged."
     )
@@ -125,6 +130,54 @@ def _rc2_release_notes(commit: str) -> str:
     return notes
 
 
+def _rc3_release_notes(commit: str) -> str:
+    """Describe this gate explicitly; never inherit an arbitrary preview claim."""
+    return f"""# Sinter 0.5.4rc3 — Linux x64 preview
+
+Exact source: `{commit}`. This is a separate prerelease; the published v0.5.3,
+v0.5.4rc1 and v0.5.4rc2 previews remain unchanged.
+
+Only Linux x64 has installed qualification: Ubuntu 22.04/glibc 2.35. The Debian
+package version is `0.5.4~rc3`. Qualification requires a clean offline install and
+separate actual package replacements from all three published priors, retaining
+copied fictional workspaces, preferences, explicit model selection, historical
+source snapshots, stale user reviews and unknown or unassigned owners.
+
+The unchanged installed-workflow/v1 gate covers source inspection, source-only
+handover, edits, save/quit/restart/reopen, Word and JSON exports and separate
+restored copies. Additional installed-recovery/v1 evidence binds held actions,
+cold reopening, explicit resume, closed-route calendar exclusion, proposed dates
+and complete stopped-process backup recovery to the exact installed binary.
+Both clipboard and denied/unavailable clipboard manual-selection branches retain
+the complete working document and restore distinct copies without rewriting the
+saved original. Copying or selecting backup text does not save the project or
+create a file. Oversized backup capture above saved-work limits is not certified
+as an installed restore. Older previews cannot open backups containing On hold;
+keep an unchanged older workspace copy if you need to return to an older preview.
+
+`sinter-0.5.4rc3-qualification.zip` contains the original qualification bundle and
+independent clean-install receipts. SHA256SUMS and candidate-release-manifest.json
+bind every uploaded asset. This scoped gate does not satisfy or bypass the
+nine-platform release gate. Unqualified: {", ".join(UNQUALIFIED)}.
+
+Local work does not require an API key, internet or a downloaded model. The
+fictional walkthrough is `examples/offline-garden/README.md` in the source ZIP.
+No model operation was requested by these installed workflows. Native NeuroForge
+AI remains an optional qualified public profile with buffered text, 1–128 output
+tokens, a 2,048-byte final question, bounded recent history and a 512-token prompt
+budget. Long native recipes, system instructions, streaming, tools, media and
+exact public token preflight are unsupported. General native assistant quality
+and completed live ChatGPT generation are not qualified by this release.
+Inputs and incomplete results remain local; uncertain requests are never replayed
+automatically.
+
+These packages are unsigned and not notarised. Follow your organisation's policy;
+never disable OS protections. Local work and backups are unencrypted. This is a
+single trusted user's workbench, not hosted collaboration or an autonomous sender.
+Customer-device acceptance and other-platform qualification remain outstanding.
+"""
+
+
 def verify_plan(path: Path, repository: Path = ROOT) -> dict:
     """Validate a sealed candidate stage immediately before authorised publication."""
     plan = _json(path)
@@ -189,9 +242,14 @@ def verify_plan(path: Path, repository: Path = ROOT) -> dict:
                 if (
                     name in seen
                     or row.is_dir()
+                    or stat.S_IFMT(row.external_attr >> 16) not in {0, stat.S_IFREG}
+                    or row.external_attr & 0x10
                     or not name.startswith(("canonical/", "independent-review/"))
                 ):
-                    raise ValueError("The qualification ZIP contains unexpected paths.")
+                    raise ValueError(
+                        "The qualification ZIP contains unexpected paths "
+                        "or entry types."
+                    )
                 seen.add(name)
                 total += row.file_size
                 if row.file_size > MAX_FILE or total > MAX_BUNDLE:

@@ -36,7 +36,7 @@ def arguments(tmp_path, version="0.5.4rc1"):
         prior_sha256=prior.installer_sha256,
         candidate_installer=candidate,
         source_commit="c" * 40,
-        expected_version="0.5.4rc2",
+        expected_version="0.5.4rc3" if version == "0.5.4rc2" else "0.5.4rc2",
         output=tmp_path / "proof",
     )
 
@@ -53,7 +53,7 @@ def permit_disposable_fixture(monkeypatch):
     monkeypatch.setattr(upgrade, "installed_version", lambda: "")
 
 
-@pytest.mark.parametrize("version", ["0.5.3", "0.5.4rc1"])
+@pytest.mark.parametrize("version", ["0.5.3", "0.5.4rc1", "0.5.4rc2"])
 @pytest.mark.parametrize("caller_matches_forged_bytes", [False, True])
 def test_caller_digest_cannot_reseal_an_unqualified_installer(
     monkeypatch,
@@ -91,7 +91,7 @@ def simulated_replacement(monkeypatch, tmp_path, version):
     monkeypatch.setattr(upgrade, "BINARY", binary)
     package_versions = {
         args.prior_installer: upgrade.debian_package_version(version),
-        args.candidate_installer: "0.5.4~rc2",
+        args.candidate_installer: upgrade.debian_package_version(args.expected_version),
     }
     monkeypatch.setattr(
         upgrade,
@@ -111,7 +111,7 @@ def simulated_replacement(monkeypatch, tmp_path, version):
             assert command[2:] == [
                 package_versions[args.prior_installer],
                 "lt",
-                "0.5.4~rc2",
+                upgrade.debian_package_version(args.expected_version),
             ]
         elif command[1] == "-i":
             installer = Path(command[2])
@@ -153,7 +153,7 @@ def simulated_replacement(monkeypatch, tmp_path, version):
     return args, prior, operations, launches, state, binary
 
 
-@pytest.mark.parametrize("version", ["0.5.3", "0.5.4rc1"])
+@pytest.mark.parametrize("version", ["0.5.3", "0.5.4rc1", "0.5.4rc2"])
 def test_both_priors_are_replaced_without_uninstall_and_receipt_uses_exact_prior(
     monkeypatch,
     tmp_path,
@@ -163,7 +163,7 @@ def test_both_priors_are_replaced_without_uninstall_and_receipt_uses_exact_prior
         monkeypatch, tmp_path, version
     )
     receipt = upgrade.qualify(args)
-    assert launches == [(version, {"legacy": True}), ("0.5.4rc2", {})]
+    assert launches == [(version, {"legacy": True}), (args.expected_version, {})]
     assert [command[:2] for command in operations] == [
         ["dpkg", "--compare-versions"],
         ["dpkg", "-i"],
@@ -176,8 +176,10 @@ def test_both_priors_are_replaced_without_uninstall_and_receipt_uses_exact_prior
     assert receipt["prior_installer_sha256"] == prior.installer_sha256
     assert receipt["prior_app_version"] == version
     assert receipt["prior_package_version"] == upgrade.debian_package_version(version)
-    assert receipt["candidate_app_version"] == "0.5.4rc2"
-    assert receipt["candidate_package_version"] == "0.5.4~rc2"
+    assert receipt["candidate_app_version"] == args.expected_version
+    assert receipt["candidate_package_version"] == upgrade.debian_package_version(
+        args.expected_version
+    )
     assert f"published v{version} installer" in receipt["checks"][0]
     assert receipt["original_fixture_hashes"] == upgrade.hashes(
         args.output / "prior-workspace"

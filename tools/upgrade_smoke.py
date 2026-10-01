@@ -148,8 +148,15 @@ def verify_prior_source(
 def prior_for_arguments(args) -> PriorRelease:
     """Validate prior and candidate selection before creating any workspace."""
     prior = qualified_prior(args.prior_version, args.prior_commit)
-    if prior.version == "0.5.4rc1" and args.expected_version != "0.5.4rc2":
-        raise ValueError("The qualified rc1 upgrade path targets 0.5.4rc2 only.")
+    targets = {
+        "0.5.3": {"0.5.4rc1", "0.5.4rc2", "0.5.4rc3"},
+        "0.5.4rc1": {"0.5.4rc2", "0.5.4rc3"},
+        "0.5.4rc2": {"0.5.4rc3"},
+    }
+    if args.expected_version not in targets[prior.version]:
+        raise ValueError(
+            "The prior and candidate have no explicitly qualified upgrade path."
+        )
     return prior
 
 
@@ -192,7 +199,7 @@ campaign_document = {
     "actions":[{"task":"Request venue permission", "owner":"Morgan Example",
                 "status":"open"}],
 }
-if expected_version == "0.5.4rc1":
+if expected_version in {"0.5.4rc1", "0.5.4rc2"}:
     campaign_document["sources"] = [{
         "id":"a" * 32, "title":"Fictional changed programme page",
         "url":"https://example.invalid/current-round", "checked_at":"2026-09-29",
@@ -210,6 +217,9 @@ if expected_version == "0.5.4rc1":
         "task":"Check water approval", "owner":"", "owner_kind":"unassigned",
         "owner_confirmed":False, "status":"open", "due":"",
     })
+    if expected_version == "0.5.4rc2":
+        # A retained user mark is deliberately unsupported by the changed source.
+        campaign_document["requirements"][0]["status"] = "met"
 campaign = CampaignStore(directory).save(campaign_document)
 report = {
     "title":"Fictional retained draft", "workflow":"brief",
@@ -351,7 +361,7 @@ def check_preserved(api: LocalAPI, expected: dict, *, legacy=False) -> list[str]
         raise AssertionError("Source-only casebook job did not complete in time.")
     assert api.request("/api/campaigns/" + campaign["id"]) == campaign_current
     assert api.request("/api/casebooks/" + book["id"]) == book_current
-    return [
+    checks = [
         "prior profile and appearance preferences retained",
         "explicit legacy model selection retained"
         + (" by prior application" if legacy else " with compatible provider"),
@@ -360,6 +370,34 @@ def check_preserved(api: LocalAPI, expected: dict, *, legacy=False) -> list[str]
         "disabled watch retained without a search request",
         "retained source-only casebook completed through installed API",
     ]
+    if expected.get("prior_version") == "0.5.4rc2":
+        document = campaign_current["document"]
+        assert len(document["sources"]) == 1 and len(document["actions"]) == 2
+        requirement, source = document["requirements"][0], document["sources"][0]
+        assert requirement["status"] == "met"
+        assert requirement["source_id"] == source["id"] == "a" * 32
+        assert requirement["source_url"] == "https://example.invalid/earlier-round"
+        assert source["url"] == "https://example.invalid/current-round"
+        assert requirement["checked_at"] == "2026-09-12"
+        assert source["checked_at"] == "2026-09-29"
+        assert [row["owner_kind"] for row in document["actions"]] == [
+            "unknown",
+            "unassigned",
+        ]
+        prepared = api.request("/api/campaigns/prepare", {"document": document})
+        assert prepared["readiness"]["claims_without_evidence"] == 1
+        assert prepared["readiness"]["requirements_unresolved"] == 1
+        assert api.request("/api/campaigns/" + campaign["id"]) == campaign_current
+        assert_preserved(
+            expected["report"],
+            api.request("/api/reports/" + expected["report_id"]),
+            "historical report",
+        )
+        checks.append(
+            "rich prior source snapshots, stale marked review "
+            "and unknown/unassigned owners retained"
+        )
+    return checks
 
 
 def prepare_fixture(
