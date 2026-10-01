@@ -120,7 +120,14 @@ def main(argv: list[str] | None = None) -> None:
                     expect(page.get_by_label("Prepare a", exact=True)).to_have_value(
                         "handover"
                     )
-                    sources = page.locator(".casebook-editor details.source")
+                    sources = page.locator(".casebook-editor details.source").filter(
+                        has=page.get_by_role(
+                            "button",
+                            name="Remove source",
+                            exact=True,
+                            include_hidden=True,
+                        )
+                    )
                     expect(sources).to_have_count(4)
                     for index, original in enumerate(bundle["casebook"]["documents"]):
                         sources.nth(index).locator("summary").click()
