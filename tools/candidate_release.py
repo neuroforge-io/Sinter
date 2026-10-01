@@ -143,9 +143,14 @@ separate actual package replacements from all three published priors, retaining
 copied fictional workspaces, preferences, explicit model selection, historical
 source snapshots, stale user reviews and unknown or unassigned owners.
 
-The unchanged installed-workflow/v1 gate covers source inspection, source-only
-handover, edits, save/quit/restart/reopen, Word and JSON exports and separate
-restored copies. Additional installed-recovery/v1 evidence binds held actions,
+The installed-workflow/v2 gate covers source inspection, source-only handover,
+edits, save/quit/restart/reopen, Word and JSON exports and separate restored
+copies. It requires the exact 53-operation installed catalogue and three actual
+local Word copies: applied wording, changed wording and an unconfirmed save.
+Pending edits remain protected; previous copies and saved records are retained,
+and an uncertain save is not automatically replayed. These are fictional local
+workflow checks; ordinary customer-browser download delivery remains unqualified.
+Additional installed-recovery/v1 evidence binds held actions,
 cold reopening, explicit resume, closed-route calendar exclusion, proposed dates
 and complete stopped-process backup recovery to the exact installed binary.
 Both clipboard and denied/unavailable clipboard manual-selection branches retain

@@ -807,3 +807,38 @@ the original 266-byte frozen callback traceback are retained. SQLite schema
 cookies, journals and physical file equality are outside this gate. No fresh
 executable was supplied to these source reviews; installed native qualification
 and the complete operator workflow remain open.
+
+### 1 October: current installed Word gate, source acceptance
+
+The eight-path installed Word qualification proposal is independently accepted
+for ordinary source correctness. It requires the exact 53-operation catalogue
+and current installed-workflow/v2 evidence: thirteen closed artifacts and
+21 checks, including three actual Word files, pending-edit refusal, a distinct
+changed copy, lost confirmation without automatic replay, and conservation of
+all five logical tables, exact preferences and public settings. The producer
+reads those files again after the installed process exits. Historical v1 contract
+constants retain their original meaning; current source cannot fall back to v1.
+
+The author's 366 focused checks pass; six retained ZIP-admission negatives
+reproduce the corrected source gate. Independent ordinary review covers all
+217 changed-module checks (one private socket-path setup failure passed on an
+unchanged-source short-path retry) and inspects retained fictional DOCX bytes.
+Earlier incomplete broader review work is retained and is not a completed
+security assessment. No application binary or installed browser ran in these
+source reviews.
+
+The private combined source selection covers 2,948 checks with eight skipped.
+Its initial run had 2,947 passes and one socket-path fixture setup failure; the
+unchanged-source explicit retry passes. All 388 frozen source hashes remain
+unchanged. A separate narrow terminal-notice policy review passes 160 ordinary
+checks and 16 independent synthetic-archive probes. RC1/RC2 exclusions remain
+unchanged; RC3 still refuses readline and checks actual Debian library,
+copyright and referenced-notice bytes. These gate compositions are followed by
+fresh qualification, rather than reusing an older installer identity.
+
+The final main composition of the accepted Word gate and terminal-notice policy
+passes **2,950 checks, eight skipped, no failures** in 168.41 seconds using a
+short private test folder. All 388 pre-run source hashes remain unchanged;
+changed Python lint, fatal repository lint and the public-boundary guard pass.
+This clean run supersedes the earlier composition's setup retry for final
+source coverage. It still does not qualify a frozen or installed artifact.

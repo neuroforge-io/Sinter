@@ -34,6 +34,12 @@ heading is not a qualification receipt or approval to publish.
   preferences and persistent database metadata before reopening can repair them.
   This strengthens the test gate; fresh installed qualification remains required.
 
+- Qualify the current installed offline workflow with the exact 53-operation
+  catalogue, actual saved Word files, pending-edit protection and lost-confirmation
+  recovery. Keep historical workflow receipts separate. Require the original
+  Debian dependency notice bytes for retained terminal libraries; readline stays
+  excluded. These source gates do not qualify an installer until they execute.
+
 - Retain open and closed cost rows while navigating within the current browser
   campaign editor. Explicit campaign replacement starts fresh view choices;
   original inputs, review statuses and saved revisions are preserved. Use a

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import csv
 import hashlib
 import io
@@ -16,7 +17,6 @@ from xml.etree import ElementTree as ET
 from tools.installed_workflow_contract import (
     ACTION_TASK,
     ARTIFACT_PATHS,
-    CHECKS,
     COMMUNICATION,
     MAX_ARTIFACT_BYTES,
     MAX_TOTAL_BYTES,
@@ -27,7 +27,11 @@ from tools.installed_workflow_contract import (
     RESOURCE_FLAGS,
     RESTORED_CAMPAIGN_TITLE,
     RESTORED_CASEBOOK_TITLE,
-    SCHEMA,
+    WORD_CHANGED_NOTE,
+    requires_word_copy,
+    workflow_artifact_paths,
+    workflow_checks,
+    workflow_schema,
 )
 
 WORD_PARTS = frozenset(
@@ -398,8 +402,9 @@ def verify_installed_workflow(
         raise ValueError(
             "The installed workflow receipt has missing or unknown fields."
         )
+    roles = workflow_artifact_paths(source)
     fixed = {
-        "schema": SCHEMA,
+        "schema": workflow_schema(source),
         "passed": True,
         "version": version,
         "source_commit": commit,
@@ -423,7 +428,7 @@ def verify_installed_workflow(
         "external_requests": 0,
         "page_errors": 0,
         "model_calls": 0,
-        "checks": list(CHECKS),
+        "checks": list(workflow_checks(source)),
         "resources": dict.fromkeys(RESOURCE_FLAGS, True),
     }
     for key, value in fixed.items():
@@ -454,7 +459,7 @@ def verify_installed_workflow(
     ):
         raise ValueError("Installed workflow static and fictional inputs differ.")
     artifacts = receipt["artifacts"]
-    if not isinstance(artifacts, list) or len(artifacts) != len(ARTIFACT_PATHS):
+    if not isinstance(artifacts, list) or len(artifacts) != len(roles):
         raise ValueError("The installed workflow artifact inventory is incomplete.")
     seen, total, retained = set(), 0, {}
     for row in artifacts:
@@ -462,9 +467,9 @@ def verify_installed_workflow(
             not isinstance(row, dict)
             or set(row) != {"role", "path", "sha256", "bytes"}
             or not isinstance(row["role"], str)
-            or row["role"] not in ARTIFACT_PATHS
+            or row["role"] not in roles
             or row["role"] in seen
-            or row["path"] != ARTIFACT_PATHS[row["role"]]
+            or row["path"] != roles[row["role"]]
             or not isinstance(row["sha256"], str)
             or not SHA.fullmatch(row["sha256"])
             or type(row["bytes"]) is not int
@@ -496,12 +501,17 @@ def verify_installed_workflow(
     ):
         raise ValueError("Installed backups differ from the fixed fictional edits.")
     for role, data in retained.items():
-        if role.endswith("backup"):
+        if role not in ARTIFACT_PATHS or role.endswith("backup"):
             continue
         if role == "handover_word":
             validate_word(data, book)
         else:
             validate_png(data)
+    if requires_word_copy(source):
+        validate_operations_catalog(
+            json_object(retained["operations_catalog"]), source, version
+        )
+        validate_word_copy_recovery(retained, source, book, receipt)
     _verify_result_hashes(
         receipt, original_book, original_campaign, book, campaign, web
     )
@@ -554,3 +564,365 @@ def _verify_result_hashes(
         raise ValueError(
             "The installed workflow result hashes do not bind retained data."
         )
+
+
+def source_operations(source: dict[str, bytes]) -> list[dict]:
+    """Read the closed literal catalogue; never execute candidate source."""
+    try:
+        tree = ast.parse(source["src/sinter/runtime.py"])
+        entries = next(
+            node.value
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "_OPERATIONS"
+                for target in node.targets
+            )
+        )
+        result = []
+        for entry in entries.elts:
+            if (
+                not isinstance(entry, ast.Call)
+                or not isinstance(entry.func, ast.Name)
+                or entry.func.id != "Operation"
+                or entry.keywords
+                or not 4 <= len(entry.args) <= 6
+            ):
+                raise ValueError(
+                    "The candidate catalogue is not a closed literal contract."
+                )
+            values = [ast.literal_eval(argument) for argument in entry.args]
+            values += [
+                "JSON object; omitted fields retain the existing API defaults.",
+                "local",
+            ][len(values) - 4 :]
+            if any(not isinstance(value, str) for value in values):
+                raise ValueError("The candidate catalogue contains non-text fields.")
+            result.append(
+                dict(
+                    zip(("id", "method", "route", "summary", "input", "effect"), values)
+                )
+            )
+    except (KeyError, StopIteration, SyntaxError, AttributeError, TypeError) as error:
+        raise ValueError(
+            "The candidate has no admitted operation catalogue."
+        ) from error
+    if len(result) != 53 or len({entry["id"] for entry in result}) != 53:
+        raise ValueError(
+            "The current installed workflow requires exactly 53 operations."
+        )
+    save = next((entry for entry in result if entry["id"] == "documents.docx.save"), {})
+    if (save.get("method"), save.get("route"), save.get("effect")) != (
+        "POST",
+        "/api/documents/docx/save",
+        "write",
+    ):
+        raise ValueError(
+            "The current catalogue lacks the explicit Word-copy write contract."
+        )
+    return result
+
+
+def validate_operations_catalog(
+    value: dict, source: dict[str, bytes], version: str
+) -> None:
+    """Bind actual installed CLI discovery to every source-declared operation."""
+    expected = {
+        "schema": "sinter-operations/v1",
+        "version": version,
+        "operations": source_operations(source),
+        "excluded": [
+            "account setup",
+            "credentials",
+            "settings mutations",
+            "HTTP session/security controls",
+            "desktop lifecycle",
+        ],
+        "jobs": "Temporary within one Runtime; CLI waits and never starts a daemon."
+        " Save/export useful results explicitly.",
+    }
+    if not _same_json(value, expected):
+        raise ValueError(
+            "Installed capabilities differ from the exact 53-operation source contract."
+        )
+
+
+def _word_copy_zip_envelope(content: bytes, archive: zipfile.ZipFile) -> None:
+    """Admit only ordinary compiler ZIP records, without hidden extra data."""
+    if len(content) < 22:
+        raise ValueError("Saved Word ZIP footer is incomplete.")
+    footer = struct.unpack("<4s4H2LH", content[-22:])
+    if (
+        footer[:5] != (b"PK\x05\x06", 0, 0, len(WORD_PARTS), len(WORD_PARTS))
+        or footer[5] + footer[6] != len(content) - 22
+        or footer[7] != 0
+        or archive.comment
+    ):
+        raise ValueError("Saved Word ZIP contains unsupported footer or trailing data.")
+    position = 0
+    for member in sorted(archive.infolist(), key=lambda entry: entry.header_offset):
+        if (
+            member.header_offset != position
+            or member.comment
+            or member.extra
+            or member.flag_bits != 0
+            or member.compress_type not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}
+            or position + 30 > footer[6]
+        ):
+            raise ValueError("Saved Word ZIP contains unsupported member metadata.")
+        header = struct.unpack("<4s5H3L2H", content[position : position + 30])
+        name = member.filename.encode("ascii")
+        if (
+            header[0] != b"PK\x03\x04"
+            or header[1:4]
+            != (member.extract_version, member.flag_bits, member.compress_type)
+            or header[6:]
+            != (member.CRC, member.compress_size, member.file_size, len(name), 0)
+            or content[position + 30 : position + 30 + len(name)] != name
+        ):
+            raise ValueError("Saved Word ZIP local header differs from its directory.")
+        position += 30 + len(name)
+        compressed = content[position : position + member.compress_size]
+        if member.compress_type == zipfile.ZIP_DEFLATED:
+            decoder = zlib.decompressobj(-15)
+            try:
+                decoder.decompress(compressed)
+            except zlib.error as error:
+                raise ValueError("Saved Word ZIP compression is invalid.") from error
+            if not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+                raise ValueError("Saved Word ZIP contains hidden compressed data.")
+        elif len(compressed) != member.file_size:
+            raise ValueError("Saved Word ZIP stored member length differs.")
+        position += member.compress_size
+    if position != footer[6]:
+        raise ValueError("Saved Word ZIP contains data outside its members.")
+
+
+def validate_word_copy_recovery(
+    retained: dict[str, bytes], source: dict[str, bytes], book: dict, receipt: dict
+) -> None:
+    """A response alone cannot replace saved bytes, snapshots and conservation."""
+    # Bind all transitive local rendering code before calling the verifier's
+    # compiler. Policy tooling may differ; admitted application Python may not.
+    root = Path(__file__).resolve().parents[1]
+    expected_python = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in (root / "src/sinter").rglob("*.py")
+    }
+    actual_python = {
+        name: content
+        for name, content in source.items()
+        if name.startswith("src/sinter/") and name.endswith(".py")
+    }
+    if actual_python != expected_python:
+        raise ValueError(
+            "Word verification needs the exact candidate Python rendering code."
+        )
+    from sinter import casebooks, docx_export
+
+    proof = json_object(retained["word_copy_recovery"])
+    fields = {
+        "schema",
+        "snapshots",
+        "pending",
+        "uncertain",
+        "before",
+        "after",
+        "saved_report",
+        "synthetic_download_denials",
+    }
+    if set(proof) != fields or proof["schema"] != "sinter-installed-word-copy/v1":
+        raise ValueError("Word recovery evidence has missing or unknown fields.")
+    original = {
+        "title": book["title"],
+        "markdown": casebooks.build(book)["document_markdown"] + OPERATOR_NOTE,
+    }
+    changed = {**original, "markdown": original["markdown"] + WORD_CHANGED_NOTE}
+    rows = proof["snapshots"]
+    if not isinstance(rows, list) or len(rows) != 3:
+        raise ValueError("Word recovery requires three actual distinct local copies.")
+    paths = set()
+    for row, payload, role in zip(
+        rows,
+        (original, changed, changed),
+        ("word_copy_applied", "word_copy_changed", "word_copy_unconfirmed"),
+    ):
+        if not isinstance(row, dict) or set(row) != {
+            "payload",
+            "response",
+            "file_mode",
+            "file_links",
+        }:
+            raise ValueError("A Word snapshot observation has unsupported fields.")
+        response = row["response"]
+        if (
+            not _same_json(row["payload"], payload)
+            or not isinstance(response, dict)
+            or set(response)
+            != {
+                "path",
+                "filename",
+                "bytes",
+                "sha256",
+                "content_type",
+                "verification",
+                "title",
+                "markdown_sha256",
+                "snapshot_sha256",
+            }
+        ):
+            raise ValueError("Word recovery did not retain the exact applied snapshot.")
+        name = response["filename"]
+        if (
+            not isinstance(name, str)
+            or not name.endswith(".docx")
+            or len(name.encode("utf-8")) > 150
+            or re.search(r"[\\/\x00-\x1f]", name)
+            or response["path"] != "/proof/data/exports/" + name
+            or response["path"] in paths
+        ):
+            raise ValueError(
+                "Word copy paths are unsafe, duplicated "
+                "or outside the fictional workspace."
+            )
+        content = retained[role]
+        expected_content = docx_export.export_docx(payload).content
+        _word_paragraphs(content)
+        with (
+            zipfile.ZipFile(io.BytesIO(content)) as actual_word,
+            zipfile.ZipFile(io.BytesIO(expected_content)) as expected_word,
+        ):
+            _word_copy_zip_envelope(content, actual_word)
+            # ZIP compression can differ between frozen/host zlib versions.
+            # Every actual ZIP byte is hashed below; every uncompressed OOXML
+            # part must still equal the exact same-source compiler output.
+            if any(
+                actual_word.read(name) != expected_word.read(name)
+                for name in WORD_PARTS
+            ):
+                raise ValueError(
+                    "Actual saved Word content differs from the supplied snapshot."
+                )
+        expected = {
+            "path": response["path"],
+            "filename": name,
+            "bytes": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "content_type": (
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+            "verification": "Word ZIP integrity and exact byte readback",
+            "title": payload["title"],
+            "markdown_sha256": hashlib.sha256(payload["markdown"].encode()).hexdigest(),
+            "snapshot_sha256": canonical_hash(payload),
+        }
+        if (
+            not _same_json(response, expected)
+            or type(row["file_mode"]) is not int
+            or row["file_mode"] != 0o600
+            or type(row["file_links"]) is not int
+            or row["file_links"] != 1
+        ):
+            raise ValueError(
+                "Actual local Word file metadata or snapshot hashes differ."
+            )
+        paths.add(response["path"])
+    if not isinstance(proof["saved_report"], dict) or not isinstance(
+        proof["saved_report"].get("document_edits"), dict
+    ):
+        raise ValueError("Word preservation must retain the saved original draft.")
+    if (
+        proof["saved_report"].get("document_edits", {}).get("markdown")
+        != original["markdown"]
+        or (
+            proof["saved_report"].get("document_title")
+            or proof["saved_report"].get("title")
+        )
+        != original["title"]
+    ):
+        raise ValueError(
+            "The applied Word snapshot differs from the saved original draft."
+        )
+    if retained["word_copy_applied"] != retained["handover_word"]:
+        raise ValueError(
+            "Ordinary Word download differs from the locally saved applied copy."
+        )
+    if not _same_json(
+        proof["pending"],
+        {"requests_before": 1, "requests_after": 1, "editor_text": changed["markdown"]},
+    ):
+        raise ValueError("Pending edits were exported or lost instead of protected.")
+    if not _same_json(
+        proof["uncertain"],
+        {
+            "requests_after_failure": 3,
+            "requests_after_idle": 3,
+            "displayed_path": rows[1]["response"]["path"],
+            "displayed_notice": "Previously confirmed copy",
+            "editor_text": changed["markdown"],
+        },
+    ):
+        raise ValueError(
+            "Uncertain Word save lost the previous path or automatically replayed."
+        )
+    if (
+        type(proof["synthetic_download_denials"]) is not int
+        or proof["synthetic_download_denials"] != 1
+    ):
+        raise ValueError(
+            "The intentional download denial was not observed exactly once."
+        )
+    before = proof["before"]
+    if not isinstance(before, dict) or set(before) != {
+        "tables",
+        "preferences_file",
+        "settings_sha256",
+    }:
+        raise ValueError("Word conservation evidence is incomplete.")
+    tables = before["tables"]
+    names = {
+        "workspace.sqlite3/reports",
+        "workspace.sqlite3/watches",
+        "workspace.sqlite3/casebooks",
+        "workspace.sqlite3/casebooks_scoped_v2",
+        "campaigns.sqlite3/campaigns",
+    }
+    if not isinstance(tables, dict) or set(tables) != names:
+        raise ValueError("Word conservation does not cover all five original tables.")
+    for value in tables.values():
+        if (
+            not isinstance(value, dict)
+            or set(value) != {"definition_sha256", "rows_sha256", "rows"}
+            or type(value["rows"]) is not int
+            or value["rows"] < 0
+            or any(
+                not isinstance(value[key], str) or not SHA.fullmatch(value[key])
+                for key in ("definition_sha256", "rows_sha256")
+            )
+        ):
+            raise ValueError("Word conservation contains unbound table observations.")
+    if any(
+        tables[name].get("rows") != 1
+        for name in (
+            "workspace.sqlite3/reports",
+            "workspace.sqlite3/casebooks",
+            "campaigns.sqlite3/campaigns",
+        )
+    ):
+        raise ValueError(
+            "Word preservation must include the actual saved "
+            "project, campaign and report."
+        )
+    if (
+        not isinstance(before["settings_sha256"], str)
+        or not SHA.fullmatch(before["settings_sha256"])
+        or before["preferences_file"] is not None
+        and (
+            not isinstance(before["preferences_file"], str)
+            or not SHA.fullmatch(before["preferences_file"])
+        )
+        or not _same_json(proof["after"], before)
+        or canonical_hash(proof["saved_report"])
+        != receipt["result_hashes"]["saved_report"]
+    ):
+        raise ValueError("Word recovery changed original reports, rows or preferences.")

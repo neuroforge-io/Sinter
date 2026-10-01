@@ -6,16 +6,16 @@ v0.5.3, v0.5.4rc1 and v0.5.4rc2 remain unchanged. Keep the exact build commit in
 each receipt; source-tree equality with another commit does not change that
 build identity. Hosted review builds do not publish this scoped prerelease.
 
-The dedicated same-repository qualification branch additionally consumes its
-same-run Linux x64 artifact in hosted CI. It prepares a small tooling image,
-then runs the existing three pinned copied/installed upgrade producers and both
-installed browser producers with application-test networking disabled. The
-`sinter-linux-installed-gates/v1` receipt records partial progress and cleanup;
-independent Python-free installation and the final canonical candidate gate
-remain explicitly false there, even when those installed workflow gates pass.
-Image preparation and public checksum-pinned prior downloads happen before the
-offline application tests. This job cannot stage a release, create a tag or
-publish, and does not establish managed cloud-browser access or real AI quality.
+The existing hosted installed-gate job still targets its historical qualification
+branch; it does not automatically qualify current main. A fresh source-pinned run
+must consume its own newly built Linux x64 installer. The existing local runner
+prepares a tooling image, runs the three pinned copied/installed upgrade producers
+and both installed browser producers with application-test networking disabled.
+Its `sinter-linux-installed-gates/v1` receipt records partial progress and cleanup;
+independent Python-free installation and the final canonical candidate gate remain
+explicitly false there, even when those workflow gates pass. Image preparation
+and checksum-pinned public prior downloads precede offline application tests.
+These gates cannot publish and do not establish customer-device or AI quality.
 
 The prospective candidate is Linux x64 on Ubuntu 22.04/glibc 2.35 only. Other
 platforms need their own installed evidence. Packages remain unsigned and not
@@ -31,9 +31,14 @@ notarised; do not disable OS protections to install them.
    Preserve copied fictional workspaces, preferences and explicit model choices.
    RC2 also retains changed source snapshots, stale user-marked reviews,
    historical reports and unknown versus unassigned owners.
-3. Run the existing `installed-workflow/v1` browser gate unchanged. Inspect
-   sources, prepare a useful source-only handover, edit, save, quit, restart,
-   reopen, export Word and JSON, and restore distinct copies.
+3. For current source with the local Word-copy operation, run
+   `installed-workflow/v2`; historical v1 receipts keep their original meaning.
+   Inspect sources, prepare a useful source-only handover, edit, save, quit,
+   restart, reopen, export Word and JSON, and restore distinct copies. Verify
+   the actual 53-operation installed catalogue and all thirteen artifacts:
+   pending-edit refusal, changed wording in a distinct saved copy, lost save
+   confirmation without replay, and unchanged originals/preferences. Read all
+   three actual Word files again after the installed process has quit.
 4. Run `tools/installed_recovery_browser.py` in installed mode against the same
    binary. Retain all fourteen recovery artifacts and ten complete campaign
    phases. Observe four actual process runs and their exits. Check held actions,
@@ -41,7 +46,11 @@ notarised; do not disable OS protections to install them.
    truthful unknown owners and proposed dates. Exercise failed Save with the
    process stopped, both clipboard and denied/unavailable clipboard recovery,
    and restoration without changing the saved original.
-5. Independently inspect the actual artifact contents and installer, then verify
+5. Run the current native launch qualifier against the fresh frozen executable
+   on an isolated display. Retain its full bounded receipt; inspect both mapped
+   launches, clean stderr, shutdown and saved fictional workspace/preferences.
+   This launch check does not establish the full native editing experience.
+6. Independently inspect the actual artifact contents and installer, then verify
    the complete staged publication plan. Do not publish a renamed source
    rehearsal, a list of claimed passes or receipts from a different binary.
 

@@ -462,6 +462,9 @@ def bundle(tmp_path, request):
             "clean_offline_Ubuntu22_install_self_test_remove",
         )
     }
+    if version == "0.5.4rc3":
+        del checks["readline_and_tinfo_excluded"]
+        checks.update(readline_excluded=True, terminal_library_notices_verified=True)
     write_json(
         review / "final-artifact-review.json",
         {
