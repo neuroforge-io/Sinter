@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 from sinter import __version__  # noqa: E402
 from tools._support import require_module  # noqa: E402
+from tools.frozen_cli_smoke import qualify as qualify_cli  # noqa: E402
 from tools.native_licences import (  # noqa: E402
     collect_linux_libraries,
     common_references,
@@ -667,6 +668,10 @@ def main(argv: list[str] | None = None) -> None:
     assert receipt["passed"] and receipt["frozen"] and receipt["pointer_bits"] == bits
     verify_account_receipt(receipt, account_auth)
     verify_native_window_receipt(receipt, native_window)
+    receipt["frozen_cli_test"] = qualify_cli(binary)
+    if receipt["frozen_cli_test"]["passed"] is not True:
+        print(json.dumps(receipt["frozen_cli_test"], indent=2), flush=True)
+        raise RuntimeError("The frozen shared CLI workflow did not pass.")
     receipt.update(
         {
             "execution": args.execution,

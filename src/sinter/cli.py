@@ -17,8 +17,12 @@ def _write(path: str | Path, content: str, *, sources: Sequence[str | Path] = ()
     print(f"Saved: {path}")
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="sinter", description="Sinter - source-linked community work and a configured model API")
+def build_parser(prog: str = "sinter") -> argparse.ArgumentParser:
+    """Describe the existing commands without opening a runtime or dispatching."""
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description="Sinter - source-linked community work and a configured model API",
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command")
     server = sub.add_parser("serve", help="Open the local web workbench")
@@ -76,8 +80,14 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("templates", help="List templates")
     sub.add_parser("health", help="Check the live API")
     from . import runtime_cli
-    from .runtime import OperationError
     runtime_cli.add_parsers(sub)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    from .runtime import OperationError
+
+    parser = build_parser()
     args = parser.parse_args(argv)
     if not args.command:
         parser.print_help()

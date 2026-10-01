@@ -5,6 +5,13 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Advertise the shared CLI commands in the packaged executable's launch help,
+  using the existing command parser. Build-test the actual frozen CLI with a
+  fictional source update, retained evidence/gaps, historical report, export,
+  restore and structured error workflow with bounded owned-process capture;
+  no provider generation is exercised. Escape machine JSON without losing
+  Unicode values on redirected legacy consoles; UTF-8 exports are retained.
+
 - Reopen the most recently saved campaign when rapid saves share a clock second
   or the clock moves backwards. Assign increasing campaign save timestamps inside
   the existing write transaction; retain legacy rows, identities, revisions,

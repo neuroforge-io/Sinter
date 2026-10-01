@@ -296,10 +296,12 @@ def dispatch(args):
                 )
                 print(f"Saved: {output}", file=sys.stderr)
         if machine:
+            # ASCII escapes preserve Unicode JSON values on redirected legacy
+            # consoles as well as UTF-8 clients; readable text mode is unchanged.
             print(
                 json.dumps(
                     _envelope(operation, result=result),
-                    ensure_ascii=False,
+                    ensure_ascii=True,
                     allow_nan=False,
                 )
             )
@@ -318,7 +320,7 @@ def dispatch(args):
             print(
                 json.dumps(
                     _envelope(operation, error=error),
-                    ensure_ascii=False,
+                    ensure_ascii=True,
                     allow_nan=False,
                 )
             )
@@ -330,7 +332,7 @@ def dispatch(args):
             print(
                 json.dumps(
                     _envelope(operation, error=error),
-                    ensure_ascii=False,
+                    ensure_ascii=True,
                     allow_nan=False,
                 )
             )

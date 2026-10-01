@@ -1,7 +1,9 @@
 """Portable launch behavior without sockets, providers or desktop permissions."""
 
+import json
 import runpy
 import signal
+import socket
 import sqlite3
 import sys
 import threading
@@ -10,7 +12,184 @@ from pathlib import Path
 
 import pytest
 
-from sinter import cli, desktop
+from sinter import cli, client, desktop
+
+
+@pytest.fixture
+def offline_command_entry(tmp_path, monkeypatch):
+    """Exercise the real command entry using only disposable local state."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("SINTER_DATA_DIR", str(tmp_path / "workspace"))
+    for name in (
+        "NEUROFORGE_BASE_URL",
+        "NEUROFORGE_MODEL",
+        "NEUROFORGE_API_KEY",
+        "SINTER_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Command discovery and local fixtures need no external access")
+
+    monkeypatch.setattr(client, "_open", forbidden)
+    monkeypatch.setattr(client, "_load_key", forbidden)
+    monkeypatch.setattr(socket, "socket", forbidden)
+    monkeypatch.setattr(desktop, "make_server", forbidden)
+    monkeypatch.setattr(desktop, "serve_desktop", forbidden)
+    monkeypatch.setattr(desktop.webbrowser, "open", forbidden)
+    native = types.ModuleType("sinter.native_window")
+    native.NativeWindowError = RuntimeError
+    native.run_native = forbidden
+    monkeypatch.setitem(sys.modules, "sinter.native_window", native)
+
+    def invoke(kind, arguments):
+        try:
+            if kind == "desktop":
+                return desktop.main(arguments)
+            launcher = Path(__file__).parents[1] / "packaging" / "desktop_entry.py"
+            monkeypatch.setattr(sys, "argv", ["Sinter", *arguments])
+            runpy.run_path(str(launcher), run_name="__main__")
+        except SystemExit as exited:
+            return exited.code
+        pytest.fail("The packaging entry must return its process exit code")
+
+    return invoke
+
+
+@pytest.mark.parametrize("entry", ["desktop", "packaging"])
+def test_portable_help_discovers_shared_commands_without_runtime(
+    entry, offline_command_entry, tmp_path, capsys
+):
+    assert offline_command_entry(entry, ["--help"]) == 0
+    output = capsys.readouterr()
+    for command in ("operations", "run", "status", "app", "import", "export"):
+        assert command in output.out
+    for flag in ("--self-test", "--mode", "--directory", "--diagnose", "--version"):
+        assert flag in output.out
+    assert "Sinter operations --format json" in output.out
+    assert output.err == "" and not (tmp_path / "workspace").exists()
+
+
+@pytest.mark.parametrize("entry", ["desktop", "packaging"])
+@pytest.mark.parametrize(
+    "command", ["operations", "run", "status", "app", "import", "export"]
+)
+def test_portable_command_help_uses_real_cli_parser(
+    entry, command, offline_command_entry, tmp_path, capsys
+):
+    assert offline_command_entry(entry, [command, "--help"]) == 0
+    output = capsys.readouterr()
+    assert "usage:" in output.out and f"sinter {command}" in output.out
+    assert output.err == "" and not (tmp_path / "workspace").exists()
+
+
+def test_cli_parser_can_describe_a_console_name_without_dispatch(
+    offline_command_entry, tmp_path
+):
+    parser = cli.build_parser(prog="Sinter.exe")
+    assert "usage: Sinter.exe" in parser.format_help()
+    arguments = parser.parse_args(["operations", "--format", "json"])
+    assert arguments.command == "operations"
+    assert not (tmp_path / "workspace").exists()
+
+
+@pytest.mark.parametrize("entry", ["desktop", "packaging"])
+def test_portable_operations_print_one_json_result_without_workspace(
+    entry, offline_command_entry, tmp_path, capsys
+):
+    assert offline_command_entry(entry, ["operations", "--format", "json"]) == 0
+    output = capsys.readouterr()
+    result = json.loads(output.out)
+    assert len(output.out.splitlines()) == 1 and output.err == ""
+    assert result["schema"] == "sinter-operation-result/v1" and result["ok"] is True
+    assert result["operation"] == "operations"
+    operations = {row["id"] for row in result["result"]["operations"]}
+    assert {"runtime.status", "casebooks.save", "template.preview"} <= operations
+    assert not (tmp_path / "workspace").exists()
+
+
+@pytest.mark.parametrize("entry", ["desktop", "packaging"])
+def test_portable_status_and_run_use_real_local_runtime(
+    entry, offline_command_entry, tmp_path, capsys
+):
+    directory = tmp_path / "fictional-workspace"
+    options = ["--directory", str(directory), "--format", "json"]
+    assert offline_command_entry(entry, ["status", *options]) == 0
+    output = capsys.readouterr()
+    status = json.loads(output.out)
+    assert len(output.out.splitlines()) == 1 and output.err == ""
+    assert status["ok"] is True and status["operation"] == "runtime.status"
+    assert status["result"]["workspace"] == str(directory.resolve())
+    assert status["result"]["provider_tested"] is False
+    assert status["result"]["watch_scheduler_started_by_runtime"] is False
+    assert set(status["result"]["counts"].values()) == {0}
+    assert (directory / "workspace.sqlite3").is_file()
+
+    assert offline_command_entry(entry, ["run", "casebooks.list", *options]) == 0
+    output = capsys.readouterr()
+    result = json.loads(output.out)
+    assert len(output.out.splitlines()) == 1 and output.err == ""
+    assert result["ok"] is True and result["operation"] == "casebooks.list"
+    assert result["result"] == {"casebooks": []}
+
+
+@pytest.mark.parametrize("entry", ["desktop", "packaging"])
+@pytest.mark.parametrize(
+    "failure", ["unknown_operation", "invalid_input", "missing_item"]
+)
+def test_portable_commands_preserve_json_errors_and_exit_codes(
+    entry, failure, offline_command_entry, tmp_path, capsys
+):
+    directory = tmp_path / "fictional-workspace"
+    options = ["--directory", str(directory), "--format", "json"]
+    if failure == "unknown_operation":
+        arguments = ["run", "fictional.unsupported", *options]
+        code, error = 2, "unknown_operation"
+    else:
+        source = tmp_path / "fictional-request.json"
+        source.write_text(
+            "{fictional malformed JSON}"
+            if failure == "invalid_input"
+            else json.dumps({"id": "f" * 32}),
+            encoding="utf-8",
+        )
+        arguments = ["run", "casebooks.get", "--input", str(source), *options]
+        code, error = (
+            (2, "invalid_input") if failure == "invalid_input" else (1, "not_found")
+        )
+    assert offline_command_entry(entry, arguments) == code
+    output = capsys.readouterr()
+    result = json.loads(output.out)
+    assert len(output.out.splitlines()) == 1
+    assert result["ok"] is False and result["error"]["code"] == error
+    assert "Sinter:" in output.err and "Traceback" not in output.err
+    if failure != "missing_item":
+        assert not directory.exists()
+
+
+@pytest.mark.parametrize("entry", ["desktop", "packaging"])
+def test_portable_unknown_command_keeps_usage_exit_on_stderr(
+    entry, offline_command_entry, tmp_path, capsys
+):
+    assert offline_command_entry(entry, ["fictional-unknown-command"]) == 2
+    output = capsys.readouterr()
+    assert output.out == "" and "invalid choice" in output.err
+    assert "usage:" in output.err and "Traceback" not in output.err
+    assert not (tmp_path / "workspace").exists()
+
+
+def test_portable_version_and_self_test_keep_legacy_dispatch(
+    offline_command_entry, tmp_path, monkeypatch, capsys
+):
+    assert offline_command_entry("packaging", ["--version"]) == 0
+    output = capsys.readouterr()
+    assert output.out.strip() == desktop.__version__ and output.err == ""
+    calls = []
+    monkeypatch.setattr(desktop, "self_test", lambda name: calls.append(name) or 1)
+    destination = str(tmp_path / "fictional-self-test.json")
+    assert offline_command_entry("packaging", ["--self-test", destination]) == 1
+    assert calls == [destination] and not (tmp_path / "workspace").exists()
 
 
 def test_packaged_commands_use_existing_cli(monkeypatch):

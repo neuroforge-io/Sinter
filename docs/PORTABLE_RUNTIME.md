@@ -16,6 +16,22 @@ sinter app --mode browser --directory ./workspace
 sinter app --mode headless --directory ./workspace
 ```
 
+Frozen packages use the same executable for desktop and command-line work:
+
+```sh
+./Sinter --help
+./Sinter operations --format json
+./Sinter status --directory ./workspace --format json
+./Sinter run --help
+```
+
+On Windows use `Sinter.exe`; inside a macOS app the console executable is
+`Sinter.app/Contents/MacOS/Sinter`. Launching without arguments opens the native
+workspace. `--help` lists desktop flags and the existing CLI commands; each
+command's `--help` explains its inputs. Commands use the same runtime, JSON output
+and exit contracts described below. Help and operation discovery do not open a
+workspace, server or graphical window.
+
 The default native window uses Tcl/Tk and calls the application directly. It does
 not start an HTTP server, launch a browser or run the watch scheduler. It supports
 source text, revisioned projects, evidence/gap reports, report history, JSON and
@@ -130,6 +146,11 @@ limits and costs. No example command here sends it. Consent and destination-boun
 credential checks are the same as the web UI.
 
 ## Structured and programmatic use
+
+Machine mode emits one ASCII-escaped JSON result on stdout, retaining original
+Unicode values when decoded. Progress and errors use stderr. This works with
+redirected legacy console encodings as well as UTF-8 callers; exported files
+remain UTF-8. Human text output follows the terminal's encoding.
 
 ```python
 from sinter.runtime import Runtime
