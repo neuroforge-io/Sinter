@@ -11,6 +11,7 @@ import copy
 import json
 import os
 import signal
+import socket
 import stat
 import threading
 from pathlib import Path
@@ -24,6 +25,13 @@ PROJECT_BYTES = 10_000_000
 
 class NativeWindowError(RuntimeError):
     """The native presentation cannot start in this environment."""
+
+
+def register_window_client(root) -> None:
+    # Tk on X11 emits its real _NET_WM_PID only with WM_CLIENT_MACHINE.
+    # gethostname is local; this never resolves or contacts another host.
+    if root.tk.call("tk", "windowingsystem") == "x11":
+        root.wm_client(socket.gethostname())
 
 
 def read_selected_text(path: str | Path, limit: int = TEXT_BYTES) -> str:
@@ -361,6 +369,7 @@ class NativeWindow:
     def _build_widgets(self):
         tk, ttk = self.tk, self.ttk
         self.root.title("Sinter — portable source workspace")
+        register_window_client(self.root)
         self.root.geometry("1120x820")
         self.root.minsize(850, 650)
         self.root.protocol("WM_DELETE_WINDOW", self.request_close)

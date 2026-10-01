@@ -103,7 +103,8 @@ def harness(tmp_path, monkeypatch):
             self.closed = True
 
     monkeypatch.setattr(tool.subprocess, "Popen", Process)
-    monkeypatch.setattr(tool.os, "killpg", killpg)
+    monkeypatch.setattr(tool.os, "killpg", killpg, raising=False)
+    monkeypatch.setattr(tool.signal, "SIGKILL", 9, raising=False)
     monkeypatch.setattr(tool, "group_alive", lambda *_: False)
     monkeypatch.setattr(tool, "X11Observer", Observer)
     return SimpleNamespace(

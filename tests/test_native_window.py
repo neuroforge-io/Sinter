@@ -195,6 +195,34 @@ def test_selected_text_read_has_a_byte_bound(tmp_path):
     assert native_window.read_selected_text(source, 6) == "123456"
 
 
+def test_x11_window_registers_its_actual_local_client_before_mapping(monkeypatch):
+    from types import SimpleNamespace
+
+    clients = []
+    root = SimpleNamespace(
+        tk=SimpleNamespace(call=lambda *args: "x11"), wm_client=clients.append
+    )
+    monkeypatch.setattr(native_window.socket, "gethostname", lambda: "fictional-host")
+    monkeypatch.setattr(
+        native_window.socket,
+        "getaddrinfo",
+        lambda *_: pytest.fail("Window identity must not perform DNS/network access"),
+    )
+    native_window.register_window_client(root)
+    assert clients == ["fictional-host"]
+
+
+@pytest.mark.parametrize("system", ["win32", "aqua"])
+def test_other_window_systems_do_not_use_x11_client_metadata(system, monkeypatch):
+    from types import SimpleNamespace
+
+    root = SimpleNamespace(tk=SimpleNamespace(call=lambda *args: system))
+    monkeypatch.setattr(
+        native_window.socket, "gethostname", lambda: pytest.fail("X11 metadata only")
+    )
+    native_window.register_window_client(root)
+
+
 @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="POSIX FIFO only.")
 def test_selected_fifo_is_rejected_before_opening(tmp_path, monkeypatch):
     source = tmp_path / "fictional-fifo"
