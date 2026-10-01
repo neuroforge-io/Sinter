@@ -7,8 +7,10 @@ qualification and does not change any published RC3 asset or historical receipt.
 
 - Allow installed-workflow qualification to use an explicitly owned browser
   session. Keep the existing UI journey, omitted defaults and historical receipt
-  contracts intact. Independent source checks pass; complete supplier cleanup and
-  actual installed execution remain separate requirements.
+  contracts intact. Independent source checks and all six hosted Python/platform
+  jobs pass; complete supplier cleanup and actual installed execution remain
+  separate requirements. Adversarial review continues to refuse the three
+  unadopted installer-tool proposals pending their bounded repairs.
 
 - Rehearse scoped casebook recovery alongside the existing campaign journey.
   Preserve exact originals before opening a reader, test selected/empty/all

@@ -1539,3 +1539,40 @@ collection count error and empty supplemental test-name query remain retained
 collector faults; the corrected reader records bind the actual six XML cases.
 The development publication job is a no-op. Neither run publishes or qualifies
 an installed preview or explains the older intermittent launcher timeout.
+
+### Following source replay and installer-tool refusals, 2 October
+
+Run `36932266041` binds the adopted seam at source
+`77ce8d7e6b2710fd2256795966abd3c032f11be8`. All twelve jobs pass on their
+first attempt. Each Python job has 3,690 cases: Linux 3,681 passes/nine skips,
+macOS 3,362/328, Windows 3,299/391. The four new inert seam controls pass
+everywhere. Original API-digest-verified ZIP/XMLs, browser artifacts and logs are
+retained; Linux's separate four Tk controls also pass. Development publication
+remains a no-op. These are source checks, not installed release qualification.
+
+Three separate unadopted installer-tool proposals still refuse source admission:
+
+- Native handoff review `de484cbf4c5a3373e938b9acbbc9bf9abc4a3463a417d72756d27164e0269a0e`
+  finds primary cleanup selection, concurrent process aliases and incomplete nested
+  schema/phase checks. Its 702 passes and four explicit GUI skips do not resolve them.
+- Recovery review `2771b80956f0192482e2003bcce1fd239d06fab9afece516288452b864fb80a6`
+  finds premature cache-empty admission, incomplete removal ownership/command binding
+  and ignored empty directories. Its 236 passes and ten source lifetimes remain valid.
+- Replacement review `87a7ccf67f22a9ccdd758af3f5b1fff0f106bc884192dfe1a29ebc77d2b583e0`
+  finds unordered saved wording and diagnostic publication replacing the first failure.
+  Its 505 passes, eight source lifetimes and earlier nine repairs remain valid.
+
+These are verifier/producer defects; the observed normal source rendering remains
+correct. Exact original witnesses, full exception chains, raw streams and review
+references stay unchanged. Repairs proceed in fresh private copies against the
+current source; their earlier executions are not relabelled. No proposal, installed
+qualification or release pass is inferred from test totals.
+
+The existing entrypoints also depend on original private locations and live host
+tools. A separately reviewed design specifies finite read-only archived-evidence
+revalidation with opaque original labels and complete retained product bytes.
+It permits no archive commands or live historical-port checks, keeps the existing
+64/256 MiB bounds, and records external qualification infrastructure separately.
+Its twenty controls are design requirements, not implemented passes. Canonical
+RC4 admission and actual matching installed execution remain pending. The physical
+user app remains intentionally closed and Sinter model requests remain zero.
