@@ -41,6 +41,15 @@ from tools.rc4_recovery_contract import (  # noqa: E402
 from tools.rc4_recovery_worker import canonical, protected, snapshot  # noqa: E402
 
 
+def write_json(path: Path, value: object) -> None:
+    """Atomically retain literal owned proof as UTF-8 with stable LF newlines."""
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
+    )
+    temporary.replace(path)
+
+
 def digest(path):
     result = hashlib.sha256()
     with Path(path).open("rb") as stream:
@@ -179,9 +188,11 @@ class SourceLifecycle:
                                 "Source desktop stopped before captured launch."
                             )
                         time.sleep(0.02)
-                    _, inner.port = transport.inner_address(capture.read_text())
+                    _, inner.port = transport.inner_address(
+                        capture.read_text(encoding="utf-8")
+                    )
                     finished, stop_method = False, "interface_quit"
-                    transport.write_json(
+                    write_json(
                         self.runtime / "state.json",
                         {
                             **self.identity,
@@ -226,7 +237,7 @@ class SourceLifecycle:
                             "Source stop changed protected work or settings."
                         )
                     finished = True
-                    transport.write_json(
+                    write_json(
                         self.runtime / "state.json",
                         {
                             **self.identity,
@@ -241,7 +252,7 @@ class SourceLifecycle:
                     )
                 path = self.runtime / "control.json"
                 if path.exists():
-                    action = json.loads(path.read_text())["action"]
+                    action = json.loads(path.read_text(encoding="utf-8"))["action"]
                     path.unlink()
                     if action == "stop" and self.process.poll() is None:
                         stop_method = "terminate"
@@ -259,7 +270,7 @@ class SourceLifecycle:
                 time.sleep(0.02)
         except Exception as error:
             self.failure = type(error).__name__ + ": " + str(error)
-            transport.write_json(self.runtime / "state.json", {"phase": "failed"})
+            write_json(self.runtime / "state.json", {"phase": "failed"})
         finally:
             # Cleanup faults cannot suppress the original body failure or raw streams.
             cleanup_errors = []
@@ -307,7 +318,7 @@ class SourceLifecycle:
                     if self.failure
                     else "cleanup: " + message
                 )
-            transport.write_json(
+            write_json(
                 self.output / "processes.json",
                 {"rows": self.rows, "failure": self.failure, "closed": self.closed},
             )
@@ -323,7 +334,7 @@ def advanced_workflow(args, runtime, relay, phases):
     external, errors, chrome_dialogs, posts = [], [], [], []
     result = {}
     current_run = 5
-    transport.write_json(runtime / "control.json", {"action": "restart"})
+    write_json(runtime / "control.json", {"action": "restart"})
     transport.wait_state(runtime, "running", current_run)
     with sync_playwright() as driver:
         browser = launch_chromium(driver, args.chromium)
@@ -417,7 +428,7 @@ def advanced_workflow(args, runtime, relay, phases):
             imported = copy.deepcopy(phases["resumed"]["document"])
             imported["title"] = UNCERTAIN_TITLE
             input_path = args.output / "advanced/control-import.json"
-            transport.write_json(input_path, imported)
+            write_json(input_path, imported)
             p.get_by_label("Import campaign backup", exact=True).set_input_files(
                 input_path
             )
@@ -527,7 +538,9 @@ def advanced_workflow(args, runtime, relay, phases):
             decision.get_by_role("button", name="Keep working", exact=True).click()
             assert (
                 len(posts) == before
-                and json.loads((runtime / "state.json").read_text())["phase"]
+                and json.loads((runtime / "state.json").read_text(encoding="utf-8"))[
+                    "phase"
+                ]
                 == "running"
             )
             expect(
@@ -576,7 +589,7 @@ def advanced_workflow(args, runtime, relay, phases):
                 "input_retained_after_stop": True,
             }
             context.close()
-            transport.write_json(runtime / "control.json", {"action": "restart"})
+            write_json(runtime / "control.json", {"action": "restart"})
             transport.wait_state(runtime, "running", 6)
             context = browser.new_context(
                 viewport={"width": 1440, "height": 1000},
@@ -614,7 +627,7 @@ def advanced_workflow(args, runtime, relay, phases):
             browser.close()
     assert not external and not errors and not chrome_dialogs
     result.update({"external_requests": 0, "page_errors": 0, "browser_dialogs": 0})
-    transport.write_json(args.output / "advanced/observations.json", result)
+    write_json(args.output / "advanced/observations.json", result)
     return result
 
 
@@ -673,7 +686,9 @@ def rehearse(args, pinned):
         (args.output / "seed.stderr").write_bytes(seeded.stderr)
         if seeded.returncode != 0 or seeded.stderr:
             raise ValueError("Source seed failed; retained diagnostics are not a pass.")
-        seed = json.loads((args.output / "seed-control.json").read_text())
+        seed = json.loads(
+            (args.output / "seed-control.json").read_text(encoding="utf-8")
+        )
         baseline = protected(seed["seed"]["snapshot"])
         source = {
             n: p.read_bytes()
@@ -706,9 +721,11 @@ def rehearse(args, pinned):
             chromium=args.chromium,
         )
         base_results = legacy.browser_workflow(legacy_args, runtime, relay, source)
-        transport.write_json(args.output / "base-observations.json", base_results)
+        write_json(args.output / "base-observations.json", base_results)
         phases = json.loads(
-            (args.output / "installed-recovery/campaign-phases.json").read_text()
+            (args.output / "installed-recovery/campaign-phases.json").read_text(
+                encoding="utf-8"
+            )
         )
         advanced_workflow(args, runtime, relay, phases)
         if relay.model_requests or relay.errors:
@@ -716,7 +733,7 @@ def rehearse(args, pinned):
                 "The source relay observed a provider request or transport error."
             )
         receipt["resources"]["browser_closed"] = True
-        transport.write_json(runtime / "control.json", {"action": "cleanup"})
+        write_json(runtime / "control.json", {"action": "cleanup"})
         controller.join(timeout=15)
         if controller.is_alive() or lifecycle.failure or not lifecycle.closed:
             raise ValueError("Source lifecycle did not complete owned cleanup.")
@@ -743,7 +760,7 @@ def rehearse(args, pinned):
             )
         if controller is not None and controller.is_alive():
             try:
-                transport.write_json(runtime / "control.json", {"action": "cleanup"})
+                write_json(runtime / "control.json", {"action": "cleanup"})
                 controller.join(timeout=15)
             except Exception as error:
                 cleanup_errors.append("controller cleanup: " + str(error))
@@ -780,7 +797,7 @@ def rehearse(args, pinned):
             for p in sorted(args.output.rglob("*"))
             if p.is_file() and p.name != RECEIPT
         }
-        transport.write_json(args.output / RECEIPT, receipt)
+        write_json(args.output / RECEIPT, receipt)
         temporary.cleanup()
     if receipt["failure"] or not receipt["source_files_conserved"]:
         raise ValueError("Source recovery failed; retained receipt is not a pass.")
@@ -797,12 +814,12 @@ def rehearse(args, pinned):
         (args.output / "validation-failure.txt").write_text(
             traceback.format_exc(), encoding="utf-8"
         )
-        transport.write_json(args.output / RECEIPT, receipt)
+        write_json(args.output / RECEIPT, receipt)
         raise ValueError(
             "Source evidence validation failed; receipt is not a pass."
         ) from error
     receipt["source_rehearsal_passed"] = True
-    transport.write_json(args.output / RECEIPT, receipt)
+    write_json(args.output / RECEIPT, receipt)
     return receipt
 
 

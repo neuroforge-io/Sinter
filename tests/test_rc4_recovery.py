@@ -650,3 +650,55 @@ def test_final_raw_rows_cannot_drop_an_original_even_with_valid_restore_phase(
     mutate(rehearsal, "processes.json", edit)
     with pytest.raises(ValueError, match="Cold reopen"):
         verify(rehearsal)
+
+
+def _windows_text_defaults(monkeypatch):
+    """Map omitted text settings to the observed Windows cp1252/CRLF defaults."""
+    actual_open = Path.open
+
+    def mapped_open(
+        path, mode="r", buffering=-1, encoding=None, errors=None, newline=None
+    ):
+        if "b" not in mode:
+            if encoding in (None, "locale"):
+                encoding = "cp1252"
+            if newline is None and any(flag in mode for flag in ("w", "a", "x")):
+                newline = "\r\n"
+        return actual_open(path, mode, buffering, encoding, errors, newline)
+
+    monkeypatch.setattr(Path, "open", mapped_open)
+
+
+def test_owned_json_retains_literal_originals_under_windows_text_defaults(
+    tmp_path, monkeypatch
+):
+    seeded = worker.seed(tmp_path / "data")
+    original = copy.deepcopy(seeded["snapshot"])
+    value = {
+        "rows": [{"persistent_snapshot": original}],
+        "failure": "Fictional cleanup — e\u0301 🐝",
+        "closed": True,
+    }
+    expected = json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+    path = tmp_path / "processes.json"
+    previous = b"original receipt remains until replacement"
+    path.write_bytes(previous)
+    _windows_text_defaults(monkeypatch)
+    # Retain the observed old default failure; do not alter the legacy helper.
+    with pytest.raises(UnicodeEncodeError):
+        producer.transport.write_json(path, value)
+    assert path.read_bytes() == previous
+    producer.write_json(path, value)
+    assert path.read_bytes() == expected
+    assert b"\r\n" not in expected and "e\u0301 🐝".encode("utf-8") in expected
+    assert json.loads(path.read_bytes()) == value
+    assert not path.with_suffix(".tmp").exists()
+    assert seeded["snapshot"] == original
+
+
+@pytest.mark.parametrize("fault", ["snapshot", "stop", "relay_close"])
+def test_cleanup_proof_survives_windows_text_defaults(tmp_path, monkeypatch, fault):
+    _windows_text_defaults(monkeypatch)
+    test_process_streams_survive_body_and_cleanup_observation_faults(
+        tmp_path, monkeypatch, fault
+    )

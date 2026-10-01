@@ -1259,3 +1259,28 @@ reproduces the original assertion failure and passes the correction with exactly
 one real occupied-bind refusal. This is a portable controlled regression, not
 Windows execution. Fresh hosted Windows replay and platform installer qualification
 remain outstanding; the original failed evidence is unchanged.
+
+### 2 October: literal Unicode in recovery evidence
+
+The completed `6f890e1` source run passes both actual Windows occupied-port and
+startup controls. Each Windows job instead has exactly two new recovery cleanup
+failures: retaining a literal combining character through the old locale-default
+proof writer raises `UnicodeEncodeError` under cp1252. Linux, macOS and browser
+checks pass. The retained failed Windows ZIPs and XML remain unchanged.
+
+The two-path correction gives the source-recovery producer its own explicit
+UTF-8/LF atomic writer and explicit owned readers. It preserves original strings,
+JSON serialization, historical transport helpers and all 21 earlier recovery
+test/helper ASTs. It does not normalize, escape away or discard source evidence.
+
+Root independently verifies the 103 pinned handoff references, all 424 candidate
+files and all 422 unrelated source files. Its fresh copied composition passes
+176 focused checks in 31.43 seconds with no skips. A separate untouched `6f890e1`
+producer plus the new Windows-default controls reproduces exactly two failures
+and one pass. Root also verifies all 47 actual Linux six-process artifacts against
+the closed source contract; their receipt is
+`1d62c10afb0ee82ddbd617debefd449091b0fe173a62cc90b6d3e8aa6cdb4a2e`.
+
+These are source regressions and source-browser recovery evidence. Fresh repaired
+hosted Windows execution and installed qualification remain outstanding. No
+physical user app or provider request is opened, and no published asset changes.

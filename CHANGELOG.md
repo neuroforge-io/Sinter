@@ -5,6 +5,11 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Save source-recovery evidence with explicit UTF-8 and stable newlines, keeping
+  complete literal Unicode originals and atomic replacement. Reproduce the Windows
+  default-encoding failure without changing historical writers or stored work.
+  Hosted Windows replay and installed qualification remain required.
+
 - Check occupied-port refusal by exact error propagation, one bind attempt,
   closed failed socket and continued use of the existing listener. Preserve the
   actual Windows refusal rather than assuming Linux's error code. This changes
