@@ -771,3 +771,22 @@ passed on explicit retry in a private folder with available space. All 387 froze
 source paths remained unchanged. Fatal lint and the narrow public-boundary guard
 passed. The [bounded receipt](releases/SINTER_NATIVE_SIGNAL_SOURCE_ACCEPTANCE_20261001.json)
 retains the initial setup failure separately from successful source coverage.
+
+### 1 October: real operator work after the source upgrade
+
+The owned local runtime was reopened from the exact `299e1d3` Git archive after
+a consistent private backup. All rows and schemas in the five saved tables and
+the exact preferences remained unchanged. Through the actual IAB interface, the
+operator reopened the saved Science Week campaign, inspected Sources, returned
+to Budget and navigated through Overview. Exact entered prices, a blank unknown
+price and the chosen cost disclosures survived the within-editor journeys.
+
+The interface then prepared a local decision brief and explicitly saved a
+4,493-byte Word copy. Independent file inspection matched the exact applied
+title and Markdown through the compiler and confirmed ZIP integrity, the official
+source link, unresolved applicant authority, unknown costs and unnamed ownership.
+The five saved tables and preferences still matched the backup. No campaign save,
+model generation or submission was performed. This is real local source-runtime
+use; it does not qualify ordinary IAB download delivery or an installed release.
+The fresh-start message is also corrected to name Your campaigns instead of
+claiming that the campaign choices are above the message.
