@@ -210,7 +210,11 @@ def container_main() -> None:
             "machine": os.uname().machine,
             "pointer_bits": struct.calcsize("P") * 8,
         }
-        lifecycle(root, [str(BINARY)], identity)
+        lifecycle(
+            root,
+            transport.browser_launch_command([str(BINARY)], identity["version"]),
+            identity,
+        )
     finally:
         removed = False
         if installed:
@@ -832,7 +836,13 @@ def qualify(args: argparse.Namespace, inputs: dict) -> dict:
                 }
                 controller = threading.Thread(
                     target=lifecycle,
-                    args=(runtime, [sys.executable, "-m", "sinter.desktop"], identity),
+                    args=(
+                        runtime,
+                        transport.browser_launch_command(
+                            [sys.executable, "-m", "sinter.desktop"], args.version
+                        ),
+                        identity,
+                    ),
                     daemon=True,
                 )
                 controller.start()

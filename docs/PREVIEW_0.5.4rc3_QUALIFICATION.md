@@ -37,6 +37,13 @@ mode requires the real candidate package, source ZIP, native receipt and precedi
 installed workflow receipt. The producer uses an existing disposable image with
 network disabled; it does not pull an image or use a real private workspace.
 
+The existing Chromium CI job runs this source rehearsal and retains its receipt
+and artifacts. Qualification launchers explicitly request browser presentation
+for RC3/current source using the same runtime. Published browser-default priors
+and historical candidates retain their original launch arguments. Bare native
+application startup remains unchanged. A passing source rehearsal does not
+qualify an installed candidate or remove a managed browser's loopback policy.
+
 Copying or selecting complete backup text does not save the campaign or create
 a file. Recovery above the product's saved-work size limits is not certified as
 an installed restore. Campaigns containing On hold need a newer preview; keep
