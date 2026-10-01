@@ -645,3 +645,55 @@ UI, guarded persistence, durable review history or installed qualification yet.
 The full design gates remain open in [the application-budget design](APPLICATION_BUDGET_V2_DESIGN.md).
 The published Linux-only 0.5.4rc2 preview is unchanged; this is unreleased
 0.5.4rc3.dev0 source. No whole-product 10/10 or new installer claim is made.
+
+## Quoted-budget navigation and brief qualification — 1 October 2026
+
+Source commit `0719ddde04bacb5f046075a55d195121201a937d` preserves open
+cost disclosures through section changes, Overview navigation and local
+rerenders. This is session view state; backups and campaign/v1 records gain no
+new fields. Explicitly replacing a campaign resets that view state. Decision
+briefs use singular or plural counts, omit empty review items and label entered
+funding amounts without assuming every route is a cash grant.
+
+The first combined candidate was held: its full suite found an obsolete
+`action(s)` wording assertion, and independent desktop/phone replays exposed
+disclosure losses during rapid toggles and cost mutations. Those failures remain
+retained separately. The repair captures live disclosure state before navigation
+or rerendering, ignores detached controls and preserves deliberate next-cost
+opening. The corrected assertion still requires held work to remain retained,
+incomplete and excluded from current work; other preservation assertions were
+unchanged.
+
+The final committed archive matched all **373** files in freeze
+`4979615af26acff4b0ce9db8e37d2be07d98d225e72139325fde8d7bf50ddc36`.
+That exact source passed **2,776 Python tests, with eight skipped**, **280
+JavaScript tests**, **146/146** budget browser checks, fatal Python lint and the
+public-boundary checks. Independent desktop and phone navigation/mutation
+replays passed **80/80** additional checks; brief, audit and generated Word
+checks passed **109/109**. Composition review confirmed the narrowly changed
+held-work assertion and the exact author and navigation repair files. These
+counts qualify this source and these tested paths, not an installed release.
+
+The real campaign reopened at its saved revision on this source. Section changes
+and Overview navigation retained the chosen cost disclosures. Read-only DOM
+inspection confirmed exact entered prices, including the blank unknown price;
+the prepared local brief retained unknown totals and unresolved review items.
+Afterward, every row and schema in the five local tables matched the pre-upgrade
+backup, and preferences remained byte-identical. No campaign save, hosted
+generation or submission was performed in this final runtime check.
+
+Scope remains explicit: browser workbench cost changes reset current answer
+reviews; direct CLI/Python campaign/v1 saves retain caller-supplied review flags
+and require human review. Generated briefs include the quoted-amount caveat;
+Word exports the current applied draft, including literal edits that may remove
+it. The legacy raw ceiling comparison excludes non-cash support but does not
+positively qualify other route kinds as cash grants. Its result is an arithmetic
+observation; application `over_ceiling` remains `null`.
+
+The strict bounded-feature assessment is **experience 7.3 / functionality 7.9 /
+appearance 7.0**. Phone density, in-app-browser Word delivery, reviewed
+application-budget persistence and RC3 installed qualification remain open.
+Earlier headless Word checks and a validated local recovery copy do not prove
+embedded-browser delivery. The published Linux-only **0.5.4rc2** remains the
+available tested installer; **0.5.4rc3.dev0** is source development. This round
+does not establish a whole-product 8/10 or 10/10 rating.

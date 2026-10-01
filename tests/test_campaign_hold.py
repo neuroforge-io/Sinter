@@ -53,7 +53,8 @@ def test_held_roundtrip_keeps_all_fields_and_does_not_become_current(tmp_path):
     assert report["readiness"]["open_actions"] == 0
     assert report["readiness"]["actions_without_owner"] == 0
     assert "On hold · retained, not completed" in report["markdown"]
-    assert "1 action(s) on hold by your choice" in report["document_markdown"]
+    assert ("1 action on hold by your choice; retained, not completed, "
+            "and excluded from current work") in report["document_markdown"]
     next_action = report["document_markdown"].split("## Next recorded open action", 1)[
         1
     ]
