@@ -842,3 +842,22 @@ short private test folder. All 388 pre-run source hashes remain unchanged;
 changed Python lint, fatal repository lint and the public-boundary guard pass.
 This clean run supersedes the earlier composition's setup retry for final
 source coverage. It still does not qualify a frozen or installed artifact.
+
+### 1 October: actual CLI envelope and retained installer refusal
+
+The frozen `1b3189c5` candidate passed three copied-workspace upgrades and
+three actual prior-DEB replacement upgrades, but its installed workflow refused
+the first catalogue check. The application returned the documented complete
+`sinter-operation-result/v1` success envelope; the qualification fixture and
+validator expected only its inner `sinter-operations/v1` catalogue. The
+original failed receipt and full actual response remain retained. This is a
+qualification mismatch, not an application request or provider failure.
+
+The independently reviewed two-path correction requires the complete envelope
+and exact source-derived 53-operation result, including strict field sets,
+versions, operation identity and boolean type. An unwrapped result is refused;
+the public CLI and historical workflow v1 contract remain unchanged. The author
+passes 383 focused checks and 14 actual-response probes; independent review
+passes 232 focused checks. These accept the source correction only. A new
+explicit source build and fresh installed workflow, recovery, cold-install and
+native-display evidence are required; the failed candidate cannot inherit them.

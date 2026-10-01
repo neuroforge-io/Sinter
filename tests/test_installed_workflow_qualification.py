@@ -646,7 +646,16 @@ def current_word_evidence(completed):
 
     operations = catalog()
     operations["version"] = VERSION
-    write_json(folder / LATEST_ARTIFACT_PATHS["operations_catalog"], operations)
+    write_json(
+        folder / LATEST_ARTIFACT_PATHS["operations_catalog"],
+        {
+            "schema": "sinter-operation-result/v1",
+            "version": VERSION,
+            "operation": "operations",
+            "ok": True,
+            "result": operations,
+        },
+    )
     receipt["artifacts"] = [
         {
             "role": role,
@@ -694,15 +703,15 @@ def test_resealed_current_catalog_forgery_fails(current_word_evidence, mutation)
     value = json.loads(path.read_text())
     index = next(
         i
-        for i, row in enumerate(value["operations"])
+        for i, row in enumerate(value["result"]["operations"])
         if row["id"] == "documents.docx.save"
     )
     if mutation == "old52":
-        value["operations"].pop(index)
+        value["result"]["operations"].pop(index)
     elif mutation == "duplicate":
-        value["operations"][index] = value["operations"][0]
+        value["result"]["operations"][index] = value["result"]["operations"][0]
     elif mutation in {"effect", "route"}:
-        value["operations"][index][mutation] = "local"
+        value["result"]["operations"][index][mutation] = "local"
     elif mutation == "extra":
         value["secret"] = "fictional rejection sentinel"
     else:
@@ -710,6 +719,64 @@ def test_resealed_current_catalog_forgery_fails(current_word_evidence, mutation)
     write_json(path, value)
     refresh_artifacts(folder)
     with pytest.raises(ValueError):
+        verify_current_word(current_word_evidence)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "unwrapped",
+        "outer_schema",
+        "outer_version",
+        "operation",
+        "ok_false",
+        "ok_integer",
+        "ok_float",
+        "ok_string",
+        "ok_null",
+        "outer_extra",
+        "outer_missing",
+        "inner_schema",
+        "inner_version",
+        "inner_extra",
+        "result_list",
+    ],
+)
+def test_resealed_cli_envelope_identity_is_required(current_word_evidence, mutation):
+    folder = current_word_evidence[0]
+    path = folder / "installed-workflow/operations-catalog.json"
+    value = json.loads(path.read_text())
+    if mutation == "unwrapped":
+        value = value["result"]
+    elif mutation == "outer_schema":
+        value["schema"] = "sinter-operations/v1"
+    elif mutation == "outer_version":
+        value["version"] = "0.5.4rc3"
+    elif mutation == "operation":
+        value["operation"] = "runtime.status"
+    elif mutation.startswith("ok_"):
+        value["ok"] = {
+            "ok_false": False,
+            "ok_integer": 1,
+            "ok_float": 1.0,
+            "ok_string": "true",
+            "ok_null": None,
+        }[mutation]
+    elif mutation == "outer_extra":
+        value["elapsed"] = 0
+    elif mutation == "outer_missing":
+        value.pop("operation")
+    elif mutation == "inner_schema":
+        value["result"]["schema"] = "sinter-operation-result/v1"
+    elif mutation == "inner_version":
+        value["result"]["version"] = "0.5.4rc3"
+    elif mutation == "inner_extra":
+        value["result"]["elapsed"] = 0
+    else:
+        value["result"] = []
+    write_json(path, value)
+    refresh_artifacts(folder)
+    with pytest.raises(ValueError, match="exact 53-operation"):
         verify_current_word(current_word_evidence)
 
 

@@ -626,8 +626,8 @@ def source_operations(source: dict[str, bytes]) -> list[dict]:
 def validate_operations_catalog(
     value: dict, source: dict[str, bytes], version: str
 ) -> None:
-    """Bind actual installed CLI discovery to every source-declared operation."""
-    expected = {
+    """Bind the complete CLI success envelope and source-declared catalogue."""
+    catalogue = {
         "schema": "sinter-operations/v1",
         "version": version,
         "operations": source_operations(source),
@@ -640,6 +640,13 @@ def validate_operations_catalog(
         ],
         "jobs": "Temporary within one Runtime; CLI waits and never starts a daemon."
         " Save/export useful results explicitly.",
+    }
+    expected = {
+        "schema": "sinter-operation-result/v1",
+        "version": version,
+        "operation": "operations",
+        "ok": True,
+        "result": catalogue,
     }
     if not _same_json(value, expected):
         raise ValueError(
