@@ -1,0 +1,56 @@
+{
+  "schema": "sinter.native.selected-source-acceptance.v1",
+  "observed_date": "2026-10-01",
+  "qualified_source": "0719ddde04bacb5f046075a55d195121201a937d",
+  "source_version": "0.5.4rc3.dev0",
+  "scope": "One actual in-app-browser selected-source question in a fresh fictional workspace, saved and reopened after process restart.",
+  "public_api_guide": "https://neuroforge.io/api.md",
+  "public_guide_sha256": "1622ee70c8e17f14d373f555b458a3d3cb9b65f70007b2a1c62cca7089aa7f92",
+  "generation_requests": 1,
+  "automatic_replays": 0,
+  "chatgpt_plan_usage": 0,
+  "request": {
+    "destination": "https://neuroforge.io/v1",
+    "model": "erais-native-qwen3",
+    "stream": false,
+    "n": 1,
+    "max_tokens": 64,
+    "template": "native-source-question",
+    "exact_material_previewed": true,
+    "explicit_consent": true,
+    "variables": {
+      "source_title": "Fictional garden handover",
+      "excerpt": "Maya will bring two watering cans. The meeting date is not confirmed. No grant has been awarded.",
+      "question": "Who will bring the watering cans, and has the meeting date been confirmed?"
+    }
+  },
+  "result": {
+    "model": "erais-native-qwen3",
+    "content": "Maya will bring the watering cans, and the meeting date is not confirmed. [e1]",
+    "finish_reason": "stop",
+    "complete": true,
+    "reported_total_tokens": 154,
+    "completion_tokens_separately_available": false,
+    "source_id": "753fec99a4182d6430fe6d7c083fc1aa",
+    "source_sha256": "b4325ad2bb5ba1963a22240d58386cdc40f9a25604ea38eedd6b18cd179616b0",
+    "excerpt_id": "e1",
+    "human_review_status": "draft"
+  },
+  "verified": {
+    "actual_content_answers_who_and_date_question": true,
+    "source_negation_and_uncertainty_preserved": true,
+    "source_citation_opens_exact_retained_excerpt": true,
+    "original_inputs_and_source_identity_preserved": true,
+    "saved_report_reopened_in_fresh_browser_after_process_restart": true,
+    "report_rows_and_preferences_preserved_exactly": true,
+    "explicit_model_selection_preserved": true,
+    "independent_content_and_receipt_review": true
+  },
+  "unqualified": [
+    "general assistant quality",
+    "full funding applications or eligibility decisions",
+    "embedded-browser Word delivery",
+    "installed release qualification",
+    "independently measured completion-token count"
+  ]
+}

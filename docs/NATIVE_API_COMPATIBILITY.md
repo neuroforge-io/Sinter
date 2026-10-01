@@ -106,3 +106,26 @@ node --test tests/provider_connection.mjs tests/provider_connection_page.mjs
 The [public NeuroForge API guide](https://neuroforge.io/api.md) is the user-facing
 connection reference. Installed desktop/browser qualification and live task
 acceptance are recorded separately for the versioned customer preview.
+
+## Actual selected-source task — 1 October 2026
+
+On source `0719ddde04bacb5f046075a55d195121201a937d`, a fresh fictional
+workspace loaded live discovery, deliberately saved `erais-native-qwen3`,
+previewed the exact selected material and ran one consented source question with
+an output cap of 64. The answer named the recorded person, preserved the
+unconfirmed meeting date and cited the retained excerpt. Inspection through the
+source control showed the exact original wording; the saved report kept its
+source identity, hash, original inputs and human review status of `draft`.
+
+The test tab was closed, the local process restarted and the saved draft reopened
+through a fresh browser tab. The report and preferences stayed exact, including
+the explicit model selection. No generation was replayed. This test sent only
+fictional, non-sensitive material to NeuroForge and used no ChatGPT allowance.
+
+The [portable task receipt](releases/SINTER_NATIVE_SELECTED_SOURCE_ACCEPTANCE_20261001.json)
+records the request and actual result. The reported 154 tokens are total usage;
+the saved result does not separately expose completion-token usage. The tested
+claim is a requested cap of 64, not 154 completion tokens or an independently
+measured completion count. This is one useful narrow task on a source runtime,
+not general assistant quality, grant eligibility, Word delivery or installed
+release qualification. The native profile's general-chat limitation remains.
