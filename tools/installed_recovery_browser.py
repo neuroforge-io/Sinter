@@ -251,7 +251,15 @@ def action_card(page, index: int):
     return card
 
 
-def browser_workflow(args, runtime: Path, relay, source: dict[str, bytes]) -> dict:
+def browser_workflow(
+    args,
+    runtime: Path,
+    relay,
+    source: dict[str, bytes],
+    *,
+    workspace_observer=None,
+    browser_session=None,
+) -> dict:
     """Operate real garden controls, actual downloads and two offline restores."""
     from playwright.sync_api import expect, sync_playwright
 
@@ -271,6 +279,9 @@ def browser_workflow(args, runtime: Path, relay, source: dict[str, bytes]) -> di
         fictional_states,
     )
 
+    observe_workspace = (
+        workspace_hashes if workspace_observer is None else workspace_observer
+    )
     states = fictional_states(source)
     phases, processes, offline = {}, [], {}
     origin = f"http://127.0.0.1:{relay.server_address[1]}"
@@ -302,8 +313,12 @@ def browser_workflow(args, runtime: Path, relay, source: dict[str, bytes]) -> di
             }
         )
 
-    with sync_playwright() as driver:
-        browser = launch_chromium(driver, args.chromium)
+    with sync_playwright() if browser_session is None else browser_session() as driver:
+        browser = (
+            launch_chromium(driver, args.chromium)
+            if browser_session is None
+            else browser_session.launch(driver, args.chromium)
+        )
         try:
             context = browser.new_context(
                 viewport={"width": 1440, "height": 1000},
@@ -498,7 +513,7 @@ def browser_workflow(args, runtime: Path, relay, source: dict[str, bytes]) -> di
                 transfers()
                 reference = download(branch + "_reference", "Export campaign backup")
                 assert json.loads(reference) == states["working"]
-                before = workspace_hashes(runtime / "data")
+                before = observe_workspace(runtime / "data")
                 page.evaluate(
                     """mode => {
                   const original = navigator.clipboard.writeText
@@ -523,7 +538,7 @@ def browser_workflow(args, runtime: Path, relay, source: dict[str, bytes]) -> di
                 )
                 assert len(refusals) == count_refusals + 1
                 stopped_save = False
-                assert workspace_hashes(runtime / "data") == before
+                assert observe_workspace(runtime / "data") == before
                 count_requests = len(requests)
                 backup = page.get_by_role(
                     "region", name="Copy campaign backup", exact=True
@@ -551,7 +566,7 @@ def browser_workflow(args, runtime: Path, relay, source: dict[str, bytes]) -> di
                     len(reference.decode().encode("utf-16-le")) // 2,
                 ]
                 assert len(requests) == count_requests
-                assert workspace_hashes(runtime / "data") == before
+                assert observe_workspace(runtime / "data") == before
                 path(branch + "_text").write_bytes(text.input_value().encode())
                 screenshot(branch + "_screen")
                 clipboard = page.evaluate("window.recoveryClipboard")

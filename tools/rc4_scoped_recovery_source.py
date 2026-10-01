@@ -156,11 +156,21 @@ def protocol(runtime, output, saved):
     return result
 
 
-def browser_workflow(args, runtime, relay):
+def browser_workflow(
+    args,
+    runtime,
+    relay,
+    *,
+    snapshot_observer=None,
+    protocol_observer=None,
+    browser_session=None,
+):
     from playwright.sync_api import expect, sync_playwright
 
     from tools._support import launch_chromium
 
+    observe_snapshot = snapshot if snapshot_observer is None else snapshot_observer
+    observe_protocol = protocol if protocol_observer is None else protocol_observer
     origin = f"http://127.0.0.1:{relay.server_address[1]}"
     observations = {
         "phases": [],
@@ -183,7 +193,7 @@ def browser_workflow(args, runtime, relay):
 
     def phase(name):
         observations["phases"].append(
-            {"name": name, "snapshot": snapshot(runtime / "data")}
+            {"name": name, "snapshot": observe_snapshot(runtime / "data")}
         )
         write_json(output / "observations.json", observations)
 
@@ -255,8 +265,12 @@ def browser_workflow(args, runtime, relay):
             expect(d.locator("pre")).to_have_text(row["content"])
             assert d.locator("pre").text_content() == row["content"]
 
-    with sync_playwright() as driver:
-        browser = launch_chromium(driver, args.chromium)
+    with sync_playwright() if browser_session is None else browser_session() as driver:
+        browser = (
+            launch_chromium(driver, args.chromium)
+            if browser_session is None
+            else browser_session.launch(driver, args.chromium)
+        )
         context = None
         try:
             context = browser.new_context(
@@ -462,7 +476,7 @@ def browser_workflow(args, runtime, relay):
                 ).click()
             received.value.save_as(output / "handover.docx")
             p.screenshot(path=output / "handover.png")
-            protocol(runtime, output, scoped)
+            observe_protocol(runtime, output, scoped)
             # A separate scoped control proves current UI optimistic conflict.
             write_json(output / "control-import.json", scoped["document"])
             transfer(p)
@@ -485,7 +499,7 @@ def browser_workflow(args, runtime, relay):
                 "Fictional other-window saved wording"
             )
             updated = save(other)
-            before = snapshot(runtime / "data")
+            before = observe_snapshot(runtime / "data")
             conflict_posts = []
             p.on(
                 "request",
@@ -509,7 +523,7 @@ def browser_workflow(args, runtime, relay):
                 len(conflict_posts) == 1
                 and read(p, "/api/casebooks/" + control["id"]) == updated
             )
-            assert canonical(before) == canonical(snapshot(runtime / "data"))
+            assert canonical(before) == canonical(observe_snapshot(runtime / "data"))
             assert read(p, "/api/casebooks/" + scoped["id"]) == scoped
             observations["conflict"] = {
                 "initial": control,
@@ -518,7 +532,7 @@ def browser_workflow(args, runtime, relay):
                 "posts": 1,
                 "automatic_replays": 0,
                 "snapshot_before": before,
-                "snapshot_after": snapshot(runtime / "data"),
+                "snapshot_after": observe_snapshot(runtime / "data"),
                 "warning": conflict_warning.inner_text(),
             }
             conflict_warning.scroll_into_view_if_needed()
@@ -577,7 +591,7 @@ def browser_workflow(args, runtime, relay):
                     branch,
                 )
                 stop(run)
-                persistent = snapshot(runtime / "data")
+                persistent = observe_snapshot(runtime / "data")
                 p.get_by_role("button", name="Save project", exact=True).click()
                 expect(p.get_by_role("alert")).to_contain_text(
                     "Cannot reach the local Sinter app"
@@ -609,7 +623,7 @@ def browser_workflow(args, runtime, relay):
                     "selection": selection,
                     "clipboard": p.evaluate("window.scopedClipboard"),
                     "snapshot_before": persistent,
-                    "snapshot_after": snapshot(runtime / "data"),
+                    "snapshot_after": observe_snapshot(runtime / "data"),
                 }
                 assert canonical(persistent) == canonical(
                     observations["offline"][branch]["snapshot_after"]

@@ -9,8 +9,8 @@ qualification and does not change any published RC3 asset or historical receipt.
   session. Keep the existing UI journey, omitted defaults and historical receipt
   contracts intact. Independent source checks and all six hosted Python/platform
   jobs pass; complete supplier cleanup and actual installed execution remain
-  separate requirements. Recovery tooling continues through independent review
-  before source adoption.
+  separate requirements. The independently reviewed qualification tooling still
+  requires matching installed execution.
 
 - Add a separate native/browser handoff qualifier with complete request and
   diagnostic records. Preserve the first failure during cleanup, reject aliases
@@ -24,6 +24,13 @@ qualification and does not change any published RC3 asset or historical receipt.
   Independent source checks and eight fictional source journeys pass; actual
   installed replacements remain required. New native Windows checks have four
   failures per hosted Python job, retained for diagnosis before release admission.
+
+- Add a separate installed-recovery qualifier with owned browser sessions and
+  complete two-sided recovery records. Check package-removal stdout as well as
+  stderr, bind the stopped process and actual command, reject unknown directories,
+  and clean only known temporary entries after their collector has stopped.
+  Independent source review and combined regressions pass; previous source browser
+  evidence remains historical and actual installed execution remains required.
 
 - Rehearse scoped casebook recovery alongside the existing campaign journey.
   Preserve exact originals before opening a reader, test selected/empty/all

@@ -1652,3 +1652,38 @@ aggregate verified-package staging is skipped. Original API-digest-bound XMLs
 and full failed logs are retained. These failures require diagnosis and fresh
 hosted replay; they are not marked fixed, excluded wholesale or explained by
 passing Linux checks. No new installed release is qualified or published.
+
+### Corrected recovery source adoption, 2 October
+
+Independent review
+`cca3ca90bc53322d5188588093f4b5799b6938e009c871e3f1bac52707edeba9`
+accepts the narrow complete-stdout parser repair. The original five malformed
+saved records fail their refusal assertions against the previous source and all
+refuse against the repair. Its 27 independent controls and 266 focused source
+tests pass without skips. Complete nonempty, non-UTF-8 and 65,536-byte stdout
+remain accepted; the exact 80-byte package-removal warning, ownership, unique
+command binding, file absence and first-failure policies remain unchanged.
+
+All 445 frozen source files match, with 438 unowned baseline files conserved.
+The cumulative seven-path patch includes four new QA paths and only the reviewed
+optional seams in three existing QA helpers. Root rechecks and retains all 7,838
+author/historical and 3,557 regular reviewer byte/hash references. Special
+adversarial entries remain explicitly recorded without opening them. Root
+declares the eight adopted native/replacement files and two documentation changes
+as a later delta before applying the exact recovery patch.
+
+The combined main-workspace checks pass 973 unique tests with no skips in 83.97
+seconds; formatting and static checks pass. This is source composition, not
+installed execution or a product-performance benchmark. The prior ten-lifetime,
+21-RPC source browser journey remains historical before the final one-call parser
+repair; neither author, reviewer nor root reruns or relabels it as fresh installed
+proof. Reviewer setup failures, the corrected removal-warning length and the
+disjoint concurrent replacement work remain retained. No whole-workspace-clean
+claim is inferred from a frozen-proposal check.
+
+The native Windows failures remain a release blocker. Their full traces show the
+HTTP bodies and cleanup pass before the closed-port postcheck times out; this
+does not demonstrate a request-startup defect. A separate QA-only portability
+repair is under review. Canonical RC4 admission, the finite historical consumer,
+matching final package and every actual installed gate remain pending. The
+physical user app stays intentionally closed and no hosted model call is initiated.

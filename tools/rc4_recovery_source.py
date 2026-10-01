@@ -328,7 +328,7 @@ class SourceLifecycle:
             )
 
 
-def advanced_workflow(args, runtime, relay, phases):
+def advanced_workflow(args, runtime, relay, phases, *, browser_session=None):
     """Actual conflicting writes and lost acknowledgements; never auto replay."""
     from playwright.sync_api import expect, sync_playwright
 
@@ -340,8 +340,12 @@ def advanced_workflow(args, runtime, relay, phases):
     current_run = 5
     write_json(runtime / "control.json", {"action": "restart"})
     transport.wait_state(runtime, "running", current_run)
-    with sync_playwright() as driver:
-        browser = launch_chromium(driver, args.chromium)
+    with sync_playwright() if browser_session is None else browser_session() as driver:
+        browser = (
+            launch_chromium(driver, args.chromium)
+            if browser_session is None
+            else browser_session.launch(driver, args.chromium)
+        )
         try:
             context = browser.new_context(
                 viewport={"width": 390, "height": 844},
