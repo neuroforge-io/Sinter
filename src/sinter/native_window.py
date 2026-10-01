@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import signal
 import socket
 import stat
@@ -17,6 +18,9 @@ import threading
 from pathlib import Path
 
 from . import client
+from .casebooks import FORMATS
+from .document_markup import inline
+from .evidence import literal
 from .outputs import atomic_write_text
 from .presentation import result_markdown
 
@@ -58,23 +62,65 @@ def read_selected_text(path: str | Path, limit: int = TEXT_BYTES) -> str:
         raise ValueError("Choose UTF-8 text or a Sinter JSON backup.") from exc
 
 
-def readable_report_lines(markdown):
-    """Presentation-only block styles; the original Markdown remains exported."""
-    fenced = False
-    for line in markdown.splitlines(keepends=True):
-        if line.startswith("```"):
-            fenced = not fenced
+def readable_report_lines(markdown, *, report=None):
+    """Project safe markup onto text; stored Markdown and exports stay exact."""
+    lines = markdown.splitlines(keepends=True)
+    duplicate = None
+    if (
+        isinstance(report, dict)
+        and report.get("workflow") == "casebook"
+        and not report.get("model_draft")
+        and report.get("document_type") in FORMATS
+        and isinstance(report.get("title"), str)
+        and isinstance(report.get("document_markdown"), str)
+    ):
+        heading = "# " + literal(report["title"])
+        preface = [
+            heading, "",
+            FORMATS[report["document_type"]] + " - DRAFT / HUMAN REVIEW REQUIRED",
+            "", heading,
+        ]
+        if (
+            [line.rstrip("\r\n") for line in lines[:5]] == preface
+            and report["document_markdown"].splitlines()[:1] == [heading]
+        ):
+            duplicate = 4
+
+    # The model fallback includes unfenced exact JSON provenance. It is already
+    # readable text, not authored Markdown, and must not be unescaped.
+    decode = report is None or isinstance(report.get("markdown"), str)
+
+    def readable(value):
+        if not decode:
+            return value
+        return "".join(
+            span.text + (" (" + span.href + ")" if span.href else "")
+            for span in inline(value)
+        )
+
+    fence = None
+    for index, line in enumerate(lines):
+        if index == duplicate:
+            continue
+        marker = re.fullmatch(r"\s*(`{3,}|~{3,})([^\s]*)\s*", line)
+        if fence is not None:
+            if (
+                marker and marker[1][0] == fence[0]
+                and len(marker[1]) >= fence[1] and not marker[2]
+            ):
+                fence = None
             yield line, "code"
-        elif fenced:
+        elif marker:
+            fence = (marker[1][0], len(marker[1]))
             yield line, "code"
         elif line.startswith("> "):
-            yield line[2:], "quote"
+            yield readable(line[2:]), "quote"
         elif line.startswith(("# ", "## ", "### ", "#### ")):
-            yield line.split(" ", 1)[1], "heading"
+            yield readable(line.split(" ", 1)[1]), "heading"
         elif line.startswith("- "):
-            yield "• " + line[2:], "bullet"
+            yield "• " + readable(line[2:]), "bullet"
         else:
-            yield line, "body"
+            yield readable(line), "body"
 
 
 def select_all(event):
@@ -1306,7 +1352,7 @@ class NativeWindow:
         )
         self.report_text.tag_configure("quote", lmargin1=16, lmargin2=16, spacing3=6)
         self.report_text.tag_configure("code", font="TkFixedFont")
-        for line, style in readable_report_lines(result_markdown(value)):
+        for line, style in readable_report_lines(result_markdown(value), report=value):
             self.report_text.insert("end", line, style)
         self.report_text.edit_modified(False)
         self.report_text.configure(state="disabled")
