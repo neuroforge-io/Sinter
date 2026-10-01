@@ -1136,3 +1136,28 @@ The actual XML retains the properties; strict schema compatibility is not
 claimed. Production source, existing workflow and published receipts are
 unchanged. Hosted Windows/macOS replay, actual installed/native/browser-owner
 proof and final candidate qualification remain separate requirements.
+
+### 2 October: exact published-RC3 fictional upgrade fixture
+
+A separate preparation tool verifies the immutable published RC3 ZIP/DEB and all
+388 extracted source files before creating fictional work. It retains full
+originals, quoted ranges, v1 history and scoped v2 choices, raw reports separately
+from their IDs, unknown/unassigned owners, stale source marks, typed SQLite rows,
+persistent database metadata and explicit custom model preferences. It preserves
+an untouched original and byte-identical replacement copy; checks use a third,
+disposable copy with provider and external transport blocked.
+
+Independent review accepts this source-fixture scope. Root's current composition
+passes all 38 focused tests and creates a fresh exact-prior fixture. Its 15
+protocol observations include 11 actual HTTP requests. Missing-capability v2
+reads, validation, old-reader resaves, builds and drafts refuse; a capable but
+unconsented draft also refuses. Wrong/duplicate capability headers and every
+unsupported-reader route remain requirements for the later installed gate.
+Independent review is bound to the retained handoff
+`9e891886eb7e17993101172fc9bf353f9c8ad4a3e3326f11dbe535ff89b53842`.
+
+Historical prior admission, receipt schemas and published assets remain exact.
+The tool prepares data; it does not install or run either binary, replace a
+package, admit RC4 or demonstrate customer desktop behavior. No model calls,
+platform qualification or new quality rating follows. See the
+[fixture guide](PUBLISHED_RC3_FIXTURE.md) for inputs and the remaining gates.

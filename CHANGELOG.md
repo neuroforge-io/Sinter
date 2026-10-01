@@ -5,6 +5,13 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Add a separate, pinned fictional workspace fixture for testing a future upgrade
+  from the published RC3 preview. Retain original source snapshots, report JSON,
+  history, ownership states, SQLite records and explicit model preferences.
+  Source checks refuse unsupported readers before queued work; actual installed
+  replacement and new release admission remain outstanding. See the
+  [fixture guide](docs/PUBLISHED_RC3_FIXTURE.md).
+
 - Exercise both live and stopped listener retries deterministically in native
   cleanup tests, preserving ownership, saved records and unsaved inputs. Keep the
   five-second product deadline separate from finite subprocess startup/teardown,
