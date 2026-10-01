@@ -4,18 +4,28 @@
 
 ## The simplest route: a desktop package
 
-Choose an actual published asset from [Releases](https://github.com/neuroforge-io/Sinter/releases). Versioned assets include a runtime, web interface, original licence notices and build receipts. The published 0.5.4rc2 Linux preview opens the local workbench in your existing browser. Unreleased rc3 source defaults to the native source workspace; its full campaign and scoped casebook editors remain in browser mode. These source changes do not update the published installers.
+Choose an actual published asset from [Releases](https://github.com/neuroforge-io/Sinter/releases). Versioned assets include a runtime, local interfaces, original licence notices and build receipts. The current rc3 app defaults to a native source workspace. Its full campaign, scoped casebook, rich-document and account sign-in screens use the explicit browser mode below. The previous rc2 package keeps its browser default.
 
-The current [0.5.4rc2 preview](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc2)
+The current [0.5.4rc3 preview](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc3)
 qualifies **Linux x64 on Ubuntu 22.04/glibc 2.35 only**. Choose its
-[Debian/Ubuntu installer](https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc2/Sinter-0.5.4rc2-linux-x64.deb)
-or [native runtime archive](https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc2/Sinter-0.5.4rc2-linux-x64.tar.gz).
-The exact package source is `256d38fa4b61a4d548472ce5abfd0bf513789090`.
-Windows, macOS and other Linux architectures have no qualified rc2 installer.
+[Debian/Ubuntu installer](https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc3/Sinter-0.5.4rc3-linux-x64.deb)
+or [native runtime archive](https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc3/Sinter-0.5.4rc3-linux-x64.tar.gz).
+The exact package source is `246b91e0ee432cb1f6f6fcd17425f55cd7a4cabe`.
+Windows, macOS and other Linux architectures have no qualified rc3 installer.
 The platform descriptions below explain the packaging machinery and earlier
-downloads; they do not qualify additional rc2 targets. See
-[public download verification](releases/PREVIEW_0.5.4rc2_PUBLICATION_RECEIPT.md)
-and [installed workflow evidence](PREVIEW_0.5.4rc2.md).
+downloads; they do not qualify additional rc3 targets. See
+[public download and installed workflow evidence](releases/PREVIEW_0.5.4rc3_PUBLICATION_RECEIPT.md).
+
+After installing the Debian package, open the full workbench with:
+
+```sh
+/opt/neuroforge/sinter/Sinter app --mode browser
+```
+
+From its Overview, choose **Open garden handover** or **Open garden campaign**.
+The fictional walkthrough needs no account, internet or downloaded model. The
+application-menu entry opens the smaller native source workspace; its repeat
+launch and shutdown are qualified separately from the full browser workflow.
 
 Windows: choose `windows-x64-setup.exe` for most Intel/AMD PCs, `windows-arm64-setup.exe` for an ARM64 installation, or `windows-x86-setup.exe` for a 32-bit installation. Run it as your normal user; it installs under Local AppData and creates a Start menu entry. Desktop shortcuts are optional. Uninstall through Installed apps.
 
@@ -24,10 +34,10 @@ macOS: choose `darwin-arm64.pkg` for Apple Silicon or `darwin-x64.pkg` for an In
 Debian/Ubuntu: open the `.deb` for your architecture in your software installer. An application-menu entry launches Sinter. Package-manager installation/removal requires the usual administrator permission. A `.tar.gz` runtime archive is also available for compatible Linux environments; it is not a universal binary for every distribution.
 
 Debian prerelease package versions use `~` so ordinary updates can install the
-later final release: app/download version `0.5.4rc2` has package-manager version
-`0.5.4~rc2`. The native receipt records both identities.
+later final release: app/download version `0.5.4rc3` has package-manager version
+`0.5.4~rc3`. The native receipt records both identities.
 
-Separate actual package replacements from published v0.5.3 and v0.5.4rc1 were
+Separate actual package replacements from published v0.5.3, v0.5.4rc1 and v0.5.4rc2 were
 tested on copied fictional workspaces. Saved work, original sources, preferences
 and explicit model selections survived. Before upgrading your own installation,
 save current work and export backups. Quit Sinter, then install the new `.deb`
@@ -51,7 +61,7 @@ The installed-app receipt's `account_auth_bundled` field is authoritative for a
 download. An offline signed-token test proves the bundled verifier can run; it
 does not prove a live ChatGPT sign-in or access for your account.
 
-## Word save recovery in unreleased source
+## Word save recovery in rc3
 
 Beside a draft's normal download, open **Word save options** and choose **Save
 Word copy on this computer**. Sinter creates a distinct verified local file and
@@ -64,15 +74,23 @@ Copies remain in the workspace's `exports` folder after closing Sinter
 inspect that folder before an explicit retry: a copy may already exist. Existing
 files are never replaced and requests are never automatically replayed. Direct
 saving requires supported safe local filesystem operations; other builds can
-use the ordinary download or copy controls. This feature is not in published
-rc2 installers and does not establish browser download delivery.
+use the ordinary download or copy controls. The actual rc3 Linux workflow
+qualifies three local Word copies, including changed wording and an unconfirmed
+save without replay. Ordinary customer-browser download delivery remains
+unqualified. Earlier rc2 installers do not include local Word-copy recovery.
 
 ## Platform qualification
 
 The table below declares the CI build/test environments. It is not a pass matrix
-for every candidate. The published v0.5.3 and v0.5.4rc1 packages predate rc2;
-consult [0.5.4rc2 qualification](PREVIEW_0.5.4rc2.md) and its exact receipts
+for every candidate. Earlier v0.5.3, RC1 and RC2 packages have separate evidence;
+consult [0.5.4rc3 qualification](releases/PREVIEW_0.5.4rc3_PUBLICATION_RECEIPT.md)
 before treating a platform as tested.
+
+The exact rc3 Linux Python and Chromium jobs passed, but aggregate Quality
+failed. Windows test-fixture encoding/platform assumptions and a genuine macOS
+failure during concurrent local Word saves remain unresolved. The macOS cause
+and its reachability elsewhere are unproven. Other platforms and customer-device
+acceptance remain unqualified; no stable all-platform release is claimed.
 
 | Target | Build / installed-app execution |
 | --- | --- |
@@ -93,25 +111,27 @@ Checks install the package, start the installed executable, serve its assets and
 
 Choose **Try an example** for a fictional offline demonstration. Use **Settings** for reading size, theme, motion and connection choices.
 
-In the published [0.5.4rc2 preview](PREVIEW_0.5.4rc2.md), Overview and Getting started
+In the rc3 browser workbench, Overview and Getting started
 also offer **Open garden handover** and **Open garden campaign**. These open the
 complete bundled fictional project without a file picker. Saved projects stay
 unchanged; opening starts an unsaved copy and switching the paired editors resumes
 your current session edits. The frozen 0.5.4rc1 installers do not include this newer
 entry; their walkthrough uses the supplied JSON backups instead.
 
-The desktop app selects an available local port. Keep the app running for watch checks. Use **Quit Sinter** in its navigation to stop the local process; closing a browser tab alone does not stop it. Source-launcher users can press Ctrl+C in the terminal.
+Browser mode selects an available local port. Keep it running for watch checks.
+Use **Quit Sinter** in its navigation to stop the local process; closing a browser
+tab alone does not stop it. Closing the native source window stops its own jobs
+and process. Source-launcher users can press Ctrl+C in the terminal.
 
 Reports and preferences are local and unencrypted. Unsaved browser work is not a backup. Export or save before quitting. Uninstalling a core application does not delete `~/.sinter`; remove that directory only after preserving any reports you need. Model caches are managed separately by the optional speech tools.
 
-Unreleased development after 0.5.4rc2 adds **On hold** for actions and a complete
-local backup-text fallback. These features are not in the published installers.
-Earlier previews refuse to open a campaign containing held actions. Keep an
-independent backup before switching versions and use the newer source version
+The rc3 browser workbench includes **On hold** for actions and a complete
+local backup-text fallback. Earlier previews refuse to open a campaign containing
+held actions. Keep an independent backup before switching versions and use rc3
 for those records. Clipboard copying requires you to paste and retain the text
 yourself; it does not establish that a file exists or that a campaign was saved.
 
-Development also adds explicit source choices for individual casebook questions.
+The rc3 browser workbench also supports explicit source choices for individual casebook questions.
 These scoped projects use casebook v2 and are stored separately to prevent older
 previews from silently discarding the choices. Older previews cannot show those
 projects or restore v2 backups. Keep an unchanged workspace copy before upgrading;
@@ -131,22 +151,22 @@ cd Sinter
 python3 start.py
 ```
 
-With no arguments, `start.py` opens the local workbench. Windows uses `py start.py`
+With no arguments, `start.py` opens the native source workspace. Windows uses `py start.py`
 or `Start-Sinter.bat`; macOS can use `Start-Sinter.command`, and Linux can use
 `./start-sinter.sh`. The platform wrappers prefer `.venv` when present and pass
 arguments through, including paths containing spaces.
 
-Unreleased source development defaults to a native Tcl/Tk source workspace.
+Current source and rc3 packages default to a native Tcl/Tk source workspace.
 It requires a working display and Python's Tk support; it gives a clear error
 when these are unavailable. Use `python3 start.py app --mode browser` for the
 full web workbench, or shared CLI operations in headless environments. Published
 rc2 downloads keep their browser launch. See [the portable runtime guide](PORTABLE_RUNTIME.md)
 for the native scope and CLI workflows.
 
-Source choices for individual casebook questions currently use the web workbench
+Source choices for individual casebook questions use the web workbench
 and lossless CLI/Python paths. The native source window refuses these newer
-projects instead of clearing their choices. Published installers do not include
-this development capability. A Linux package deliberately built without the
+projects instead of clearing their choices. The rc3 browser presentation includes
+this capability. A Linux package deliberately built without the
 native window uses an explicit browser-mode application-menu command; that
 source behavior still needs matching installed qualification.
 
@@ -173,9 +193,11 @@ A missing Pages setting is not a failed application build. Release downloads rem
 
 The publisher checks all nine installer receipts, source commit identity and SHA-256 digests before attaching files. It does not overwrite an existing release. `SHA256SUMS.txt` and `build-manifest.json` accompany the packages. This is artifact integrity and test provenance, not publisher code signing.
 
-The Linux-only rc2 preview uses a separate explicit candidate gate. Its
+The Linux-only rc3 preview uses a separate explicit candidate gate. Its
 `candidate-release-manifest.json` binds the exact source, installer, runtime
-archive and qualification pack. Both prior upgrades and the frozen executable's
-15-check offline browser journey are mandatory. This does not pass or bypass the
+archive and qualification pack. All three prior-preview upgrades, the frozen
+executable's 21-check offline browser journey and installed recovery are
+mandatory, with separate bare cold-install and mapped native-display evidence.
+This does not pass or bypass the
 full nine-target publisher; development and candidate versions are excluded from
 its automatic publication path.

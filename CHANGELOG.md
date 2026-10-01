@@ -1,11 +1,16 @@
 # Changelog
 
-## 0.5.4rc3 - sealed candidate, not published
+## 0.5.4rc3 - published Linux x64 preview
 
-These source changes follow the published 0.5.4rc2 preview. They are not in its
-installers and have not received installed-platform qualification.
-The candidate version is sealed for building and installed qualification; this
-heading is not a qualification receipt or approval to publish.
+Published from `246b91e0ee432cb1f6f6fcd17425f55cd7a4cabe` on 1 October 2026.
+Linux x64 on Ubuntu 22.04/glibc 2.35 is the only qualified target. The exact
+downloads, installed browser/recovery checks, all three prior-preview upgrades,
+bare offline install and mapped native launch evidence are recorded in the
+[publication receipt](docs/releases/PREVIEW_0.5.4rc3_PUBLICATION_RECEIPT.md).
+The aggregate cross-platform Quality run failed; Windows fixture portability
+and a genuine macOS concurrent local Word-save failure remain unresolved.
+Other platforms, full native editing and general hosted AI quality are unqualified.
+Later documentation changes do not change the frozen release assets.
 
 - Keep campaign section controls available before the review dossier and during
   deep editing, with measured clearance below save controls. Reveal restored

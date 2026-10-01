@@ -10,37 +10,46 @@ Action plans and shared knowledge, with the evidence still in view.
 
 [Download Sinter](https://github.com/neuroforge-io/Sinter/releases) · [Getting started](docs/INSTALLATION.md) · [What you can do](docs/WORKFLOWS.md) · [Help & feedback](https://github.com/neuroforge-io/Sinter/issues)
 
-**Apache 2.0 · Local-first · Linux preview / cross-platform source · By NeuroForge**
+**Apache 2.0 · Local-first · Linux preview · By NeuroForge**
 
 </div>
 
 ---
 
-## Current preview: 0.5.4rc2
+## Current preview: 0.5.4rc3
 
-The [Linux x64 preview is published](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc2),
+The [Linux x64 preview is published](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc3),
 qualified on Ubuntu 22.04/glibc 2.35. Other platforms are not qualified for this
-preview. [Publication evidence](docs/releases/PREVIEW_0.5.4rc2_PUBLICATION_RECEIPT.md)
+preview. [Publication evidence](docs/releases/PREVIEW_0.5.4rc3_PUBLICATION_RECEIPT.md)
 records the exact public downloads and installed/upgrade scope.
 
-The package source is frozen at `256d38fa4b61a4d548472ce5abfd0bf513789090`.
-Later `main` commits do not change those downloads. This preview opens the complete
-paired garden example directly from Overview and Getting started, with original
-sources, a handover and editable actions. Fifteen installed-browser checks cover
-save, quit, restart, reopen, Word/JSON export and separate restored copies without
-a model request. Separate actual package upgrades from v0.5.3 and v0.5.4rc1 retain
-copied fictional workspaces, preferences and explicit model selections.
+The package source is frozen at `246b91e0ee432cb1f6f6fcd17425f55cd7a4cabe`.
+Later `main` commits do not change those downloads. Twenty-one installed browser
+checks cover the paired garden example, source inspection, edited handover and
+actions, save/quit/reopen, actual Word copies and separate restored backups.
+Additional installed recovery covers held actions and a stopped-server backup.
+Separate copied-workspace and actual package upgrades from v0.5.3, RC1 and RC2
+retain fictional work, preferences and explicit model selections. No model
+operation was requested by these checks.
 
-Current development reports `0.5.4rc3.dev0`. Its newer campaign recovery and
-casebook source-choice features are source-only and are not qualified installers.
+The app defaults to a smaller native **source workspace**. For funding campaigns,
+rich documents and account sign-in, open the full browser workbench with
+`/opt/neuroforge/sinter/Sinter app --mode browser` after installing the Debian
+package. Its Overview offers **Open garden handover** and **Open garden campaign**.
+See [one portable runtime](docs/PORTABLE_RUNTIME.md) for the separate presentations.
+Native qualification covers repeat launch and clean shutdown; full native editing
+and customer-device acceptance remain unqualified.
 
-Unreleased development also adds a native source workspace and shared CLI/Python
-operations. See [one portable runtime](docs/PORTABLE_RUNTIME.md) for launch modes,
-fictional workflows and current scope. Published downloads remain unchanged.
+Linux Python and Chromium CI passed. The aggregate cross-platform Quality run
+failed: Windows test-fixture portability and a genuine macOS concurrent Word-save
+failure remain open. The release page retains these limits; this is a Linux-only
+preview, not a cross-platform qualification or a whole-product 10/10 claim.
 
-The earlier v0.5.3 and [v0.5.4rc1](docs/PREVIEW_0.5.4rc1.md) previews remain
+The earlier v0.5.3, [v0.5.4rc1](docs/PREVIEW_0.5.4rc1.md) and
+[v0.5.4rc2](docs/PREVIEW_0.5.4rc2.md) previews remain
 unchanged; their installers have different source and capabilities.
-See [preview scope and evidence](docs/PREVIEW_0.5.4rc2.md) before choosing an asset.
+See [preview scope and evidence](docs/releases/PREVIEW_0.5.4rc3_PUBLICATION_RECEIPT.md)
+before choosing an asset.
 Start with the [fictional offline garden walkthrough](examples/offline-garden/README.md).
 It needs no account, internet, model download or hosted generation.
 
@@ -142,7 +151,7 @@ revisioned project. Ask your questions, keep the original wording, and prepare a
 briefing, enquiry, agenda item or volunteer handover with explicit coverage and gaps.
 Optional AI drafting uses a previewed excerpt pack, never a silent upload of the collection.
 
-In current development, **Choose sources for each question** limits related-wording
+In the rc3 browser workbench, **Choose sources for each question** limits related-wording
 matches to your explicit selections. Choosing none leaves that question unanswered;
 all original inputs remain in the project backup. Changing questions or removing
 selected sources requires reviewing those choices. Scoped projects use casebook v2:
@@ -175,24 +184,26 @@ Sinter is for P&Cs, clubs, associations, volunteer teams and anyone who has more
 
 Choose dark or light appearance, larger reading text, comfortable or compact layouts and reduced motion. Projects have clear inputs, visible progress and reviewable outputs. Work can be exported rather than locked into a service.
 
-The installed application opens its interface in your existing browser. It includes Python: **the core installers do not require a terminal, Git, Python installation or an account**. Choose **Try an example** for a fictional, offline first run. No personal data or API key is needed for the examples.
+The installed application includes Python and opens a native source workspace.
+The full browser workbench currently requires the explicit command below.
+The fictional examples need no account, personal data, internet or model download.
 
 ## Install, open, try an example
 
-1. Open the [0.5.4rc2 release](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc2) and choose its Linux x64 package if your environment matches the tested Ubuntu 22.04/glibc 2.35 baseline.
+1. Open the [0.5.4rc3 release](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc3) and choose its Linux x64 package if your environment matches the tested Ubuntu 22.04/glibc 2.35 baseline.
 2. Run the installer using your normal operating-system software controls.
-3. Open **Sinter** from your applications menu and choose **Try an example**.
+3. For the full campaign walkthrough, run `/opt/neuroforge/sinter/Sinter app --mode browser`, then choose **Open garden campaign** or **Open garden handover** from Overview. The application-menu entry opens the smaller native source workspace.
 
-| System | Current 0.5.4rc2 availability | Qualification |
+| System | Current 0.5.4rc3 availability | Qualification |
 | --- | --- | --- |
 | Ubuntu Linux, Intel/AMD 64-bit (`x64`) | `.deb` installer and native `.tar.gz` runtime | Ubuntu 22.04 / glibc 2.35 installed and upgrade tests |
-| Windows, macOS and other Linux architectures | No qualified rc2 installer | Earlier previews remain on Releases; they do not contain rc2 changes |
-| Source / portable Python app | Source ZIP and `sinter.pyz` | Requires Python 3.10+; separate from native installed qualification |
+| Windows, macOS and other Linux architectures | No qualified rc3 installer | Earlier previews remain on Releases; they do not contain rc3 changes |
+| Source / portable Python app | Source ZIP and `sinter.pyz` | Requires Python 3.10+; qualification is limited to Linux in this preview |
 
 **These are community preview builds, not publisher-signed or notarised installers.** Operating-system policy may warn or block installation. Follow your organisation's software policy; do not disable security protections. Build receipts record the interpreter, processor, compatibility/emulation mode and installed-app tests. A passing build is not certification for every older OS version.
 
 `x64` covers both AMD and Intel processors. Other distributions and older runtime
-combinations have not been qualified for rc2. See
+combinations have not been qualified for rc3. See
 [installation details and limitations](docs/INSTALLATION.md).
 
 ### Prefer source?
