@@ -5,6 +5,11 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Choose upgrade-checker browser arguments from the verified binary version,
+  separately from legacy data-preservation checks. RC3 needs explicit browser
+  mode. Exact prior admission and historical receipts remain unchanged; this
+  process-seam repair does not qualify a new installed upgrade.
+
 - Make installed Linux-menu qualification retain full observed diagnostic counts
   and hashes, with an explicitly bounded reversible sample. Require the exact
   notice from the pinned build source and reject unexpected errors even after

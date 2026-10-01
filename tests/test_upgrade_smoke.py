@@ -366,6 +366,142 @@ def test_legacy_and_explicit_rc1_paths_choose_their_exact_registered_source():
         assert upgrade.prior_for_arguments(args) == upgrade.QUALIFIED_PRIORS[version]
 
 
+@pytest.mark.parametrize(
+    "version,legacy,mode_arguments",
+    [
+        ("0.5.3", True, []),
+        ("0.5.4rc1", True, []),
+        ("0.5.4rc2", True, []),
+        ("0.5.4rc3", True, ["--mode", "browser"]),
+        ("0.5.4rc3", False, ["--mode", "browser"]),
+    ],
+)
+def test_installed_browser_presentation_is_independent_of_legacy_preservation(
+    monkeypatch, tmp_path, version, legacy, mode_arguments
+):
+    """Process seams only: no frozen prior, browser, provider or release receipt."""
+    workspace, output = tmp_path / "workspace", tmp_path / "output"
+    workspace.mkdir()
+    output.mkdir()
+    preferences = b'{"model":"retained-explicit-model"}\n'
+    (workspace / "preferences.json").write_bytes(preferences)
+    binary = tmp_path / "fictional-binary"
+    binary.write_bytes(b"Never executed fictional binary")
+    label = "prior" if legacy else "candidate"
+    prior_version = version if legacy else "0.5.3"
+    expected = {"prior_version": prior_version, "report": {"original": "retained"}}
+    calls = []
+    process = SimpleNamespace(returncode=None)
+    process.poll = lambda: process.returncode
+    process.wait = lambda **kwargs: process.returncode
+    process.terminate = lambda: pytest.fail("Normal quit reached forced termination")
+    process.kill = lambda: pytest.fail("Normal quit reached forced kill")
+
+    def binary_version(command, **kwargs):
+        assert command == [str(binary.resolve()), "--version"]
+        assert kwargs["check"] is True
+        return subprocess.CompletedProcess(command, 0, version + "\n", "")
+
+    def launch(command, **kwargs):
+        calls.append(command)
+        assert command == [str(binary.resolve()), *mode_arguments]
+        assert kwargs["env"]["SINTER_DATA_DIR"] == str(workspace)
+        assert kwargs["stdout"] is kwargs["stderr"]
+        (output / f"{label}-loopback-url.txt").write_text(
+            "http://127.0.0.1:12345", encoding="utf-8"
+        )
+        return process
+
+    class API:
+        def __init__(self, url):
+            assert url == "http://127.0.0.1:12345"
+
+        def request(self, path, *args):
+            if path == "/api/session":
+                return {"version": version, "desktop": True, "token": "fictional"}
+            assert path == "/api/desktop/quit" and args == ({},)
+            process.returncode = 0
+
+    def preserve(api, retained, *, legacy):
+        assert isinstance(api, API) and retained is expected
+        calls.append(("preservation", legacy))
+        return ["fictional preservation seam"]
+
+    monkeypatch.setattr(upgrade.subprocess, "run", binary_version)
+    monkeypatch.setattr(upgrade.subprocess, "Popen", launch)
+    monkeypatch.setattr(upgrade, "LocalAPI", API)
+    monkeypatch.setattr(upgrade, "check_preserved", preserve)
+    actual, checks = upgrade.run_native(
+        binary, workspace, expected, output, version, legacy=legacy
+    )
+    assert actual == version
+    assert calls == [
+        [str(binary.resolve()), *mode_arguments],
+        ("preservation", legacy),
+    ]
+    assert checks == [
+        "fictional preservation seam",
+        "opening candidate did not rewrite the prior preferences file",
+    ]
+    assert (workspace / "preferences.json").read_bytes() == preferences
+    assert expected == {
+        "prior_version": prior_version,
+        "report": {"original": "retained"},
+    }
+    assert (output / f"{label}-process.log").read_bytes() == b""
+    assert process.returncode == 0
+
+
+def test_installed_browser_version_mismatch_refuses_before_launch(
+    monkeypatch, tmp_path
+):
+    workspace, output = tmp_path / "workspace", tmp_path / "output"
+    workspace.mkdir()
+    output.mkdir()
+    preferences = b'{"original":"preferences"}'
+    (workspace / "preferences.json").write_bytes(preferences)
+    monkeypatch.setattr(
+        upgrade.subprocess,
+        "run",
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command, 0, "0.5.4rc2\n", ""
+        ),
+    )
+    monkeypatch.setattr(
+        upgrade.subprocess,
+        "Popen",
+        lambda *args, **kwargs: pytest.fail("Mismatched binary reached launch"),
+    )
+    with pytest.raises(AssertionError, match="binary version did not match"):
+        upgrade.run_native(
+            tmp_path / "never-executed", workspace, {}, output, "0.5.4rc3", legacy=True
+        )
+    assert (workspace / "preferences.json").read_bytes() == preferences
+
+
+@pytest.mark.parametrize("version", ["0.5.3", "0.5.4rc1", "0.5.4rc2"])
+def test_registered_prior_presentation_does_not_relax_exact_source_selection(version):
+    prior = upgrade.QUALIFIED_PRIORS[version]
+    args = SimpleNamespace(
+        prior_version=version,
+        prior_commit=prior.source_commit,
+        expected_version="0.5.4rc3",
+    )
+    assert upgrade.prior_for_arguments(args) is prior
+    args.prior_commit = "0" * 40
+    with pytest.raises(ValueError, match="qualified prior version and source"):
+        upgrade.prior_for_arguments(args)
+
+
+@pytest.mark.parametrize("prior", ["0.5.4rc3", "0.5.4rc3.dev0", "9.9.9", None, True])
+def test_presentation_fix_does_not_admit_unknown_prior_or_future_upgrade(prior):
+    args = SimpleNamespace(
+        prior_version=prior, prior_commit=None, expected_version="0.5.4rc4"
+    )
+    with pytest.raises(ValueError, match="qualified prior version and source"):
+        upgrade.prior_for_arguments(args)
+
+
 @pytest.mark.parametrize("tool", ["upgrade_smoke.py", "installed_upgrade_smoke.py"])
 def test_upgrade_help_is_dependency_independent_and_requires_source_archive(
     tool, tmp_path

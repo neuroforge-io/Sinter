@@ -1033,3 +1033,19 @@ Failed cleanup cannot certify future output from a still-live writer; that
 receipt is refused. Historical receipts and published RC3 remain unchanged.
 Fresh candidate packaging, both menu entries, native/browser handoff, recovery
 and actual RC3 replacement still need their own source-bound execution.
+
+### 2 October: upgrade presentation and preservation remain separate
+
+The upgrade runner used its legacy-preservation flag to suppress explicit browser
+arguments. Published RC3 defaults to native, so that behavior cannot exercise
+its full browser workflow. The narrow correction uses the already verified
+binary version for presentation while retaining legacy labels and preservation
+checks. The original RC3 process-seam failure is retained; 151 focused authored
+tests and 14 independently executed regression cases pass.
+
+Independent source review is bound to
+`0f3b33cc4af9d459c2f64b1d0398a657c96d429a09edf1ca15b240f22d3d00e1`.
+Its process seams are fictional: no actual binary or installer ran. Historical
+prior admission and receipts are unchanged. Exact RC3 admission, rich source and
+scoped-v2 fixtures, capability refusal and actual package replacement remain
+separate requirements before a new release can qualify.

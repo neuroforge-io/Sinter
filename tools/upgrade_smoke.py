@@ -505,7 +505,8 @@ def run_native(
     api = None
     with (output / f"{label}-process.log").open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
-            browser_launch_command([str(binary)], actual, legacy=legacy),
+            # Legacy selects preservation checks, not the binary's presentation.
+            browser_launch_command([str(binary)], actual),
             env=environment,
             stdout=log,
             stderr=log,
