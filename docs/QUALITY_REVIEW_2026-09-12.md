@@ -1610,3 +1610,45 @@ ten-lifetime source replay: five malformed removal-stdout records still pass its
 consumer. The narrow complete-stream repair and replacement's ordered-wording
 and publication-error repair require fresh independent review. Historical failures
 and all corresponding source receipts remain unchanged.
+
+### Corrected replacement source adoption and native hosted failures, 2 October
+
+Independent replacement review
+`b7e926e75301878d4b0a5de5dea5012584f82e8bdd0b4ed626c9a130ecc06cfa`
+accepts the exact four-new-path patch. Its 523 unique tests pass with no skips.
+Five preserved latest witnesses change from false admission to the intended
+refusal: original/applied wording must keep order and multiplicity, and failed
+diagnostic publication must preserve the original error and still attempt the
+separate failed-response publication. All earlier nine targets and their 41
+surrounding controls, plus ten filesystem controls, remain protected.
+
+Eight fresh source lifetimes across the four pinned published priors pass; 33
+hostile views of the fresh RC3 source run refuse. All 16 observed app/collector
+PIDs disappear, eight app ports close, and observed workers, sockets, threads,
+relays and browser temporary files close. Six older app stderr streams are empty;
+the two RC3 source streams retain their exact 72-byte normal notice. This is
+different from the 80-byte package-removal warning. No installed replacement is
+observed or inferred. Repeats and distinct control groups are not added to the
+523-case total. Reviewer cache/setup/reader-bound refusals remain retained.
+
+Root rechecks all 13,785 hash-bound author/historical references and 7,658
+byte/hash-bound review references. Its separate private retention also includes
+an oversized negative test fixture; retaining it does not admit it to the bounded
+public evidence transport. All 441 original source files match the reviewed
+baseline. Root declares the four adopted native files and two documentation
+changes as a separate later delta, then applies only the reviewed replacement
+patch. The combined current source passes 711 tests without skips in 17.64
+seconds. The first root run's two Unix-path-length fixture refusals remain
+unchanged; a shorter private pytest base directory fixes the setup with no
+assertion, timeout or source change. Static and formatting checks pass.
+
+Hosted run `36938320802` at native-source commit
+`0bfac7e9e3d9d1500a226536af25e3e0d3449133` is **failed**. Each Python job
+has 3,874 cases. Linux passes 3,865/nine skips; macOS passes 3,546/328.
+Windows 3.10 and 3.13 each have four new native-control failures and 392 skips:
+two real source HTTP timeouts, an incomplete mocked Docker identity, and an
+unavailable POSIX process-group call. Browser workflows, RKC and speech pass;
+aggregate verified-package staging is skipped. Original API-digest-bound XMLs
+and full failed logs are retained. These failures require diagnosis and fresh
+hosted replay; they are not marked fixed, excluded wholesale or explained by
+passing Linux checks. No new installed release is qualified or published.
