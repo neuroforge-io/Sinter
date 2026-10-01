@@ -241,7 +241,8 @@ def browser_cycle(browser, process, origin, row, before, output, version, observ
         ).to_be_visible()
         expect(
             page.get_by_text(
-                "Save project inputs and edited reports separately.", exact=False
+                "Use Save project for inputs and Save to My workspace for edited reports.",
+                exact=False,
             )
         ).to_be_visible()
 
