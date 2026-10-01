@@ -24,7 +24,9 @@ heading is not a qualification receipt or approval to publish.
 - Explicitly bundle Linux native-window XCB support with original dependency
   notices. A clean offline Ubuntu 22.04 prototype exposed and then closed the
   missing-library gap; final combined-source installer qualification remains
-  required. A separate native shutdown callback error is still under review.
+  required. Defer native shutdown to a safe Tk idle boundary so a stop signal
+  cannot destroy a scrollbar while its callback is still running; coalesce
+  repeated signals and retain local saved work.
 
 - Retain open and closed cost rows while navigating within the current browser
   campaign editor. Explicit campaign replacement starts fresh view choices;

@@ -832,7 +832,7 @@ def main(argv: list[str] | None = None) -> None:
             f"Package: sinter\nVersion: {package_version}\nArchitecture: {debarch}\n"
             "Maintainer: NeuroForge <support@neuroforge.io>\n"
             f"Depends: libc6 (>= {libc}), zlib1g\nSection: utils\nPriority: optional\n"
-            "Description: Local-first community workbench using the Fracture API\n"
+            "Description: Local-first evidence and community workbench\n"
             " Bundled Python runtime. No model weights or proprietary model "
             "implementation.\n",
             encoding="utf-8",

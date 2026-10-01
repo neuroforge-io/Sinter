@@ -2030,7 +2030,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     try {
       const latest = await request('/api/campaigns/' + existing[0].id);
       apply(latest.document, latest.id || existing[0].id, latest.revision, true);
-      feedback.replaceChildren(notice('Most recently updated campaign opened. Choose a different one above or start a new campaign.', 'success'));
+      feedback.replaceChildren(notice('Most recently updated campaign opened. Choose a different one in Your campaigns, or start a new campaign.', 'success'));
     } catch (problem) { error('Could not reopen your latest campaign. ' + problem.message); }
   }
   // The app attaches this returned workspace before the next animation frame.
