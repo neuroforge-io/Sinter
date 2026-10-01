@@ -45,6 +45,24 @@ jobs:
           }
       - name: Build, install, exercise, and remove package
         run: python tools/package_native.py --arch ${{ matrix.arch }} --execution ${{ matrix.execution }} ${{ matrix.account_args }}
+      - name: Qualify the frozen Linux native window
+        if: runner.os == 'Linux' && matrix.arch == 'x64'
+        timeout-minutes: 2
+        run: |
+          if ! command -v xvfb-run >/dev/null; then
+            python tools/native_window_smoke.py --binary dist/Sinter/Sinter --receipt release/frozen-native-window.json
+            exit 1
+          fi
+          xvfb-run --auto-servernum --server-args="-screen 0 1440x1000x24 -nolisten tcp" \
+            python tools/native_window_smoke.py --binary dist/Sinter/Sinter --receipt release/frozen-native-window.json
+      - name: Retain frozen native-window evidence
+        if: always() && runner.os == 'Linux' && matrix.arch == 'x64'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frozen-native-window-Linux-x64
+          path: release/frozen-native-window.json
+          if-no-files-found: warn
+          retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: native-${{ runner.os }}-${{ matrix.arch }}
