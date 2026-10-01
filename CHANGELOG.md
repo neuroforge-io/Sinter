@@ -5,6 +5,13 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Show per-question source coverage in source-only casebook reports, including
+  chosen sources without an exact retained quote. Missing or damaged records
+  stay unknown. Offer explicit, hash-checked local inspection of the retained
+  original and nearby text without changing quotations, Word files or AI context.
+  [Evidence-view review](docs/CASEBOOK_EVIDENCE_CONTEXT_REVIEW_2026-10-01.md)
+  records the source tests and remaining retrieval/installed boundaries.
+
 - Open the full browser workbench explicitly from the native source window over
   its current local workspace. Keep unsaved inputs in their own view, pause
   scheduled watch checks and wait for admitted requests before shutdown. A

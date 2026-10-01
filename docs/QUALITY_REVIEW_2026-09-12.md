@@ -992,3 +992,24 @@ Linux-menu CI has actual package evidence for its own tree, without this native
 repair; it does not qualify the combined candidate. See the
 [source acceptance](NATIVE_BROWSER_REVIEW_2026-10-01.md). Historical failures,
 published RC3 and its receipts remain unchanged.
+
+### 1 October: retained evidence coverage and local context
+
+Source-only casebook reports now distinguish sources that supplied an exact
+quotation from selected sources that did not. Unknown passage lists, unresolved
+identities and inconsistent search choices retain an unavailable state rather
+than becoming a zero count. Original V3 failures remain in the private evidence.
+
+Root's current-main composition passes 3,176 Python tests/nine explicit skips,
+294 JavaScript tests, 51 new desktop/phone checks and the existing evidence-view
+producer with actual Word captures and a cold source-app reopen. Independently,
+82 read-only real-case checks reveal the retained original text beyond a table
+heading cutoff without changing quotations, report history or AI preview.
+There is no new root in-app-browser or installed pass: the earlier temporary
+browser confirmation still needs dismissal.
+
+Independent component ratings are 8.2 for correctness/claim discipline and 7.7
+for sampled evidence-panel usability. Semantic retrieval, selecting new passages,
+missing original bodies, maximum-size performance and broader release/customer
+qualification remain work. See the
+[bounded evidence review](CASEBOOK_EVIDENCE_CONTEXT_REVIEW_2026-10-01.md).

@@ -8,6 +8,7 @@ import {registerReportDraft, trackReportEdits, trackReportEditor, reportEditorDr
   markReportSaved, isReportDraftUnsaved} from './report-drafts.js';
 import {reportCitationIndex, reportCitationMatcher} from './report-citations.js';
 import {casebookQuestionEvidence} from './casebook-question-evidence.js';
+import {retainedCasebookSource, retainedQuestionContext} from './casebook-retained-context.js';
 
 /** The document is the default view; provenance remains one click away. */
 export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated, onSaved, recovered = false} = {}) {
@@ -100,7 +101,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   connectCitations(evidenceArticle, report, sources);
   const campaignEvidence = campaignEvidenceCounts(report.campaign);
   const questionEvidence = casebookQuestionEvidence(report);
-  if (questionEvidence) evidencePanel.append(questionEvidenceView(questionEvidence, sources));
+  if (questionEvidence) evidencePanel.append(questionEvidenceView(report, questionEvidence, sources));
   if (isAssistant) evidencePanel.append(assistantEvidence(report, evidenceArticle));
   else evidencePanel.append(...[h('div', {class: 'evidence-overview'},
     h('div', {}, h('h3', {}, isCampaign ? 'Campaign evidence at a glance' : 'What supports this draft'),
@@ -140,17 +141,55 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
 }
 
 /** A local view of this report's historical search choices and exact quotations. */
-function questionEvidenceView(rows, sources) {
+function questionEvidenceView(report, rows, sources) {
   const panel = h('section', {class: 'casebook-question-evidence', 'aria-label': 'Questions and evidence'},
     h('h3', {}, 'Questions and evidence'),
     h('p', {class: 'muted'}, 'Recorded wording-search choices and passages from this report. Related wording is not an answer; no match does not prove an issue is absent.'),
     h('p', {class: 'fine'}, 'This view retains the report’s own evidence. Later project edits are not included. Opening a quote does not send anything.'));
+  const jumpToOriginal = sourceId => {
+    const original = [...sources.querySelectorAll('[data-source-id]')]
+      .find(item => item.dataset.sourceId === sourceId);
+    if (!original) throw new Error('The original text is not available in this report. No current source was substituted.');
+    original.open = true; original.scrollIntoView({block: 'center'});
+    original.querySelector('summary').focus({preventScroll: true});
+  };
   for (const row of rows) {
     const card = h('article', {class: 'question-evidence-row', 'aria-label': `Question ${row.position} evidence`},
       h('h4', {}, `Question ${row.position}`, h('span', {class: 'question-evidence-state'}, row.status)),
       h('p', {class: 'question-evidence-question'}, row.questionAvailable ? row.question : 'Question wording unavailable'),
       h('p', {class: 'fine'}, 'Recorded search choice: ', h('strong', {}, row.scopeLabel)));
     for (const gap of row.gaps) card.append(notice(gap, 'warning'));
+    if (row.coverage && row.scopeMode !== 'none') {
+      const {sourceCount, excerptedSourceCount, unexcerptedSources} = row.coverage;
+      card.append(h('p', {class: 'question-evidence-coverage'},
+        `Exact retained quotes from ${excerptedSourceCount} of ${sourceCount} ${row.scopeMode === 'all' ? 'supplied' : 'chosen'} source${sourceCount === 1 ? '' : 's'}.`));
+      if (unexcerptedSources.length) {
+        if (row.scopeMode !== 'all') card.append(notice(
+          `${unexcerptedSources.length} chosen source${unexcerptedSources.length === 1 ? ' has' : 's have'} no exact retained quote for this question. This does not mean ${unexcerptedSources.length === 1 ? 'it lacks' : 'they lack'} an answer.`, 'warning'));
+        const missing = h('details', {class: 'question-evidence-unrepresented'},
+          h('summary', {}, `Inspect ${unexcerptedSources.length} source${unexcerptedSources.length === 1 ? '' : 's'} without a retained quote for this question`),
+          h('p', {class: 'fine'}, 'This counts source identities and exact quote matches, not relevance, authority or eligibility. All original sources remain separate from the selected quotations.'));
+        const contents = h('div'); missing.append(contents);
+        missing.addEventListener('toggle', () => {
+          if (!missing.open || contents.firstChild) return;
+          for (const source of unexcerptedSources) {
+            const feedback = h('p', {role: 'status', class: 'fine'});
+            const item = h('div', {}, h('p', {}, source.title || 'Title not retained'),
+              h('p', {class: 'source-id'}, `Source reference: ${source.id}`),
+              ...(source.date ? [h('p', {class: 'fine'}, `Supplied date (unverified): ${source.date}`)] : []));
+            if (source.originalRetained) item.append(button(`Inspect retained original for question ${row.position}, source ${source.id}`, async event => {
+              const control = event.currentTarget; control.disabled = true;
+              try { await retainedCasebookSource(report, source.id); if (control.isConnected) jumpToOriginal(source.id); }
+              catch (error) { if (control.isConnected) feedback.textContent = error.message; }
+              finally { control.disabled = false; }
+            }, 'quiet'));
+            else item.append(h('p', {class: 'fine'}, 'This report retains the source record, but not its original text. Inspect the project or backup that produced this report; a newer project is not a substitute.'));
+            item.append(feedback); contents.append(item);
+          }
+        });
+        card.append(missing);
+      }
+    }
     for (const passage of row.matches) {
       if (!passage.available) {
         card.append(notice('Evidence unavailable: the recorded excerpt or its exact original cannot be resolved. No substitute was used.'),
@@ -158,6 +197,23 @@ function questionEvidenceView(rows, sources) {
         continue;
       }
       const displayLabel = passage.label === 'Recorded excerpt' ? `${passage.label} ${passage.excerptId}` : passage.label;
+      const context = h('div', {class: 'question-evidence-context'});
+      const contextStatus = h('p', {role: 'status', class: 'fine'});
+      const surrounding = button(`Inspect surrounding text for question ${row.position} ${displayLabel}`, async event => {
+        const control = event.currentTarget; control.disabled = true;
+        try {
+          const retained = await retainedQuestionContext(report, row.position - 1, passage.excerptId);
+          if (!control.isConnected) return;
+          context.replaceChildren(notice('Additional original text shown locally. It is not included in this report’s quotations, Word document or optional AI preview.'),
+            h('p', {class: 'fine'}, `Retained original: ${retained.originalCharacters} Unicode characters. The quotation remains ${retained.start}–${retained.end}. These windows may end inside a section or table; inspect the full original if needed.`),
+            h('p', {class: 'fine'}, `Before the quote: Unicode characters ${retained.beforeStart}–${retained.start}.`),
+            retained.before ? h('pre', {class: 'plain-wrap'}, retained.before) : h('p', {class: 'fine'}, 'The quote starts at the beginning of this original.'),
+            h('p', {class: 'fine'}, `After the quote: Unicode characters ${retained.end}–${retained.afterEnd}.`),
+            retained.after ? h('pre', {class: 'plain-wrap'}, retained.after) : h('p', {class: 'fine'}, 'The quote ends at the end of this original.'));
+          contextStatus.textContent = 'Surrounding text inspected locally; the recorded quotation is unchanged.';
+        } catch (error) { if (control.isConnected) contextStatus.textContent = error.message; }
+        finally { control.disabled = false; }
+      }, 'quiet');
       const quote = h('details', {class: 'question-evidence-quote'},
         h('summary', {'aria-label': `Inspect question ${row.position} ${displayLabel}, source ${passage.sourceId}`},
           `Inspect ${displayLabel}: ${passage.sourceTitle || 'Title not retained'}`),
@@ -165,10 +221,12 @@ function questionEvidenceView(rows, sources) {
         h('p', {class: 'source-id'}, `Excerpt ID: ${passage.excerptId}`),
         h('p', {class: 'source-id'}, `Source ID: ${passage.sourceId}`),
         h('p', {class: 'fine'}, `Unicode characters ${passage.start}–${passage.end} (zero-based, end-exclusive) in the retained original.`),
-        button(`Open original source for ${displayLabel}`, () => {
-          const original = [...sources.querySelectorAll('[data-source-id]')]
-            .find(item => item.dataset.sourceId === passage.sourceId);
-          if (original) { original.open = true; original.scrollIntoView({block: 'center'}); original.querySelector('summary').focus({preventScroll: true}); }
+        surrounding, contextStatus, context,
+        button(`Open original source for ${displayLabel}`, async event => {
+          const control = event.currentTarget; control.disabled = true;
+          try { await retainedCasebookSource(report, passage.sourceId); if (control.isConnected) jumpToOriginal(passage.sourceId); }
+          catch (error) { if (control.isConnected) contextStatus.textContent = error.message; }
+          finally { control.disabled = false; }
         }, 'quiet'));
       card.append(quote);
     }

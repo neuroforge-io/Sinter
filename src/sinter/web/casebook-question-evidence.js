@@ -96,7 +96,19 @@ export function casebookQuestionEvidence(report) {
     const status = gaps.length || matches.some(row => !row.available) ? 'Review required'
       : mode === 'none' ? 'No sources selected'
         : matches.length ? 'Review required' : 'No wording match';
+    // Count exact retained quotations for THIS question, never global matches
+    // or source titles. A quotation is not an answer or whole-source review.
+    const represented = new Set(matches.filter(row => row.available).map(row => row.sourceId));
+    const coverage = mode === 'unavailable' || !register.size || !questionAvailable
+      || !ids || matches.some(row => !row.available) ? null : {
+      sourceCount: selectedIds.length, excerptedSourceCount: represented.size,
+      unexcerptedSources: selectedIds.filter(id => !represented.has(id)).map(id => {
+        const source = register.get(id), original = originals.get(id);
+        return {id, title: typeof source.title === 'string' ? source.title : null,
+          date: typeof source.date === 'string' ? source.date : null,
+          originalRetained: Boolean(original && typeof original.content === 'string')};
+      })};
     return {position: index + 1, question: exactQuestion, questionAvailable, scopeLabel, sourceIds: selectedIds,
-      status, matches, gaps};
+      status, matches, gaps, coverage, scopeMode: mode};
   });
 }

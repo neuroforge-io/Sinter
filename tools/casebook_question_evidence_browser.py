@@ -25,6 +25,7 @@ from tools._support import browser_arguments, launch_chromium  # noqa: E402
 
 PATHS = (
     "src/sinter/web/casebook-question-evidence.js",
+    "src/sinter/web/casebook-retained-context.js",
     "src/sinter/web/reports.js",
     "src/sinter/web/report-citations.js",
     "src/sinter/web/documents.css",
@@ -125,8 +126,8 @@ def run_flow(
     row = page.get_by_role("article", name="Question 1 evidence")
     expect(row.locator(".question-evidence-state")).to_have_text("Review required")
     expect(row).to_contain_text("All supplied sources")
-    expect(row.locator("details")).to_have_count(2)
-    expect(row.locator("details[open]")).to_have_count(0)
+    expect(row.locator(".question-evidence-quote")).to_have_count(2)
+    expect(row.locator(".question-evidence-quote[open]")).to_have_count(0)
     expect(
         page.get_by_role("article", name="Question 2 evidence").locator(
             ".question-evidence-state"
@@ -147,7 +148,7 @@ def run_flow(
             for item in report["document_references"]
             if item["excerpt_id"] == excerpt_id
         )
-        quote = row.locator("details").nth(index)
+        quote = row.locator(".question-evidence-quote").nth(index)
         summary = quote.locator("summary")
         summary.focus()
         started = time.perf_counter()
@@ -334,7 +335,7 @@ def main(argv=None):
                         row = page.get_by_role("article", name="Question 1 evidence")
                         expect(row).to_contain_text("Evidence unavailable")
                         expect(row).to_contain_text("missing-historical-excerpt")
-                        expect(row.locator("details")).to_have_count(0)
+                        expect(row.locator(".question-evidence-quote")).to_have_count(0)
                         assert server.app.store.report(report_id) == report
                         checks[-1][
                             "missing_reference_no_current_project_substitution"
