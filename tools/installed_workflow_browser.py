@@ -922,6 +922,8 @@ def browser_workflow(
     relay: Relay,
     fixture: dict,
     checks: list[str],
+    *,
+    browser_session=None,
 ) -> tuple[dict, int, int]:
     """Operate the frozen app through its real UI and explicit local saves."""
     from playwright.sync_api import expect, sync_playwright
@@ -933,8 +935,13 @@ def browser_workflow(
     origin = f"http://127.0.0.1:{relay.server_address[1]}"
     errors, external = [], []
     snapshots = {}
-    with sync_playwright() as driver:
-        browser = launch_chromium(driver, args.chromium)
+    session = sync_playwright() if browser_session is None else browser_session()
+    with session as driver:
+        browser = (
+            launch_chromium(driver, args.chromium)
+            if browser_session is None
+            else browser_session.launch(driver, args.chromium)
+        )
         try:
             context = browser.new_context(
                 viewport={"width": 1440, "height": 1000},

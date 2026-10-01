@@ -1506,3 +1506,36 @@ The proposal stays out of main pending repair and another independent review.
 Fresh installed recovery, replacement, native handoff and canonical RC4 admission
 remain required. No new installer is published; Sinter model requests remain zero
 and the physical user app stays intentionally closed.
+
+### Owned workflow browser seam, 2 October
+
+The two-path source change adds an optional supplied browser session to the
+existing 53-operation workflow producer. Its operating body, final cleanup,
+historical defaults and receipt contracts remain unchanged. Independent review
+`126a513157a563ccf0c6d1428d8a8f869a4219b900a46523c2ea21120ed84316`
+accepts this narrow seam, verifies all 439 unrelated files and nine author
+references, and passes 221 unique checks with no skips. Root's current-main
+composition passes the same 221 checks in 35.46 seconds. The four new inert
+failure controls are included in that total; supplied-session controls fail
+against the old helper while omitted defaults stay unchanged.
+
+The separate supplier's four inert interoperability controls preserve primary
+errors and attempt context, browser and driver cleanup. They bind its intermediate
+source snapshot only. This does not accept the final supplier or repair historical
+default cleanup. Complete installed recovery, replacement, native handoff and
+canonical release admission still require independent review and fresh installed
+execution. Original fixture, collection and overlong Unix-socket setup refusals
+remain retained; the successful short-path replay changes no assertions or
+timeouts. No hosted generation or physical user-app execution occurs.
+
+Fresh run `36929191732` independently binds committed source
+`f61a19769fa86f86e7cde1996a784461474f1495`, before this browser seam is added.
+Its twelve jobs all succeed on their first attempt. All six Python jobs retain
+3,686 cases with the same explicit platform skips as the preceding replay; the
+actual isolated Unicode reader passes in each. Linux's additional four Tk source
+controls pass, alongside Chromium workflows, RKC and local speech. All twelve
+artifact ZIPs are bound by original API IDs, sizes and digests. The initial
+collection count error and empty supplemental test-name query remain retained
+collector faults; the corrected reader records bind the actual six XML cases.
+The development publication job is a no-op. Neither run publishes or qualifies
+an installed preview or explains the older intermittent launcher timeout.

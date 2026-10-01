@@ -5,6 +5,11 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Allow installed-workflow qualification to use an explicitly owned browser
+  session. Keep the existing UI journey, omitted defaults and historical receipt
+  contracts intact. Independent source checks pass; complete supplier cleanup and
+  actual installed execution remain separate requirements.
+
 - Rehearse scoped casebook recovery alongside the existing campaign journey.
   Preserve exact originals before opening a reader, test selected/empty/all
   source choices, retain partial human drafts, conflicting edits and separate
@@ -24,7 +29,8 @@ qualification and does not change any published RC3 asset or historical receipt.
   Preserve real host filesystem reads and exact archive-member checks, distinguish
   mocked Linux guards from actual host admission, and require the actual POSIX
   resources for process-group, FIFO and private-permission tests. Portable byte,
-  JSON, type and lifecycle checks stay active. Fresh hosted replay is required.
+  JSON, type and lifecycle checks stay active. All six repaired Python source
+  jobs pass in fresh hosted execution; installed qualification stays separate.
 
 - Keep scoped recovery readers isolated from account settings while retaining
   Windows Python bootstrap and explicit UTF-8 output. Preserve exact synthetic
