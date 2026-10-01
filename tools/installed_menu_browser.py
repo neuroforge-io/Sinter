@@ -34,7 +34,8 @@ from tools.native_window_smoke import (  # noqa: E402
     stop_process,
 )
 
-BINARY = Path("/opt/neuroforge/sinter/Sinter")
+BINARY_COMMAND = "/opt/neuroforge/sinter/Sinter"
+BINARY = Path(BINARY_COMMAND)
 ENTRIES = Path("/usr/share/applications")
 TITLE = "Fictional installed-menu first-run handover"
 NOTE = "\n\nFictional reviewer note: approval remains unconfirmed."
@@ -49,7 +50,7 @@ def menu_command(path, *, native=False):
     parsed = configparser.ConfigParser(interpolation=None, strict=True)
     parsed.read_string(Path(path).read_text(encoding="utf-8"))
     row = parsed["Desktop Entry"]
-    expected = [str(BINARY), "app", "--mode", "native" if native else "browser"]
+    expected = [BINARY_COMMAND, "app", "--mode", "native" if native else "browser"]
     if (
         row.get("Type") != "Application"
         or row.get("Terminal") != "false"
@@ -153,6 +154,20 @@ def installed_launch(command, home, script, provider, row):
             )
 
 
+def saved_snapshots(read):
+    """Retain the list's report identity separately from its exact saved body."""
+    books, reports = (
+        read("/api/casebooks")["casebooks"],
+        read("/api/reports")["reports"],
+    )
+    assert len(books) == len(reports) == 1
+    return {
+        "project": read("/api/casebooks/" + books[0]["id"]),
+        "report_id": reports[0]["id"],
+        "report": read("/api/reports/" + reports[0]["id"]),
+    }
+
+
 def first_journey(page, process, read, expect, row):
     card = page.get_by_role("region", name="Fictional garden practice project")
     expect(card).to_contain_text("No account or internet needed")
@@ -186,15 +201,7 @@ def first_journey(page, process, read, expect, row):
     ).to_be_visible()
     page.get_by_role("button", name="Save project", exact=True).click()
     expect(page.get_by_text("Saved revision 2.", exact=False)).to_be_visible()
-    books, reports = (
-        read("/api/casebooks")["casebooks"],
-        read("/api/reports")["reports"],
-    )
-    assert len(books) == len(reports) == 1
-    before = {
-        "project": read("/api/casebooks/" + books[0]["id"]),
-        "report": read("/api/reports/" + reports[0]["id"]),
-    }
+    before = saved_snapshots(read)
     assert before["project"]["document"]["documents"] == fixture["documents"]
     assert NOTE.strip() in before["report"]["document_edits"]["markdown"]
     row["source_documents_exact"] = True
@@ -253,7 +260,7 @@ def browser_cycle(browser, process, origin, row, before, output, version, observ
             assert (
                 read("/api/casebooks/" + before["project"]["id"]) == before["project"]
             )
-            assert read("/api/reports/" + before["report"]["id"]) == before["report"]
+            assert read("/api/reports/" + before["report_id"]) == before["report"]
             page.get_by_role("link", name="My workspace", exact=True).click()
             page.get_by_role("button", name="Open draft", exact=True).click()
             expect(

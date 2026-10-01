@@ -2,7 +2,7 @@
 
 import os
 import signal
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 
 import pytest
@@ -20,7 +20,7 @@ def test_actual_package_entry_uses_one_explicit_runtime(tmp_path, native):
         )
     )
     assert tool.menu_command(path, native=native) == [
-        str(tool.BINARY),
+        tool.BINARY_COMMAND,
         "app",
         "--mode",
         "native" if native else "browser",
@@ -74,6 +74,41 @@ def test_capture_refuses_unexpected_destinations(url):
 
 def test_exact_loopback_capture_is_accepted():
     assert tool.launch_url("http://127.0.0.1:65535") == "http://127.0.0.1:65535"
+
+
+def test_linux_menu_admission_keeps_posix_command_on_windows(tmp_path, monkeypatch):
+    path = tmp_path / "sinter.desktop"
+    path.write_text(package_native.linux_desktop_entry())
+    monkeypatch.setattr(tool, "BINARY", PureWindowsPath(tool.BINARY_COMMAND))
+    assert tool.menu_command(path)[0] == "/opt/neuroforge/sinter/Sinter"
+
+
+def test_saved_report_identity_is_separate_from_the_real_store_body(tmp_path):
+    from sinter.store import Store
+
+    store = Store(tmp_path / "fictional")
+    original = {
+        "title": "Fictional source note",
+        "markdown": "Fictional approval unknown.",
+    }
+    identifier = store.save_report(original)
+    project = {"id": "p" * 32, "document": {"title": "Fictional project"}}
+
+    def read(path):
+        if path == "/api/casebooks":
+            return {"casebooks": [{"id": project["id"]}]}
+        if path == "/api/casebooks/" + project["id"]:
+            return project
+        if path == "/api/reports":
+            return {"reports": store.reports()}
+        assert path == "/api/reports/" + identifier
+        return store.report(identifier)
+
+    before = tool.saved_snapshots(read)
+    assert before["report_id"] == identifier
+    assert before["report"] == store.report(identifier)
+    assert "id" not in before["report"]
+    assert before["report"]["markdown"] == original["markdown"]
 
 
 def test_launch_environment_excludes_inherited_settings_and_keys(tmp_path, monkeypatch):
