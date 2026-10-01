@@ -259,6 +259,162 @@ def test_repeat_launch_requires_mapped_window_and_clean_sigterm_in_one_workspace
     ]
 
 
+def test_native_entry_adapter_observes_real_process_arguments_separately(harness):
+    command = (str(harness.binary.resolve()), "app", "--mode", "native")
+    observations = []
+    receipt = tool.smoke(
+        harness.binary, native_entry_command=command, invocation_log=observations
+    )
+    assert receipt["passed"] is True
+    assert receipt["schema"] == "sinter-frozen-native-window-test/v1"
+    assert "invocations" not in receipt and "menu_entry" not in receipt
+    assert len(observations) == len(receipt["launches"]) == 2
+    for observation, process, row in zip(
+        observations, harness.processes, receipt["launches"]
+    ):
+        assert observation == {
+            "argv": [*command, "--directory", process.args[-1]],
+            "started": True,
+            "pid": process.pid,
+        }
+        assert process.args == observation["argv"]
+        assert row["pid"] == observation["pid"]
+        assert row["saved_workspace_exact"] is True
+        assert row["saved_casebook_exact"] is True
+        assert row["explicit_model_selection_exact"] is True
+        assert row["stderr_bytes"] == 0
+        assert row["sigterm_sent"] is True
+        assert row["owned_windows_remaining"] == []
+    assert harness.diagnostics[0].args == [str(harness.binary), "--diagnose"]
+    assert all(process.args[1] == "run" for process in harness.commands)
+    assert receipt["binary_unchanged"] is True
+    assert harness.observers[0].closed is True
+
+
+def test_default_launch_does_not_silently_claim_or_use_native_menu_adapter(harness):
+    receipt = tool.smoke(harness.binary)
+    assert receipt["passed"] is True
+    assert all(
+        process.args == [str(harness.binary), "--directory", process.args[-1]]
+        for process in harness.processes
+    )
+    assert "invocations" not in receipt and "menu_entry" not in receipt
+
+
+@pytest.mark.parametrize(
+    "parts",
+    [
+        ["app", "--mode", "browser"],
+        ["app", "--mode", "native", "--serve"],
+        ["--mode", "native"],
+        ["app", "--mode", "native; arbitrary"],
+        ["app", "--mode", True],
+    ],
+)
+def test_native_entry_adapter_refuses_non_native_prefix_before_children(harness, parts):
+    observations = []
+    receipt = tool.smoke(
+        harness.binary,
+        native_entry_command=(str(harness.binary), *parts),
+        invocation_log=observations,
+    )
+    assert receipt["passed"] is False
+    assert "exact tested executable" in receipt["error"]
+    assert observations == []
+    assert harness.observers == harness.diagnostics == harness.commands == []
+    assert harness.processes == []
+
+
+@pytest.mark.parametrize("shape", ["list", "string", "other_binary", "subclass"])
+def test_native_entry_adapter_requires_plain_exact_identity(harness, shape):
+    class PretendsNative(str):
+        def __eq__(self, other):
+            return True
+
+    command = (str(harness.binary), "app", "--mode", "native")
+    if shape == "list":
+        command = list(command)
+    elif shape == "string":
+        command = " ".join(command)
+    elif shape == "other_binary":
+        command = ("/another/never-executed-Sinter", *command[1:])
+    else:
+        command = (*command[:3], PretendsNative("browser"))
+    observations = []
+    receipt = tool.smoke(
+        harness.binary, native_entry_command=command, invocation_log=observations
+    )
+    assert receipt["passed"] is False
+    assert observations == []
+    assert harness.observers == harness.diagnostics == harness.commands == []
+
+
+@pytest.mark.parametrize("observations", [None, {}, "", ["historical evidence"]])
+def test_native_entry_adapter_requires_separate_fresh_plain_log(harness, observations):
+    command = (str(harness.binary), "app", "--mode", "native")
+    receipt = tool.smoke(
+        harness.binary, native_entry_command=command, invocation_log=observations
+    )
+    assert receipt["passed"] is False
+    assert "fresh separate invocation log" in receipt["error"]
+    assert harness.observers == harness.diagnostics == harness.commands == []
+
+
+def test_native_entry_adapter_cannot_attach_observations_to_bare_launch(harness):
+    observations = []
+    receipt = tool.smoke(harness.binary, invocation_log=observations)
+    assert receipt["passed"] is False
+    assert "require the native-entry adapter" in receipt["error"]
+    assert observations == []
+    assert harness.observers == harness.diagnostics == harness.commands == []
+
+
+def test_native_entry_adapter_retains_failed_start_without_invoked_pid(
+    harness, monkeypatch
+):
+    original = tool.subprocess.Popen
+
+    def fail_native(args, **kwargs):
+        if args[1] == "app":
+            raise OSError("Fictional native-entry start failure")
+        return original(args, **kwargs)
+
+    monkeypatch.setattr(tool.subprocess, "Popen", fail_native)
+    observations = []
+    command = (str(harness.binary), "app", "--mode", "native")
+    receipt = tool.smoke(
+        harness.binary, native_entry_command=command, invocation_log=observations
+    )
+    assert receipt["passed"] is False
+    assert "Fictional native-entry start failure" in receipt["error"]
+    assert len(observations) == 1 and observations[0]["started"] is False
+    assert "pid" not in observations[0]
+    assert observations[0]["argv"][:4] == list(command)
+    assert observations[0]["argv"][4] == "--directory"
+    assert harness.processes == []
+    assert receipt["launches"][0]["saved_workspace_exact"] is True
+    assert harness.observers[0].closed is True
+
+
+def test_native_entry_adapter_keeps_existing_stderr_failure_and_exact_source(harness):
+    harness.mode["stderr"] = OLD_CALLBACK_STDERR
+    observations = []
+    receipt = tool.smoke(
+        harness.binary,
+        native_entry_command=(str(harness.binary), "app", "--mode", "native"),
+        invocation_log=observations,
+    )
+    assert receipt["passed"] is False
+    assert len(observations) == len(harness.processes) == 1
+    assert observations[0]["started"] is True
+    row = receipt["launches"][0]
+    assert base64.b64decode(row["stderr_base64"]) == OLD_CALLBACK_STDERR
+    assert row["saved_workspace_exact"] is True
+    assert row["saved_casebook_exact"] is True
+    assert row["passed"] is False
+    assert harness.observers[0].closed is True
+
+
 def test_unicode_saved_work_is_preserved_with_a_windows_default_text_encoding(
     harness, monkeypatch
 ):

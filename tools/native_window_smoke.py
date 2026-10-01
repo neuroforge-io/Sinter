@@ -4,6 +4,11 @@ This checks a mapped, process-owned Tk window, repeat launch, clean SIGTERM
 shutdown and preservation of saved fictional sources/preferences.
 It never opens a browser, starts an X server, exercises inference or uses a real
 workspace. A pass is launch qualification for this artifact/display only.
+
+An optional fixed native-entry command adapter records separate invocation
+observations for an owning installed-menu producer. It does not qualify entry
+bytes, package identity, full native editing/handoff or package removal. The
+default command and v1 receipt contract remain unchanged.
 """
 
 from __future__ import annotations
@@ -339,6 +344,8 @@ def local_operation(
     operation: str,
     payload: dict,
     receipt: dict,
+    *,
+    observation=None,
 ) -> dict:
     """Use only the tested executable's offline CLI, retaining failure evidence."""
     if operation not in {"casebooks.save", "casebooks.get", "runtime.status"}:
@@ -347,21 +354,24 @@ def local_operation(
         )
     request = workspace.parent / "qualification-request.json"
     request.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    if observation is not None and (type(observation) is not dict or observation):
+        raise ValueError("Provide a fresh separate offline process observation.")
+    arguments = [
+        str(binary),
+        "run",
+        operation,
+        "--input",
+        str(request),
+        "--directory",
+        str(workspace),
+        "--format",
+        "json",
+    ]
     row = {"operation": operation, "passed": False}
     receipt["offline_commands"].append(row)
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
         process = subprocess.Popen(
-            [
-                str(binary),
-                "run",
-                operation,
-                "--input",
-                str(request),
-                "--directory",
-                str(workspace),
-                "--format",
-                "json",
-            ],
+            arguments,
             env=environment,
             stdin=subprocess.DEVNULL,
             stdout=stdout,
@@ -369,13 +379,21 @@ def local_operation(
             start_new_session=True,
         )
         row["pid"] = process.pid
+        if observation is not None:
+            observation.update(argv=arguments.copy(), pid=process.pid)
         try:
             process.wait(timeout=10)
         finally:
             try:
                 stop_process(process, row)
             finally:
-                capture_stderr(stderr, row)
+                try:
+                    capture_stderr(stderr, row)
+                finally:
+                    if observation is not None:
+                        observe_process_streams(
+                            stdout, stderr, process, row, observation
+                        )
                 stdout.seek(0)
                 raw = stdout.read(MAX_CLI_BYTES + 1)
                 row["stdout"] = raw[:MAX_CLI_BYTES].decode("utf-8", errors="replace")
@@ -410,9 +428,7 @@ def workspace_snapshot(workspace: Path) -> dict[str, str | int]:
     """Read original preference bytes and all logical SQLite schema/row bytes."""
     preferences = (workspace / "preferences.json").read_bytes()
     path = workspace / "workspace.sqlite3"
-    with closing(
-        sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
-    ) as db:
+    with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)) as db:
         if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
             raise RuntimeError("The fictional saved workspace failed SQLite integrity.")
         version = db.execute("PRAGMA user_version").fetchone()[0]
@@ -440,6 +456,125 @@ def same_json(left: object, right: object) -> bool:
     return json.dumps(left, **options) == json.dumps(right, **options)
 
 
+def sqlite_observation(path: Path) -> dict:
+    """Observe typed original rows from a regular database without migration."""
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError("Use a regular fictional database observation.")
+    tables = {}
+    with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)) as db:
+        db.execute("PRAGMA query_only=ON")
+        if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+            raise RuntimeError("Fictional workspace integrity observation failed.")
+        metadata = {
+            name: db.execute("PRAGMA " + name).fetchone()[0]
+            for name in ("user_version", "application_id", "encoding", "page_size")
+        }
+        for name, sql in db.execute(
+            "SELECT name,sql FROM sqlite_master WHERE type='table' ORDER BY name"
+        ):
+            quoted = '"' + name.replace('"', '""') + '"'
+            columns = [
+                row[1] for row in db.execute("PRAGMA table_info(" + quoted + ")")
+            ]
+            rows = []
+            for values in db.execute("SELECT * FROM " + quoted):
+                cells = []
+                for value in values:
+                    kind = (
+                        "null"
+                        if value is None
+                        else "integer"
+                        if type(value) is int
+                        else "real"
+                        if type(value) is float
+                        else "text"
+                        if type(value) is str
+                        else "blob"
+                        if type(value) is bytes
+                        else "unsupported"
+                    )
+                    if kind == "unsupported":
+                        raise RuntimeError(
+                            "Unexpected SQLite value in fictional observation."
+                        )
+                    cells.append(
+                        {
+                            "type": kind,
+                            "value": value.hex() if kind == "blob" else value,
+                        }
+                    )
+                rows.append(cells)
+            tables[name] = {
+                "sql": sql,
+                "columns": columns,
+                "rows": sorted(
+                    rows,
+                    key=lambda row: json.dumps(row, sort_keys=True, allow_nan=False),
+                ),
+            }
+    return {"metadata": metadata, "tables": tables}
+
+
+def retained_workspace_snapshot(workspace: Path) -> dict:
+    """Separate V3 observation: full preferences and both typed live databases."""
+    raw = (workspace / "preferences.json").read_bytes()
+    if len(raw) > 128_000 or (workspace / "preferences.json").is_symlink():
+        raise RuntimeError("Fictional preference observation exceeds its boundary.")
+    return {
+        "preferences": {
+            "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "base64": base64.b64encode(raw).decode("ascii"),
+        },
+        "sqlite": sqlite_observation(workspace / "workspace.sqlite3"),
+        "campaigns": sqlite_observation(workspace / "campaigns.sqlite3"),
+    }
+
+
+def stdout_observation(stream, process, row) -> dict:
+    """Separate evidence; never turn a pre-reap sample into a final stream."""
+    before = process.poll()
+    final_before = (
+        type(before) is int
+        and type(row.get("exit_code")) is int
+        and before == row["exit_code"]
+        and row.get("owned_group_remaining") is False
+    )
+    captured = {}
+    capture_stderr(stream, captured)
+    return {
+        "complete": final_before and process.poll() == before,
+        "exit_code": before,
+        "record": {
+            key.removeprefix("stderr").lstrip("_") or "text": value
+            for key, value in captured.items()
+        },
+    }
+
+
+def observe_process_streams(stdout, stderr, process, row, observation):
+    """Keep both complete-stream observations separate from historical v1 rows."""
+    first_error = None
+    for name, stream in (("stdout", stdout), ("stderr", stderr)):
+        try:
+            observation[name] = stdout_observation(stream, process, row)
+        except BaseException as error:
+            observation[name + "_capture_error_type"] = type(error).__name__
+            first_error = first_error or error
+    if first_error:
+        raise first_error
+
+
+def operation_observation_argument(observations):
+    if observations is None:
+        return {}
+    if type(observations) is not list:
+        raise ValueError("Provide a separate actual offline invocation list.")
+    row = {}
+    observations.append(row)
+    return {"observation": row}
+
+
 def verify_fictional_workspace(
     binary: Path,
     workspace: Path,
@@ -447,6 +582,8 @@ def verify_fictional_workspace(
     saved: dict,
     receipt: dict,
     row: dict,
+    *,
+    operation_observations=None,
 ) -> None:
     """Check original saved data and the target's explicit connection selection."""
     snapshot = workspace_snapshot(workspace)
@@ -459,11 +596,23 @@ def verify_fictional_workspace(
             "The fictional saved workspace/preferences changed during launch."
         )
     actual = local_operation(
-        binary, workspace, environment, "casebooks.get", {"id": saved["id"]}, receipt
+        binary,
+        workspace,
+        environment,
+        "casebooks.get",
+        {"id": saved["id"]},
+        receipt,
+        **operation_observation_argument(operation_observations),
     )
     row["saved_casebook_exact"] = same_json(actual, saved)
     status = local_operation(
-        binary, workspace, environment, "runtime.status", {}, receipt
+        binary,
+        workspace,
+        environment,
+        "runtime.status",
+        {},
+        receipt,
+        **operation_observation_argument(operation_observations),
     )
     expected = {
         key: FICTIONAL_PREFERENCES[key]
@@ -494,17 +643,66 @@ def verify_fictional_workspace(
         )
 
 
-def launch_once(binary, workspace, environment, observer, row):
+def native_entry_arguments(binary, command):
+    """Admit only the fixed native-menu prefix, never an arbitrary command."""
+    expected = (str(binary), "app", "--mode", "native")
+    if (
+        type(command) is not tuple
+        or len(command) != len(expected)
+        or any(type(part) is not str for part in command)
+        or command != expected
+    ):
+        raise RuntimeError(
+            "The native-entry adapter requires the exact tested executable "
+            "followed by app --mode native."
+        )
+    return list(command)
+
+
+def launch_once(
+    binary,
+    workspace,
+    environment,
+    observer,
+    row,
+    *,
+    entry_command=None,
+    invocation=None,
+    stream_observation=None,
+):
+    arguments = (
+        [str(binary)]
+        if entry_command is None
+        else native_entry_arguments(binary, entry_command)
+    ) + ["--directory", str(workspace)]
+    if entry_command is not None:
+        if type(invocation) is not dict or invocation:
+            raise RuntimeError("Provide a fresh native-entry invocation observation.")
+        invocation.update(argv=arguments.copy(), started=False)
+    elif invocation is not None:
+        raise RuntimeError("Invocation observations require the native-entry adapter.")
+    if stream_observation is not None and (
+        entry_command is None
+        or type(stream_observation) is not dict
+        or stream_observation
+    ):
+        raise RuntimeError(
+            "Provide a fresh separate adapted-launch stream observation."
+        )
     started = time.monotonic()
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
         process = subprocess.Popen(
-            [str(binary), "--directory", str(workspace)],
+            arguments,
             env=environment,
             stdin=subprocess.DEVNULL,
             stdout=stdout,
             stderr=stderr,
             start_new_session=True,
         )
+        if invocation is not None:
+            invocation.update(started=True, pid=process.pid)
+        if stream_observation is not None:
+            stream_observation.update(argv=arguments.copy(), pid=process.pid)
         row.update(pid=process.pid, sigterm_sent=False, forced_cleanup=False)
         try:
             deadline = started + START_SECONDS
@@ -530,7 +728,13 @@ def launch_once(binary, workspace, environment, observer, row):
                 stop_process(process, row)
                 row["owned_windows_remaining"] = observer.windows(process.pid)
             finally:
-                capture_stderr(stderr, row)
+                try:
+                    capture_stderr(stderr, row)
+                finally:
+                    if stream_observation is not None:
+                        stream_observation["stdout"] = stdout_observation(
+                            stdout, process, row
+                        )
                 stdout.seek(0)
                 row["stdout"] = stdout.read(4096).decode("utf-8", errors="replace")
                 row["elapsed_seconds"] = round(time.monotonic() - started, 4)
@@ -554,7 +758,9 @@ def launch_once(binary, workspace, environment, observer, row):
         row["passed"] = True
 
 
-def diagnose(binary, environment, evidence=None):
+def diagnose(binary, environment, evidence=None, *, observation=None):
+    if observation is not None and (type(observation) is not dict or observation):
+        raise ValueError("Provide a fresh separate diagnostic process observation.")
     evidence = {} if evidence is None else evidence
     evidence["passed"] = False
     cleanup = {"sigterm_sent": False, "forced_cleanup": False}
@@ -567,6 +773,8 @@ def diagnose(binary, environment, evidence=None):
             stderr=stderr,
             start_new_session=True,
         )
+        if observation is not None:
+            observation.update(argv=[str(binary), "--diagnose"], pid=process.pid)
         try:
             process.wait(timeout=10)
         finally:
@@ -574,7 +782,13 @@ def diagnose(binary, environment, evidence=None):
                 stop_process(process, cleanup)
             finally:
                 evidence.update(cleanup)
-                capture_stderr(stderr, evidence)
+                try:
+                    capture_stderr(stderr, evidence)
+                finally:
+                    if observation is not None:
+                        observe_process_streams(
+                            stdout, stderr, process, cleanup, observation
+                        )
                 stdout.seek(0)
                 content = stdout.read(32_001)
                 evidence["stdout"] = content[:32_000].decode("utf-8", errors="replace")
@@ -623,7 +837,9 @@ def diagnose(binary, environment, evidence=None):
     }
 
 
-def smoke(binary):
+def smoke(
+    binary, *, native_entry_command=None, invocation_log=None, entry_observations=None
+):
     receipt = {
         "schema": "sinter-frozen-native-window-test/v1",
         "passed": False,
@@ -659,14 +875,44 @@ def smoke(binary):
         if not binary.is_file() or not os.access(binary, os.X_OK):
             raise RuntimeError("Choose an executable frozen Sinter artifact.")
         receipt["binary_sha256"] = binary_digest(binary)
+        if native_entry_command is not None:
+            native_entry_arguments(binary, native_entry_command)
+            if type(invocation_log) is not list or invocation_log:
+                raise RuntimeError(
+                    "Provide a fresh separate invocation log for the native-entry "
+                    "adapter; v1 launch evidence alone does not qualify a menu entry."
+                )
+            if entry_observations is not None:
+                if type(entry_observations) is not dict or entry_observations:
+                    raise RuntimeError("Provide fresh separate V3 entry observations.")
+                entry_observations.update(
+                    streams=[], workspaces=[], offline=[], diagnostic={}
+                )
+        elif invocation_log is not None:
+            raise RuntimeError(
+                "Invocation observations require the native-entry adapter."
+            )
+        elif entry_observations is not None:
+            raise RuntimeError(
+                "Separate V3 observations require the native-entry adapter."
+            )
         observer = X11Observer(display)
         with tempfile.TemporaryDirectory(prefix="sinter-frozen-window-") as temp:
             home = Path(temp)
             workspace = home / "workspace"
+            if entry_observations is not None:
+                entry_observations["workspace_path"] = str(workspace)
             environment = clean_environment(home, display, os.environ.get("XAUTHORITY"))
             receipt["diagnostic_process"] = {"passed": False}
             receipt["frozen_diagnostics"] = diagnose(
-                binary, environment, receipt["diagnostic_process"]
+                binary,
+                environment,
+                receipt["diagnostic_process"],
+                **(
+                    {"observation": entry_observations["diagnostic"]}
+                    if entry_observations is not None
+                    else {}
+                ),
             )
             workspace.mkdir(mode=0o700)
             (workspace / "preferences.json").write_text(
@@ -680,6 +926,11 @@ def smoke(binary):
                 "casebooks.save",
                 {"document": FICTIONAL_DOCUMENT},
                 receipt,
+                **operation_observation_argument(
+                    entry_observations["offline"]
+                    if entry_observations is not None
+                    else None
+                ),
             )
             if (
                 not isinstance(saved.get("id"), str)
@@ -726,19 +977,67 @@ def smoke(binary):
                 saved,
                 receipt,
                 receipt["fictional_workspace"],
+                **(
+                    {"operation_observations": entry_observations["offline"]}
+                    if entry_observations is not None
+                    else {}
+                ),
             )
+            if entry_observations is not None:
+                entry_observations["workspaces"].append(
+                    {
+                        "phase": "original",
+                        "snapshot": retained_workspace_snapshot(workspace),
+                    }
+                )
             for index in (1, 2):
                 row = {"launch": index, "passed": False}
                 receipt["launches"].append(row)
                 try:
-                    launch_once(binary, workspace, environment, observer, row)
+                    if native_entry_command is None:
+                        launch_once(binary, workspace, environment, observer, row)
+                    else:
+                        invocation = {}
+                        invocation_log.append(invocation)
+                        separate = None
+                        if entry_observations is not None:
+                            separate = {}
+                            entry_observations["streams"].append(separate)
+                        launch_once(
+                            binary,
+                            workspace,
+                            environment,
+                            observer,
+                            row,
+                            entry_command=native_entry_command,
+                            invocation=invocation,
+                            **(
+                                {"stream_observation": separate}
+                                if separate is not None
+                                else {}
+                            ),
+                        )
                 except Exception:
                     # Retain original launch failure even if the separate local
                     # preservation check also fails. Neither check replays AI.
                     row["passed"] = False
                     try:
                         verify_fictional_workspace(
-                            binary, workspace, environment, saved, receipt, row
+                            binary,
+                            workspace,
+                            environment,
+                            saved,
+                            receipt,
+                            row,
+                            **(
+                                {
+                                    "operation_observations": entry_observations[
+                                        "offline"
+                                    ]
+                                }
+                                if entry_observations is not None
+                                else {}
+                            ),
                         )
                     except Exception as exc:
                         row.update(
@@ -748,9 +1047,28 @@ def smoke(binary):
                     raise
                 row["passed"] = False
                 verify_fictional_workspace(
-                    binary, workspace, environment, saved, receipt, row
+                    binary,
+                    workspace,
+                    environment,
+                    saved,
+                    receipt,
+                    row,
+                    **(
+                        {"operation_observations": entry_observations["offline"]}
+                        if entry_observations is not None
+                        else {}
+                    ),
                 )
                 row["passed"] = True
+                if entry_observations is not None:
+                    entry_observations["workspaces"].append(
+                        {
+                            "phase": "after_launch_" + str(index),
+                            "snapshot": retained_workspace_snapshot(workspace),
+                        }
+                    )
+        if entry_observations is not None:
+            entry_observations["workspace_removed"] = not home.exists()
         receipt["binary_sha256_after"] = binary_digest(binary)
         receipt["binary_unchanged"] = (
             receipt["binary_sha256_after"] == receipt["binary_sha256"]

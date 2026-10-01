@@ -1284,3 +1284,41 @@ the closed source contract; their receipt is
 These are source regressions and source-browser recovery evidence. Fresh repaired
 hosted Windows execution and installed qualification remain outstanding. No
 physical user app or provider request is opened, and no published asset changes.
+
+### 2 October: repaired hosted source run and native-entry owner
+
+The completed quality run `36907293494` at exact `7b0d786f79623711a336e0ad51f3d8e560616da0`
+passes all twelve jobs. Root retains the API-digest-matched six original Python
+ZIP/XMLs and browser artifact ZIP. Each Python job collects 3,344 cases: Linux
+3.10/3.13 each pass 3,335 with 9 explicit skips; macOS each pass 3,016 with 328
+skips; Windows each pass 2,971 with 373 skips. All 46 recovery and 12 binding/
+startup case identities execute and match root's earlier focused XML on every
+platform. This is actual source execution, not a platform installer pass. The
+original failed runs remain immutable.
+
+The separately reviewed V4 native-entry proposal repairs the V3 raw-state and
+boolean-summary admission defects. Thirteen preparation paths add one owner and
+a distinct closed archive-source route, preserving all 422 unrelated main files,
+all 30 original native tests and their helper. Root verifies 407 author references
+and 435 copied source bytes; the independent critic verifies another 62 references,
+passes 529 unique affected tests in 41.70 seconds, confirms 115 additional semantic
+probes and refuses 27 malformed real-archive variants. Probe totals overlap and
+are not additional unique test cases. Reviewer setup corrections remain separate.
+
+The retained Ubuntu 22.04 builder actually lacks Git. Its original Git route stays
+unsupported. Host admission freshly re-archives real bare Git source; the distinct
+inner archive route verifies complete source/version/producer bytes and origin
+metadata. Four actual author success/refusal source runs retain all 56 original
+lifecycle streams. An independent fifth inert run retains 14 more streams and
+its actual full-ID removal/absence. No Sinter binary, native UI or installer runs
+in these source mechanics. The former V3 malformed-state acceptance and nonquiet
+source-Tk experiment remain historical negatives.
+
+Independent acceptance is bounded to the source proposal:
+`aea3582615bda7d9fe6b13effb1d469064a20c718a571f1d1fc49ce69a728bf8`.
+A matching package's actual native-entry execution, combined browser/native
+ownership, installed recovery, four-prior replacement including published E, and
+closed RC4 canonical admission remain required. The guides
+[owned container](INSTALLED_NATIVE_CONTAINER.md) and
+[native entry](INSTALLED_NATIVE_ENTRY_TEST.md) specify runnable preparation and
+these limits. No published RC3 asset, physical user app or hosted AI request changes.

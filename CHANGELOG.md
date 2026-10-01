@@ -5,10 +5,17 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Add a separate owner for installed native-entry qualification. Bind real
+  container settings, complete diagnostics and cleanup; reject malformed state
+  and ambiguous removal responses. A closed archive route verifies exact Git
+  source in the retained image, where Git is absent. Source-only mechanics and
+  independent adversarial checks pass; matching installed execution is pending.
+
 - Save source-recovery evidence with explicit UTF-8 and stable newlines, keeping
   complete literal Unicode originals and atomic replacement. Reproduce the Windows
   default-encoding failure without changing historical writers or stored work.
-  Hosted Windows replay and installed qualification remain required.
+  Fresh Windows 3.10/3.13 source jobs pass at `7b0d786`; installed qualification
+  remains required.
 
 - Check occupied-port refusal by exact error propagation, one bind attempt,
   closed failed socket and continued use of the existing listener. Preserve the
