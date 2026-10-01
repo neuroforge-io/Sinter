@@ -162,13 +162,41 @@ def test_clean_image_has_no_python_tooling_and_app_is_not_source_mode():
     assert "find / -xdev" in final.CLEAN_SCRIPT
     assert "env -i PATH=/usr/bin:/bin" in final.CLEAN_SCRIPT
     assert "dpkg -r sinter" in final.CLEAN_SCRIPT
-    workflow = (final.ROOT / ".github/workflows/native.yml").read_text()
-    job = workflow.split("  final_rc3:", 1)[1].split("  desktop:", 1)[0]
+    workflow = (final.ROOT / ".github/workflows/final-linux-rc3.yml").read_text()
+    job = workflow.split("  final_rc3:", 1)[1]
     assert "actions: read" in job and "write" not in job
     assert "persist-credentials: false" in job
     assert "github.event.pull_request.head.repo.full_name == github.repository" in job
     assert "gh release" not in job
     assert final.COMMIT == "d9b36a6853bab0d715dc91e726f984a8ab16a747"
+
+
+def test_readonly_reusable_release_caller_can_validate_every_native_job():
+    native = (final.ROOT / ".github/workflows/native.yml").read_text()
+    release = (final.ROOT / ".github/workflows/release.yml").read_text()
+    qualification = (final.ROOT / ".github/workflows/final-linux-rc3.yml").read_text()
+    # A skipped nested job still participates in GitHub's permission admission.
+    # Preserve the release's narrower existing grant; artifact-read authority
+    # belongs only to the non-reusable, same-repository qualification job.
+    assert "permissions:\n  contents: read\n" in release
+    native_call = release.split("  native:\n", 1)[1].split("  publish:\n", 1)[0]
+    assert "permissions:" not in native_call
+    assert "uses: ./.github/workflows/native.yml" in native_call
+    assert "permissions:\n  contents: read\n" in native
+    assert "actions:" not in native and "  final_rc3:" not in native
+    assert "workflow_call:" in native and "workflow_call:" not in qualification
+    assert "workflow_dispatch:" not in qualification
+    probe = qualification.split("  native_release_contract:", 1)[1].split(
+        "  final_rc3:", 1
+    )[0]
+    assert "if: ${{ false }}" in probe
+    assert "uses: ./.github/workflows/native.yml" in probe
+    assert "permissions:\n      contents: read\n" in probe and "actions:" not in probe
+    job = qualification.split("  final_rc3:", 1)[1]
+    assert "actions: read" in job and "write" not in job
+    assert "github.event_name == 'pull_request'" in job
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in job
+    assert "qualification/linux-rc3-caller-fix-20261001" in job
 
 
 def test_single_linux_target_is_rejected_by_unchanged_full_publisher(tmp_path):

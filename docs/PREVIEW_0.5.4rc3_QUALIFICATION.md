@@ -39,6 +39,15 @@ receipt. Unexpected errors remain failures and are not caught as that refusal.
 This historical CI step cannot publish a release; exit `3` must not be reported
 as a sealed-plan pass.
 
+The retained-candidate job lives in `final-linux-rc3.yml`, a review-only workflow
+that cannot be called by the release workflow. Its existing artifact-read grant
+stays scoped to that same-repository job. The reusable `native.yml` keeps only
+the release caller's existing contents-read grant. GitHub validates nested job
+permissions before conditions, so even a skipped artifact-reader would prevent
+that narrower caller from starting. A skipped native-call probe in the review
+workflow exercises this actual permission admission without building packages or
+publishing. See [GitHub's reusable-workflow permission rules](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#nesting-reusable-workflows).
+
 The final branch also runs the existing installed upgrade, workflow and recovery
 job against its newly built same-run package. That receipt binds the current
 combined source commit and binary; it is separate from the unchanged retained
