@@ -122,13 +122,17 @@ def capture_stream(path):
 class SourceLifecycle:
     """Own only isolated source children; preserve diagnostics before observations."""
 
-    def __init__(self, runtime, output, identity, baseline):
+    def __init__(
+        self, runtime, output, identity, baseline, *, preserve=protected, worker=None
+    ):
         self.runtime, self.output = runtime, output
         self.notice = identity["notice"]
         self.identity = {
             key: value for key, value in identity.items() if key != "notice"
         }
         self.baseline = baseline
+        self.preserve = preserve
+        self.worker = worker or ROOT / "tools/rc4_recovery_worker.py"
         self.process = None
         self.rows = []
         self.failure = None
@@ -140,7 +144,7 @@ class SourceLifecycle:
             "-I",
             "-S",
             "-B",
-            str(ROOT / "tools/rc4_recovery_worker.py"),
+            str(self.worker),
             "--source",
             str(ROOT),
             "--data",
@@ -162,7 +166,7 @@ class SourceLifecycle:
             while True:
                 if self.process is None:
                     if canonical(
-                        protected(snapshot(self.runtime / "data"))
+                        self.preserve(snapshot(self.runtime / "data"))
                     ) != canonical(self.baseline):
                         raise ValueError(
                             "Protected originals changed before source reopen."
@@ -230,9 +234,9 @@ class SourceLifecycle:
                         raise ValueError(
                             "Unexpected source diagnostic; raw streams retained."
                         )
-                    if canonical(protected(row["persistent_snapshot"])) != canonical(
-                        self.baseline
-                    ):
+                    if canonical(
+                        self.preserve(row["persistent_snapshot"])
+                    ) != canonical(self.baseline):
                         raise ValueError(
                             "Source stop changed protected work or settings."
                         )

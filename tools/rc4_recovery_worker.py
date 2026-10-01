@@ -138,7 +138,7 @@ def seed(directory):
     }
 
 
-def main(argv=None):
+def main(argv=None, *, after_stop=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--data", type=Path, required=True)
@@ -186,6 +186,7 @@ def main(argv=None):
     # It does not claim an installed scheduler or native-owner transition.
     Application.scheduler = lambda app: app.stop.wait()
     result = None
+    readers = None
     try:
         for name, module in list(sys.modules.items()):
             if name == "sinter" or name.startswith("sinter."):
@@ -204,6 +205,8 @@ def main(argv=None):
             code = desktop.main(["--mode", "browser", "--directory", str(args.data)])
             if code != 0:
                 raise ValueError("Source desktop did not exit normally.")
+            if after_stop is not None:
+                readers = after_stop(args)
     finally:
         args.control.write_text(
             json.dumps(
@@ -215,6 +218,7 @@ def main(argv=None):
                     "scheduler_paused": True,
                     "OS_browser_tested": False,
                     "seed": result,
+                    **({"reader_checks": readers} if after_stop is not None else {}),
                 },
                 ensure_ascii=False,
                 indent=2,

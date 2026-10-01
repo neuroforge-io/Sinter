@@ -5,6 +5,12 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Rehearse scoped casebook recovery alongside the existing campaign journey.
+  Preserve exact originals before opening a reader, test selected/empty/all
+  source choices, retain partial human drafts, conflicting edits and separate
+  restores. Ten source app lifetimes and 137 bound artifacts pass; malformed
+  numeric evidence refuses admission. Installed execution remains a separate gate.
+
 - Add a separate owner for installed native-entry qualification. Bind real
   container settings, complete diagnostics and cleanup; reject malformed state
   and ambiguous removal responses. A closed archive route verifies exact Git

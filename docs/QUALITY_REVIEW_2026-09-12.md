@@ -1322,3 +1322,39 @@ closed RC4 canonical admission remain required. The guides
 [owned container](INSTALLED_NATIVE_CONTAINER.md) and
 [native entry](INSTALLED_NATIVE_ENTRY_TEST.md) specify runnable preparation and
 these limits. No published RC3 asset, physical user app or hosted AI request changes.
+
+### 2 October: scoped casebook recovery with conserved originals
+
+The seven-path source proposal adds a distinct scoped-project rehearsal while
+keeping the existing six-lifetime campaign journey mandatory. Its four additional
+lifetimes cover selected, empty and all-source question scopes, stale reviews,
+original Unicode evidence, an explicitly partial human draft, a saved handover
+and its Word part bytes, one manual action edit, two-window conflicts and separate
+clipboard/manual backup restores. Unknown owners, unassigned owners and unconfirmed
+dates retain their meanings. Original snapshots, preferences and schema metadata
+are checked before any supporting reader can initialise or migrate the workspace.
+
+Independent review first rejected boolean/float values accepted as post counts,
+revisions and selection endpoints. The rejected source and all original evidence
+remain historical. The repaired contract refuses all 31 retained malformed
+complete-artifact copies, including those ten numeric variants. Its 218 focused
+checks pass without skips; the ten new assertions fail against the old parser.
+All sixteen earlier scoped test/helper ASTs and 422 unrelated base files remain
+exact. The accepted independent source review is
+`773e63f2df140f7e867edd7b019f23b3753c69dbe51964601142a3d7937e6f9b`.
+
+Root verifies all 114 author and 163 critic references, applies the exact patch
+over `9722a58211c0f16f536af028a176839d28996b00`, and preserves 433 unrelated current
+main files in its 440-file composition. A fresh 366-check affected suite passes
+without skips. Its own default source rehearsal completes all ten lifetimes and
+137 artifacts; closed semantic verification passes at receipt
+`3b5dd4298165ac9d6f830028ee32e5f5eb07e0b73770a909ce6bd9ea09f60175`.
+Root independently observes all ten PIDs gone and listeners closed. An initial
+collector manifest-format error refused before starting an app and remains a
+separate setup record.
+
+This is source/browser evidence with fictional work, not a new installed release,
+physical native editing, office rendering, model quality or grant-submission
+claim. The physical user app stays closed and no hosted Sinter request is made.
+Installed recovery, the four-prior replacement and final candidate admission
+remain required. See [the scoped rehearsal guide](RC4_SCOPED_SOURCE_RECOVERY.md).
