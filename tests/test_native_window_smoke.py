@@ -747,20 +747,56 @@ def test_cli_json_types_are_not_coerced_into_exact_saved_work(harness, change):
         assert receipt["error_type"] == "ValueError"  # Nonfinite JSON is rejected.
 
 
-@pytest.mark.parametrize("name", ["application_id", "encoding", "page_size"])
-def test_same_live_file_persistent_metadata_must_survive_launch(harness, name):
+@pytest.mark.parametrize(
+    "name,lossy_dump",
+    [
+        ("application_id", False),
+        ("encoding", False),
+        ("encoding", True),
+        ("page_size", False),
+    ],
+)
+def test_same_live_file_persistent_metadata_must_survive_launch(
+    harness, monkeypatch, name, lossy_dump
+):
+    if lossy_dump:
+        from sinter import casebooks
+
+        monkeypatch.setattr(
+            casebooks, "time", SimpleNamespace(time=lambda: 1790847138.1234567)
+        )
+
     def mutate(workspace):
         original = workspace / "workspace.sqlite3"
         if name == "encoding":
             # Reconstruct identical logical bytes in a differently encoded file.
             # No current source text or preference is edited by this probe.
             with closing(sqlite3.connect(original)) as db, db:
+                timestamps = db.execute(
+                    "SELECT updated_at,id FROM casebooks"
+                ).fetchall()
                 dump = "\n".join(db.iterdump())
                 version = db.execute("PRAGMA user_version").fetchone()[0]
+                if lossy_dump:
+                    # Reproduce SQL serialization losing a REAL timestamp's
+                    # precision; metadata-only probes must retain its exact value.
+                    timestamp, quoted = db.execute(
+                        "SELECT updated_at,quote(updated_at) FROM casebooks"
+                    ).fetchone()
+                    rounded = format(timestamp, ".10g")
+                    assert float(rounded) != timestamp
+                    original_value = "," + quoted + ","
+                    assert dump.count(original_value) == 1
+                    dump = dump.replace(original_value, "," + rounded + ",", 1)
             replacement = workspace / "fictional-reencoded.sqlite3"
             with closing(sqlite3.connect(replacement)) as db, db:
                 db.execute("PRAGMA encoding='UTF-16le'")
                 db.executescript(dump)
+                # Keep original binary64 values across SQLite versions whose
+                # SQL dump/reparse path does not roundtrip every REAL exactly.
+                db.executemany(
+                    "UPDATE casebooks SET updated_at=? WHERE id=?", timestamps
+                )
                 db.execute("PRAGMA user_version=" + str(version))
             replacement.replace(original)
         else:
