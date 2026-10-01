@@ -525,17 +525,35 @@ def verify_native_window_receipt(receipt, enabled=True):
         )
 
 
-def linux_desktop_entry(native_window=True):
-    """Launch the presentation included in this Linux package."""
-    command = "/opt/neuroforge/sinter/Sinter"
-    if not native_window:
-        command += " app --mode browser"
+def linux_desktop_entry(native_window=True, *, presentation="browser"):
+    """Give installed Linux users explicit shortcuts into one runtime."""
+    if presentation not in {"browser", "native"}:
+        raise ValueError("Choose a supported presentation.")
+    if presentation == "native" and not native_window:
+        raise ValueError("The native window is not bundled in this package.")
+    name = "Sinter" if presentation == "browser" else "Sinter native source workspace"
+    description = (
+        "Full local community workbench and offline examples"
+        if presentation == "browser"
+        else "Smaller offline source workspace without a browser"
+    )
+    command = f"/opt/neuroforge/sinter/Sinter app --mode {presentation}"
     return (
-        "[Desktop Entry]\nType=Application\nName=Sinter\n"
-        "Comment=Community workbench by NeuroForge\n"
+        f"[Desktop Entry]\nType=Application\nName={name}\n"
+        f"Comment={description}\n"
         f"Exec={command}\nIcon=sinter\n"
         "Terminal=false\nCategories=Office;Utility;\n"
     )
+
+
+def linux_desktop_entries(native_window=True):
+    """Keep the native alternative discoverable in ordinary menu/search results."""
+    entries = {"sinter.desktop": linux_desktop_entry(native_window)}
+    if native_window:
+        entries["sinter-native.desktop"] = linux_desktop_entry(
+            native_window, presentation="native"
+        )
+    return entries
 
 
 def freeze_runtime(arguments, build, ico, icns):
@@ -820,10 +838,10 @@ def main(argv: list[str] | None = None) -> None:
         icons = stage / "usr" / "share" / "icons" / "hicolor" / "scalable" / "apps"
         icons.mkdir(parents=True)
         shutil.copy2(ROOT / "src" / "sinter" / "web" / "icon.svg", icons / "sinter.svg")
-        (stage / "usr" / "share" / "applications" / "sinter.desktop").write_text(
-            linux_desktop_entry(native_window),
-            encoding="utf-8",
-        )
+        for name, entry in linux_desktop_entries(native_window).items():
+            (stage / "usr" / "share" / "applications" / name).write_text(
+                entry, encoding="utf-8"
+            )
         control = stage / "DEBIAN"
         control.mkdir()
         libc = platform.libc_ver()[1]

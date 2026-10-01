@@ -26,9 +26,13 @@ def menu_command(tmp_path, native_window):
     return shlex.split(section["Exec"])
 
 
-def test_native_package_menu_keeps_default_native_launch(tmp_path, monkeypatch):
-    command = menu_command(tmp_path, True)
-    assert command == ["/opt/neuroforge/sinter/Sinter"]
+def test_native_shortcut_keeps_explicit_native_launch(tmp_path, monkeypatch):
+    entry = package_native.linux_desktop_entry(True, presentation="native")
+    parsed = configparser.ConfigParser(interpolation=None)
+    parsed.read_string(entry)
+    assert parsed["Desktop Entry"]["Name"] == "Sinter native source workspace"
+    command = shlex.split(parsed["Desktop Entry"]["Exec"])
+    assert command == ["/opt/neuroforge/sinter/Sinter", "app", "--mode", "native"]
     module = types.ModuleType("sinter.native_window")
     module.NativeWindowError = RuntimeError
     calls = []
@@ -39,7 +43,9 @@ def test_native_package_menu_keeps_default_native_launch(tmp_path, monkeypatch):
         desktop.webbrowser, "open", lambda *_: pytest.fail("No browser")
     )
     workspace = tmp_path / "Fictional native workspace"
-    assert desktop.main(command[1:] + ["--directory", str(workspace)]) == 0
+    with pytest.raises(SystemExit) as exited:
+        cli.main(command[1:] + ["--directory", str(workspace)])
+    assert exited.value.code == 0
     assert calls == [str(workspace)]
 
 
@@ -70,8 +76,9 @@ class MenuServer:
         self.app_closed = True
 
 
-def test_browser_only_menu_runs_explicit_browser_pipeline(tmp_path, monkeypatch):
-    command = menu_command(tmp_path, False)
+@pytest.mark.parametrize("native_window", [False, True])
+def test_primary_menu_runs_full_browser_pipeline(tmp_path, monkeypatch, native_window):
+    command = menu_command(tmp_path, native_window)
     assert command == ["/opt/neuroforge/sinter/Sinter", "app", "--mode", "browser"]
     module = types.ModuleType("sinter.native_window")
     module.NativeWindowError = RuntimeError
@@ -101,3 +108,27 @@ def test_browser_only_menu_runs_explicit_browser_pipeline(tmp_path, monkeypatch)
     assert instance.scheduled.wait(1)
     assert instance.closed and instance.app_closed and instance.stopped.is_set()
     assert signal.getsignal(signal.SIGTERM) is previous_signal
+
+
+def test_browser_only_package_has_no_unusable_native_shortcut():
+    assert set(package_native.linux_desktop_entries(False)) == {"sinter.desktop"}
+    with pytest.raises(ValueError, match="not bundled"):
+        package_native.linux_desktop_entry(False, presentation="native")
+
+
+def test_native_package_has_two_shortcuts_into_the_same_runtime():
+    entries = package_native.linux_desktop_entries(True)
+    assert set(entries) == {"sinter.desktop", "sinter-native.desktop"}
+    for name, mode in (
+        ("sinter.desktop", "browser"),
+        ("sinter-native.desktop", "native"),
+    ):
+        parsed = configparser.ConfigParser(interpolation=None)
+        parsed.read_string(entries[name])
+        assert parsed["Desktop Entry"]["Terminal"] == "false"
+        assert shlex.split(parsed["Desktop Entry"]["Exec"]) == [
+            "/opt/neuroforge/sinter/Sinter",
+            "app",
+            "--mode",
+            mode,
+        ]

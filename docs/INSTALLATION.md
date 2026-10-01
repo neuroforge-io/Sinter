@@ -125,6 +125,26 @@ and process. Source-launcher users can press Ctrl+C in the terminal.
 
 Reports and preferences are local and unencrypted. Unsaved browser work is not a backup. Export or save before quitting. Uninstalling a core application does not delete `~/.sinter`; remove that directory only after preserving any reports you need. Model caches are managed separately by the optional speech tools.
 
+### Development Linux launcher change
+
+Linux packages built from current development source give **Sinter** an explicit
+full community-workbench launcher. No terminal command is needed for that menu
+entry. Packages with Tk also provide **Sinter native source workspace** for the
+smaller offline interface. Both use the same runtime and saved-work directory;
+the bare executable and source wrappers still default to native mode.
+
+The full workbench opens a loopback address in a local browser. A browser's
+acceptance of the launch does not prove that a restricted environment permits
+that address. Keep its protections in place and choose the native alternative
+where appropriate. Use **Save project** for inputs and **Save to My workspace**
+for edited reports. Wait for the Saved confirmation, then choose **Quit Sinter**.
+Closing a browser tab alone
+does not stop the installed app. Quit before opening it again.
+
+This is a development packaging change, not a change to the published RC3
+assets or their pinned instructions. Matching installed first-run evidence and
+a separately qualified publication must precede customer download claims.
+
 The rc3 browser workbench includes **On hold** for actions and a complete
 local backup-text fallback. Earlier previews refuse to open a campaign containing
 held actions. Keep an independent backup before switching versions and use rc3

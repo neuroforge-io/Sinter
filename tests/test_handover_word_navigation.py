@@ -22,7 +22,7 @@ FIXTURE = Path(__file__).parent / "fixtures/handover-appendix.json"
 
 
 def rendered(appendix=True):
-    original = json.loads(FIXTURE.read_text())
+    original = json.loads(FIXTURE.read_text(encoding="utf-8"))
     if appendix:
         original["handover_evidence"] = "selected_appendix"
     before = copy.deepcopy(original)
