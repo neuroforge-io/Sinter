@@ -18,6 +18,8 @@ heading is not a qualification receipt or approval to publish.
   an explicit choice for pending edits, identify earlier copies after changes,
   and retain text after an unconfirmed save without automatically replaying it.
   This does not establish browser download delivery or factual review.
+  Announce the confirmed save accurately even when the user leaves the draft
+  before it finishes; do not promise that a detached file-path field was selected.
 
 - Explicitly bundle Linux native-window XCB support with original dependency
   notices. A clean offline Ubuntu 22.04 prototype exposed and then closed the

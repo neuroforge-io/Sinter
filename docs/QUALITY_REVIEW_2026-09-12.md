@@ -739,3 +739,10 @@ import and copied-workspace preservation on a Python-free offline Ubuntu base;
 its native launch probe also exposed a shutdown callback error. Final combined
 frozen builds, clean native shutdown, installed browser/recovery and actual prior
 installer replacement gates remain open. No new platform or release is qualified.
+
+A subsequent source polish removes the global claim that a file path was selected
+when a user leaves the draft during a pending save. A fresh 21-check fictional
+browser probe confirms the copy survives, Overview remains active and the
+announcement says only that the copy was saved. The 34 focused Word state,
+filesystem and route checks also pass. This small follow-on does not replace the
+preceding composition receipt or qualify browser download delivery or an installer.
