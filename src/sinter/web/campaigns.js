@@ -165,6 +165,16 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   let tab = campaignTabs.some(([id]) => id === seed.tab) ? seed.tab : 'overview', busy = false;
   let expandedActionRows = null;
   let budgetOpenState = new WeakMap();
+  const renderedBudgetRows = new WeakMap();
+  // These choices belong to the in-memory editor, never the saved campaign.
+  if (Array.isArray(seed.budgetDisclosures)
+      && seed.budgetDisclosures.length === document.budget.length) {
+    document.budget.forEach((row, index) => {
+      if (typeof seed.budgetDisclosures[index] === 'boolean') {
+        budgetOpenState.set(row, seed.budgetDisclosures[index]);
+      }
+    });
+  }
   let pendingBudgetFocus = null;
   let sourceQuery = typeof seed.sourceQuery === 'string' ? seed.sourceQuery : '';
   let assetQuery = typeof seed.assetQuery === 'string' ? seed.assetQuery : '';
@@ -191,8 +201,33 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   function rememberCampaign() {
     remember('campaigns', {document: structuredClone(document), id: savedId, revision,
       dirty, selected, tab, sourceQuery, assetQuery, communicationQuery,
-      communicationRoute, communicationOrder, practice});
+      communicationRoute, communicationOrder, practice,
+      budgetDisclosures: document.budget.map(row => budgetOpenState.get(row) ?? null)});
   }
+  function captureBudgetDisclosures() {
+    let updated = false;
+    const currentRows = new Set(document.budget);
+    for (const details of editor.querySelectorAll('.campaign-budget-row > details')) {
+      const row = renderedBudgetRows.get(details);
+      // Old campaign controls must not attach their state to replacement rows.
+      if (currentRows.has(row) && budgetOpenState.get(row) !== details.open) {
+        budgetOpenState.set(row, details.open); updated = true;
+      }
+    }
+    return updated;
+  }
+  function setBudgetDisclosure(row, open) {
+    budgetOpenState.set(row, open);
+    // Match a deliberate open to its live native state before any pre-capture.
+    for (const details of editor.querySelectorAll('.campaign-budget-row > details')) {
+      if (renderedBudgetRows.get(details) === row) details.open = open;
+    }
+  }
+  // A native toggle event may still be queued when the container is removed.
+  root.dispose = () => {
+    captureBudgetDisclosures();
+    rememberCampaign();
+  };
   function changed() {
     dirty = true; status.textContent = 'Unsaved changes';
     feedback.querySelector('.notice.success')?.remove();
@@ -360,6 +395,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   async function save() {
     if (busy) return;
+    if (captureBudgetDisclosures()) rememberCampaign();
     lock(true); feedback.replaceChildren();
     try {
       const saved = await request('/api/campaigns/save', {data: {document, id: savedId, revision}});
@@ -568,6 +604,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     selected = document.opportunities.length - 1; changed(); renderEditor();
   }
   function renderEditor() {
+    if (captureBudgetDisclosures()) rememberCampaign();
     const detailsOpen = editor.querySelector('.campaign-details')?.open ?? !document.title;
     const title = input('Campaign name', 'text', document, 'title', '', {required: true, maxLength: 200});
     const organisation = input('Applicant organisation', 'text', document, 'organisation', 'Use the applicant’s legal name, which may differ from the school or venue.', {maxLength: 1024});
@@ -836,7 +873,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       h('div', {class: 'form-grid'}, windowKind.wrap, deadline.wrap, windowChecked.wrap, decision.wrap, ceiling.wrap, ceilingCurrency.wrap, state.wrap), windowQuote.wrap, fit.wrap);
     focus.append(h('header', {class: 'campaign-focus-heading'}, headerFunder, headerName, programme),
       h('dl', {class: 'campaign-opportunity-facts'},
-        h('div', {}, h('dt', {}, 'Cash award / ceiling'), maximum),
+        h('div', {}, h('dt', {}, 'Recorded funding amount / ceiling'), maximum),
         h('div', {}, deadlineLabel, deadlineValue),
         h('div', {}, h('dt', {}, 'Application lead'), workflowValue),
         h('div', {}, h('dt', {}, 'Decision timing'), decisionValue),
@@ -1002,7 +1039,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       const next = campaignQuotedBudget(currentRows);
       const row = currentRows[next.nextIndex];
       if (!row) return;
-      budgetOpenState.set(row, true);
+      setBudgetDisclosure(row, true);
       const state = campaignBudgetRowState(row);
       pendingBudgetFocus = {index: document.budget.indexOf(row),
         field: state.quantity === null ? 'quantity' : state.unitCents === null ? 'unit_cost' : 'quote_reference'};
@@ -1027,7 +1064,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         h('summary', {}, 'About these amounts'), h('p', {class: 'fine'}, QUOTED_BUDGET_NOTE)), progress,
       h('div', {class: 'button-row'}, nextCost, button('Add budget item', () => {
         const row = {item: '', opportunity: '', quantity: 1, unit_cost: null, quote_reference: ''};
-        document.budget.push(row); budgetOpenState.set(row, true);
+        document.budget.push(row); setBudgetDisclosure(row, true);
         invalidateBudgetAnswers();
         pendingBudgetFocus = {index: document.budget.length - 1, field: 'item'};
         changed(); renderEditor();
@@ -1055,7 +1092,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }
       const item = input('Budget item', 'text', row, 'item', '', {maxLength: 1000}, revised);
       const scope = choice('Funding opportunity', scopeChoices(), row, 'opportunity', () => {
-        budgetOpenState.set(row, true);
+        setBudgetDisclosure(row, true);
         pendingBudgetFocus = {index: rowIndex, field: 'opportunity'};
         revised(); renderEditor();
       });
@@ -1071,8 +1108,15 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         h('div', {class: 'campaign-budget-row-editor'}, h('div', {class: 'form-grid'}, item.wrap, scope.wrap),
           h('div', {class: 'form-grid'}, quantity.wrap, price.wrap), quote.wrap,
           remove(document.budget, row, 'Remove budget item', historical ? null : invalidateBudgetAnswers)));
+      renderedBudgetRows.set(details, row);
       details.open = budgetOpenState.get(row) ?? (!historical && row === nextRow);
-      details.addEventListener('toggle', () => budgetOpenState.set(row, details.open));
+      budgetOpenState.set(row, details.open);
+      details.addEventListener('toggle', () => {
+        // Replaced rows and detached editors must not overwrite newer state.
+        if (!details.isConnected || !document.budget.includes(row)) return;
+        budgetOpenState.set(row, details.open);
+        rememberCampaign();
+      });
       refreshRow();
       panel.append(h('article', {class: 'campaign-row campaign-budget-row',
         'aria-label': 'Budget item', 'data-budget-index': rowIndex}, details));

@@ -236,6 +236,447 @@ def main(
             }"""
         )
 
+    def disclosure_navigation(page: Page, checks: CampaignChecks) -> None:
+        """Use local navigation without reloading the app's in-memory editor."""
+        page.get_by_role("link", name="Sinter overview", exact=True).click()
+        expect(page.locator("#page-title")).to_have_text("Overview")
+        page.get_by_role("button", name="Find a tool", exact=False).click()
+        page.get_by_label("Find a Sinter tool", exact=True).fill("Funding campaigns")
+        page.get_by_label("Find a Sinter tool", exact=True).press("Enter")
+        expect(page.locator(".campaign-save-bar")).to_be_visible()
+        expect(page.get_by_label("Campaign name", exact=True)).to_have_count(1)
+
+    def disclosure_states(page: Page) -> dict[str, bool]:
+        return page.locator(".campaign-budget-row").evaluate_all(
+            "els=>Object.fromEntries(els.map(el=>[el.dataset.budgetIndex, "
+            "el.querySelector('details').open]))"
+        )
+
+    def disclosure_continuity(page: Page, checks: CampaignChecks) -> None:
+        """Keep view choices separate from rows, reviews and replacement inputs."""
+        for width in (1440, 390):
+            prefix = f"disclosure-{width}-"
+            page.set_viewport_size(
+                {"width": width, "height": 1000 if width == 1440 else 844}
+            )
+            candidate = copy.deepcopy(ORIGINAL)
+            literal = '<img src="https://example.invalid/title-probe"> 🐝 e\u0301'
+            candidate["budget"][0]["item"] = literal
+            checks.import_fixture(page, candidate)
+            checks.save(page)
+            page.get_by_role("tab", name="Opportunities", exact=True).click()
+            amount_labels = page.locator(
+                ".campaign-opportunity-facts dt"
+            ).all_text_contents()
+            check(
+                prefix + "recorded-funding-label-does-not-assume-cash",
+                "Recorded funding amount / ceiling" in amount_labels
+                and "Cash award / ceiling" not in amount_labels,
+                amount_labels,
+            )
+            page.get_by_role("tab", name="Application answers", exact=True).click()
+            page.get_by_label("Working on opportunity", exact=True).select_option("1")
+            page.get_by_role("tab", name="Budget", exact=True).click()
+
+            def row(index: int) -> Locator:
+                return page.locator(f'[data-budget-index="{index}"]')
+
+            page.get_by_role(
+                "button", name="Prepare campaign brief", exact=True
+            ).click()
+            expect(page.get_by_role("region", name="Your draft report")).to_be_visible()
+            initial = backup(page, checks, prefix + "before-view-choices")
+            saved_rows = server.app.campaigns.list()
+            saved = {
+                item["id"]: server.app.campaigns.get(item["id"]) for item in saved_rows
+            }
+            desired = {"0": True, "1": False, "2": False, "3": True}
+            for index, wanted in desired.items():
+                details = row(int(index)).locator("details")
+                if details.evaluate("el=>el.open") != wanted:
+                    details.locator("summary").focus()
+                    page.keyboard.press("Enter")
+                expect(details).to_have_js_property("open", wanted)
+            check(
+                prefix + "literal-title-safe",
+                row(0).locator(".campaign-budget-row-title").inner_text() == literal
+                and row(0).locator("img").count() == 0,
+            )
+            check(
+                prefix + "view-only-preview-current",
+                page.locator("#campaign-output").get_attribute("data-stale") != "true",
+            )
+            check(
+                prefix + "view-only-clean-status",
+                page.locator(".campaign-save-state").inner_text()
+                == "Saved on this computer",
+            )
+            disclosure_navigation(page, checks)
+            check(
+                prefix + "native-choices-survive-navigation",
+                disclosure_states(page) == desired,
+                disclosure_states(page),
+            )
+            check(
+                prefix + "navigation-retains-exact-inputs-and-reviews",
+                backup(page, checks, prefix + "after-view-navigation") == initial,
+            )
+            check(
+                prefix + "view-only-saved-revisions-unchanged",
+                all(
+                    server.app.campaigns.get(identifier) == value
+                    for identifier, value in saved.items()
+                ),
+            )
+            page.get_by_role("tab", name="Application answers", exact=True).click()
+            check(
+                prefix + "working-opportunity-retained",
+                page.get_by_label("Working on opportunity", exact=True).input_value()
+                == "1",
+            )
+            page.get_by_role("tab", name="Budget", exact=True).click()
+            check(
+                prefix + "tab-rerender-retains-choices",
+                disclosure_states(page) == desired,
+                disclosure_states(page),
+            )
+
+            # An intentionally rapid same-turn click pair challenges the queued
+            # native toggle event, rather than assuming it has already fired.
+            rapid_desired = {**desired, "0": not desired["0"]}
+            page.evaluate(
+                """() => {
+                  document.querySelector('[data-budget-index="0"] summary').click();
+                  document.querySelector('a.brand').click();
+                }"""
+            )
+            expect(page.locator("#page-title")).to_have_text("Overview")
+            disclosure_navigation(page, checks)
+            check(
+                prefix + "rapid-queued-toggle-survives-disposal",
+                disclosure_states(page) == rapid_desired,
+                disclosure_states(page),
+            )
+            check(
+                prefix + "rapid-navigation-keeps-exact-inputs-and-reviews",
+                backup(page, checks, prefix + "after-rapid-navigation") == initial,
+            )
+
+            page.get_by_role("button", name="Add budget item", exact=True).click()
+            row(4).get_by_label("Budget item", exact=True).fill(literal + " added")
+            if not row(1).locator("details").evaluate("el=>el.open"):
+                row(1).locator("summary").click()
+            row(1).get_by_role("button", name="Remove budget item", exact=True).click()
+            states_after_remove = disclosure_states(page)
+            edited = backup(page, checks, prefix + "after-row-count-change")
+            disclosure_navigation(page, checks)
+            check(
+                prefix + "row-count-change-choices-follow-remaining-rows",
+                disclosure_states(page) == states_after_remove,
+                {"before": states_after_remove, "after": disclosure_states(page)},
+            )
+            check(
+                prefix + "row-count-change-inputs-and-reviews-exact",
+                backup(page, checks, prefix + "after-row-count-navigation") == edited,
+            )
+            check(
+                prefix + "view-metadata-excluded-from-backup",
+                not any(
+                    key in edited for key in ["budgetDisclosures", "budgetOpenState"]
+                )
+                and all(
+                    set(item)
+                    == {
+                        "item",
+                        "opportunity",
+                        "quantity",
+                        "unit_cost",
+                        "quote_reference",
+                    }
+                    for item in edited["budget"]
+                ),
+            )
+            checks.save(page)
+            check(
+                prefix + "save-keeps-view-and-inputs",
+                disclosure_states(page) == states_after_remove
+                and backup(page, checks, prefix + "after-save") == edited,
+            )
+            shot(page, prefix + "retained-row-choices")
+
+            replacement = copy.deepcopy(ORIGINAL)
+            replacement["title"] = "Fictional replacement " + str(width)
+            for item in replacement["budget"]:
+                item["unit_cost"] = "0.00"
+                item["quote_reference"] = "Fictional replacement reference"
+            other = server.app.campaigns.save(replacement)
+            disclosure_navigation(page, checks)
+            page.get_by_role(
+                "button", name="Open " + replacement["title"], exact=True
+            ).click()
+            expect(page.get_by_label("Campaign name", exact=True)).to_have_value(
+                replacement["title"]
+            )
+            page.get_by_role("tab", name="Budget", exact=True).click()
+            check(
+                prefix + "same-count-other-project-does-not-inherit-choices",
+                disclosure_states(page)
+                == {"0": False, "1": False, "2": False, "3": False},
+                disclosure_states(page),
+            )
+            check(
+                prefix + "other-project-saved-original-unchanged",
+                server.app.campaigns.get(other["id"]) == other,
+            )
+            row(0).locator("summary").click()
+            shorter = copy.deepcopy(ORIGINAL)
+            shorter["title"] = "Fictional shorter imported budget " + str(width)
+            shorter["budget"] = [
+                copy.deepcopy(ORIGINAL["budget"][0]),
+                copy.deepcopy(ORIGINAL["budget"][2]),
+            ]
+            checks.transfers(page)
+            page.get_by_label("Import campaign backup", exact=True).set_input_files(
+                {
+                    "name": "fictional-shorter.json",
+                    "mimeType": "application/json",
+                    "buffer": json.dumps(shorter).encode(),
+                }
+            )
+            expect(page.get_by_label("Campaign name", exact=True)).to_have_value(
+                shorter["title"]
+            )
+            page.get_by_role("tab", name="Budget", exact=True).click()
+            check(
+                prefix + "shorter-import-resets-view-defaults",
+                disclosure_states(page) == {"0": False, "1": True},
+                disclosure_states(page),
+            )
+            imported = backup(page, checks, prefix + "shorter-import")
+            disclosure_navigation(page, checks)
+            check(
+                prefix + "shorter-import-defaults-and-inputs-survive",
+                disclosure_states(page) == {"0": False, "1": True}
+                and backup(page, checks, prefix + "shorter-return") == imported,
+            )
+            page.get_by_role("button", name="Start a new campaign", exact=True).click()
+            expect(page.get_by_label("Campaign name", exact=True)).to_have_value("")
+            page.get_by_role("tab", name="Budget", exact=True).click()
+            check(
+                prefix + "new-campaign-has-no-disclosure-rows",
+                disclosure_states(page) == {},
+            )
+            page.get_by_role("button", name="Add budget item", exact=True).click()
+            row(0).get_by_label("Budget item", exact=True).fill("Fictional new cost")
+            disclosure_navigation(page, checks)
+            check(
+                prefix + "new-blank-editor-added-cost-stays-open",
+                disclosure_states(page) == {"0": True}
+                and row(0).get_by_label("Budget item", exact=True).input_value()
+                == "Fictional new cost",
+            )
+            check(
+                prefix + "phone-layout-no-overflow",
+                page.evaluate("()=>document.documentElement.scrollWidth<=innerWidth+1"),
+            )
+
+    def disclosure_rerenders(page: Page, checks: CampaignChecks) -> None:
+        """Challenge native toggles before internal rendering and row replacement."""
+        for width in (1440, 390):
+            prefix = f"native-rerender-{width}-"
+            page.set_viewport_size(
+                {"width": width, "height": 1000 if width == 1440 else 844}
+            )
+            checks.import_fixture(page, copy.deepcopy(ORIGINAL))
+            checks.save(page)
+            page.get_by_role("tab", name="Budget", exact=True).click()
+            page.get_by_role(
+                "button", name="Prepare campaign brief", exact=True
+            ).click()
+            expect(page.get_by_role("region", name="Your draft report")).to_be_visible()
+            initial = backup(page, checks, prefix + "original")
+
+            def row(index: int) -> Locator:
+                return page.locator(f'[data-budget-index="{index}"]')
+
+            def close_row(index: int = 0) -> None:
+                details = row(index).locator("details")
+                # Settle this fixture close before the separately challenged
+                # rapid open; otherwise a prior queued event can mask the race.
+                details.evaluate(
+                    """el => new Promise(resolve => {
+                      if (!el.open) return resolve();
+                      el.addEventListener('toggle', () => resolve(), {once:true});
+                      el.querySelector('summary').click();
+                    })"""
+                )
+                expect(details).to_have_js_property("open", False)
+
+            close_row()
+            page.evaluate(
+                """() => {
+                  document.querySelector('[data-budget-index="0"] summary').click();
+                  [...document.querySelectorAll('[role="tab"]')]
+                    .find(el=>el.textContent==='Application answers').click();
+                }"""
+            )
+            page.get_by_role("tab", name="Budget", exact=True).click()
+            wanted = {"0": True, "1": False, "2": True, "3": False}
+            check(
+                prefix + "queued-toggle-across-section-tabs",
+                disclosure_states(page) == wanted,
+                disclosure_states(page),
+            )
+            check(
+                prefix + "section-tabs-retain-exact-data-and-clean-preview",
+                backup(page, checks, prefix + "after-tabs") == initial
+                and page.locator(".campaign-save-state").inner_text()
+                == "Saved on this computer"
+                and page.locator("#campaign-output").get_attribute("data-stale")
+                != "true",
+            )
+
+            # The next-cost action must also open a previously closed target,
+            # rather than letting native capture override its explicit intent.
+            close_row(2)
+            close_row()
+            page.evaluate(
+                """() => {
+                  document.querySelector('[data-budget-index="0"] summary').click();
+                  [...document.querySelectorAll('button')]
+                    .find(el=>el.textContent==='Open the next cost to check').click();
+                }"""
+            )
+            check(
+                prefix + "queued-toggle-across-next-cost",
+                disclosure_states(page) == wanted,
+                disclosure_states(page),
+            )
+            focused = focus_state(page)
+            check(
+                prefix + "next-cost-focus-and-originals-retained",
+                focused["row"] == "2"
+                and focused["field"] == "unit_cost"
+                and backup(page, checks, prefix + "after-next-cost") == initial,
+                focused,
+            )
+
+            close_row()
+            page.evaluate(
+                """() => {
+                  document.querySelector('[data-budget-index="0"] summary').click();
+                  [...document.querySelectorAll('button')]
+                    .find(el=>el.textContent==='Save campaign').click();
+                }"""
+            )
+            expect(page.locator(".campaign-save-state")).to_have_text(
+                "Saved on this computer"
+            )
+            expect(
+                page.get_by_role("button", name="Save campaign", exact=True)
+            ).to_be_enabled()
+            check(
+                prefix + "queued-toggle-across-save",
+                disclosure_states(page) == wanted
+                and backup(page, checks, prefix + "after-queued-save") == initial,
+                disclosure_states(page),
+            )
+
+            # A deliberately closed allocation target challenges the same
+            # requested-open collision as the next-cost action.
+            close_row(1)
+            close_row()
+            page.evaluate(
+                """historical => {
+                  document.querySelector('[data-budget-index="0"] summary').click();
+                  const scope = document.querySelector(
+                    '[data-budget-index="1"] [data-campaign-field="opportunity"]');
+                  scope.value = historical;
+                  scope.dispatchEvent(new Event('change', {bubbles:true}));
+                }""",
+                HIST,
+            )
+            scoped = copy.deepcopy(initial)
+            scoped["budget"][1]["opportunity"] = HIST
+            for answer in scoped["answers"]:
+                if answer["opportunity"] in (ROUTE, ALT):
+                    answer["status"] = "draft"
+            check(
+                prefix + "queued-toggle-across-scope-rerender",
+                disclosure_states(page)
+                == {"0": True, "1": True, "2": True, "3": False},
+                disclosure_states(page),
+            )
+            check(
+                prefix + "scope-edit-has-only-explicit-data-and-review-effects",
+                backup(page, checks, prefix + "after-scope") == scoped,
+            )
+            close_row()
+            page.evaluate(
+                """() => {
+                  document.querySelector('[data-budget-index="0"] summary').click();
+                  [...document.querySelector('[data-budget-index="1"]')
+                    .querySelectorAll('button')]
+                    .find(el=>el.textContent==='Remove budget item').click();
+                }"""
+            )
+            del scoped["budget"][1]
+            check(
+                prefix + "queued-toggle-across-delete-with-shifted-indices",
+                disclosure_states(page) == {"0": True, "1": True, "2": False},
+                disclosure_states(page),
+            )
+            check(
+                prefix + "delete-retains-exact-surviving-rows-and-reviews",
+                backup(page, checks, prefix + "after-delete") == scoped,
+            )
+
+            close_row()
+            page.evaluate(
+                """() => {
+                  document.querySelector('[data-budget-index="0"] summary').click();
+                  [...document.querySelectorAll('button')]
+                    .find(el=>el.textContent==='Add budget item').click();
+                }"""
+            )
+            scoped["budget"].append(
+                {
+                    "item": "",
+                    "opportunity": "",
+                    "quantity": 1,
+                    "unit_cost": None,
+                    "quote_reference": "",
+                }
+            )
+            check(
+                prefix + "queued-toggle-across-add-keeps-new-row-open",
+                disclosure_states(page)
+                == {"0": True, "1": True, "2": False, "3": True},
+                disclosure_states(page),
+            )
+            check(
+                prefix + "add-retains-exact-existing-rows-and-review-effects",
+                backup(page, checks, prefix + "after-add") == scoped,
+            )
+
+            replacement = copy.deepcopy(initial)
+            replacement["title"] = f"Fictional captured-row replacement {width}"
+            for item in replacement["budget"]:
+                item["unit_cost"] = "0.00"
+                item["quote_reference"] = "Fictional replacement reference"
+            checks.import_fixture(page, replacement)
+            page.get_by_role("tab", name="Budget", exact=True).click()
+            check(
+                prefix + "same-count-replacement-never-captures-previous-row-dom",
+                disclosure_states(page)
+                == {"0": False, "1": False, "2": False, "3": False},
+                disclosure_states(page),
+            )
+            check(
+                prefix + "replacement-originals-remain-exact",
+                backup(page, checks, prefix + "replacement") == replacement,
+            )
+
     with (
         tempfile.TemporaryDirectory(prefix="sinter-ui-independent-fictional-") as data,
         ExitStack() as guard,
@@ -788,6 +1229,8 @@ def main(
                         page.locator("#campaign-output").get_attribute("data-stale")
                         != "true",
                     )
+                    disclosure_continuity(page, checks)
+                    disclosure_rerenders(page, checks)
                     seed(
                         {
                             "schema": "sinter-campaign/v1",

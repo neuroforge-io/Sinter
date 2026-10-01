@@ -71,7 +71,8 @@ def test_legacy_absent_and_explicit_aud_keep_input_serialization_and_meaning():
     )
     for book in (legacy, explicit):
         report = campaigns.prepare(book)
-        assert "**Cash award / ceiling:** A$50,000" in report["document_markdown"]
+        assert ("**Recorded funding amount / ceiling:** A$50,000"
+                in report["document_markdown"])
         group = report["budget_summary"]["by_opportunity"][0]
         assert group["over_ceiling"] is None
         assert group["quoted_subtotal_over_ceiling"] is True

@@ -60,7 +60,8 @@ actions in a revisioned local record. Readable drafts can be edited and exported
 to Word while their original sources remain in the evidence pack.
 
 Current development shows compact quoted-cost rows and opens the next missing
-price or reference. Quoted subtotals retain original amounts, unknowns and GST
+price or reference. Open and closed cost rows stay as left when moving between
+pages in the same browser session. Quoted subtotals retain original amounts, unknowns and GST
 wording; they do not establish an application amount or funding-ceiling decision.
 The campaign workbench marks current application answers for review when active
 costs change. Direct CLI/Python saves retain entered review statuses; review them

@@ -1035,7 +1035,7 @@ def test_rolling_application_window_is_normalized_and_reported_without_a_fake_de
     assert "Applications are accepted all year round." in markdown
     assert "Application deadline: Not confirmed" not in markdown
     brief = campaigns.prepare(document)["document_markdown"]
-    assert "**Cash award / ceiling:** A$5,000" in brief
+    assert "**Recorded funding amount / ceiling:** A$5,000" in brief
     report = campaigns.prepare(document)
     assert report["readiness"]["application_windows_to_check"] == 0
 
@@ -1131,11 +1131,12 @@ def test_campaign_brief_formats_money_and_dates_for_people():
     brief = campaigns.prepare(document)["document_markdown"]
     assert "Fixed closing date: 4 Oct 2026" in brief
     assert "checked: 29 Sept 2026" in brief
-    assert "**Cash award / ceiling:** A$60,000" in brief
+    assert "**Recorded funding amount / ceiling:** A$60,000" in brief
     assert "Proposed date: 2 Oct 2026 (proposed, not confirmed)" in brief
 
     document["opportunities"][0]["ceiling"] = "60000.50"
-    assert "**Cash award / ceiling:** A$60,000.50" in campaigns.prepare(document)["document_markdown"]
+    assert ("**Recorded funding amount / ceiling:** A$60,000.50"
+            in campaigns.prepare(document)["document_markdown"])
 
 
 def test_decision_brief_flags_stale_or_future_application_window_checks():
@@ -1148,7 +1149,7 @@ def test_decision_brief_flags_stale_or_future_application_window_checks():
     )
     brief = campaigns.prepare(document)["document_markdown"]
     assert "last checked 91 days ago; recheck before use" in brief
-    assert "1 active application window(s) need current official wording" in brief
+    assert "1 active application window needs current official wording" in brief
 
     opportunity["window_checked_at"] = (date.today() + timedelta(days=1)).isoformat()
     brief = campaigns.prepare(document)["document_markdown"]
@@ -1159,7 +1160,8 @@ def test_active_route_without_a_dated_window_source_is_counted_as_open_review_wo
     report = campaigns.prepare(campaign())
 
     assert report["readiness"]["application_windows_to_check"] == 1
-    assert "1 active application window(s) need current official wording" in report["document_markdown"]
+    assert ("1 active application window needs current official wording"
+            in report["document_markdown"])
 
 
 def test_application_window_check_is_current_through_day_90_and_stale_on_day_91():
@@ -1257,7 +1259,7 @@ def test_legacy_action_without_scope_needs_confirmation_and_is_not_current_work(
     assert report["readiness"]["actions_scope_unconfirmed"] == 1
     assert report["readiness"]["open_actions"] == 0
     assert "Submit the closed application" not in report["document_markdown"]
-    assert "1 open action(s) need scope confirmation" in report["document_markdown"]
+    assert "1 open action needs scope confirmation" in report["document_markdown"]
     assert "Scope: Not confirmed" in report["markdown"]
     assert "Submit the closed application" in report["markdown"]
 
@@ -1278,7 +1280,8 @@ def test_submitted_route_actions_need_explicit_after_submission_classification()
     assert report["readiness"]["open_actions"] == 1
     assert report["readiness"]["actions_submission_phase_review"] == 1
     assert "Check whether the funder received the application" not in report["document_markdown"]
-    assert "1 unfinished pre-submission action(s) on submitted route(s) need review" in report["document_markdown"]
+    assert ("1 unfinished pre-submission action on a submitted route needs review"
+            in report["document_markdown"])
     assert "Fictional access fund · Phase: Before submission" in report["markdown"]
 
     document["actions"][0]["submission_phase"] = "post_submission"
@@ -1304,7 +1307,8 @@ def test_reopened_route_holds_post_submission_actions_until_reclassified():
     assert report["readiness"]["open_actions"] == 0
     assert report["readiness"]["actions_phase_reclassification"] == 1
     assert report["readiness"]["actions_to_classify"] == 1
-    assert "1 post-submission action(s) on active route(s) need reclassification" in report["document_markdown"]
+    assert ("1 post-submission action on an active route needs reclassification"
+            in report["document_markdown"])
     assert "Check the previous submission" not in report["document_markdown"]
 
 
@@ -1328,8 +1332,8 @@ def test_inactive_route_actions_are_counted_as_held_and_kept_out_of_current_work
     assert report["readiness"]["actions_without_owner"] == 0
     assert report["readiness"]["actions_inactive_route_review"] == 1
     assert report["readiness"]["actions_to_classify"] == 1
-    assert "0 open actions" in report["document_markdown"]
-    held = "1 open action(s) are held on closed, paused or not-pursued routes"
+    assert "0 open actions" not in report["document_markdown"]
+    held = "1 open action is held on a closed, paused or not-pursued route"
     assert held in report["document_markdown"]
     assert report["document_markdown"].count(
         held) == 1
@@ -1762,3 +1766,178 @@ def test_storage_limit_is_atomic_and_does_not_prevent_existing_edits(tmp_path):
                              first["id"], first["revision"])
     assert len(store.list()) == 2
     assert store.get(first["id"]) == changed
+
+
+def test_decision_brief_omits_zero_review_bullets_but_keeps_audit_counts_and_notices():
+    document = campaign(requirements=[], actions=[])
+    document["opportunities"][0]["application_mode"] = "not_required"
+    before = copy.deepcopy(document)
+
+    report = campaigns.prepare(document)
+    brief = report["document_markdown"]
+
+    for key in ("requirements_unresolved", "requirements_not_met",
+                "claims_without_evidence", "open_actions"):
+        assert report["readiness"][key] == 0
+    assert not re.search(r"^- 0\b", brief, re.MULTILINE)
+    assert "marked not met" not in brief
+    assert "incomplete or stale evidence" not in brief
+    assert "No current open action is recorded." in brief
+    assert "0 requirements unresolved; 0 marked not met" in report["markdown"]
+    assert "0 open actions (confirmed current scope only)" in report["markdown"]
+    assert "GST basis may be unknown or mixed" in brief
+    assert "No GST conversion was made" in brief
+    assert "not an eligibility or application-ceiling decision" in brief
+    assert campaigns.NOTICE in brief and campaigns.NOTICE in report["markdown"]
+    assert report["readiness"]["status"] == "needs_attention"
+    assert document == before
+
+
+@pytest.mark.parametrize("key,singular,plural", [
+    ("requirements_unresolved", "requirement check unresolved",
+     "requirement checks unresolved"),
+    ("requirements_not_met", "requirement check marked not met",
+     "requirement checks marked not met"),
+    ("claims_without_evidence", "marked check has incomplete or stale evidence",
+     "marked checks have incomplete or stale evidence"),
+    ("open_actions", "open action (confirmed current scope only)",
+     "open actions (confirmed current scope only)"),
+    ("actions_held", "action on hold by your choice", "actions on hold by your choice"),
+    ("application_workflow_to_confirm", "active route needs a recorded application",
+     "active routes need a recorded application"),
+    ("opportunities_without_answers", "route with a confirmed formal application has",
+     "routes with a confirmed formal application have"),
+    ("answers_on_unconfirmed_application_routes", "answer draft is held",
+     "answer drafts are held"),
+    ("actions_scope_unconfirmed", "open action needs scope confirmation",
+     "open actions need scope confirmation"),
+    ("actions_submission_phase_review",
+     "unfinished pre-submission action on a submitted route needs review",
+     "unfinished pre-submission actions on submitted routes need review"),
+    ("actions_phase_reclassification",
+     "post-submission action on an active route needs reclassification",
+     "post-submission actions on active routes need reclassification"),
+    ("actions_inactive_route_review",
+     "open action is held on a closed, paused or not-pursued route",
+     "open actions are held on closed, paused or not-pursued routes"),
+    ("application_windows_to_check", "active application window needs current",
+     "active application windows need current"),
+    ("budget_amount_basis_review",
+     "quoted budget group: application amount basis unqualified in Sinter",
+     "quoted budget groups: application amount basis unqualified in Sinter"),
+    ("quoted_subtotals_above_ceiling", "current quoted subtotal is numerically above",
+     "current quoted subtotals are numerically above"),
+    ("funding_currency_review", "active funding ceiling cannot be compared",
+     "active funding ceilings cannot be compared"),
+])
+@pytest.mark.parametrize("count", [1, 2])
+def test_decision_brief_review_labels_use_singular_plural_and_matching_verbs(
+    key, singular, plural, count
+):
+    # A renderer-only fixture exercises each count independently. Admission and
+    # readiness arithmetic are covered by the campaign fixtures above.
+    report = campaigns.prepare(campaign())
+    readiness = dict(report["readiness"])
+    readiness[key] = count
+    brief = campaigns._render_decision_brief(
+        report["campaign"], readiness, report["budget_summary"], "")
+
+    assert f"- {count} {singular if count == 1 else plural}" in brief
+    assert "(s)" not in brief
+    assert "draftss" not in brief
+    assert "GST basis may be unknown or mixed" in brief
+    assert "not an eligibility or application-ceiling decision" in brief
+
+
+@pytest.mark.parametrize("count", [1, 2])
+def test_decision_brief_portfolio_counts_also_use_natural_plural_labels(count):
+    document = campaign(assets=[{
+        "name": f"Fictional research record {index}",
+        "prior_art_status": "not_started",
+    } for index in range(count)])
+    report = campaigns.prepare(document)
+    brief = report["document_markdown"]
+    suffix = "" if count == 1 else "s"
+
+    for noun in ("asset", "rights record", "contributor record", "prior-art screen",
+                 "disclosure date"):
+        assert f"{count} {noun}{suffix}" in brief
+    assert "separate from funding eligibility" in brief
+    assert "do not establish ownership, novelty, patentability" in brief
+
+
+def test_decision_brief_caveats_keep_quote_arithmetic_separate_from_application():
+    document = campaign(requirements=[])
+    route = document["opportunities"][0]
+    route.update(route_type="cash_grant", ceiling_currency="AUD", ceiling="200")
+    document["budget"] = [{
+        "item": "Fictional inclusive quote", "opportunity": route["name"],
+        "quantity": 1, "unit_cost": "110.00",
+        "quote_reference": "Fictional quote includes GST; exact e\u0301 wording.",
+    }, {
+        "item": "Fictional exclusive quote", "opportunity": route["name"],
+        "quantity": 1, "unit_cost": "100.00",
+        "quote_reference": "Fictional quote excludes GST.",
+    }, {
+        "item": "Unknown production cost", "opportunity": route["name"],
+        "quantity": 1, "unit_cost": None, "quote_reference": "",
+    }]
+    before = copy.deepcopy(document)
+
+    report = campaigns.prepare(document)
+    brief = report["document_markdown"]
+    group = report["budget_summary"]["by_opportunity"][0]
+
+    assert "1 cost remains unknown; known quoted subtotal A$210" in brief
+    assert ("1 current quoted subtotal is numerically above its recorded AUD ceiling"
+            in brief)
+    assert "the application comparison remains unqualified" in brief
+    assert ("1 quoted budget group: application amount basis unqualified in Sinter"
+            in brief)
+    assert "not a finding of missing GST wording or a tax error" in brief
+    assert group["over_ceiling"] is None
+    assert group["quoted_subtotal_over_ceiling"] is True
+    assert report["readiness"]["budgets_over_ceiling"] == 0
+    assert report["readiness"]["quoted_subtotals_above_ceiling"] == 1
+    assert "includes GST; exact e\u0301 wording." in report["markdown"]
+    assert "includes GST; exact e\u0301 wording." not in brief
+    assert document == before
+
+
+@pytest.mark.parametrize("route_type", [
+    "cash_grant", "equity", "unknown", "non_cash_support",
+])
+def test_route_amount_labels_describe_recorded_funding_for_every_kind(route_type):
+    document = campaign()
+    document["opportunities"][0].update(
+        route_type=route_type, ceiling_currency="AUD", ceiling="5000.00")
+    before = copy.deepcopy(document)
+
+    report = campaigns.prepare(document)
+
+    for text in (report["markdown"], report["document_markdown"]):
+        assert "Recorded funding amount / ceiling:" in text
+        assert "Cash award / ceiling:" not in text
+    assert report["campaign"]["opportunities"][0]["route_type"] == route_type
+    assert report["campaign"]["opportunities"][0]["ceiling"] == "5000.00"
+    amount = ("No grant cash (non-cash support)"
+              if route_type == "non_cash_support" else "A$5,000")
+    assert amount in report["markdown"] and amount in report["document_markdown"]
+    assert report["budget_summary"]["by_opportunity"][0]["over_ceiling"] is None
+    assert document == before
+
+
+def test_recorded_amount_label_change_preserves_literal_quote_and_evidence_wording():
+    document = campaign()
+    literal_label = "Supplier wording: Cash award / ceiling: is an entered phrase."
+    document["budget"][0]["quote_reference"] = literal_label
+    document["requirements"][0]["source_quote"] = literal_label
+    before = copy.deepcopy(document)
+
+    report = campaigns.prepare(document)
+
+    assert literal_label in report["markdown"]
+    assert "Recorded funding amount / ceiling:" in report["markdown"]
+    assert report["campaign"]["budget"][0]["quote_reference"] == literal_label
+    assert report["campaign"]["requirements"][0]["source_quote"] == literal_label
+    assert document == before

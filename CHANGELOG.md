@@ -5,6 +5,11 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Retain open and closed cost rows while navigating within the current browser
+  campaign editor. Explicit campaign replacement starts fresh view choices;
+  original inputs, review statuses and saved revisions are preserved. Use a
+  recorded-funding label for all route types and clearer generated brief counts.
+
 - Keep quoted budget amounts separate from a reviewed application budget. Retain
   original AUD values, references, unknown prices and historical costs; explain
   unknown or mixed GST bases in the live view, decision brief and audit pack.

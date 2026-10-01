@@ -890,6 +890,11 @@ def _brief_amount(value: str | None) -> str:
     return "A$" + rendered
 
 
+def _brief_count(count: int, singular: str) -> str:
+    """Render counted brief labels without parenthetical plural suffixes."""
+    return f"{count} {singular if count == 1 else singular + 's'}"
+
+
 def _route_amount(row: dict) -> str:
     """Keep a known non-cash route distinct from a missing amount."""
     return funding_amount(row)
@@ -1261,7 +1266,7 @@ def _render_decision_brief(document: dict, readiness: dict,
             + _application_workflow_description(row),
             "**Application window:** " + _brief_window_description(
                 row, document["sources"]),
-            "**Cash award / ceiling:** " + _route_amount(row),
+            "**Recorded funding amount / ceiling:** " + _route_amount(row),
         ])
         comparison = ceiling_comparison_note(row)
         if comparison:
@@ -1275,58 +1280,89 @@ def _render_decision_brief(document: dict, readiness: dict,
     lines.append("Statuses, dates and ceilings are campaign entries; Sinter has "
                  "not verified them.")
 
+    review_items = []
     unresolved = readiness["requirements_unresolved"]
-    check_label = "requirement check" if unresolved == 1 else "requirement checks"
-    review_items = [
-        f"{unresolved} {check_label} unresolved",
-        f"{readiness['requirements_not_met']} marked not met",
-        f"{readiness['claims_without_evidence']} marked checks have incomplete or stale evidence",
-        f"{readiness['open_actions']} open actions (confirmed current scope only)",
-    ]
+    if unresolved:
+        review_items.append(
+            _brief_count(unresolved, "requirement check") + " unresolved")
+    not_met = readiness["requirements_not_met"]
+    if not_met:
+        review_items.append(
+            _brief_count(not_met, "requirement check") + " marked not met")
+    missing_evidence = readiness["claims_without_evidence"]
+    if missing_evidence:
+        verb = "has" if missing_evidence == 1 else "have"
+        review_items.append(
+            f"{_brief_count(missing_evidence, 'marked check')} {verb} "
+            "incomplete or stale evidence")
+    open_actions = readiness["open_actions"]
+    if open_actions:
+        review_items.append(
+            _brief_count(open_actions, "open action")
+            + " (confirmed current scope only)")
     if readiness["actions_held"]:
         review_items.append(
-            f"{readiness['actions_held']} action(s) on hold by your choice, "
-            "retained and not completed; excluded from current work")
+            _brief_count(readiness["actions_held"], "action")
+            + " on hold by your choice; retained, not completed, "
+            "and excluded from current work")
     workflow_count = readiness["application_workflow_to_confirm"]
     if workflow_count:
         review_items.append(
-            f"{workflow_count} active route(s) need their application process, "
-            "named applicant and explicit applicant confirmation recorded")
+            f"{_brief_count(workflow_count, 'active route')} "
+            + ("needs" if workflow_count == 1 else "need")
+            + " a recorded application process, named applicant "
+            "and explicit applicant confirmation")
     missing_answers = readiness["opportunities_without_answers"]
     if missing_answers:
         review_items.append(
-            f"{missing_answers} route(s) with a confirmed formal application have no answer drafts")
+            _brief_count(missing_answers, "route")
+            + " with a confirmed formal application "
+            + ("has" if missing_answers == 1 else "have") + " no answer drafts")
     unconfirmed_answer_routes = readiness["answers_on_unconfirmed_application_routes"]
     if unconfirmed_answer_routes:
         review_items.append(
-            f"{unconfirmed_answer_routes} answer draft(s) are held because their "
-            "route application and applicant are unconfirmed")
+            _brief_count(unconfirmed_answer_routes, "answer draft")
+            + (" is" if unconfirmed_answer_routes == 1 else " are")
+            + " held because the route application and applicant are unconfirmed")
     unconfirmed_scopes = readiness["actions_scope_unconfirmed"]
     if unconfirmed_scopes:
         review_items.append(
-            f"{unconfirmed_scopes} open action(s) need scope confirmation; "
-            "they are not current work until classified as campaign-wide or route-specific")
+            f"{_brief_count(unconfirmed_scopes, 'open action')} "
+            + ("needs" if unconfirmed_scopes == 1 else "need")
+            + " scope confirmation; classify "
+            + ("it" if unconfirmed_scopes == 1 else "them")
+            + " as campaign-wide or route-specific before treating "
+            + ("it" if unconfirmed_scopes == 1 else "them") + " as current work")
     phase_reviews = readiness["actions_submission_phase_review"]
     if phase_reviews:
         review_items.append(
-            f"{phase_reviews} unfinished pre-submission action(s) on submitted route(s) need review; "
-            "only a person-marked after-submission follow-up counts as current")
+            _brief_count(phase_reviews, "unfinished pre-submission action")
+            + (" on a submitted route needs" if phase_reviews == 1
+               else " on submitted routes need")
+            + " review; only a person-marked after-submission follow-up "
+            "counts as current")
     phase_reclassification = readiness["actions_phase_reclassification"]
     if phase_reclassification:
         review_items.append(
-            f"{phase_reclassification} post-submission action(s) on active route(s) need reclassification "
-            "before they can return to current work")
+            _brief_count(phase_reclassification, "post-submission action")
+            + (" on an active route needs" if phase_reclassification == 1
+               else " on active routes need")
+            + " reclassification before returning to current work")
     inactive_route_actions = readiness["actions_inactive_route_review"]
     if inactive_route_actions:
         review_items.append(
-            f"{inactive_route_actions} open action(s) are held on closed, paused or not-pursued routes; "
-            "move continuing work to a current scope or explicitly put it on hold; "
+            _brief_count(inactive_route_actions, "open action")
+            + (" is held on a closed, paused or not-pursued route; "
+               if inactive_route_actions == 1 else
+               " are held on closed, paused or not-pursued routes; ")
+            + "move continuing work to a current scope or explicitly put it on hold; "
             "mark Done only when completed")
     window_count = readiness["application_windows_to_check"]
     if window_count:
         review_items.append(
-            f"{window_count} active application window(s) need current official wording "
-            "and a dated check within 90 days")
+            _brief_count(window_count, "active application window")
+            + (" needs" if window_count == 1 else " need")
+            + " current official wording and a dated check within 90 days")
     if not budget["items"]:
         review_items.append("No quoted amounts are linked to active opportunities; "
                             "the current quoted subtotal is unknown")
@@ -1342,19 +1378,27 @@ def _render_decision_brief(document: dict, readiness: dict,
     review_items.append(budget["amount_basis_note"])
     if readiness["budget_amount_basis_review"]:
         review_items.append(
-            f"{readiness['budget_amount_basis_review']} quoted budget group(s) "
-            "have an application amount basis unqualified in Sinter; "
+            _brief_count(readiness["budget_amount_basis_review"],
+                         "quoted budget group")
+            + ": application amount basis unqualified in Sinter; "
             "this is not a finding of missing GST wording or a tax error")
     if readiness["quoted_subtotals_above_ceiling"]:
         review_items.append(
-            f"{readiness['quoted_subtotals_above_ceiling']} current quoted subtotal(s) "
-            "are numerically above the recorded AUD ceiling(s); the application "
-            "comparison remains unqualified")
+            _brief_count(readiness["quoted_subtotals_above_ceiling"],
+                         "current quoted subtotal")
+            + (" is numerically above its recorded AUD ceiling; the application "
+               "comparison remains unqualified"
+               if readiness["quoted_subtotals_above_ceiling"] == 1 else
+               " are numerically above their recorded AUD ceilings; application "
+               "comparisons remain unqualified"))
     if readiness["funding_currency_review"]:
         review_items.append(
-            f"{readiness['funding_currency_review']} active funding ceiling(s) "
-            "cannot be compared with AUD project costs; review currencies and "
-            "funding terms separately, without an assumed conversion")
+            _brief_count(readiness["funding_currency_review"],
+                         "active funding ceiling")
+            + " cannot be compared with AUD project costs; review "
+            + ("the currency" if readiness["funding_currency_review"] == 1
+               else "currencies")
+            + " and funding terms separately, without an assumed conversion")
     lines.extend(["## Open review items",
                   *["- " + item for item in review_items]])
 
@@ -1388,12 +1432,17 @@ def _render_decision_brief(document: dict, readiness: dict,
         portfolio = _portfolio_summary(document["assets"])
         lines.extend([
             "## Portfolio IP workstream · separate from funding eligibility",
-            f"{portfolio['assets_total']} assets recorded · "
-            f"{portfolio['rights_records_unverified']} rights records unverified · "
-            f"{portfolio['contributor_records_unverified']} contributor records unverified · "
-            f"{portfolio['prior_art_not_started']} prior-art screens not started · "
-            f"{portfolio['disclosure_dates_unknown']} disclosure dates unknown · "
-            f"{portfolio['assets_without_funding_routes']} assets not linked to a funding route.",
+            _brief_count(portfolio["assets_total"], "asset") + " recorded · "
+            + _brief_count(portfolio["rights_records_unverified"], "rights record")
+            + " unverified · "
+            + _brief_count(portfolio["contributor_records_unverified"],
+                           "contributor record") + " unverified · "
+            + _brief_count(portfolio["prior_art_not_started"], "prior-art screen")
+            + " not started · "
+            + _brief_count(portfolio["disclosure_dates_unknown"], "disclosure date")
+            + " unknown · "
+            + _brief_count(portfolio["assets_without_funding_routes"], "asset")
+            + " not linked to a funding route.",
             "These are planning records. Public pages and preliminary searches do "
             "not establish ownership, novelty, patentability or freedom to operate.",
         ])
@@ -1489,7 +1538,7 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                       + _application_workflow_description(item),
                       "Application window: " + _window_description(
                           item, document["sources"])
-                      + " · Cash award / ceiling: " + _route_amount(item),
+                      + " · Recorded funding amount / ceiling: " + _route_amount(item),
                       "Decision window: " + _inline(item["decision_window"]
                                                     or "Not confirmed"),
                       _link(item["url"], "Programme details")])
