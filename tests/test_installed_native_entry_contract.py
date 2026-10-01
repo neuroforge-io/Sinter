@@ -5,7 +5,7 @@ import copy
 import io
 import json
 import os
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 
 import pytest
@@ -169,7 +169,7 @@ def inner_fixture(tmp_path):
             ensure_ascii=False,
             indent=2 if formatted else None,
         ) + ("\n" if formatted else "")
-        (path / "preferences.json").write_text(preferences, encoding="utf-8")
+        (path / "preferences.json").write_bytes(preferences.encode("utf-8"))
         documents.append(document)
         snapshots.append(native.retained_workspace_snapshot(path))
     diag = {
@@ -530,6 +530,23 @@ def test_closed_inner_semantics_accept_only_complete_synthetic_controls(tmp_path
         "passed" not in result
         and result["scope"] == "installed Linux native-entry command only"
     )
+
+
+def test_synthetic_preference_originals_ignore_host_text_newline_conversion(
+    tmp_path, monkeypatch
+):
+    original_write = Path.write_text
+
+    def windows_text_write(path, text, *args, **kwargs):
+        if path.name == "preferences.json":
+            return path.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+        return original_write(path, text, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", windows_text_write)
+    receipt, source, package, pins = inner_fixture(tmp_path)
+    result = contract.validate_inner(receipt, source, package, 7, pins)
+    assert result["entry_pids"] == [1001, 1002, 1003, 1004]
+    assert b"\r\n" not in (tmp_path / "mapped/preferences.json").read_bytes()
 
 
 @pytest.mark.parametrize(

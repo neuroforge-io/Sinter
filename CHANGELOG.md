@@ -26,6 +26,14 @@ qualification and does not change any published RC3 asset or historical receipt.
   resources for process-group, FIFO and private-permission tests. Portable byte,
   JSON, type and lifecycle checks stay active. Fresh hosted replay is required.
 
+- Keep scoped recovery readers isolated from account settings while retaining
+  Windows Python bootstrap and explicit UTF-8 output. Preserve exact synthetic
+  preference bytes across host newline conventions, and keep mocked Linux mount
+  paths separate from host paths. All archive-origin refusals also run as portable
+  byte controls; actual process-group checks retain their explicit resource limits.
+  Independent source review and a fresh ten-lifetime offline rehearsal pass.
+  Repaired Windows replay and installed qualification remain pending.
+
 - Save source-recovery evidence with explicit UTF-8 and stable newlines, keeping
   complete literal Unicode originals and atomic replacement. Reproduce the Windows
   default-encoding failure without changing historical writers or stored work.

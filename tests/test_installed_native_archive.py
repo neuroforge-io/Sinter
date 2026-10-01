@@ -4,6 +4,7 @@ import base64
 import copy
 import io
 import json
+import os
 import tarfile
 from pathlib import PurePosixPath, PureWindowsPath
 
@@ -66,6 +67,10 @@ def fixture(tmp_path, monkeypatch):
     return source, repository, rows, archive, identity
 
 
+@pytest.mark.skipif(
+    not hasattr(os, "killpg"),
+    reason="Actual Linux qualification child capture requires POSIX process groups.",
+)
 def test_actual_fixed_archive_reader_keeps_exact_originals_and_source(
     tmp_path, monkeypatch
 ):
@@ -183,6 +188,10 @@ def test_unsupported_archive_members_or_source_overrides_refuse(
         "origin_symlink",
     ],
 )
+@pytest.mark.skipif(
+    not hasattr(os, "killpg"),
+    reason="Actual Linux qualification archive child requires POSIX process groups.",
+)
 def test_claimed_archive_origin_never_substitutes_for_originals(
     tmp_path, monkeypatch, attack
 ):
@@ -215,6 +224,56 @@ def test_claimed_archive_origin_never_substitutes_for_originals(
         path.symlink_to(saved)
     with pytest.raises((ValueError, OSError)):
         owner.archive_source_identity(repository, COMMIT, [])
+
+
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "wrong_revision",
+        "wrong_source",
+        "bool_bytes",
+        "wrong_hash",
+        "extra_field",
+        "duplicate_field",
+        "archive_symlink",
+        "origin_symlink",
+    ],
+)
+def test_portable_original_origin_checks_do_not_require_process_groups(
+    tmp_path, monkeypatch, attack
+):
+    # Feed the exact on-disk archive through a synthetic command observation.
+    # All actual-child controls above still run on POSIX; this checks the
+    # portable byte/origin refusals on every host without claiming a child ran.
+    def read_archive(argv, commands, **_kwargs):
+        commands.append({"stderr": {"bytes": 0}})
+        return 0, (tmp_path / "repository" / owner.ARCHIVE_NAME).read_bytes()
+
+    monkeypatch.setattr(owner, "command", read_archive)
+    test_claimed_archive_origin_never_substitutes_for_originals(
+        tmp_path, monkeypatch, attack
+    )
+
+
+def test_portable_archive_original_positive_keeps_exact_bytes(tmp_path, monkeypatch):
+    _source, repository, _rows, archive, expected = fixture(tmp_path, monkeypatch)
+    calls = []
+
+    def read_archive(argv, commands, **kwargs):
+        calls.append((list(argv), kwargs))
+        commands.append({"stderr": {"bytes": 0}})
+        return 0, archive
+
+    monkeypatch.setattr(owner, "command", read_archive)
+    observed = {}
+    assert owner.archive_source_identity(repository, COMMIT, [], observed) == expected
+    assert len(calls) == 1
+    assert calls[0][0][-1] == repository / owner.ARCHIVE_NAME
+    assert calls[0][1]["limit"] == owner.MAX_ARCHIVE
+    assert (
+        contract.full_bytes(observed["origin"])
+        == (repository / owner.ORIGIN_NAME).read_bytes()
+    )
 
 
 def archive_receipt(tmp_path):

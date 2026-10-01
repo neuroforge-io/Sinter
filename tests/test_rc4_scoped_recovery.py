@@ -14,6 +14,7 @@ import pytest
 from sinter.casebooks import Casebooks, validate
 from sinter.server import make_server
 from sinter.store import Store
+from tools import published_rc3_fixture as published_fixture
 from tools import rc4_recovery_source as base
 from tools import rc4_scoped_recovery_contract as contract
 from tools import rc4_scoped_recovery_source as producer
@@ -152,6 +153,78 @@ def test_current_native_and_python_refuse_cli_preserves(seeded, tmp_path):
     assert contract.equal(
         contract.seed_projection(snapshot(data), initial["snapshot"]),
         initial["snapshot"],
+    )
+
+
+def test_scoped_cli_reader_environment_keeps_only_windows_bootstrap(
+    tmp_path, monkeypatch
+):
+    fictional_home = tmp_path / "fictional-home"
+    monkeypatch.setattr(
+        published_fixture,
+        "os",
+        SimpleNamespace(
+            name="nt",
+            defpath="fixed-python-path",
+            environ={
+                "SYSTEMROOT": "/fictional/windows",
+                "HOME": "/caller/home",
+                "USERPROFILE": "/caller/profile",
+                "OPENAI_API_KEY": "fictional-excluded",
+                "NEUROFORGE_BASE_URL": "https://excluded.invalid",
+            },
+        ),
+    )
+    assert worker.cli_reader_environment(fictional_home) == {
+        "PATH": "fixed-python-path",
+        "SystemRoot": "/fictional/windows",
+        "USERPROFILE": str(fictional_home.resolve()),
+        "HOME": str(fictional_home),
+    }
+
+
+def test_scoped_actual_cli_readers_use_explicit_utf8_and_isolated_home(
+    seeded, tmp_path, monkeypatch
+):
+    data, _, _ = seeded
+    original_run = subprocess.run
+    observations = []
+    control = tmp_path / "process 🐝 é" / "run-1.json"
+    control.parent.mkdir()
+
+    def observed_run(command, **kwargs):
+        assert command[1:8] == [
+            "-I",
+            "-S",
+            "-B",
+            "-X",
+            "utf8",
+            str(worker.__file__),
+            "--cli-child",
+        ]
+        assert kwargs["env"] == worker.cli_reader_environment(tmp_path / "home")
+        assert not any("KEY" in key for key in kwargs["env"])
+        result = original_run(command, **kwargs)
+        observations.append(result)
+        return result
+
+    monkeypatch.setattr(worker.subprocess, "run", observed_run)
+    worker.after_stop(SimpleNamespace(data=data, source=producer.ROOT, control=control))
+    assert len(observations) == 4
+    assert all(result.returncode == 0 for result in observations)
+    assert [result.stderr for result in observations] == [
+        b"",
+        b"",
+        b"Ready for review\n",
+        ("Saved: " + str(control.with_suffix(".cli-export.json")) + "\n").encode(
+            "utf-8"
+        ),
+    ]
+    envelopes = [json.loads(result.stdout.decode("utf-8")) for result in observations]
+    assert all("🐝" in json.dumps(row, ensure_ascii=False) for row in envelopes[:3])
+    assert "🐝" in json.dumps(
+        json.loads(control.with_suffix(".cli-export.json").read_text(encoding="utf-8")),
+        ensure_ascii=False,
     )
 
 

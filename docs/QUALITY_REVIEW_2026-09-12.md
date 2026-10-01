@@ -1406,3 +1406,48 @@ Root's combined current-main rehearsal and native qualification suite passes
 Initial lint/format and reviewer cache-guard failures remain separate historical
 records. Fresh combined hosted replay and all installed/canonical gates remain
 required. The physical user app stays closed; hosted Sinter requests remain zero.
+
+### Following hosted replay and scoped-reader portability, 2 October
+
+Actual run `36918835852` at source
+`2c4b8f54d65646486c8246301630e4ae38a07feb` completes all Linux and macOS Python
+jobs and the Chromium workflow job successfully. Each Python job contains 3,674
+cases. Linux has 3,665 passes and nine explicit skips; macOS has 3,346 passes and
+328 skips. Each Windows job still has sixteen failures and 382 skips. The original
+full Windows logs and independently API-digest-verified ZIP/XMLs remain unchanged;
+this source replay does not qualify an installed platform.
+
+The remaining Windows failures concern test and reader setup: actual POSIX child
+capture in archive controls, text-mode newline conversion of synthetic original
+preferences, host path syntax inside a mocked Linux container, and isolated CLI
+children missing Windows Python bootstrap. A separate five-path QA repair keeps
+all contract and privilege checks unchanged. The actual archive-child controls
+require process-group support; their exact byte/origin checks also execute on
+every platform through explicitly synthetic observations. Preference fixtures
+write original UTF-8 bytes. Mocked Docker paths use their Linux namespace. Scoped
+readers reuse the reviewed fictional environment helper, retain only required
+Windows bootstrap, and request explicit UTF-8 mode under isolated Python.
+
+Independent review accepts the exact source repair at
+`a27e8687ec11ff76850ac06158afd63bbaf7b8f10badd4ef39ecbf893684c4c1`.
+It verifies all 435 unrelated files against the 440-file original Git archive,
+conserves all old function bodies except the three declared setup/reader changes,
+and passes 349 unique Linux checks with no skips. Three new behavioral controls
+fail against the old code; they are part of that total. Root's current-main replay
+also passes those 349 checks in 25.22 seconds. The new CLI check operates four real
+readers with a Unicode export path, original decoded JSON and the exact existing
+progress diagnostics. Initial incorrect collector assumptions about empty stderr
+and unescaped JSON, a formatter cache, and a wrong externally supplied manifest pin
+remain retained setup failures; none is presented as an application defect.
+
+A fresh private source rehearsal exercises all ten campaign/scoped app lifetimes
+and 137 bound artifacts. Its source-only receipt is
+`6df13c6f73cd01474832fa1957cecbac19b825b76c1028147dfa993132382c26`.
+The independently observed ten PIDs are absent and all ten owned listeners are
+closed afterward. Complete original work, selected/empty/all question choices,
+uncertain save/quit recovery, historical reviews, separate restores and preference
+bytes remain conserved. This proof binds the pre-documentation source snapshot
+and its external manifest, not a later commit or installed binary. Fresh repaired
+hosted replay, the three installed adapters and closed canonical release admission
+remain separate gates. The physical user app stays closed and Sinter model calls
+remain zero.

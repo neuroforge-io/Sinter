@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +14,13 @@ from tools import rc4_recovery_worker as worker  # noqa: E402
 
 TITLE = "Fictional scoped recovery handover"
 FRIENDLY = "no choices were cleared"
+
+
+def cli_reader_environment(home):
+    """Use fictional home and Windows Python bootstrap, without caller accounts."""
+    from tools.published_rc3_fixture import seed_environment
+
+    return {**seed_environment(home), "HOME": str(home)}
 
 
 def after_stop(args):
@@ -156,6 +162,8 @@ def after_stop(args):
             "-I",
             "-S",
             "-B",
+            "-X",
+            "utf8",
             str(Path(__file__)),
             "--cli-child",
             str(args.source),
@@ -165,7 +173,7 @@ def after_stop(args):
         ]
         proc = subprocess.run(
             command,
-            env={"PATH": os.defpath, "HOME": str(args.data.parent / "home")},
+            env=cli_reader_environment(args.data.parent / "home"),
             stdin=subprocess.DEVNULL,
             capture_output=True,
             timeout=20,

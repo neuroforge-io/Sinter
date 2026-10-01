@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+from pathlib import PurePosixPath
 from types import SimpleNamespace
 
 import pytest
@@ -239,7 +240,9 @@ def test_owned_cleanup_targets_only_actual_id_and_keeps_primary_failure(
 ):
     identifier = "2" * 64
     fixture, pins = outer_fixture()
-    pins.update(outer.pins_for(tmp_path, "a" * 64))
+    # No filesystem access occurs in this mocked Linux lifecycle. Keep its
+    # Docker mount namespace independent from the host's temporary path syntax.
+    pins.update(outer.pins_for(PurePosixPath("/owned/fictional-linux"), "a" * 64))
     observed = json.loads(contract.stream_bytes(fixture["commands"][2]["stdout"]))[0]
     observed["Image"] = outer.IMAGE_ID
     name = "sinter-native-entry-abcdef012345"

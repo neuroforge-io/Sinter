@@ -27,6 +27,14 @@ Current reader inventory:
 | `NativeController` project open/import/text-add/save/build/export | It cannot preserve v2 as an editor. Actual current source seams refuse open/import, a dirty v1 resave/build over stored v2, and direct scoped-local text-add/save/build/export. Dirty local inputs and identities remain intact. No Tk or installed native claim follows. |
 | Catalogue listing, explicit deletion, saved report operations | Listing exposes metadata, deletion is an explicit destructive operation, and reports preserve retained source context. They are not unsupported scoped-project readers. This rehearsal does not delete or reimport reports. |
 
+The supporting CLI readers use isolated Python with explicit UTF-8 mode and a
+fictional home. On Windows, the already reviewed fixture environment retains only
+the required interpreter bootstrap and points the user profile at fictional data;
+it never inherits caller account or provider settings. Focused tests execute those
+portable reader seams, including a Unicode export path and exact existing progress
+diagnostics. The full ten-lifetime producer remains a Linux source rehearsal; these
+unit controls do not qualify a Windows or macOS installed application.
+
 The separate receipt is `sinter-rc4-scoped-casebook-source/v1`. Its closed artifact inventory and semantic validator require the complete original typed SQLite rows, raw JSON/history, persistent `user_version/application_id/encoding/page_size`, exact preferences file/public-model settings, supported source choices, actual saved report identity, separate recovery IDs and real process cleanup. It refuses installed/native/prior-replacement/candidate/release flags. Hash checks alone do not establish these semantics.
 
 Remaining boundaries: this is headless source Chromium at 390 px, with the OS opener captured. No installed packaging, physical menu/native transitions, provider/key use, scheduler polling, exact-E binary replacement, Windows/Mac qualification, browser policy acceptance or canonical RC4 admission is established. Project lost-save/quit response variants and pending unapplied report edits are not inferred from the separately executed campaign variants. A project backup carries project inputs; a report's applied wording is saved/exported separately. Future installed producers must execute and bind those required routes against the final frozen package rather than relabel this receipt.
