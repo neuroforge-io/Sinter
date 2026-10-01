@@ -1,7 +1,7 @@
 {
   "schema": "sinter-native-signal-source-acceptance/v1",
   "base_source_commit": "57781a88d70f7c99e95011f3ec6b8fd98e9c2d25",
-  "scope": "Exact2pathSIGTERMrepair and neutralDEBdescription onannouncementpolish. Source acceptance only; no freshfrozen/installedqualification.",
+  "scope": "Exact two-path SIGTERM repair and neutral Debian description on the Word announcement polish. Source acceptance only; no fresh frozen or installed qualification.",
   "changed_paths_sha256": {
     "src/sinter/native_window.py": "bee815475dc6091139e7d67759b099c9a0d93f5df86ba9cae8d5e39ef93ca74d",
     "tests/test_native_window.py": "ad101ec20c0c2ee717754755016c8e1e1b96a76fe863cd85dc4bfb2a40874aeb",
@@ -14,7 +14,7 @@
       "passed": 2842,
       "skipped": 8,
       "setup_errors": 7,
-      "reason": "ENOSPC whilecreatingtestdirectories"
+      "reason": "No space left on the shared temporary filesystem while creating test directories."
     },
     "unchanged_source_explicit_retry": {
       "passed": 7,
@@ -33,9 +33,9 @@
     "review_sha256": "b11b7cf85fcbda764a707afb294c61633b2d298344322bde2db4b0ffa71c7ce2"
   },
   "remaining_limits": [
-    "Finalfrozenandinstalledwindow/workflow/upgradequalificationrequired",
-    "Existingdirectwidgetdestructionandtimer-cancellationfaultlimitsremain",
-    "Modaldialoginterruptionandinfiniteidlestarvationuntested"
+    "Final frozen and installed window, workflow and upgrade qualification required.",
+    "Existing direct widget destruction and timer-cancellation exception-cleanup limits remain.",
+    "Modal dialog interruption and indefinite idle starvation remain untested."
   ],
   "source_manifest_sha256": "0795cdaed365bde84da6bbeccb2e6b0db0fafa81ebd23f73da756a2865604ffb"
 }
