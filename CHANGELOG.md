@@ -8,7 +8,9 @@ qualification and does not change any published RC3 asset or historical receipt.
 - Create the private Word-copy lock exclusively, then open an existing lock
   without creation flags. Preserve file checks, distinct copies and explicit
   retry semantics. Concurrent and unsafe-file regressions cover the source
-  implementation; fresh macOS qualification is still required.
+  implementation. Fresh macOS 3.10/3.13 source CI at `bd648f8` executes all
+  29 Word-copy tests successfully; this does not qualify a macOS installer or
+  establish the original intermittent failure's precise cause.
 - Separate the historical D9 audit from reusable release callers. Retain its
   original source, package and clean-install evidence, then explicitly refuse
   current-release staging with exit `3`; do not manufacture a final independent

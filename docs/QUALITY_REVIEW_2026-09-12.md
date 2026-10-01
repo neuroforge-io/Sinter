@@ -888,3 +888,40 @@ identifies absent question-to-source/Word navigation and costly manual recovery.
 This is a bounded offline workflow score, not a whole-product, native editing,
 customer-device, live ChatGPT or hosted-model quality rating. Further improvement
 continues; no 10/10 or completion of the broader quality goal is claimed.
+
+### 1 October: post-publication source checkpoint and held prototypes
+
+Source development is now `0.5.4rc4.dev0`; the published RC3 source and eight
+assets remain unchanged. Exact source `e0076d2b450076d27ae226062c4df0ce8f334419`
+passes 3,023 Python tests with eight explicitly scoped GUI/Windows-wrapper skips
+in 160.21 seconds. Its 394 canonical files remain unchanged after testing. An
+actual isolated Chromium Word-copy recovery journey passes all 50 checks with
+no external requests, unchanged originals and byte-identical source inputs.
+These are source regressions, not a new installer qualification.
+
+The new exclusive-create/non-creating-open lock path retains ownership, link,
+file-type and permission refusal, distinct saved copies and explicit retry.
+Independent Linux review passes 93 focused tests and 50 synchronized/fault
+checks. Independently retrieved, digest-verified artifacts from
+[macOS source CI](https://github.com/neuroforge-io/Sinter/actions/runs/36849849584)
+bind both Python jobs to `bd648f854aacdefafcf661172464c41b00e18e76`: each records
+2,706 passes and 322 skips; all 29 Word-copy cases, including the original
+concurrency test, run and pass without skips. The old E failure remains retained.
+This supports the narrow source repair, without proving the original Darwin
+cause, impossibility of intermittent failure, or installed macOS compatibility.
+
+The historical D9 auditor now retains original package/source and clean-install
+evidence, then refuses current-release staging with a friendly exit `3`. It
+cannot manufacture independent review or E's workflow/v2 qualification. Its
+complete 39-test authored proposal also passes independent replay and twelve
+additional conservation/refusal probes; current composed tests retain the
+separate reusable release-caller permission check.
+
+Two private improvements remain held. Focused Word-navigation checks missed
+40 historical report/qualification integration failures, prompting an explicit
+new presentation identity and a separate closed workflow revision. Independent
+review of a native-to-browser shortcut also reproduces a save committing after
+the native owner closes. Neither prototype is in this source checkpoint or the
+published preview. They require corrected integration and shutdown evidence
+before adoption. The user's intentional app closure was not treated as a crash;
+no physical app reopening or hosted generation was used in these checks.
