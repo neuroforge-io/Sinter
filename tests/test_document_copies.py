@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -244,3 +245,138 @@ def test_concurrent_saves_are_distinct_bounded_and_exact(tmp_path):
     assert all(Path(result["path"]).read_bytes() == expected for result in results)
     assert len(exported(tmp_path)) == 8
     assert not list((tmp_path / "exports").glob("*.tmp"))
+
+
+def test_modeled_combined_lock_creation_failure_is_avoided(tmp_path, monkeypatch):
+    # Model the observed Darwin ENOENT at combined create/open. This establishes
+    # the failing call boundary, not a proven explanation of the hosted failure.
+    folder = tmp_path / "exports"
+    folder.mkdir(mode=0o700)
+    original_open = os.open
+    attempts = []
+
+    def modeled_open(path, flags, mode=0o777, *, dir_fd=None):
+        if path == ".word-copy.lock":
+            attempts.append(flags)
+            if flags & os.O_CREAT and not flags & os.O_EXCL:
+                raise FileNotFoundError(errno.ENOENT, "modeled create/open race", path)
+        return original_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(copies.os, "open", modeled_open)
+    folder_fd = original_open(folder, os.O_DIRECTORY | os.O_RDONLY)
+    try:
+        with pytest.raises(FileNotFoundError, match="modeled create/open race"):
+            modeled_open(
+                ".word-copy.lock",
+                os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK,
+                0o600,
+                dir_fd=folder_fd,
+            )
+    finally:
+        os.close(folder_fd)
+    attempts.clear()
+    result = copies.save_word_copy(tmp_path, PAYLOAD)
+    assert len(attempts) == 1 and attempts[0] & os.O_EXCL
+    assert Path(result["path"]).read_bytes() == export_docx(PAYLOAD).content
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_lock_creation_is_exclusive_and_existing_open_does_not_create(
+    tmp_path, monkeypatch, existing
+):
+    folder = tmp_path / "exports"
+    folder.mkdir(mode=0o700)
+    lock = folder / ".word-copy.lock"
+    if existing:
+        lock.write_bytes(b"existing private lock; retain exact bytes")
+        lock.chmod(0o600)
+        before = lock.stat()
+    original_open = os.open
+    attempts = []
+
+    def tracked_open(path, flags, mode=0o777, *, dir_fd=None):
+        if path == ".word-copy.lock":
+            attempts.append((flags, mode))
+        return original_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(copies.os, "open", tracked_open)
+    result = copies.save_word_copy(tmp_path, PAYLOAD)
+    base = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK
+    expected = [(base | os.O_CREAT | os.O_EXCL, 0o600)]
+    if existing:
+        expected.append((base, 0o777))
+        after = lock.stat()
+        assert (before.st_dev, before.st_ino) == (after.st_dev, after.st_ino)
+        assert lock.read_bytes() == b"existing private lock; retain exact bytes"
+    assert attempts == expected
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o600
+    assert Path(result["path"]).read_bytes() == export_docx(PAYLOAD).content
+
+
+@pytest.mark.parametrize("stage", ["creation", "existing"])
+def test_missing_lock_path_is_not_retried_or_recreated(tmp_path, monkeypatch, stage):
+    original_open = os.open
+    attempts = []
+
+    def missing_open(path, flags, mode=0o777, *, dir_fd=None):
+        if path != ".word-copy.lock":
+            return original_open(path, flags, mode, dir_fd=dir_fd)
+        attempts.append(flags)
+        if stage == "existing" and flags & os.O_EXCL:
+            raise FileExistsError(errno.EEXIST, "modeled competing creation", path)
+        raise FileNotFoundError(errno.ENOENT, "modeled missing lock path", path)
+
+    monkeypatch.setattr(copies.os, "open", missing_open)
+    with pytest.raises(ValueError, match="not be confirmed") as caught:
+        copies.save_word_copy(tmp_path, PAYLOAD)
+    assert isinstance(caught.value.__cause__, FileNotFoundError)
+    base = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK
+    assert attempts == [base | os.O_CREAT | os.O_EXCL] + (
+        [base] if stage == "existing" else []
+    )
+    assert exported(tmp_path) == []
+    assert list((tmp_path / "exports").iterdir()) == []
+
+
+@pytest.mark.parametrize("kind", ["public", "hardlink", "fifo", "owner"])
+def test_existing_lock_safety_checks_survive_exclusive_creation_fallback(
+    tmp_path, monkeypatch, kind
+):
+    folder = tmp_path / "exports"
+    folder.mkdir(mode=0o700)
+    lock = folder / ".word-copy.lock"
+    if kind == "fifo":
+        os.mkfifo(lock, 0o600)
+    else:
+        lock.write_bytes(b"unsafe lock must stay unchanged")
+        lock.chmod(0o600)
+        if kind == "public":
+            lock.chmod(0o644)
+        elif kind == "hardlink":
+            os.link(lock, tmp_path / "fictional-lock-link")
+        elif kind == "owner":
+            original_fstat = os.fstat
+
+            def different_owner(fd):
+                information = original_fstat(fd)
+                if stat.S_ISREG(information.st_mode):
+                    fields = list(information)
+                    fields[4] = information.st_uid + 1
+                    return os.stat_result(fields)
+                return information
+
+            monkeypatch.setattr(copies.os, "fstat", different_owner)
+    before = lock.stat()
+    with pytest.raises(ValueError, match="lock is unsafe"):
+        copies.save_word_copy(tmp_path, PAYLOAD)
+    after = lock.stat()
+    assert (before.st_dev, before.st_ino, before.st_mode, before.st_nlink) == (
+        after.st_dev,
+        after.st_ino,
+        after.st_mode,
+        after.st_nlink,
+    )
+    if kind != "fifo":
+        assert lock.read_bytes() == b"unsafe lock must stay unchanged"
+    assert exported(tmp_path) == []
+    assert not list(folder.glob("*.tmp"))
