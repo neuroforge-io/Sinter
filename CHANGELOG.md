@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.4rc4.dev0 - source development, no published installer
+
+This development source follows the frozen RC3 release. It has no new installed
+qualification and does not change any published RC3 asset or historical receipt.
+
+- Create the private Word-copy lock exclusively, then open an existing lock
+  without creation flags. Preserve file checks, distinct copies and explicit
+  retry semantics. Concurrent and unsafe-file regressions cover the source
+  implementation; fresh macOS qualification is still required.
+- Separate the historical D9 audit from reusable release callers. Retain its
+  original source, package and clean-install evidence, then explicitly refuse
+  current-release staging with exit `3`; do not manufacture a final independent
+  review or claim E's newer Word workflow for that historical artifact.
+
 ## 0.5.4rc3 - published Linux x64 preview
 
 Published from `246b91e0ee432cb1f6f6fcd17425f55cd7a4cabe` on 1 October 2026.

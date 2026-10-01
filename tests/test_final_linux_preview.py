@@ -197,6 +197,11 @@ def test_readonly_reusable_release_caller_can_validate_every_native_job():
     assert "github.event_name == 'pull_request'" in job
     assert "github.event.pull_request.head.repo.full_name == github.repository" in job
     assert "qualification/linux-rc3-caller-fix-20261001" in job
+    assert "historical D9 audit and staging refusal" in job
+    assert "linux-rc3-historical-d9-audit" in job
+    assert "final-qualification/clean-proof/" in job
+    assert "final-qualification/stage/" not in job
+    assert "final-qualification/independent-review/" not in job
 
 
 def test_single_linux_target_is_rejected_by_unchanged_full_publisher(tmp_path):
