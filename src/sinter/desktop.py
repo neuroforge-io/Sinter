@@ -206,7 +206,26 @@ def main(argv=None) -> int:
 
         cli_main(arguments)
         return 0
-    parser = argparse.ArgumentParser(prog="Sinter")
+    from .cli import build_parser
+
+    parser = argparse.ArgumentParser(
+        prog="Sinter",
+        description=(
+            "Open the native workspace with no arguments, "
+            "or use the shared commands below."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Command-line work (the same executable and runtime):\n\n"
+            + build_parser(prog="Sinter").format_help()
+            + "\nExamples:\n"
+            "  Sinter operations --format json\n"
+            "  Sinter status --directory ./workspace --format json\n"
+            "  Sinter run casebooks.list --directory ./workspace --format json\n"
+            "  Sinter app --mode native --directory ./workspace\n"
+            "\nUse Sinter COMMAND --help for command-specific options."
+        ),
+    )
     parser.add_argument("--self-test", metavar="RECEIPT")
     parser.add_argument(
         "--no-browser",
