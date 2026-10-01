@@ -22,6 +22,7 @@ import sqlite3
 import subprocess
 import tempfile
 import time
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import BinaryIO
@@ -409,7 +410,9 @@ def workspace_snapshot(workspace: Path) -> dict[str, str | int]:
     """Read original preference bytes and all logical SQLite schema/row bytes."""
     preferences = (workspace / "preferences.json").read_bytes()
     path = workspace / "workspace.sqlite3"
-    with sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True) as db:
+    with closing(
+        sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
+    ) as db:
         if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
             raise RuntimeError("The fictional saved workspace failed SQLite integrity.")
         version = db.execute("PRAGMA user_version").fetchone()[0]

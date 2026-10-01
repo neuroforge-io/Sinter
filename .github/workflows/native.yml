@@ -9,6 +9,47 @@ concurrency:
   group: native-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  final_rc3:
+    name: Linux x64 / independent clean install and sealed plan
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'qualification/linux-rc3-final-20261001'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Retrieve only the immutable original public synthetic evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/neuroforge-io/Sinter/actions/artifacts/11144194440/zip > original-rc3.zip
+          git fetch --no-tags https://github.com/neuroforge-io/Sinter.git d9b36a6853bab0d715dc91e726f984a8ab16a747
+      - name: Independently install without system Python and verify the sealed plan
+        run: python -B tools/finalize_linux_preview.py --artifact original-rc3.zip --output final-qualification
+      - name: Retain exact staged assets and honest partial proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-rc3-canonical-stage
+          path: |
+            final-qualification/stage/
+            final-qualification/independent-review/
+            final-qualification/clean-proof/
+            final-qualification/final-qualification.json
+          if-no-files-found: warn
+          retention-days: 14
   desktop:
     name: ${{ matrix.os }} / ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
@@ -75,7 +116,8 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.head_ref == 'qualification/linux-rc3-20261001'
+      (github.head_ref == 'qualification/linux-rc3-20261001' ||
+       github.head_ref == 'qualification/linux-rc3-final-20261001')
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:

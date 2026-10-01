@@ -17,6 +17,31 @@ explicitly false there, even when those workflow gates pass. Image preparation
 and checksum-pinned public prior downloads precede offline application tests.
 These gates cannot publish and do not establish customer-device or AI quality.
 
+The separate final qualification branch consumes the unchanged retained installed
+artifact, preserving its original build commit. Its clean Ubuntu image contains
+no system Python/account packages: inspect the actual root filesystem and package
+inventory before installation, install the exact Debian bytes with networking
+disabled, compare the complete frozen self-test JSON to the original installed
+receipt, then remove the package and owned container. Only after those checks may
+the existing canonical candidate `prepare`/`verify` produce a local stage.
+The audit tooling commit is recorded separately; it never changes the build pin
+or rewrites historical partial receipts. This CI job cannot publish a release.
+
+The final branch also runs the existing installed upgrade, workflow and recovery
+job against its newly built same-run package. That receipt binds the current
+combined source commit and binary; it is separate from the unchanged retained
+RC3 clean-install and canonical-stage proof. A retained-artifact pass cannot
+qualify later native-window or campaign changes. The current package's mapped
+native-window smoke check runs in the Linux x64 build job; its installed browser
+workflows do not establish a complete native-widget journey.
+
+RC3 retains noticed terminal libraries including tinfo/ncurses. Its independent
+review requires readline exclusion and actual terminal-library notice/reference
+bytes, checked against the Debian payload. The older RC1/RC2 independent exclusion
+requirements remain intact. The nine-target publisher must still reject Linux-only
+promotion. Use process-only `TZ=UTC` when reproducing the hosted Git source archive;
+Git ZIP timestamps depend on the archive process's timezone.
+
 The prospective candidate is Linux x64 on Ubuntu 22.04/glibc 2.35 only. Other
 platforms need their own installed evidence. Packages remain unsigned and not
 notarised; do not disable OS protections to install them.

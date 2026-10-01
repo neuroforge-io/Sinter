@@ -6,8 +6,10 @@ import argparse
 import copy
 import hashlib
 import json
+import os
 import socket
 import socketserver
+import stat
 import subprocess
 import sys
 import threading
@@ -436,7 +438,7 @@ def test_failed_installed_flow_retains_false_receipt_and_removes_container(
     assert runtime is not None and not runtime.exists()
 
 
-def actual_word_files(tmp_path):
+def actual_word_files(tmp_path, monkeypatch):
     from sinter.docx_export import export_docx
 
     runtime, output = tmp_path / "runtime", tmp_path / "output"
@@ -462,13 +464,34 @@ def actual_word_files(tmp_path):
                 }
             }
         )
-    return runtime, output, {"snapshots": rows}, content
+    # The producer admits files from a Linux guest. Model only that guest's
+    # ownership/permission metadata on every test host, retaining real bytes,
+    # size, type, link count, paths and hashes for admission and mutation checks.
+    guest_uid, metadata = 1701, {}
+    original_stat = Path.stat
+
+    def guest_stat(path, *args, **kwargs):
+        information = original_stat(path, *args, **kwargs)
+        if path.parent == exports and kwargs.get("follow_symlinks", True):
+            values = list(information)
+            fields = metadata.get(path, {})
+            values[0] = stat.S_IFMT(information.st_mode) | fields.get("mode", 0o600)
+            values[4] = fields.get("uid", guest_uid)
+            return os.stat_result(values)
+        return information
+
+    monkeypatch.setattr(flow.os, "getuid", lambda: guest_uid, raising=False)
+    monkeypatch.setattr(Path, "stat", guest_stat)
+    return runtime, output, {"snapshots": rows}, content, metadata
 
 
+@pytest.mark.parametrize("missing_native_uid", [False, True])
 def test_word_capture_reads_three_actual_private_files_and_retains_exact_bytes(
-    tmp_path,
+    tmp_path, monkeypatch, missing_native_uid
 ):
-    runtime, output, proof, content = actual_word_files(tmp_path)
+    if missing_native_uid:
+        monkeypatch.delattr(flow.os, "getuid", raising=False)
+    runtime, output, proof, content, _ = actual_word_files(tmp_path, monkeypatch)
     flow.retain_word_copies(runtime, output, proof)
     assert {path.name for path in output.iterdir()} == {
         "word-copy-applied.docx",
@@ -488,6 +511,7 @@ def test_word_capture_reads_three_actual_private_files_and_retains_exact_bytes(
         "missing",
         "hash",
         "mode",
+        "owner",
         "links",
         "symlink",
         "folder_symlink",
@@ -497,9 +521,9 @@ def test_word_capture_reads_three_actual_private_files_and_retains_exact_bytes(
     ],
 )
 def test_success_response_does_not_replace_actual_word_file_admission(
-    tmp_path, mutation
+    tmp_path, monkeypatch, mutation
 ):
-    runtime, output, proof, _ = actual_word_files(tmp_path)
+    runtime, output, proof, _, metadata = actual_word_files(tmp_path, monkeypatch)
     path = runtime / "data/exports/Fictional-0.docx"
     if mutation == "missing":
         path.unlink()
@@ -507,6 +531,9 @@ def test_success_response_does_not_replace_actual_word_file_admission(
         path.write_bytes(b"changed actual file")
     elif mutation == "mode":
         path.chmod(0o644)
+        metadata[path] = {"mode": 0o644}
+    elif mutation == "owner":
+        metadata[path] = {"uid": 1702}
     elif mutation == "links":
         (tmp_path / "other.docx").hardlink_to(path)
     elif mutation == "symlink":

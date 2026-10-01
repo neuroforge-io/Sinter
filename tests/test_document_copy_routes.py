@@ -11,9 +11,9 @@ from unittest.mock import patch
 
 import pytest
 
-from sinter import client
+from sinter import client, document_copies
 from sinter.docx_export import export_docx
-from sinter.runtime import Runtime
+from sinter.runtime import OperationError, Runtime
 from sinter.server import make_server
 
 PAYLOAD = {
@@ -24,7 +24,9 @@ ROUTE = "/api/documents/docx/save"
 
 
 @pytest.fixture
-def server(tmp_path):
+def server(tmp_path, monkeypatch, request):
+    if getattr(request, "param", None) is False:
+        monkeypatch.setattr(document_copies, "SAFE_LOCAL_SAVE", False)
     instance = make_server(port=0, directory=tmp_path)
     thread = threading.Thread(target=instance.serve_forever, daemon=True)
     thread.start()
@@ -56,15 +58,23 @@ def call(server, *, path=ROUTE, method="POST", payload=PAYLOAD, headers=None, ra
         connection.close()
 
 
+@pytest.mark.parametrize("server", [None, False], indirect=True)
 def test_exact_binary_equivalence_and_no_url_or_auth_exception(server):
     status, headers, body = call(server)
-    assert status == 200 and headers["Cache-Control"] == "no-store"
-    result = json.loads(body)
-    disk = Path(result["path"]).read_bytes()
-    assert disk == export_docx(PAYLOAD).content
-    assert hashlib.sha256(disk).hexdigest() == result["sha256"]
+    expected = export_docx(PAYLOAD).content
+    assert headers["Cache-Control"] == "no-store"
+    if document_copies.SAFE_LOCAL_SAVE:
+        assert status == 200
+        result = json.loads(body)
+        disk = Path(result["path"]).read_bytes()
+        assert disk == expected
+        assert hashlib.sha256(disk).hexdigest() == result["sha256"]
+    else:
+        assert status == 400
+        assert "Safe local Word saving is unavailable" in json.loads(body)["error"]
+        assert not (server.app.store.directory / "exports").exists()
     status, normal_headers, normal = call(server, path="/api/documents/docx")
-    assert status == 200 and normal == disk
+    assert status == 200 and normal == expected
     assert normal_headers["Content-Type"].endswith("wordprocessingml.document")
     assert "attachment;" in normal_headers["Content-Disposition"]
     assert server.app.token.encode() not in body
@@ -117,6 +127,7 @@ def test_content_type_and_existing_body_limit_are_retained(server):
     assert not (server.app.store.directory / "exports").exists()
 
 
+@pytest.mark.parametrize("server", [None, False], indirect=True)
 def test_existing_report_preferences_and_campaigns_survive_local_export(server):
     app = server.app
     campaign = app.campaigns.save(
@@ -127,7 +138,7 @@ def test_existing_report_preferences_and_campaigns_survive_local_export(server):
         name: (app.store.directory / name).read_bytes()
         for name in ["preferences.json", "campaigns.sqlite3"]
     }
-    assert call(server)[0] == 200
+    assert call(server)[0] == (200 if document_copies.SAFE_LOCAL_SAVE else 400)
     assert app.campaigns.get(campaign["id"]) == campaign
     assert all(
         (app.store.directory / name).read_bytes() == value
@@ -135,7 +146,21 @@ def test_existing_report_preferences_and_campaigns_survive_local_export(server):
     )
 
 
-def test_shared_runtime_explicit_operation_uses_the_same_private_recovery(tmp_path):
+@pytest.mark.parametrize("unsupported", [False, True])
+def test_shared_runtime_explicit_operation_uses_the_same_private_recovery(
+    tmp_path, monkeypatch, unsupported
+):
+    if unsupported:
+        monkeypatch.setattr(document_copies, "SAFE_LOCAL_SAVE", False)
     with Runtime(tmp_path) as runtime:
-        result = runtime.call("documents.docx.save", PAYLOAD)
-        assert Path(result["path"]).read_bytes() == export_docx(PAYLOAD).content
+        if document_copies.SAFE_LOCAL_SAVE:
+            result = runtime.call("documents.docx.save", PAYLOAD)
+            assert Path(result["path"]).read_bytes() == export_docx(PAYLOAD).content
+        else:
+            with pytest.raises(
+                OperationError, match="Safe local Word saving is unavailable"
+            ) as error:
+                runtime.call("documents.docx.save", PAYLOAD)
+            assert error.value.status == 400
+            assert error.value.code == "invalid_input"
+            assert not (tmp_path / "exports").exists()
