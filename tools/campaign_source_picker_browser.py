@@ -247,7 +247,17 @@ class SourcePickerChecks(CampaignChecks):
         title = "Fictional reusable source callbacks"
         before = self.start(page, title)
         chosen = before["sources"][1]
+        expect(
+            page.get_by_text(
+                "Choose the official source before adding its exact window wording "
+                "and check date. Changing or clearing the source resets both.",
+                exact=True,
+            )
+        ).to_be_visible()
         self.choose(page, "Registered source for the application window", chosen)
+        expect(
+            page.get_by_role("status", name="Application-window source change")
+        ).to_contain_text("Previous wording and its check date were cleared.")
         expect(
             page.get_by_label("Exact official wording for this window", exact=True)
         ).to_have_value("")
@@ -494,6 +504,7 @@ def main(argv: list[str] | None = None) -> None:
         "src/sinter/web/campaigns.js",
         "src/sinter/web/campaign-source-options.js",
         "src/sinter/web/campaign-requirement-source.js",
+        "src/sinter/web/campaign-window-source.js",
         "src/sinter/web/campaigns.css",
         "tools/campaign_source_picker_browser.py",
     )
