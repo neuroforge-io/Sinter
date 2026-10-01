@@ -3,6 +3,7 @@
 import hashlib
 import json
 import shutil
+import signal
 import subprocess
 import zipfile
 
@@ -153,6 +154,27 @@ def test_single_linux_target_is_rejected_by_unchanged_full_publisher(tmp_path):
     (tmp_path / "copied-prior-test.json").write_text("{}")
     with pytest.raises(ValueError, match="single Linux architecture"):
         final.publisher_negative(tmp_path)
+
+
+def test_cli_termination_unwinds_owned_cleanup_and_restores_signal_handler(
+    tmp_path, monkeypatch
+):
+    previous = signal.getsignal(signal.SIGTERM)
+    cleaned = []
+
+    def interrupted_work(*args):
+        try:
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+        finally:
+            cleaned.append(True)
+
+    monkeypatch.setattr(final, "finalize", interrupted_work)
+    with pytest.raises(KeyboardInterrupt, match="qualification interrupted"):
+        final.main(
+            ["--artifact", str(tmp_path / "original.zip"), "--output", str(tmp_path)]
+        )
+    assert cleaned == [True]
+    assert signal.getsignal(signal.SIGTERM) is previous
 
 
 @pytest.mark.parametrize(

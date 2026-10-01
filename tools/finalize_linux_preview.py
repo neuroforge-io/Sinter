@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import signal
 import sys
 import tarfile
 import time
@@ -528,9 +529,21 @@ def finalize(artifact: Path, output: Path) -> None:
     )
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
-    finalize(args.artifact, args.output)
+    args = parser.parse_args(argv)
+
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt("qualification interrupted")
+
+    previous = signal.signal(signal.SIGTERM, interrupted)
+    try:
+        finalize(args.artifact, args.output)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+if __name__ == "__main__":
+    main()
