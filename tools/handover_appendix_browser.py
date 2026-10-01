@@ -281,6 +281,16 @@ def main(argv: list[str] | None = None) -> None:
                         reopened.get_by_label(
                             "Restore a casebook backup", exact=True
                         ).set_input_files(backup_path)
+                        replace = reopened.get_by_role(
+                            "dialog", name="Replace this unsaved editor?", exact=True
+                        )
+                        expect(replace).to_be_visible()
+                        assert server.app.casebooks.get(saved["id"]) == before_restore
+                        assert server.app.store.report(historical_id) == historical
+                        replace.get_by_role(
+                            "button", name="Replace editor", exact=True
+                        ).click()
+                        expect(replace).to_be_hidden()
                         expect(
                             reopened.get_by_text(
                                 "Backup opened as a new unsaved project.", exact=True

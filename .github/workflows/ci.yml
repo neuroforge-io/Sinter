@@ -66,6 +66,10 @@ jobs:
           python-version: '3.13'
       - run: python -m pip install '.[browser]'
       - run: python -m playwright install --with-deps chromium
+      - name: Rehearse fictional recovery with actual source process lifecycles
+        run: >-
+          python tools/installed_recovery_browser.py --source-fixture
+          --output browser-artifacts/source-recovery-rehearsal
       - run: python tools/browser_smoke.py
       - run: python tools/studio_browser.py
       - run: python tools/desktop_browser.py
@@ -89,10 +93,6 @@ jobs:
       - run: python tools/document_page_break_browser.py
       - run: python tools/garden_practice_browser.py
       - run: python tools/campaign_guidance_browser.py
-      - name: Rehearse fictional recovery with actual source process lifecycles
-        run: >-
-          python tools/installed_recovery_browser.py --source-fixture
-          --output browser-artifacts/source-recovery-rehearsal
       - run: python tools/native_browser.py
       - run: python tools/provider_readiness_browser.py
       - run: python tools/atlas_source_browser.py
