@@ -1,5 +1,9 @@
 # Recorded quote amounts in campaign/v1
 
+This describes unreleased 0.5.4rc3.dev0 source, not the published 0.5.4rc2
+installers. The Budget editor is in the browser campaign workbench; the native
+Tcl/Tk source workspace has [a narrower scope](PORTABLE_RUNTIME.md).
+
 Sinter keeps the five budget-row fields unchanged: `item`, `opportunity`,
 `quantity`, `unit_cost` and `quote_reference`. A quote reference is the person's
 original free text. Sinter does not infer tax registration, GST treatment,
@@ -24,7 +28,7 @@ funding rules before choosing an amount to request.
 | `complete` | Every recorded row has a unit cost and at least one row exists. It does not mean every necessary project cost has been recorded or reviewed. |
 | `unknown_costs` | Recorded rows whose unit cost is `null`; these are never treated as zero. |
 | `unquoted_costs` | Recorded rows without a quote reference; this is not a verification of references that are present. |
-| `quoted_subtotal_over_ceiling` | Per-opportunity raw arithmetic: whether its known quoted subtotal is numerically greater than an entered AUD cash ceiling. It is `null` for a missing ceiling, non-AUD/unconfirmed/unsupported ceiling currency or non-cash route. |
+| `quoted_subtotal_over_ceiling` | Per-opportunity raw arithmetic under the legacy v1 gate: whether its known quoted subtotal is numerically greater than an entered AUD ceiling. It is `null` for a missing ceiling, non-AUD/unconfirmed/unsupported currency or `non_cash_support` route. |
 | `over_ceiling` | Always `null` for this v1 quoted-amount policy: the application-level comparison remains unqualified. |
 | `amount_basis_note` | Explains that quote bases may be mixed or unknown, no GST conversion is made, and Sinter has not qualified eligible costs/application amounts. |
 | `comparison_note` | The separate funding-currency explanation. It does not qualify the amount or GST basis. |
@@ -33,7 +37,10 @@ An explicit zero amount remains zero; an absent amount remains unknown. A raw
 crossing can be `true` even with unpriced lines. A `false` raw crossing means only
 that the entered known amounts did not numerically cross the recorded ceiling;
 it does not establish that the complete or eligible application fits. A ceiling
-comparison of quoted figures is never a funder decision.
+comparison of quoted figures is never a funder decision. The legacy arithmetic
+gate excludes `non_cash_support`; it does not positively qualify other route
+types as cash grants. Reviewed application-budget v2 requires its own stricter
+route gate and remains unimplemented.
 
 ## Current and historical work
 
@@ -66,9 +73,15 @@ and retrying requires an explicit action.
 
 Older saved reports keep their original JSON on disk. Their returned derived
 view uses the current quote policy without rewriting that historical JSON or
-literal user edits. Newly prepared full reports, decision briefs and Word exports
-label quote subtotals and retain the amount-basis caveat. Historical user-edited
-text remains the author's original text and needs its own review.
+literal user edits. Generated reports and decision briefs label quote subtotals
+and retain the amount-basis caveat. Word uses the current applied draft text,
+including your edits; retain and review the caveat before sharing. Historical
+user-edited text remains the author's original text and needs its own review.
+
+The campaign workbench marks current application answers for review when active
+costs change. Direct CLI/Python saves retain entered review statuses; review those
+answers explicitly after changing costs. This v1 interface does not bind an
+answer review to a captured cost snapshot.
 
 This is a foundation for a future reviewed application-budget workflow. Typed
 amount bases, supporting evidence and a separately reviewed application

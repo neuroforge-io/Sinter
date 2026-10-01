@@ -14,8 +14,9 @@ installers and have not received installed-platform qualification.
   preserving exact cents and the caller's settings at the admitted bounds.
 
 - Make costs easier to scan with compact rows and an action that opens the next
-  missing price or reference. Invalidate current application-answer reviews when
-  active costs are added, edited or removed; retain historical reviews and exact
+  missing price or reference. In the campaign workbench, invalidate current
+  application-answer reviews when active costs are added, edited or removed;
+  retain historical reviews and exact
   saved quote values. Reviewed application-amount entry remains an explicit open
   extension, documented in the application-budget design.
 
