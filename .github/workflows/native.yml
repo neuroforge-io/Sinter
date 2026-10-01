@@ -52,7 +52,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   linux32:
-    name: Linux 32-bit / ${{ matrix.arch }} (declared execution mode)
+    name: Linux 32-bit / ${{ matrix.arch }} (CLI/browser-only)
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -82,7 +82,7 @@ jobs:
               apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev zlib1g-dev binutils libssl-dev libffi-dev pkg-config $CRYPTO_COMPILER
               python -m pip install pyinstaller==6.22.2 certifi
               python -m pip install ".[accounts]"
-              python tools/package_native.py --arch "$TARGET_ARCH" --execution "$EXECUTION_MODE"
+              python tools/package_native.py --arch "$TARGET_ARCH" --execution "$EXECUTION_MODE" --without-native-window
             '
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
