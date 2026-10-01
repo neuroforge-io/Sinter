@@ -213,7 +213,7 @@ def main(argv: list[str] | None = None) -> None:
 
                     page.route("**/api/reports", fail_once)
                     report.get_by_role(
-                        "button", name="Save to this computer", exact=True
+                        "button", name="Save to My workspace", exact=True
                     ).click()
                     expect(report.get_by_role("alert")).to_contain_text(
                         "Fictional local save failure"
@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> None:
                     assert page.evaluate(warn)
                     assert not server.app.store.reports()
                     report.get_by_role(
-                        "button", name="Save to this computer", exact=True
+                        "button", name="Save to My workspace", exact=True
                     ).click()
                     expect(report).to_contain_text("Saved in My workspace")
                     expect(report).not_to_contain_text(
@@ -254,7 +254,7 @@ def main(argv: list[str] | None = None) -> None:
                         report.get_by_label("Edit your draft", exact=True)
                     ).to_have_value("Unapplied fictional handover wording.")
                     report.get_by_role(
-                        "button", name="Save to this computer", exact=True
+                        "button", name="Save to My workspace", exact=True
                     ).click()
                     expect(report.get_by_role("alert")).to_contain_text(
                         "Apply or cancel"
@@ -289,7 +289,7 @@ def main(argv: list[str] | None = None) -> None:
 
                     apply_text("First version sent to save.")
                     report.get_by_role(
-                        "button", name="Save to this computer", exact=True
+                        "button", name="Save to My workspace", exact=True
                     ).click()
                     page.wait_for_timeout(100)
                     assert len(held) == 1
@@ -305,7 +305,7 @@ def main(argv: list[str] | None = None) -> None:
                     assert page.evaluate(warn)
                     expect(
                         report.get_by_role(
-                            "button", name="Save to this computer", exact=True
+                            "button", name="Save to My workspace", exact=True
                         )
                     ).to_be_enabled()
                     checks.append(

@@ -216,7 +216,7 @@ class QualityChecks:
         expect(source).to_have_attribute('open', '')
         expect(source.locator(':scope > summary')).to_be_focused()
         assert page.url.endswith('#research?example=1'), 'Citation changed the application route.'
-        page.get_by_role('button', name='Save to this computer').click()
+        page.get_by_role('button', name='Save to My workspace').click()
         expect(report).to_contain_text('Saved in My workspace')
         self.screenshot(page, 'research-sources-desktop')
         page.get_by_role('link', name='My workspace', exact=True).click()
@@ -589,7 +589,7 @@ class QualityChecks:
         expect(page.get_by_text('Copied. Ready to paste into your email or document.', exact=True)).to_be_visible()
         assert page.evaluate('navigator.clipboard.readText()') == edited.removeprefix('# ')
         assert self.download_text(page, 'Download Markdown') == edited
-        page.get_by_role('button', name='Save to this computer', exact=True).click()
+        page.get_by_role('button', name='Save to My workspace', exact=True).click()
         expect(page.get_by_role('region', name='Your draft report')).to_contain_text('Saved in My workspace')
         self.goto(page, 'library')
         page.get_by_role('button', name='Open draft', exact=True).first.click()

@@ -821,7 +821,7 @@ def main(argv=None):
                                             )
                                         page.get_by_role(
                                             "button",
-                                            name="Save to this computer",
+                                            name="Save to My workspace",
                                             exact=True,
                                         ).click()
                                         expect(

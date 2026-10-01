@@ -83,3 +83,8 @@ manual reviewer note instead of treating those matches as answers. The report
 save label was ambiguous, and confirmed Word paths did not reappear after a cold
 report reopen, although the files remained intact. These are recorded for further
 improvement. No new whole-product score or 10/10 claim follows from this review.
+
+The subsequent development save action now says **Save to My workspace**. A
+separate actual in-app browser retest confirms pending-edit refusal and explicit
+save without changing earlier reports or Word copies. Published RC3 retains its
+old label. The original walkthrough and the other recorded gaps remain intact.

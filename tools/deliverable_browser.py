@@ -293,7 +293,7 @@ class DeliverableChecks:
         assert after['sources'] == before['sources'] and after['excerpts'] == before['excerpts']
         assert after['document_markdown'] == before['document_markdown']
         assert after['document_edits']['markdown'] == updated
-        page.get_by_role('button', name='Save to this computer', exact=True).click()
+        page.get_by_role('button', name='Save to My workspace', exact=True).click()
         expect(page.get_by_text('Saved in My workspace', exact=False)).to_be_visible()
         self.goto(page, 'library')
         page.get_by_role('button', name='Open draft', exact=True).first.click()
@@ -330,7 +330,7 @@ class DeliverableChecks:
         assert '<strong>water access</strong>' in html and '<em>Thursday</em>' in html
         pack = self.pack(page)
         assert pack['model_draft'] is True and pack.get('document_markdown') == FINAL_DRAFT
-        page.get_by_role('button', name='Save to this computer', exact=True).click()
+        page.get_by_role('button', name='Save to My workspace', exact=True).click()
         expect(page.get_by_text('Saved in My workspace', exact=False)).to_be_visible()
         self.goto(page, 'library')
         page.get_by_role('button', name='Open draft', exact=True).first.click()
@@ -545,7 +545,7 @@ class DeliverableChecks:
             assert assistant_record['incomplete'] is True
             assert assistant_record['context'] == pack['context']
             assert assistant_record['result']['content'] == partial_text
-        page.get_by_role('button', name='Save to this computer', exact=True).click()
+        page.get_by_role('button', name='Save to My workspace', exact=True).click()
         expect(page.get_by_text('Saved in My workspace', exact=False)).to_be_visible()
         self.goto(page, 'library')
         page.get_by_role('button', name='Open draft', exact=True).first.click()
@@ -566,7 +566,7 @@ class DeliverableChecks:
             edited = partial_exports('Water access still needs venue confirmation.')
             assert edited['document_edits']['markdown'] == updated
             assert edited['document_markdown'] == pack['document_markdown']
-            page.get_by_role('button', name='Save to this computer', exact=True).click()
+            page.get_by_role('button', name='Save to My workspace', exact=True).click()
             expect(page.get_by_text('Saved in My workspace', exact=False)).to_be_visible()
             self.goto(page, 'library')
             page.get_by_role('button', name='Open draft', exact=True).first.click()

@@ -264,7 +264,7 @@ def main(argv: list[str] | None = None) -> None:
                         report.get_by_role("tabpanel", name="Document", exact=True)
                     ).to_contain_text("No order has been approved.")
                     report.get_by_role(
-                        "button", name="Save to this computer", exact=True
+                        "button", name="Save to My workspace", exact=True
                     ).click()
                     expect(
                         report.get_by_text(

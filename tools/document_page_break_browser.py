@@ -113,7 +113,7 @@ def main(argv: list[str] | None = None) -> None:
                         expect(report).to_be_visible()
                         with page.expect_response("**/api/reports") as saved:
                             report.get_by_role(
-                                "button", name="Save to this computer", exact=True
+                                "button", name="Save to My workspace", exact=True
                             ).click()
                         historical_id = saved.value.json()["id"]
                         historical = server.app.store.report(historical_id)
@@ -192,7 +192,7 @@ def main(argv: list[str] | None = None) -> None:
                             assert excerpt["quote"] in copied, excerpt["id"]
                         with page.expect_response("**/api/reports") as saved:
                             report.get_by_role(
-                                "button", name="Save to this computer", exact=True
+                                "button", name="Save to My workspace", exact=True
                             ).click()
                         edited_id = saved.value.json()["id"]
                         edited = server.app.store.report(edited_id)
