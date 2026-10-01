@@ -12,6 +12,7 @@ from contextlib import ExitStack
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
+from uuid import UUID
 from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +95,30 @@ def fixture(title: str, currency: str | None = None) -> dict:
 
 
 class CurrencyChecks(CampaignChecks):
+    def same_second_reopen_latest(self, page):
+        from playwright.sync_api import expect
+
+        with (
+            patch("sinter.campaigns.utc_now", return_value="2026-10-01T12:00:00+00:00"),
+            patch("sinter.campaigns.uuid.uuid4",
+                  side_effect=[UUID(hex="1" * 32), UUID(hex="f" * 32)]),
+        ):
+            self.import_fixture(page, fixture("Fictional older tied USD", "USD"))
+            older = self.save_snapshot(page)
+            self.import_fixture(page, fixture("Fictional latest tied other", "other"))
+            latest = self.save_snapshot(page)
+
+        assert older["id"] != latest["id"]
+        assert self.app.campaigns.get(older["id"]) == older
+        page.reload()
+        expect(page.get_by_label("Campaign name", exact=True)).to_have_value(
+            latest["document"]["title"]
+        )
+        expect(self.details(page)).to_have_value("other")
+        assert self.app.campaigns.get(latest["id"]) == latest
+        assert self.app.campaigns.get(older["id"]) == older
+        self.screenshot(page, "currency-same-second-latest", full_page=True)
+
     def details(self, page):
         from playwright.sync_api import expect
 
@@ -251,6 +276,9 @@ class CurrencyChecks(CampaignChecks):
         backup = self.backup(page, "other-currency-backup")
         assert backup == saved["document"]
         page.reload()
+        expect(page.get_by_label("Campaign name", exact=True)).to_have_value(
+            saved["document"]["title"]
+        )
         expect(self.details(page)).to_have_value("other")
         expect(page.get_by_label("Project fit and timing", exact=True)).to_have_value(
             "Fictional JPY terms retained exactly; comparison unsupported."
@@ -369,6 +397,7 @@ def main(argv: list[str] | None = None) -> None:
                         )
                         checks.app = server.app
                         for name in (
+                            "same_second_reopen_latest",
                             "usd_save_reopen_restore_and_word",
                             "unconfirmed_and_other",
                             "non_cash_and_new_unknown",

@@ -10,7 +10,7 @@ import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterator
@@ -1887,6 +1887,17 @@ class CampaignStore:
             raise ValueError("Reopen the campaign to obtain its current revision.")
         return value
 
+    @staticmethod
+    def _next_updated_at(db: sqlite3.Connection) -> str:
+        """Order successful saves inside the existing serialized write transaction."""
+        now = datetime.fromisoformat(utc_now())
+        latest = db.execute("SELECT MAX(updated_at) FROM campaigns").fetchone()[0]
+        if latest:
+            # Existing stores use second-resolution UTC stamps. Keep those rows
+            # intact; ties or a clock rollback must not reopen an older campaign.
+            now = max(now, datetime.fromisoformat(latest) + timedelta(microseconds=1))
+        return now.isoformat(timespec="microseconds")
+
     def save(self, document: object, id: str | None = None,
              revision: int | None = None) -> dict:
         """Create a campaign or replace exactly the revision the caller edited."""
@@ -1904,13 +1915,16 @@ class CampaignStore:
                     raise ValueError("You have 50 campaigns. Export and remove an "
                                      "old campaign before creating another.")
                 id, revision = uuid.uuid4().hex, 1
-                db.execute("INSERT INTO campaigns VALUES (?,?,?,?,?)",
-                           (id, revision, normalized["title"], utc_now(), encoded))
+                db.execute(
+                    "INSERT INTO campaigns VALUES (?,?,?,?,?)",
+                    (id, revision, normalized["title"], self._next_updated_at(db), encoded),
+                )
             else:
                 cursor = db.execute(
                     "UPDATE campaigns SET revision=revision+1,title=?,updated_at=?,"
                     "document=? WHERE id=? AND revision=?",
-                    (normalized["title"], utc_now(), encoded, id, revision))
+                    (normalized["title"], self._next_updated_at(db), encoded, id, revision),
+                )
                 if cursor.rowcount != 1:
                     raise ValueError("This campaign changed in another window or "
                                      "was removed. Export your edits, then reopen it.")
