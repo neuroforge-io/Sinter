@@ -627,10 +627,10 @@ def test_explicit_serve_still_dispatches_to_the_workbench():
 
 
 @pytest.mark.parametrize('arguments, expected', [
-    ([], ('127.0.0.1', 8420, True)),
+    (['serve'], ('127.0.0.1', 8420, True)),
     (['serve', '--no-browser', '--port', '9000'], ('127.0.0.1', 9000, False)),
 ])
-def test_source_launcher_opens_workbench_and_preserves_serve_options(
+def test_source_launcher_preserves_explicit_serve_options(
     monkeypatch, arguments, expected,
 ):
     launcher = Path(__file__).parents[1] / 'start.py'

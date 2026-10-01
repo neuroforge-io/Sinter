@@ -154,10 +154,13 @@ Install with `python -m pip install .` for the `sinter` command. `python -m sint
 
 `sinter` and `python -m sinter` with no arguments print help and exit. Use
 `sinter serve` to open the workbench explicitly. The source `start.py` boundary
-defaults to `serve` only when no arguments are supplied; `--help`, `--version`
+defaults to `app` only when no arguments are supplied; `--help`, `--version`
 and explicit commands pass through unchanged. The shell, macOS `.command` and
 Windows `.bat` wrappers delegate to that boundary and preserve arguments.
 Desktop launchers also open the workbench directly.
+Unreleased native launch, shared CLI operations and Python access are documented
+in [the portable runtime guide](PORTABLE_RUNTIME.md). The existing web workbench
+is explicitly available through `sinter app --mode browser` or `sinter serve`.
 Research accepts repeated focus questions, for example:
 
 ```sh

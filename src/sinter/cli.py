@@ -51,6 +51,8 @@ def main(argv: list[str] | None = None) -> None:
     template.add_argument("-v", "--var", action="append", default=[], metavar="KEY=VALUE")
     template.add_argument("-o", "--output")
     template.add_argument("--no-stream", action="store_true")
+    template.add_argument("--consent", action="store_true", help="For Short source answer, approve the exact previewed source request")
+    template.add_argument("--context-hash", help="For Short source answer, hash from sinter run template.preview")
     workbench = sub.add_parser("workbench", help="Run a workflow from a JSON input file")
     workbench.add_argument("file")
     workbench.add_argument("-o", "--output", default="sinter_report.md")
@@ -67,13 +69,16 @@ def main(argv: list[str] | None = None) -> None:
     speech.add_argument("-o", "--output", help="Output file; default transcript.FORMAT")
     sub.add_parser("templates", help="List templates")
     sub.add_parser("health", help="Check the live API")
+    from . import runtime_cli
+    from .runtime import OperationError
+    runtime_cli.add_parsers(sub)
     args = parser.parse_args(argv)
     if not args.command:
         parser.print_help()
         return
     try:
         _dispatch(args)
-    except (client.APIError, ValueError, OSError, KeyError) as exc:
+    except (client.APIError, OperationError, ValueError, OSError, KeyError) as exc:
         print(f"Sinter: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
     except KeyboardInterrupt:
@@ -82,6 +87,10 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def _dispatch(args) -> None:
+    from . import runtime_cli
+    if args.command in runtime_cli.COMMANDS:
+        runtime_cli.dispatch(args)
+        return
     from .templates import available_templates, resolve_template, template_events
     if args.command == "serve":
         from .server import serve
@@ -176,6 +185,19 @@ def _dispatch(args) -> None:
             if not sep:
                 raise ValueError("Template arguments use KEY=VALUE.")
             variables[key] = value
+        if template.compact_source:
+            from .runtime import Runtime
+            with Runtime() as runtime:
+                result = runtime.call('template.run', {
+                    'template': args.name, 'variables': variables,
+                    'consent': args.consent, 'context_hash': args.context_hash},
+                    progress=lambda message: print(message, file=sys.stderr))
+            content = "\n\n".join(row['content'] for row in result['results'])
+            print(content)
+            if output:
+                _write(output, '# Model-generated draft - review required\n\n' + content,
+                       sources=sources)
+            return
         results, references, streamed = [], [], False
         for event in template_events(template, variables, stream=not args.no_stream):
             if event["type"] == "step":

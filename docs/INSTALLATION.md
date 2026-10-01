@@ -110,10 +110,17 @@ or `Start-Sinter.bat`; macOS can use `Start-Sinter.command`, and Linux can use
 `./start-sinter.sh`. The platform wrappers prefer `.venv` when present and pass
 arguments through, including paths containing spaces.
 
+Unreleased source development defaults to a native Tcl/Tk source workspace.
+It requires a working display and Python's Tk support; it gives a clear error
+when these are unavailable. Use `python3 start.py app --mode browser` for the
+full web workbench, or shared CLI operations in headless environments. Published
+rc2 downloads keep their browser launch. See [the portable runtime guide](PORTABLE_RUNTIME.md)
+for the native scope and CLI workflows.
+
 Explicit help, version and commands retain their CLI meaning: `python3 start.py
 --help`, `python3 start.py --version`, or `python3 start.py serve --no-browser
 --port 9000`. A bare installed `sinter` or `python -m sinter` prints help and exits;
-use `sinter serve` to open the workbench from those entry points.
+use `sinter app` for the native workspace or `sinter serve` for the web workbench.
 
 For speech recognition, stop Sinter and run `python3 setup_speech.py` (`py setup_speech.py` on Windows). The helper asks before installing into `.venv`; it does not install a model without the later model-download choice. See [transcription](TRANSCRIPTION.md).
 
