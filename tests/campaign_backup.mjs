@@ -151,3 +151,27 @@ test('unserializable inputs fail honestly without changing the working copy or t
   assert.equal(controls.copy.disabled, false);
   assert.throws(() => campaignBackupText(undefined), /working copy/);
 });
+
+for (const completion of ['resolve', 'reject']) {
+  test(`failed refresh supersedes an older stalled clipboard ${completion} without losing focus`, async t => {
+    let resolve, reject, unavailable = false;
+    const env = environment(t, () => new Promise((done, fail) => { resolve = done; reject = fail; }));
+    const document = fixture();
+    const controls = env.control(() => {
+      if (unavailable) throw new Error('PRIVATE pending-source details');
+      return document;
+    });
+    const pending = controls.copy.handlers.click();
+    unavailable = true; controls.refresh.handlers.click();
+    const failedMessage = env.text(controls.root);
+    const focused = env.focused;
+    assert.match(failedMessage, /Earlier backup text, if shown, has not been refreshed/);
+    assert.doesNotMatch(failedMessage, /PRIVATE/);
+    assert.deepEqual(JSON.parse(controls.textarea.value), document);
+    if (completion === 'resolve') resolve(); else reject(new Error('PRIVATE old denial'));
+    await pending;
+    assert.equal(env.text(controls.root), failedMessage);
+    assert.equal(env.focused, focused);
+    assert.equal(controls.copy.disabled, false);
+  });
+}

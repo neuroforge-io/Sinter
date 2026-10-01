@@ -17,6 +17,28 @@ installers and have not received installed-platform qualification.
   checkout platforms. Exercise actual native source workflows and frozen Linux
   window launch, repeat launch and owned-process cleanup in hosted CI.
 
+- Refuse scoped casebooks and backups in older or incapable interfaces before
+  source choices can be dropped. Require a deliberate empty list to clear the
+  last choice; retain that intent through navigation and recovery. Preserve
+  lossless current CLI access and require explicit Python/HTTP format capability.
+
+- Keep the Linux CLI/browser-only package menu launch explicit when Tcl/Tk is
+  omitted. The native-enabled menu launch retains its default native mode.
+  This source fix does not qualify a new installer.
+
+- Choose sources for each casebook question, including an explicit empty choice.
+  Keep every original input, stable reference and historical report. Bind choices
+  to exact questions; changed questions and removed sources require review.
+  Scoped projects use v2 storage that older previews cannot silently widen.
+  Optional draft context shows the bounded, selected material; incomplete or
+  invalid responses remain locally recoverable without automatic replay.
+
+- Add readable, selectable casebook backup text when browser downloads or
+  clipboard access fail. Preserve unsaved project inputs and source choices
+  without truncation; make pending-source refusal explicit. Share the local
+  backup controls with campaigns and prevent stale clipboard completions from
+  replacing a newer failed-refresh warning.
+
 - Explain when changing or clearing an application-window source resets its
   quoted wording and check date. Keep the entered deadline and other work,
   preserve an unchanged binding, and prompt a deliberate source recheck.

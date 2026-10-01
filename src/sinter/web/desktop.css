@@ -27,5 +27,4 @@ summary{cursor:pointer;min-height:2.75rem;align-content:center}
 .casebook-stats>div{padding:1.2rem;border:1px solid var(--line);border-radius:1rem;background:var(--surface)}
 .casebook-stats strong{display:block;font-size:2rem;color:var(--accent);font-variant-numeric:tabular-nums}
 .casebook-stats span{font-size:.8rem}
-.casebooks-page .source{content-visibility:auto;contain-intrinsic-size:auto 120px}
 .casebooks-page pre{max-height:28rem;overflow:auto}

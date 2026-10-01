@@ -5,7 +5,7 @@ export function session() {
   return sessionPromise;
 }
 
-export async function request(path, {data, signal, method = data === undefined ? 'GET' : 'POST', responseType = 'json'} = {}) {
+export async function request(path, {data, signal, method = data === undefined ? 'GET' : 'POST', responseType = 'json', headers: suppliedHeaders = {}} = {}) {
   if (!path.startsWith('/api/')) throw new Error('Only local API paths are allowed.');
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -13,7 +13,7 @@ export async function request(path, {data, signal, method = data === undefined ?
   signal?.addEventListener('abort', abort, {once: true});
   const timer = setTimeout(abort, 35000);
   try {
-    const headers = {};
+    const headers = {...suppliedHeaders};
     if (method === 'POST') {
       headers['Content-Type'] = 'application/json';
       headers['X-Sinter-Token'] = (await session()).token;

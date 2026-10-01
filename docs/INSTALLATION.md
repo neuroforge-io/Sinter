@@ -95,6 +95,16 @@ independent backup before switching versions and use the newer source version
 for those records. Clipboard copying requires you to paste and retain the text
 yourself; it does not establish that a file exists or that a campaign was saved.
 
+Development also adds explicit source choices for individual casebook questions.
+These scoped projects use casebook v2 and are stored separately to prevent older
+previews from silently discarding the choices. Older previews cannot show those
+projects or restore v2 backups. Keep an unchanged workspace copy before upgrading;
+return to a supporting version to use the newer work. Clearing all source choices
+is an explicit change to an unscoped project, not an automatic downgrade.
+Casebook backup text can also be selected and retained manually when downloads
+or clipboard access fail. Add or clear a pending source first. Copying captures
+inputs at that moment; it does not save the project or create a file.
+
 ## Source and speech installation
 
 Python 3.10+ and a current browser are needed for a source installation:
@@ -116,6 +126,13 @@ when these are unavailable. Use `python3 start.py app --mode browser` for the
 full web workbench, or shared CLI operations in headless environments. Published
 rc2 downloads keep their browser launch. See [the portable runtime guide](PORTABLE_RUNTIME.md)
 for the native scope and CLI workflows.
+
+Source choices for individual casebook questions currently use the web workbench
+and lossless CLI/Python paths. The native source window refuses these newer
+projects instead of clearing their choices. Published installers do not include
+this development capability. A Linux package deliberately built without the
+native window uses an explicit browser-mode application-menu command; that
+source behavior still needs matching installed qualification.
 
 Explicit help, version and commands retain their CLI meaning: `python3 start.py
 --help`, `python3 start.py --version`, or `python3 start.py serve --no-browser
