@@ -25,6 +25,10 @@ python tools/campaign_action_bar_browser.py
 python tools/communication_view_browser.py
 python tools/handover_appendix_browser.py
 python tools/casebook_save_state_browser.py
+python tools/casebook_context_browser.py
+python tools/casebook_question_evidence_browser.py
+python tools/casebook_confirm_browser.py
+python tools/quit_browser.py
 python tools/document_export_browser.py
 python tools/download_lifecycle_browser.py
 python tools/document_page_break_browser.py

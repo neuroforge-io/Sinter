@@ -138,8 +138,12 @@ acceptance of the launch does not prove that a restricted environment permits
 that address. Keep its protections in place and choose the native alternative
 where appropriate. Use **Save project** for inputs and **Save to My workspace**
 for edited reports. Wait for the Saved confirmation, then choose **Quit Sinter**.
-Closing a browser tab alone
-does not stop the installed app. Quit before opening it again.
+Development Quit stays visible at phone widths. If there are unsaved browser
+inputs, choose **Keep working** or explicitly quit in its in-page dialog. The
+native-owned workbench requests confirmation in the Sinter window and keeps
+browser inputs while it decides. An unconfirmed reply keeps your browser inputs;
+check whether Sinter is running before explicitly retrying. Closing a browser tab
+alone does not stop the installed app. Quit before opening it again.
 
 This is a development packaging change, not a change to the published RC3
 assets or their pinned instructions. Matching installed first-run evidence and

@@ -274,9 +274,17 @@ def first_journey(page, process, read, expect, row):
     title = page.get_by_label("Project name", exact=True)
     title.fill(TITLE)
     dialogs = []
-    page.once("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
+    page.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
     page.get_by_role("button", name="Quit Sinter", exact=True).click()
-    assert len(dialogs) == 1 and "save" in dialogs[0].lower()
+    decision = page.get_by_role("dialog", name="Quit Sinter?", exact=True)
+    expect(decision).to_be_visible()
+    expect(decision).to_contain_text("Save or export")
+    keep = decision.get_by_role("button", name="Keep working", exact=True)
+    expect(keep).to_be_focused()
+    keep.click()
+    expect(decision).to_have_count(0)
+    assert not dialogs
+    row["dirty_quit_decision"] = "in-page"
     assert process.poll() is None and title.input_value() == TITLE
     assert read("/api/casebooks")["casebooks"] == []
     row["dirty_quit_cancelled"] = True

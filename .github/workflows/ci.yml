@@ -77,6 +77,18 @@ jobs:
       - run: python tools/site_browser.py
       - run: python tools/casebook_browser.py
       - run: python tools/casebook_save_state_browser.py
+      - name: Check selected-source coverage and exact local context
+        run: python tools/casebook_context_browser.py
+        env:
+          TMPDIR: ${{ github.workspace }}/browser-artifacts
+      - name: Check question-to-evidence navigation
+        run: python tools/casebook_question_evidence_browser.py
+        env:
+          TMPDIR: ${{ github.workspace }}/browser-artifacts
+      - name: Check project decisions preserve pending work
+        run: python tools/casebook_confirm_browser.py
+        env:
+          TMPDIR: ${{ github.workspace }}/browser-artifacts
       - run: python tools/handover_appendix_browser.py
       - run: python tools/deliverable_browser.py
       - run: python tools/campaign_browser.py
@@ -96,6 +108,10 @@ jobs:
       - run: python tools/garden_practice_browser.py
       - run: python tools/campaign_guidance_browser.py
       - run: python tools/native_browser.py
+      - name: Check in-page quit and late-response protection
+        run: python tools/quit_browser.py
+        env:
+          TMPDIR: ${{ github.workspace }}/browser-artifacts
       - run: python tools/provider_readiness_browser.py
       - run: python tools/atlas_source_browser.py
       - run: node --experimental-default-type=module tests/atlas_async.mjs

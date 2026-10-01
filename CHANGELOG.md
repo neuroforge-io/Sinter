@@ -5,6 +5,13 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Make browser Quit visible on narrow screens and use an accessible in-page
+  decision for pending work. Keep inputs after an unconfirmed reply, require an
+  explicit retry, and prevent delayed page responses from replacing the stopped
+  view. Native-owned browser inputs remain until its separate confirmation.
+  The [source review](docs/BROWSER_QUIT_REVIEW_2026-10-02.md) retains the original
+  race and unload failures; installed and physical native behavior remain separate.
+
 - Choose upgrade-checker browser arguments from the verified binary version,
   separately from legacy data-preservation checks. RC3 needs explicit browser
   mode. Exact prior admission and historical receipts remain unchanged; this

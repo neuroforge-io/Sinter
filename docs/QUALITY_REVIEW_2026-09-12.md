@@ -1049,3 +1049,37 @@ Its process seams are fictional: no actual binary or installer ran. Historical
 prior admission and receipts are unchanged. Exact RC3 admission, rich source and
 scoped-v2 fixtures, capability refusal and actual package replacement remain
 separate requirements before a new release can qualify.
+
+### 2 October: accessible Quit and late-response source protection
+
+Browser Quit stays available at phone widths and uses the existing accessible
+in-page decision for pending work. Cancel/Escape keep inputs without a request;
+an unconfirmed reply keeps inputs for explicit recovery. Native-owned browser
+work remains while the native window decides. A confirmed standalone stop blocks
+late page content/errors and releases its unload guard. Earlier race and unload
+failures remain retained rather than being rewritten as passes.
+
+Independent runtime review accepts V3. Root's current composition passes 185
+focused Python tests, 294 JavaScript tests, the existing offline/confirmation
+browser producers, 51 evidence-context checks and four actual source-process
+save/quit/reopen/interruption launches. The reusable quit producer also passes
+38 checks in eight desktop/phone journeys on current main. Four relevant
+producers are added to routine Chromium CI with retained fictional artifacts.
+No actual installed, physical native confirmation or new root in-app-browser
+pass is claimed. See the [source review](BROWSER_QUIT_REVIEW_2026-10-02.md).
+
+The first composition run hit a full temporary volume; its database/setup errors
+and browser crashes remain recorded. The unchanged source passes with an owned
+home-drive temporary directory. Wider `1382ce3` CI also has macOS and Windows
+source-test failures under separate diagnosis. New installed/upgrade, bare-host
+and platform acceptance remain release requirements; no new rating or 10/10 is
+assigned from these bounded source checks.
+
+Before adoption, the full current 411-file Linux/Python 3.12 composition passes
+3,226 tests with nine explicit native-display/Windows skips in 283.40 seconds.
+All canonical source hashes stay exact; 294 JavaScript tests, five workflow tests,
+38 quit checks and the desktop/phone question-evidence producer pass. Actual Word
+payloads and a cold source-app reopen retain their wording and identities. The
+source receipt is
+`dc4c9f258f630442c0268f1fc6681a1af3c0f6859d199a2882c91b97b7d0b25e`.
+This later documentation note is separate from runtime and installed proof.

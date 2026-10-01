@@ -14,24 +14,25 @@ import {tools, buildNavigation, installToolFinder} from './navigation.js';
 import {rememberDraft, shouldWarnBeforeExit} from './draft-state.js';
 import {hasUnsavedReportDrafts, clearReportDrafts} from './report-drafts.js';
 import {gardenSeed, gardenCard, GARDEN_PRACTICE} from './garden-practice.js';
+import {confirmAction} from './confirm-action.js';
 
 const view = document.getElementById('view');
 const drafts = new Map();
 const dirtyDrafts = new Set();
-let busy = false, current = '#home', routeSequence = 0;
+let busy = false, quitPending = false, appStopped = false, current = '#home', routeSequence = 0;
 const routes = tools.map(({id, label}) => [id, label]);
 const navigation = document.getElementById('navigation');
 buildNavigation(navigation);
-installToolFinder(go, () => busy);
-function setBusy(value) {
-  busy = value;
-  for (const link of navigation.querySelectorAll('a')) link.setAttribute('aria-disabled', String(value));
+installToolFinder(go, () => busy || quitPending || appStopped);
+function refreshNavigation() {
+  for (const link of navigation.querySelectorAll('a')) link.setAttribute('aria-disabled', String(busy || quitPending || appStopped));
 }
+function setBusy(value) { busy = value; refreshNavigation(); }
 function remember(kind, value, options) { rememberDraft(drafts, dirtyDrafts, kind, value, options); }
-function go(route) { if (!busy) location.hash = route; }
+function go(route) { if (!busy && !quitPending && !appStopped) location.hash = route; }
 
 async function openGarden(kind) {
-  if (busy) return;
+  if (busy || quitPending || appStopped) return;
   const previous = drafts.get(kind);
   if (previous?.practice === GARDEN_PRACTICE) { go(kind); return; }
   if (dirtyDrafts.has(kind) && !confirm('Open the fictional garden example in this editor? Save or export your current project first if you need to keep its unsaved inputs. Saved projects and document drafts stay available.')) return;
@@ -79,7 +80,8 @@ function help() {
 }
 
 async function route() {
-  if (busy) { history.replaceState(null, '', current); announce('Finish or cancel the current task before changing pages.'); return; }
+  if (appStopped) { history.replaceState(null, '', current); return; }
+  if (busy || quitPending || appStopped) { history.replaceState(null, '', current); announce('Finish or cancel the current task before changing pages.'); return; }
   const hash = location.hash || '#home'; current = hash;
   const [id, query] = hash.slice(1).split('?');
   const name = routes.find(([key]) => key === id)?.[1] || 'Overview';
@@ -113,9 +115,9 @@ async function route() {
     else if (id === 'settings') content = await settingsPage();
     else if (id === 'help') content = help();
     else content = home(go, drafts, (await request('/api/settings')).settings, openGarden);
-    if (sequence !== routeSequence) return;
+    if (sequence !== routeSequence || appStopped) { content?.dispose?.(); return; }
     view.replaceChildren(content); document.getElementById('content').focus({preventScroll: true}); window.scrollTo(0, 0);
-  } catch (error) { if (sequence === routeSequence) view.replaceChildren(notice(error.message, 'error'), button('Try again', route)); }
+  } catch (error) { if (sequence === routeSequence && !appStopped) view.replaceChildren(notice(error.message, 'error'), button('Try again', route)); }
 }
 
 const theme = document.getElementById('theme-toggle');
@@ -134,7 +136,7 @@ document.querySelector('.skip-link').addEventListener('click', event => {
   event.preventDefault(); document.getElementById('content').focus();
 });
 window.addEventListener('hashchange', route);
-window.addEventListener('beforeunload', event => { if (shouldWarnBeforeExit(dirtyDrafts, busy) || hasUnsavedReportDrafts()) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (!appStopped && (shouldWarnBeforeExit(dirtyDrafts, busy || quitPending) || hasUnsavedReportDrafts())) { event.preventDefault(); event.returnValue = ''; } });
 session().then(value => {
   document.getElementById('version').textContent = `v${value.version} / Apache 2.0`;
   const ownerMessage = value.native_window_owner ? h('span', {}, value.session_notice) : null;
@@ -170,18 +172,35 @@ session().then(value => {
   }
   if (value.desktop) {
     const quit = button('Quit Sinter', async () => {
-      if ((shouldWarnBeforeExit(dirtyDrafts, busy) || hasUnsavedReportDrafts()) && !confirm('Quit Sinter? Download or save your work first. Unsaved work will be lost.')) return;
+      if (quitPending || appStopped) return;
+      quitPending = true; quit.disabled = true; refreshNavigation();
       try {
+        if ((shouldWarnBeforeExit(dirtyDrafts, busy) || hasUnsavedReportDrafts()) && !await confirmAction({
+          title: 'Quit Sinter?',
+          description: ownerNotice
+            ? 'Save or export your browser work first. The Sinter window will ask for confirmation; your browser inputs stay here while it decides.'
+            : 'Save or export your work first. Quitting stops this local app. Unsaved browser work is not saved automatically.',
+          confirmLabel: ownerNotice ? 'Request quit' : 'Quit Sinter',
+          cancelLabel: 'Keep working'
+        })) return;
         await request('/api/desktop/quit', {data: {}});
         if (ownerNotice) {
           updateOwnerState({state: 'requested'});
           announce('Quit requested. Check Sinter; inputs stay here.'); return;
         }
-        busy = false; drafts.clear(); dirtyDrafts.clear(); clearReportDrafts(); view.replaceChildren(notice('Sinter has stopped. You can close this window.'));
+        appStopped = true; ++routeSequence; busy = false;
+        theme.disabled = true; document.getElementById('tool-finder-button').disabled = true; drafts.clear(); dirtyDrafts.clear(); clearReportDrafts(); view.replaceChildren(notice('Sinter has stopped. You can close this window.'));
       }
-      catch (error) { announce(error.message); }
+      catch (error) {
+        const message = error.message + ' Quit was not confirmed. Your browser inputs are kept here. Check whether Sinter is still running before trying again.';
+        view.prepend(notice(message, 'error')); announce(message);
+      }
+      finally {
+        quitPending = false; quit.disabled = appStopped; refreshNavigation();
+        if (!appStopped && quit.isConnected) quit.focus({preventScroll: true});
+      }
     }, 'quiet');
-    if (ownerNotice) ownerNotice.append(quit); else navigation.append(quit);
+    if (ownerNotice) ownerNotice.append(quit); else document.querySelector('.top-actions').append(quit);
   }
 }).catch(() => {});
 request('/api/settings').then(state => applyAppearance(state.settings)).catch(() => {}).finally(route);

@@ -43,6 +43,12 @@ with a bounded shutdown that preserves work when close must be refused. The
 [native-to-browser source review](docs/NATIVE_BROWSER_REVIEW_2026-10-01.md)
 records its evidence and the limits of sharing saved work between the two views.
 
+Development browser Quit uses a keyboard-accessible in-page choice and remains
+visible on narrow screens. An unconfirmed quit keeps browser inputs for explicit
+recovery; a confirmed stop also blocks delayed page responses. See the
+[quit source review](docs/BROWSER_QUIT_REVIEW_2026-10-02.md) for tested behavior
+and the separate installed/native confirmation limits.
+
 Source-only casebook reports also expose sources without a retained quotation
 and let you inspect hash-checked surrounding original text locally. The
 [evidence-view review](docs/CASEBOOK_EVIDENCE_CONTEXT_REVIEW_2026-10-01.md)
