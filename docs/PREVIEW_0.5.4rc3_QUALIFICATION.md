@@ -27,6 +27,14 @@ the existing canonical candidate `prepare`/`verify` produce a local stage.
 The audit tooling commit is recorded separately; it never changes the build pin
 or rewrites historical partial receipts. This CI job cannot publish a release.
 
+The final branch also runs the existing installed upgrade, workflow and recovery
+job against its newly built same-run package. That receipt binds the current
+combined source commit and binary; it is separate from the unchanged retained
+RC3 clean-install and canonical-stage proof. A retained-artifact pass cannot
+qualify later native-window or campaign changes. The current package's mapped
+native-window smoke check runs in the Linux x64 build job; its installed browser
+workflows do not establish a complete native-widget journey.
+
 RC3 retains noticed terminal libraries including tinfo/ncurses. Its independent
 review requires readline exclusion and actual terminal-library notice/reference
 bytes, checked against the Debian payload. The older RC1/RC2 independent exclusion
