@@ -5,6 +5,11 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Reopen the most recently saved campaign when rapid saves share a clock second
+  or the clock moves backwards. Assign increasing campaign save timestamps inside
+  the existing write transaction; retain legacy rows, identities, revisions,
+  document/export formats and concurrent-edit rejection.
+
 - Add native **Assistant setup** over the existing provider/settings operations:
   explicitly load model names, choose an exact ID and save without a browser.
   Preserve destination approval, write-only session keys, launcher overrides and

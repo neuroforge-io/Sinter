@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import sys
 import tempfile
 import threading
@@ -12,6 +13,7 @@ from contextlib import ExitStack
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
+from uuid import NAMESPACE_URL, UUID, uuid5
 from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +96,38 @@ def fixture(title: str, currency: str | None = None) -> dict:
 
 
 class CurrencyChecks(CampaignChecks):
+    def same_second_reopen_latest(self, page):
+        from playwright.sync_api import expect
+
+        with (
+            patch("sinter.campaigns.utc_now", return_value="2026-10-01T12:00:00+00:00"),
+            patch("sinter.campaigns.uuid") as campaign_uuid,
+        ):
+            # Scope IDs to the store; Playwright also uses the stdlib uuid module.
+            campaign_uuid.uuid4.side_effect = [
+                UUID(hex="1" * 32), UUID(hex="f" * 32)
+            ]
+            campaign_uuid.uuid5 = uuid5
+            campaign_uuid.NAMESPACE_URL = NAMESPACE_URL
+            self.import_fixture(page, fixture("Fictional older tied USD", "USD"))
+            older = self.save_snapshot(page)
+            self.import_fixture(page, fixture("Fictional latest tied other", "other"))
+            latest = self.save_snapshot(page)
+
+        assert [older["id"], latest["id"]] == ["1" * 32, "f" * 32]
+        retained_older = self.app.campaigns.get(older["id"])
+        assert retained_older == older, f"Older campaign changed: {retained_older!r}"
+        page.reload()
+        expect(page.get_by_label("Campaign name", exact=True)).to_have_value(
+            latest["document"]["title"]
+        )
+        expect(self.details(page)).to_have_value("other")
+        assert (
+            self.app.campaigns.get(latest["id"]) == latest
+        ), "Latest snapshot changed."
+        assert self.app.campaigns.get(older["id"]) == older, "Older snapshot changed."
+        self.screenshot(page, "currency-same-second-latest", full_page=True)
+
     def details(self, page):
         from playwright.sync_api import expect
 
@@ -251,6 +285,9 @@ class CurrencyChecks(CampaignChecks):
         backup = self.backup(page, "other-currency-backup")
         assert backup == saved["document"]
         page.reload()
+        expect(page.get_by_label("Campaign name", exact=True)).to_have_value(
+            saved["document"]["title"]
+        )
         expect(self.details(page)).to_have_value("other")
         expect(page.get_by_label("Project fit and timing", exact=True)).to_have_value(
             "Fictional JPY terms retained exactly; comparison unsupported."
@@ -369,6 +406,7 @@ def main(argv: list[str] | None = None) -> None:
                         )
                         checks.app = server.app
                         for name in (
+                            "same_second_reopen_latest",
                             "usd_save_reopen_restore_and_word",
                             "unconfirmed_and_other",
                             "non_cash_and_new_unknown",
@@ -404,7 +442,12 @@ def main(argv: list[str] | None = None) -> None:
         and unchanged
         and all(resources.values()),
     }
-    (artifacts / "browser-receipt.json").write_text(json.dumps(receipt, indent=2))
+    receipt_path = artifacts / "browser-receipt.json"
+    receipt_path.write_text(json.dumps(receipt, indent=2))
+    retained = ROOT / "browser-artifacts" / "campaign-currency"
+    retained.mkdir(parents=True, exist_ok=True)
+    for path in [receipt_path, *(artifacts / name for name in checks.screenshots)]:
+        shutil.copyfile(path, retained / path.name)
     print(artifacts / "browser-receipt.json")
     if not receipt["passed"]:
         raise SystemExit("FAIL: inspect retained fictional currency receipt.")
