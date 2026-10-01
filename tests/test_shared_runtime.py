@@ -338,9 +338,24 @@ def test_catalog_discovery_does_not_create_workspace_or_socket(tmp_path):
         result = catalog()
     ids = {row["id"] for row in result["operations"]}
     assert (
-        len(ids) == 52
-        and {"template.preview", "atlas.context", "casebooks.save"} <= ids
+        len(ids) == 53
+        and {
+            "template.preview",
+            "atlas.context",
+            "casebooks.save",
+            "documents.docx.save",
+        }
+        <= ids
     )
+    local_save = next(
+        row for row in result["operations"] if row["id"] == "documents.docx.save"
+    )
+    assert (local_save["method"], local_save["route"], local_save["effect"]) == (
+        "POST",
+        "/api/documents/docx/save",
+        "write",
+    )
+    assert "No destination paths" in local_save["input"]
     assert not list(tmp_path.iterdir())
 
 

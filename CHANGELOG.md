@@ -7,6 +7,23 @@ installers and have not received installed-platform qualification.
 The candidate version is sealed for building and installed qualification; this
 heading is not a qualification receipt or approval to publish.
 
+- Keep campaign section controls available before the review dossier and during
+  deep editing, with measured clearance below save controls. Reveal restored
+  sections on narrow screens and keep the focused action field visible at larger
+  text sizes. Preserve owners, scope, dates, reviews, sources and quote meanings.
+
+- Offer an explicit local Word-copy recovery when a browser does not deliver a
+  download. Save exactly the applied title and wording into a distinct private
+  file, verify its ZIP and saved bytes, and show a selectable file path. Require
+  an explicit choice for pending edits, identify earlier copies after changes,
+  and retain text after an unconfirmed save without automatically replaying it.
+  This does not establish browser download delivery or factual review.
+
+- Explicitly bundle Linux native-window XCB support with original dependency
+  notices. A clean offline Ubuntu 22.04 prototype exposed and then closed the
+  missing-library gap; final combined-source installer qualification remains
+  required. A separate native shutdown callback error is still under review.
+
 - Retain open and closed cost rows while navigating within the current browser
   campaign editor. Explicit campaign replacement starts fresh view choices;
   original inputs, review statuses and saved revisions are preserved. Use a

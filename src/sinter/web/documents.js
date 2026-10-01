@@ -83,6 +83,26 @@ export function hasUnappliedDocumentEdits(current, text, open) {
   return open === true && text !== current;
 }
 
+export async function wordCopySnapshotHash(snapshot) {
+  const bytes = new TextEncoder().encode(JSON.stringify({markdown: snapshot.markdown, title: snapshot.title}));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+}
+
+export function validWordCopyResult(result, snapshot, snapshotHash) {
+  const hex = value => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+  return result !== null && typeof result === 'object' && !Array.isArray(result)
+    && typeof result.filename === 'string' && result.filename.endsWith('.docx')
+    && !/[\\/\x00-\x1f]/.test(result.filename)
+    && typeof result.path === 'string' && result.path.startsWith('/')
+    && result.path.endsWith('/' + result.filename)
+    && Number.isSafeInteger(result.bytes) && result.bytes > 0 && result.bytes <= 8 * 1024 * 1024
+    && result.content_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    && result.verification === 'Word ZIP integrity and exact byte readback'
+    && result.title === snapshot.title && hex(result.sha256) && hex(result.markdown_sha256)
+    && hex(snapshotHash) && result.snapshot_sha256 === snapshotHash;
+}
+
 export function plainDocument(value) {
   // Read a detached, safe DOM tree. Copying never exposes Markdown escapes or markup.
   const node = markdown(value);
@@ -165,12 +185,22 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
       + 'in this download', false)
     : null;
   let preparedWord;
+  let savedWordCopy;
+  let latestLocalSaveConfirmed = false;
+  let exportBusy = false;
+  const localCopy = h('section', {class: 'document-local-copy stack', hidden: true,
+    'aria-label': 'Word copy saved on this computer'});
+  const savedPath = field('Saved Word file path', 'text', '',
+    'Select and copy this path to find the file in your file manager or Word editor.',
+    {readOnly: true});
+  const localCopyNote = h('p', {class: 'fine', 'aria-live': 'polite'});
+  const localCopyBytes = h('p', {class: 'fine'});
   const wordInput = () => ({title: report.document_title || report.title || 'Sinter draft', markdown: documentMarkdown(report)});
   const sameWordInput = (left, right) => left?.title === right.title && left?.markdown === right.markdown;
   const word = button(isCampaign ? 'Download Word brief (.docx)' : 'Download Word (.docx)', async () => {
-    if (!canUseDocument()) return;
+    if (exportBusy || !canUseDocument()) return;
     const snapshot = wordInput();
-    word.disabled = true;
+    lockExports(true);
     try {
       if (!sameWordInput(preparedWord, snapshot)) {
         const content = await request('/api/documents/docx', {data: snapshot, responseType: 'blob'});
@@ -185,10 +215,66 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
       // An explicit retry of unchanged wording stays within this click and
       // reuses the prepared local file; it does not replay the compile request.
       download(reportName(snapshot.title) + '.docx', preparedWord.content, preparedWord.content.type);
-      feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, 'Word download requested. Check your browser’s downloads, then open the file to keep editing.')); announce('Word download requested. Check your browser’s downloads.');
+      feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, 'Word download requested. Check your browser’s downloads. If no file appears, open Word save options to save a copy directly on this computer.')); announce('Word download requested. Check your browser’s downloads.');
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
-    finally { word.disabled = false; }
+    finally { lockExports(false); }
   });
+  const localSave = button('Save Word copy on this computer', async () => {
+    if (exportBusy || !canUseDocument('saving a local Word copy')) return;
+    const snapshot = wordInput();
+    latestLocalSaveConfirmed = false; refreshLocalCopy();
+    lockExports(true);
+    try {
+      const snapshotHash = await wordCopySnapshotHash(snapshot);
+      const saved = await request('/api/documents/docx/save', {data: snapshot});
+      if (!validWordCopyResult(saved, snapshot, snapshotHash)) {
+        throw new Error('The local save response did not match this document snapshot.');
+      }
+      savedWordCopy = {snapshot, saved};
+      latestLocalSaveConfirmed = true;
+      savedPath.input.value = saved.path;
+      localCopyBytes.textContent = `${saved.bytes.toLocaleString()} bytes saved. Word package integrity and exact saved bytes checked.`;
+      refreshLocalCopy();
+      feedback.replaceChildren(notice('Word copy saved on this computer. Its exact file path is below. This does not confirm a browser download.', 'success'));
+      savedPath.input.focus(); savedPath.input.select();
+      announce('Word copy saved on this computer. File path selected.');
+    } catch (error) {
+      feedback.replaceChildren(notice(error.message + ' The local save was not confirmed. Your text is retained. Check Sinter’s exports folder before explicitly trying again; a copy may already exist.', 'error'));
+      refreshLocalCopy();
+    } finally { lockExports(false); }
+  }, 'quiet');
+  function lockExports(value) {
+    exportBusy = value; word.disabled = value; localSave.disabled = value;
+  }
+  function refreshLocalCopy() {
+    if (!savedWordCopy) return;
+    localCopy.hidden = false;
+    const current = sameWordInput(savedWordCopy.snapshot, wordInput());
+    const pending = hasUnappliedDocumentEdits(documentMarkdown(report), input.input.value, !editor.hidden);
+    localCopyNote.textContent = !latestLocalSaveConfirmed
+      ? 'Previously confirmed copy: the latest save was not confirmed. This path belongs to the earlier successful save.'
+      : current && !pending
+      ? 'This file contains the wording applied when you clicked Save Word copy. Review it before sharing.'
+      : 'Earlier saved copy: this file contains the wording applied when you clicked Save Word copy. Later or pending edits are not in this file.';
+  }
+  const copyPath = button('Copy saved file path', async () => {
+    if (!savedWordCopy) return;
+    try {
+      await navigator.clipboard.writeText(savedPath.input.value);
+      feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, 'Saved file path copied.'));
+    } catch {
+      savedPath.input.focus(); savedPath.input.select();
+      feedback.replaceChildren(notice('Clipboard access is unavailable. The file path is selected below; use your computer’s copy command.'));
+    }
+  }, 'quiet');
+  localCopy.append(localCopyNote, savedPath.wrap, localCopyBytes, copyPath,
+    h('details', {}, h('summary', {}, 'Saved file verification'),
+      h('p', {class: 'fine'}, 'The save records the supplied applied wording, creates a distinct private local file and checks its ZIP integrity and exact bytes. It does not verify facts, eligibility or browser delivery.'),
+      h('p', {class: 'fine'}, 'The saved copy stays in Sinter’s exports folder after closing the app. Existing files are never overwritten.')));
+  const wordSaveOptions = h('details', {class: 'document-word-save-options'},
+    h('summary', {}, 'Word save options'),
+    h('p', {class: 'fine'}, 'If your browser does not deliver a download, save a distinct Word copy directly in Sinter’s private exports folder on the computer running Sinter. This is an explicit local save; it does not send your text to a model or overwrite an existing file.'),
+    localSave, localCopy);
   const input = field(isCampaign ? 'Edit the decision brief' : 'Edit your draft', 'textarea', editorSeed?.text || '', 'Apply edits, then save the draft to keep them after closing Sinter. Use Insert page break at your cursor to start the following content on a new exported page. The original output and source evidence are retained.', {rows: 18, maxLength: 500000});
   function canUseDocument(operation = 'copying, downloading or printing') {
     if (!hasUnappliedDocumentEdits(documentMarkdown(report), input.input.value, !editor.hidden)) return true;
@@ -197,13 +283,13 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
     input.input.focus(); announce(message);
     return false;
   }
-  input.input.addEventListener('input', () => onEditorChange(input.input.value, true));
+  input.input.addEventListener('input', () => { onEditorChange(input.input.value, true); refreshLocalCopy(); });
   const edit = button(isCampaign ? 'Edit decision brief' : 'Edit draft', () => { if (editor.hidden) input.input.value = documentMarkdown(report); editor.hidden = false; input.input.focus(); }, 'quiet');
   const apply = button('Apply edits', () => {
     if (!input.input.value.trim()) { feedback.replaceChildren(notice('Keep some document text, or cancel to retain the current draft.', 'error')); return; }
     if (input.input.value.length > input.input.maxLength) { feedback.replaceChildren(notice('Keep this draft under 500,000 characters before applying edits.', 'error')); return; }
     report.document_edits = {markdown: input.input.value, edited_at: new Date().toISOString(), author: 'user'};
-    editor.hidden = true; onChange(); feedback.replaceChildren(notice('Edits applied. Save this draft to keep them.', 'success')); announce('Draft updated. Original evidence retained.'); exports.querySelector('summary').focus();
+    editor.hidden = true; onChange(); refreshLocalCopy(); feedback.replaceChildren(notice('Edits applied. Save this draft to keep them.', 'success')); announce('Draft updated. Original evidence retained.'); exports.querySelector('summary').focus();
   }, 'primary');
   const pageBreak = button('Insert page break', () => {
     const inserted = insertDocumentPageBreak(input.input.value, input.input.selectionStart);
@@ -225,7 +311,7 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
     feedback.replaceChildren(notice('Page break inserted. Apply edits, then save the draft to keep it.'));
     announce('Page break inserted at your cursor. Apply edits to use it.');
   }, 'quiet');
-  editor.append(input.wrap, h('div', {class: 'button-row'}, apply, pageBreak, button('Cancel edits', () => { editor.hidden = true; onEditorChange('', false); exports.querySelector('summary').focus(); })));
+  editor.append(input.wrap, h('div', {class: 'button-row'}, apply, pageBreak, button('Cancel edits', () => { editor.hidden = true; onEditorChange('', false); refreshLocalCopy(); exports.querySelector('summary').focus(); })));
   const evidencePack = button(
     isCampaign ? 'Download redacted evidence pack' : 'Download evidence pack', () => {
     if (!canUseDocument()) return;
@@ -271,6 +357,6 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
         : report.incomplete ? 'Incomplete draft copied. Review the partial text before using it.'
           : 'Copied. Ready to paste into your email or document.')); announce(isCampaign ? 'Decision brief copied.' : report.incomplete ? 'Incomplete draft text copied.' : 'Draft text copied.'); }
       catch { feedback.replaceChildren(notice('Clipboard access is unavailable. Download the document instead.', 'error')); }
-    }, 'primary'), word, save || null, exports));
+    }, 'primary'), word, save || null, exports), wordSaveOptions);
   return {controls, feedback, editor, canUseDocument};
 }

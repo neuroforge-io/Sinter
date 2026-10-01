@@ -43,7 +43,10 @@ def toolkit(tmp_path, monkeypatch):
     )
 
 
-def test_default_freezer_preserves_cli_stdio_and_uses_standard_tk_hooks():
+def test_default_freezer_preserves_cli_stdio_and_uses_standard_tk_hooks(monkeypatch):
+    monkeypatch.setattr(
+        package, "linux_native_window_library_arguments", lambda enabled: []
+    )
     arguments = package.freezer_arguments(False)
     assert "--console" in arguments
     assert "--windowed" not in arguments
@@ -57,6 +60,47 @@ def test_explicit_compatibility_build_excludes_both_tk_modules():
     for name in ("tkinter", "_tkinter"):
         assert arguments[arguments.index(name) - 1] == "--exclude-module"
     assert "--console" in arguments
+
+
+def test_linux_native_window_explicitly_collects_xcb_before_notice_inventory(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(sys, "platform", "linux")
+    library = tmp_path / "libxcb.so.1"
+    library.write_bytes(b"fictional XCB library bytes")
+    calls = []
+
+    def resolve(name):
+        calls.append(name)
+        return str(library)
+
+    arguments = package.linux_native_window_library_arguments(resolve=resolve)
+    assert calls == ["libxcb.so.1"]
+    assert arguments == ["--add-binary", str(library) + package.os.pathsep + "."]
+    monkeypatch.setattr(
+        package, "linux_native_window_library_arguments", lambda enabled: arguments
+    )
+    frozen = package.freezer_arguments(False)
+    assert frozen[frozen.index("--add-binary") + 1] == arguments[1]
+
+
+@pytest.mark.parametrize(
+    "platform,enabled", [("linux", False), ("darwin", True), ("win32", True)]
+)
+def test_xcb_collection_is_only_for_linux_native_window(platform, enabled, monkeypatch):
+    monkeypatch.setattr(sys, "platform", platform)
+
+    def refuse(name):
+        raise AssertionError("Disabled or non-Linux builds must not resolve XCB")
+
+    assert package.linux_native_window_library_arguments(enabled, resolve=refuse) == []
+
+
+@pytest.mark.parametrize("value", [None, "libxcb.so.1", "/missing/libxcb.so.1"])
+def test_missing_xcb_refuses_before_freezing(value, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    with pytest.raises(RuntimeError, match="build-host libxcb.so.1"):
+        package.linux_native_window_library_arguments(resolve=lambda name: value)
 
 
 def test_matching_toolkit_preflight_does_not_open_a_display(toolkit):

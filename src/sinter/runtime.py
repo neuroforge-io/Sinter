@@ -354,6 +354,17 @@ _OPERATIONS = (
         "Existing document-export payload.",
     ),
     Operation(
+        "documents.docx.save",
+        "POST",
+        "/api/documents/docx/save",
+        (
+            "Save a distinct, verified local Word copy "
+            "in the private workspace exports folder."
+        ),
+        "title, markdown. No destination paths. Requires safe local file support.",
+        "write",
+    ),
+    Operation(
         "community.compare",
         "POST",
         "/api/community/compare",

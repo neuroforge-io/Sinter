@@ -176,6 +176,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     });
   }
   let pendingBudgetFocus = null;
+  let toolbarObserver = null, toolbarObserverFrame = null;
   let sourceQuery = typeof seed.sourceQuery === 'string' ? seed.sourceQuery : '';
   let assetQuery = typeof seed.assetQuery === 'string' ? seed.assetQuery : '';
   let communicationQuery = typeof seed.communicationQuery === 'string' ? seed.communicationQuery : '';
@@ -188,7 +189,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   let pendingActionFocus = null;
   const root = h('div', {class: 'campaign-page'}), shelf = h('div', {class: 'campaign-shelf'});
   const feedback = h('div', {class: 'campaign-save-feedback', 'aria-live': 'polite', tabindex: 0}), status = h('span', {class: 'campaign-save-state', role: 'status'});
-  const summary = h('div', {class: 'campaign-summary'}), editor = h('div'), output = h('div', {id: 'campaign-output', class: 'campaign-output'});
+  const summary = h('div', {class: 'campaign-summary'}), editor = h('div', {class: 'campaign-editor'}), output = h('div', {id: 'campaign-output', class: 'campaign-output'});
+  const sectionNavigation = h('nav', {class: 'campaign-section-navigation non-print', 'aria-label': 'Campaign sections navigation'});
   const capacity = h('p', {class: 'fine', 'aria-label': 'Campaign capacity'});
   const decisionCard = h('section', {class: 'campaign-decision-card', 'aria-label': 'Campaign decision and next move'});
   const savedList = h('div', {class: 'campaign-saved-list'});
@@ -225,6 +227,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   // A native toggle event may still be queued when the container is removed.
   root.dispose = () => {
+    toolbarObserver?.disconnect();
+    if (toolbarObserverFrame !== null) cancelAnimationFrame(toolbarObserverFrame);
     captureBudgetDisclosures();
     rememberCampaign();
   };
@@ -334,7 +338,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       rows.splice(rows.indexOf(item), 1); changed(); renderEditor();
     }, 'quiet');
   }
-  function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; newButton.disabled = value; editor.inert = value; transfers.inert = value; }
+  function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; newButton.disabled = value; editor.inert = value; sectionNavigation.inert = value; transfers.inert = value; }
   function apply(next, id = null, rev = null, preferActionable = false) {
     const resumeCurrentCampaign = Boolean(id && id === savedId);
     const previousTab = tab;
@@ -433,7 +437,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }});
       output.replaceChildren(renderReport(report));
       delete output.dataset.stale; output.classList.remove('campaign-output-stale');
-      output.scrollIntoView({block: 'start'});
+      scrollCampaignTarget(output);
       announce('Campaign brief prepared. Unknowns and review items remain visible.');
     } catch (problem) { error(problem.message); }
     finally { lock(false); }
@@ -547,7 +551,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       tab = 'overview'; rememberCampaign(); renderEditor();
       const focus = editor.querySelector('.campaign-focus') || editor;
       focus.tabIndex = -1; focus.focus({preventScroll: true});
-      focus.scrollIntoView({block: 'start'});
+      scrollCampaignTarget(focus);
     };
     const targetDate = result.action.due ? new Date(result.action.due + 'T12:00:00') : null;
     const targetDatePast = Boolean(result.action.due && result.action.due < localDate());
@@ -574,8 +578,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         tab = 'actions'; rememberCampaign(); renderEditor();
         const recordedAction = result.action.actionIndex === undefined ? null
           : editor.querySelector(`[data-action-index="${result.action.actionIndex}"]`);
-        (recordedAction || editor).scrollIntoView({block: 'start'});
-        recordedAction?.querySelector('textarea')?.focus();
+        const taskField = recordedAction?.querySelector('textarea');
+        scrollCampaignTarget(taskField || recordedAction || editor);
+        taskField?.focus({preventScroll: true});
       }, 'quiet'));
     const otherActiveRoutes = document.opportunities.filter(row =>
       isOpportunityActionable(row.status) && row.name !== result.focusOpportunity);
@@ -602,6 +607,32 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     while (document.opportunities.some(row => row.name === 'Opportunity ' + number)) number++;
     document.opportunities.push({name: 'Opportunity ' + number, funder: '', url: '', deadline: '', decision_window: '', ceiling: null, ceiling_currency: 'unconfirmed', fit: '', route_type: 'unknown', status: 'researching'});
     selected = document.opportunities.length - 1; changed(); renderEditor();
+  }
+  function revealSelectedCampaignTab() {
+    const tabs = sectionNavigation.querySelector('.campaign-tabs');
+    const selectedTab = tabs?.querySelector('[aria-selected="true"]');
+    if (!selectedTab) return;
+    const bounds = tabs.getBoundingClientRect(), chosen = selectedTab.getBoundingClientRect();
+    if (chosen.left < bounds.left) tabs.scrollLeft += chosen.left - bounds.left;
+    else if (chosen.right > bounds.right) tabs.scrollLeft += chosen.right - bounds.right;
+  }
+  function updateCampaignClearance() {
+    const saveRegion = root.querySelector('.campaign-save-bar');
+    const top = saveRegion ? Number.parseFloat(getComputedStyle(saveRegion).top) || 0 : 0;
+    const navigationTop = (saveRegion?.getBoundingClientRect().height || 0) + top + 8;
+    root.style.setProperty('--campaign-navigation-top', `${Math.ceil(navigationTop)}px`);
+    const clearance = navigationTop + sectionNavigation.getBoundingClientRect().height + 16;
+    root.style.setProperty('--campaign-scroll-clearance', `${Math.ceil(clearance)}px`);
+  }
+  function scrollCampaignTarget(target, focus = false) {
+    if (!target) return;
+    updateCampaignClearance();
+    if (focus) { target.tabIndex = -1; target.focus({preventScroll: true}); }
+    target.scrollIntoView({block: 'start', behavior: 'auto'});
+  }
+  function openCampaignSection(id) {
+    tab = id; rememberCampaign(); renderEditor();
+    scrollCampaignTarget(editor.querySelector('.campaign-section'), true);
   }
   function renderEditor() {
     if (captureBudgetDisclosures()) rememberCampaign();
@@ -637,12 +668,12 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const tabs = h('div', {class: 'campaign-tabs', role: 'tablist', 'aria-label': 'Campaign sections'});
     const panel = h('section', {class: 'campaign-section', role: 'tabpanel'});
     for (const [id, label] of campaignTabs) {
-      const control = button(label, () => { tab = id; rememberCampaign(); renderEditor(); }, 'campaign-tab');
+      const control = button(label, () => openCampaignSection(id), 'campaign-tab');
       control.setAttribute('role', 'tab'); control.setAttribute('aria-selected', String(tab === id)); control.tabIndex = tab === id ? 0 : -1;
       control.addEventListener('keydown', event => {
         const at = campaignTabs.findIndex(([key]) => key === tab);
         const offset = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
-        if (offset) { event.preventDefault(); tab = campaignTabs[(at + offset + campaignTabs.length) % campaignTabs.length][0]; rememberCampaign(); renderEditor(); editor.querySelector('[aria-selected="true"]').focus(); }
+        if (offset) { event.preventDefault(); tab = campaignTabs[(at + offset + campaignTabs.length) % campaignTabs.length][0]; rememberCampaign(); renderEditor(); sectionNavigation.querySelector('[aria-selected="true"]').focus({preventScroll: true}); }
       });
       tabs.append(control);
     }
@@ -654,8 +685,21 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     else if (tab === 'communications') renderCommunications(panel);
     else if (tab === 'assets') renderAssets(panel);
     else renderSources(panel);
-    editor.replaceChildren(details, tabs, panel);
+    if (['budget', 'actions'].includes(tab)) {
+      const routeName = document.opportunities[selected]?.name || 'No route selected';
+      const scopeNote = tab === 'budget'
+        ? 'All current campaign costs.'
+        : 'All action scopes remain shown.';
+      const context = h('div', {class: 'campaign-section-context'},
+        h('p', {}, 'Selected route: ', h('strong', {}, routeName), h('span', {}, scopeNote)),
+        button('Campaign status', () => scrollCampaignTarget(decisionCard, true), 'quiet'));
+      panel.prepend(context);
+    }
+    editor.replaceChildren(details, panel);
+    sectionNavigation.replaceChildren(tabs);
+    revealSelectedCampaignTab();
     if (pendingFocus) {
+      updateCampaignClearance();
       const referenceScope = pendingFocus.referenceIndex === undefined ? ''
         : ` .campaign-asset-reference[data-reference-index="${pendingFocus.referenceIndex}"]`;
       const target = editor.querySelector(`.campaign-asset[data-asset-id="${pendingFocus.assetId}"]${referenceScope} [data-campaign-field="${pendingFocus.field}"]`);
@@ -666,11 +710,13 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }
     }
     if (pendingBudgetFocus) {
+      updateCampaignClearance();
       const {index, field: fieldName} = pendingBudgetFocus;
       pendingBudgetFocus = null;
       editor.querySelector(`[data-budget-index="${index}"] [data-campaign-field="${fieldName}"]`)?.focus();
     }
     if (pendingActionFocus) {
+      updateCampaignClearance();
       const {index, field: fieldName} = pendingActionFocus;
       pendingActionFocus = null;
       const target = editor.querySelector(
@@ -1060,15 +1106,15 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       h('p', {class: 'muted'}, 'Keep each quoted or estimated amount beside its original reference. Open a cost to check or edit it. Blank prices stay unknown.'),
       total, h('p', {class: 'fine campaign-budget-basis-note'},
         'Quoted amounts may have different or unknown GST bases. No GST conversion was made. Sinter has not qualified an application budget.'),
-      h('details', {class: 'campaign-budget-basis-details'},
-        h('summary', {}, 'About these amounts'), h('p', {class: 'fine'}, QUOTED_BUDGET_NOTE)), progress,
       h('div', {class: 'button-row'}, nextCost, button('Add budget item', () => {
         const row = {item: '', opportunity: '', quantity: 1, unit_cost: null, quote_reference: ''};
         document.budget.push(row); setBudgetDisclosure(row, true);
         invalidateBudgetAnswers();
         pendingBudgetFocus = {index: document.budget.length - 1, field: 'item'};
         changed(); renderEditor();
-      }, 'quiet')));
+      }, 'quiet')), progress,
+      h('details', {class: 'campaign-budget-basis-details'},
+        h('summary', {}, 'About these amounts'), h('p', {class: 'fine'}, QUOTED_BUDGET_NOTE)));
     for (const route of document.opportunities.filter(row => actionable.has(row.name))) {
       const note = campaignCurrencyComparisonNote(route);
       if (note) panel.append(h('p', {class: 'fine campaign-currency-comparison'}, route.name + ': ' + note));
@@ -1976,7 +2022,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     h('p', {}, 'Compare opportunities, map products and IP questions to funding routes, prepare answers and turn missing details into next actions. Saved locally, with your sources beside the work.')),
     h('div', {class: 'campaign-save-bar non-print', role: 'region', 'aria-label': 'Campaign save and preview'},
       h('div', {class: 'button-row'}, saveButton, prepareButton), status, feedback),
-    practiceGuide, decisionCard, savedPanel, shelf, summary, capacity, editor, transfers, output);
+    practiceGuide, sectionNavigation, decisionCard, savedPanel, shelf, summary, capacity, editor, transfers, output);
   status.textContent = dirty ? 'Unsaved changes' : savedId ? 'Saved on this computer' : 'Not saved yet';
   renderEditor(); renderSummary();
   const existing = await refreshShelf();
@@ -1987,5 +2033,16 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       feedback.replaceChildren(notice('Most recently updated campaign opened. Choose a different one above or start a new campaign.', 'success'));
     } catch (problem) { error('Could not reopen your latest campaign. ' + problem.message); }
   }
+  // The app attaches this returned workspace before the next animation frame.
+  // Discarded route renders never start an observer on detached controls.
+  toolbarObserverFrame = requestAnimationFrame(() => {
+    toolbarObserverFrame = null;
+    if (!root.isConnected) return;
+    toolbarObserver = new ResizeObserver(updateCampaignClearance);
+    toolbarObserver.observe(root.querySelector('.campaign-save-bar'));
+    toolbarObserver.observe(sectionNavigation);
+    revealSelectedCampaignTab();
+    updateCampaignClearance();
+  });
   return root;
 }
