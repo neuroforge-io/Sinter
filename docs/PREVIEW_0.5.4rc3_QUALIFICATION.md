@@ -1,7 +1,10 @@
 # RC3 qualification requirements
 
-Status: development tooling. This document is not an installer qualification or
-a publication receipt. Published v0.5.3, v0.5.4rc1 and v0.5.4rc2 remain unchanged.
+Status: sealed version for candidate building and installed qualification. This
+document is not an installer qualification or a publication receipt. Published
+v0.5.3, v0.5.4rc1 and v0.5.4rc2 remain unchanged. Keep the exact build commit in
+each receipt; source-tree equality with another commit does not change that
+build identity. Hosted review builds do not publish this scoped prerelease.
 
 The prospective candidate is Linux x64 on Ubuntu 22.04/glibc 2.35 only. Other
 platforms need their own installed evidence. Packages remain unsigned and not

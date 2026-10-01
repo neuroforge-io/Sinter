@@ -1,9 +1,11 @@
 # Changelog
 
-## 0.5.4rc3.dev0 - unreleased development
+## 0.5.4rc3 - sealed candidate, not published
 
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
+The candidate version is sealed for building and installed qualification; this
+heading is not a qualification receipt or approval to publish.
 
 - Keep quoted budget amounts separate from a reviewed application budget. Retain
   original AUD values, references, unknown prices and historical costs; explain
