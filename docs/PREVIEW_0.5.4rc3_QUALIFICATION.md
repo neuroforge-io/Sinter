@@ -8,8 +8,8 @@ build identity. Hosted review builds do not publish this scoped prerelease.
 
 The existing hosted installed-gate job still targets its historical qualification
 branch; it does not automatically qualify current main. A fresh source-pinned run
-must consume its own newly built Linux x64 installer. The existing local runner
-prepares a tooling image, runs the three pinned copied/installed upgrade producers
+must consume its own newly built Linux x64 installer. Prepare a tooling image,
+then use the existing local runner for the three pinned copied/installed upgrade producers
 and both installed browser producers with application-test networking disabled.
 Its `sinter-linux-installed-gates/v1` receipt records partial progress and cleanup;
 independent Python-free installation and the final canonical candidate gate remain
@@ -46,11 +46,16 @@ notarised; do not disable OS protections to install them.
    truthful unknown owners and proposed dates. Exercise failed Save with the
    process stopped, both clipboard and denied/unavailable clipboard recovery,
    and restoration without changing the saved original.
-5. Run the current native launch qualifier against the fresh frozen executable
+5. Independently install the same actual Debian package on a digest-pinned
+   Ubuntu 22.04 base without preinstalled Python, account libraries or X11/XCB.
+   Disable test networking; verify the bundled toolkit imports, complete the
+   installed self-test and remove the package. Keep this cold import/install
+   proof separate from graphical launch and from the Python-equipped tooling image.
+6. Run the current native launch qualifier against the fresh frozen executable
    on an isolated display. Retain its full bounded receipt; inspect both mapped
    launches, clean stderr, shutdown and saved fictional workspace/preferences.
    This launch check does not establish the full native editing experience.
-6. Independently inspect the actual artifact contents and installer, then verify
+7. Independently inspect the actual artifact contents and installer, then verify
    the complete staged publication plan. Do not publish a renamed source
    rehearsal, a list of claimed passes or receipts from a different binary.
 
