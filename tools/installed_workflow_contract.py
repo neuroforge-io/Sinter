@@ -1,5 +1,6 @@
 """Data-only contract for one fictional Linux x64 installed UI qualification."""
 
+import ast
 from types import MappingProxyType
 
 SCHEMA = "sinter-installed-workflow/v1"
@@ -108,6 +109,10 @@ MAX_TOTAL_BYTES = 12 * 1024 * 1024
 # Historical v1 remains unchanged. These roles are mandatory only when the
 # pinned source introduces the explicit local Word-copy operation.
 LATEST_SCHEMA = "sinter-installed-workflow/v2"
+NAVIGATION_SCHEMA = "sinter-installed-workflow/v3"
+LEGACY_PRESENTATION = "sinter-handover-presentation/v1"
+RECIPIENT_PRESENTATION = "sinter-handover-presentation/v2"
+NAVIGATION_CHECK = "handover_recipient_guidance_and_internal_navigation"
 WORD_CHANGED_NOTE = (
     "\n\n## Fictional Word-only clarification\n\n"
     "No grant was awarded; no owner or proposed date has been confirmed. 🐝"
@@ -140,15 +145,88 @@ def requires_word_copy(source: dict[str, bytes]) -> bool:
     )
 
 
+def _symbol_nodes(tree: ast.AST, symbol: str) -> list[ast.AST]:
+    """Find reserved identifier references/bindings, including nested declarations."""
+    return [
+        node
+        for node in ast.walk(tree)
+        if (
+            isinstance(node, ast.Name)
+            and node.id == symbol
+            or isinstance(node, ast.arg)
+            and node.arg == symbol
+            or isinstance(node, ast.alias)
+            and (node.asname or node.name.split(".")[0]) == symbol
+            or getattr(node, "name", None) == symbol
+            or isinstance(node, (ast.Global, ast.Nonlocal))
+            and symbol in node.names
+            or isinstance(node, ast.MatchMapping)
+            and node.rest == symbol
+        )
+    ]
+
+
+def source_presentation(source: dict[str, bytes]) -> str:
+    """Read a closed literal identity; never execute or guess candidate code."""
+    try:
+        handover = ast.parse(source.get("src/sinter/handover.py", b""))
+        exporter = ast.parse(source.get("src/sinter/docx_export.py", b""))
+        identity_nodes = _symbol_nodes(handover, "PRESENTATION_VERSION")
+        navigation_nodes = _symbol_nodes(exporter, "_passage_navigation")
+        markers = [
+            node
+            for node in handover.body
+            if isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == "PRESENTATION_VERSION"
+        ]
+        navigation = [
+            node
+            for node in exporter.body
+            if isinstance(node, ast.FunctionDef) and node.name == "_passage_navigation"
+        ]
+        navigation_bindings = [
+            node
+            for node in navigation_nodes
+            if not (isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load))
+        ]
+        if not identity_nodes and not navigation_nodes:
+            return LEGACY_PRESENTATION
+        if (
+            len(markers) != 1
+            or identity_nodes != [markers[0].targets[0]]
+            or len(navigation) != 1
+            or navigation_bindings != navigation
+            or ast.literal_eval(markers[0].value) != RECIPIENT_PRESENTATION
+        ):
+            raise ValueError("Unknown or incomplete handover presentation identity.")
+    except (SyntaxError, TypeError, ValueError) as error:
+        raise ValueError(
+            "Installed qualification needs a closed handover presentation identity."
+        ) from error
+    return RECIPIENT_PRESENTATION
+
+
 def workflow_schema(source: dict[str, bytes]) -> str:
+    if source_presentation(source) == RECIPIENT_PRESENTATION:
+        if not requires_word_copy(source):
+            raise ValueError(
+                "Recipient handover qualification requires Word-copy support."
+            )
+        return NAVIGATION_SCHEMA
     return LATEST_SCHEMA if requires_word_copy(source) else SCHEMA
 
 
 def workflow_artifact_paths(source: dict[str, bytes]):
-    return LATEST_ARTIFACT_PATHS if requires_word_copy(source) else ARTIFACT_PATHS
+    return (
+        LATEST_ARTIFACT_PATHS if workflow_schema(source) != SCHEMA else ARTIFACT_PATHS
+    )
 
 
 def workflow_checks(source: dict[str, bytes]) -> tuple[str, ...]:
+    if workflow_schema(source) == NAVIGATION_SCHEMA:
+        return (*CHECKS[:-1], *WORD_CHECKS, NAVIGATION_CHECK, CHECKS[-1])
     return (
         (*CHECKS[:-1], *WORD_CHECKS, CHECKS[-1])
         if requires_word_copy(source)

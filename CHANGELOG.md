@@ -5,6 +5,17 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Link generated Word handover question labels to included quotations and their
+  passage reference keys. Retain exact source identities, Unicode ranges and
+  wording; ambiguous or oversized mappings keep their text without optional
+  navigation. Explain missing originals to the recipient instead of referring
+  them to an Evidence panel they may not have.
+- Keep the new handover presentation and installed-workflow/v3 qualification
+  separate from historical reports and workflow/v1/v2 receipts. Independently
+  reviewed source checks bind reference labels to the compiled source captions,
+  identities and ranges. New source still needs fresh installed qualification.
+- Present native report markup readably while retaining exact stored Markdown
+  and exports, including literal code fences and unknown report labels.
 - Create the private Word-copy lock exclusively, then open an existing lock
   without creation flags. Preserve file checks, distinct copies and explicit
   retry semantics. Concurrent and unsafe-file regressions cover the source

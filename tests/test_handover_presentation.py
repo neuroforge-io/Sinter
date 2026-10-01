@@ -547,7 +547,7 @@ def test_no_selected_wording_does_not_substitute_irrelevant_background_as_an_ans
     assert report["coverage"]["unrepresented_documents"] == ["Menu"]
 
 
-def test_extra_selected_passages_remain_exact_and_explicitly_available_in_evidence():
+def test_extra_selected_passages_remain_exact_and_explicitly_omitted_from_copy():
     labels = ("azalea", "banksia", "clover", "dahlia", "eucalyptus", "freesia")
     payload = {
         "title": "Access",
@@ -567,7 +567,7 @@ def test_extra_selected_passages_remain_exact_and_explicitly_available_in_eviden
     assert len(report["excerpts"]) > handover.MAX_NOTES
     extra = len(report["excerpts"]) - handover.MAX_NOTES
     assert (
-        f"{extra} additional selected passages remain in Evidence"
+        f"{extra} additional selected passages are not reproduced in this copy"
         in report["document_markdown"]
     )
     for item in report["excerpts"]:

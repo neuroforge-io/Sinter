@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import struct
@@ -16,6 +17,7 @@ from sinter import casebooks, docx_export
 from tools import candidate_qualification as qualification
 from tools import candidate_release as candidate
 from tools import installed_workflow_qualification as workflow
+from tools.historical_handover_fixture import historical_handover
 from tools.installed_workflow_contract import (
     ARTIFACT_PATHS,
     CHECKS,
@@ -85,18 +87,18 @@ def completed(bundle):
         for name, content in source.items()
         if name.startswith("src/sinter/web/")
     }
-    report = casebooks.build(book)
-    word = docx_export.export_docx(
-        {
-            "title": report["title"],
-            "markdown": report["document_markdown"] + OPERATOR_NOTE,
-        }
-    )
+    # Historical v1 fixtures retain their captured report/Word bytes. They must
+    # not acquire a later generator's wording from the verifier's imports.
+    historical = historical_handover("installed_garden")
+    assert historical["input"] == book
+    report = historical["report"]
+    word_content = base64.b64decode(historical["word_base64"], validate=True)
+    assert hashlib.sha256(word_content).hexdigest() == historical["word_sha256"]
     for role, name in ARTIFACT_PATHS.items():
         path = folder / name
         path.parent.mkdir(exist_ok=True)
         if role == "handover_word":
-            path.write_bytes(word.content)
+            path.write_bytes(word_content)
         elif role == "casebook_backup":
             write_json(path, book)
         elif role == "campaign_backup":
@@ -565,6 +567,11 @@ def current_word_evidence(completed):
         "title": book["title"],
         "markdown": report["document_markdown"] + OPERATOR_NOTE,
     }
+    # This separate latest-source fixture uses the new generator and closed v3
+    # qualification, never the historical v1 download captured above.
+    (folder / LATEST_ARTIFACT_PATHS["handover_word"]).write_bytes(
+        docx_export.export_docx(original).content
+    )
     report["document_edits"] = {
         "markdown": original["markdown"],
         "author": "user",
@@ -686,6 +693,48 @@ def verify_current_word(evidence):
         native,
         receipt["installed_binary_sha256"],
     )
+
+
+@pytest.mark.parametrize(
+    "schema", ["sinter-installed-workflow/v1", "sinter-installed-workflow/v2"]
+)
+def test_current_presentation_rejects_resealed_historical_workflow_revision(
+    current_word_evidence, schema
+):
+    folder = current_word_evidence[0]
+    path = folder / "installed-workflow-browser.json"
+    receipt = json.loads(path.read_text())
+    receipt["schema"] = schema
+    write_json(path, receipt)
+    refresh_artifacts(folder)
+    with pytest.raises(ValueError):
+        verify_current_word(current_word_evidence)
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [None, "sinter-handover-presentation/v1", "sinter-handover-presentation/v999"],
+)
+def test_current_word_saved_snapshot_requires_matching_presentation(
+    current_word_evidence, marker
+):
+    folder = current_word_evidence[0]
+    path = folder / "installed-workflow/word-copy-recovery.json"
+    proof = json.loads(path.read_text())
+    if marker is None:
+        proof["saved_report"].pop("handover_presentation")
+    else:
+        proof["saved_report"]["handover_presentation"] = marker
+    write_json(path, proof)
+    receipt_path = folder / "installed-workflow-browser.json"
+    receipt = json.loads(receipt_path.read_text())
+    receipt["result_hashes"]["saved_report"] = workflow.canonical_hash(
+        proof["saved_report"]
+    )
+    write_json(receipt_path, receipt)
+    refresh_artifacts(folder)
+    with pytest.raises(ValueError):
+        verify_current_word(current_word_evidence)
 
 
 def test_current_word_requires_exact_catalog_saved_bytes_and_conservation(

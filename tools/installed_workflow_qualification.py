@@ -18,17 +18,20 @@ from tools.installed_workflow_contract import (
     ACTION_TASK,
     ARTIFACT_PATHS,
     COMMUNICATION,
+    LEGACY_PRESENTATION,
     MAX_ARTIFACT_BYTES,
     MAX_TOTAL_BYTES,
     OPERATOR_NOTE,
     PRACTICE_FILES,
     RECEIPT_FIELDS,
     RECIPIENT,
+    RECIPIENT_PRESENTATION,
     RESOURCE_FLAGS,
     RESTORED_CAMPAIGN_TITLE,
     RESTORED_CASEBOOK_TITLE,
     WORD_CHANGED_NOTE,
     requires_word_copy,
+    source_presentation,
     workflow_artifact_paths,
     workflow_checks,
     workflow_schema,
@@ -274,7 +277,9 @@ def _word_paragraphs(content: bytes) -> tuple[list[str], dict[str, ET.Element]]:
     return paragraphs, parsed
 
 
-def validate_word(content: bytes, book: dict) -> None:
+def validate_word(
+    content: bytes, book: dict, *, presentation: str = LEGACY_PRESENTATION
+) -> None:
     """Check the fictional handover's words, exact key and appended operator note."""
     paragraphs, parsed = _word_paragraphs(content)
     text = "\n".join(paragraphs)
@@ -314,13 +319,37 @@ def validate_word(content: bytes, book: dict) -> None:
             raise ValueError("The Word download has no complete exact passage key.")
     if parsed["word/document.xml"].find(".//" + W + "tbl") is None:
         raise ValueError("The fictional source table is missing from Word.")
-    _known_word_paragraphs(paragraphs, book)
+    _known_word_paragraphs(paragraphs, book, presentation=presentation)
+    if presentation == RECIPIENT_PRESENTATION:
+        _word_navigation(parsed["word/document.xml"], book)
 
 
-def _known_word_paragraphs(paragraphs: list[str], book: dict) -> None:
+def _known_word_paragraphs(
+    paragraphs: list[str], book: dict, *, presentation: str = LEGACY_PRESENTATION
+) -> None:
     # A closed text vocabulary prevents a resealed file from carrying unrelated
     # private prose alongside valid fixture phrases. Styling remains reviewable.
+    guidance = {
+        LEGACY_PRESENTATION: (
+            "Quoted source notes below preserve the supplied words, with readable "
+            "layout. Read the exact originals and surrounding context in Evidence "
+            "before confirming any commitment.",
+            "Showing 4 of 4 selected passages from 4 sources. All selected passages "
+            "remain available in Evidence.",
+        ),
+        RECIPIENT_PRESENTATION: (
+            "Quoted notes below reproduce the included selected wording, with "
+            "readable layout. They are excerpts, not every original document "
+            "or its surrounding text. Ask the sender for the full originals "
+            "or project backup before confirming any commitment.",
+            "Showing 4 of 4 selected passages from 4 sources. "
+            "Unselected original text is not reproduced.",
+        ),
+    }
+    if presentation not in guidance:
+        raise ValueError("The Word presentation identity is unsupported.")
     allowed = {
+        *guidance[presentation],
         "",
         book["title"],
         book["organisation"],
@@ -336,11 +365,6 @@ def _known_word_paragraphs(paragraphs: list[str], book: dict) -> None:
         "owner or target date is assigned by this checklist.",
         "No wording match was found in the admitted text. The real-world answer "
         "remains unknown; ask for clarification or add a source.",
-        "Quoted source notes below preserve the supplied words, with readable "
-        "layout. Read the exact originals and surrounding context in Evidence "
-        "before confirming any commitment.",
-        "Showing 4 of 4 selected passages from 4 sources. All selected passages "
-        "remain available in Evidence.",
         "Quoted source table. Blank cells are shown as —; entries do not confirm "
         "assignments or dates.",
         "These short labels refer to the exact selected excerpts. Offsets count "
@@ -382,6 +406,143 @@ def _known_word_paragraphs(paragraphs: list[str], book: dict) -> None:
         value = normalize(paragraph)
         if value not in allowed and not related.fullmatch(value):
             raise ValueError("The Word download contains unrelated or private wording.")
+
+
+def _word_navigation(document: ET.Element, book: dict) -> None:
+    """Admit only the four-passage fixture's local, matching navigation layer."""
+    # These are the current local compiler's exact admitted fixture identities,
+    # never labels inferred from the submitted Word file. The complete installed
+    # gate also binds every transitive candidate Python byte before recovery.
+    from sinter import casebooks
+
+    report = casebooks.build(book)
+    titles = {row["id"]: row["title"] for row in report["source_register"]}
+    references = {row["label"]: row for row in report["document_references"]}
+    if set(references) != {f"Passage {number}" for number in range(1, 5)}:
+        raise ValueError(
+            "The recipient fixture has no exact four-passage reference mapping."
+        )
+
+    def words(node):
+        return "".join(
+            (item.text or "")
+            if item.tag == W + "t"
+            else "\n"
+            if item.tag == W + "br"
+            else "\t"
+            if item.tag == W + "tab"
+            else ""
+            for item in node.iter()
+        )
+
+    body_node = document.find(W + "body")
+    if body_node is None:
+        raise ValueError("Recipient navigation has no Word document body.")
+    body = list(body_node)
+    starts = list(document.iter(W + "bookmarkStart"))
+    ends = list(document.iter(W + "bookmarkEnd"))
+    expected = {
+        f"Sinter{kind}{number}"
+        for kind in ("Passage", "Reference")
+        for number in range(1, 5)
+    }
+    names = [node.get(W + "name") for node in starts]
+    ids = [node.get(W + "id") for node in starts]
+    if (
+        len(starts) != 8
+        or set(names) != expected
+        or len(set(ids)) != 8
+        or any(
+            not isinstance(value, str) or not re.fullmatch(r"0|[1-9][0-9]*", value)
+            for value in ids
+        )
+        or sorted(ids) != sorted(node.get(W + "id", "") for node in ends)
+        or any(set(node.attrib) != {W + "id", W + "name"} for node in starts)
+        or any(set(node.attrib) != {W + "id"} for node in ends)
+    ):
+        raise ValueError("The recipient handover has missing or ambiguous bookmarks.")
+    seen_links = []
+    seen_bookmarks = []
+    for paragraph in document.iter(W + "p"):
+        text = words(paragraph)
+        bookmarks = paragraph.findall(W + "bookmarkStart")
+        links = paragraph.findall(W + "hyperlink")
+        if len(bookmarks) > 1:
+            raise ValueError("A recipient passage has ambiguous navigation.")
+        expected_links = []
+        if bookmarks:
+            seen_bookmarks.extend(bookmarks)
+            closes = paragraph.findall(W + "bookmarkEnd")
+            if len(closes) != 1 or closes[0].get(W + "id") != bookmarks[0].get(
+                W + "id"
+            ):
+                raise ValueError("A recipient bookmark is not closed in its paragraph.")
+            name = bookmarks[0].get(W + "name")
+            number = int(name[-1])
+            label = f"Passage {number}"
+            record = references[label]
+            caption = "Original source: " + titles[record["source_id"]]
+            if name.startswith("SinterPassage"):
+                if text != label:
+                    raise ValueError("A quote bookmark does not identify its passage.")
+                if paragraph not in body:
+                    raise ValueError(
+                        "A quote destination has no admitted source caption."
+                    )
+                index = body.index(paragraph)
+                if (
+                    index + 1 >= len(body)
+                    or body[index + 1].tag != W + "p"
+                    or words(body[index + 1]) != caption
+                ):
+                    raise ValueError(
+                        "A quote destination caption differs from its exact "
+                        "source reference."
+                    )
+                expected_links = [(label, f"SinterReference{number}")]
+            else:
+                expected_reference = (
+                    f"{label} — {caption}\n"
+                    f"Excerpt ID: {record['excerpt_id']}; "
+                    f"source ID: {record['source_id']}.\n"
+                    f"Unicode characters: {record['start']}–{record['end']}; "
+                    "quoted above."
+                )
+                if text != expected_reference:
+                    raise ValueError(
+                        "A numbered reference differs from its exact supplied "
+                        "source caption, ID or range."
+                    )
+                expected_links = [(label, f"SinterPassage{number}")]
+        elif text.startswith("Related wording — review required:"):
+            expected_links = [
+                (label, "SinterPassage" + label[-1])
+                for label in re.findall(r"Passage [1-4]", text)
+            ]
+        actual_links = []
+        for link in links:
+            if (
+                set(link.attrib) != {W + "anchor"}
+                or link.get(W + "anchor") not in expected
+            ):
+                raise ValueError(
+                    "A recipient link is not an admitted local destination."
+                )
+            actual_links.append(
+                (
+                    "".join(node.text or "" for node in link.iter(W + "t")),
+                    link.get(W + "anchor"),
+                )
+            )
+        if actual_links != expected_links:
+            raise ValueError("Recipient links do not match their passage labels.")
+        seen_links.extend(links)
+    if len(seen_links) != len(list(document.iter(W + "hyperlink"))):
+        raise ValueError("Recipient navigation contains nested or hidden links.")
+    if len(seen_bookmarks) != len(starts):
+        raise ValueError(
+            "Recipient bookmarks must identify visible passage paragraphs."
+        )
 
 
 def verify_installed_workflow(
@@ -504,7 +665,7 @@ def verify_installed_workflow(
         if role not in ARTIFACT_PATHS or role.endswith("backup"):
             continue
         if role == "handover_word":
-            validate_word(data, book)
+            validate_word(data, book, presentation=source_presentation(source))
         else:
             validate_png(data)
     if requires_word_copy(source):
@@ -740,6 +901,19 @@ def validate_word_copy_recovery(
     }
     if set(proof) != fields or proof["schema"] != "sinter-installed-word-copy/v1":
         raise ValueError("Word recovery evidence has missing or unknown fields.")
+    saved = proof.get("saved_report")
+    presentation = source_presentation(source)
+    if (
+        not isinstance(saved, dict)
+        or (
+            presentation == RECIPIENT_PRESENTATION
+            and saved.get("handover_presentation") != RECIPIENT_PRESENTATION
+        )
+        or (presentation == LEGACY_PRESENTATION and "handover_presentation" in saved)
+    ):
+        raise ValueError(
+            "The saved report presentation does not match its qualification."
+        )
     original = {
         "title": book["title"],
         "markdown": casebooks.build(book)["document_markdown"] + OPERATOR_NOTE,

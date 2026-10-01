@@ -21,6 +21,7 @@ from .casebook_scope import (SCOPED_SCHEMA, draft_context, recovered_draft,
                              validate_response_unicode)
 from .evidence import Excerpt, Source, literal, render_evidence, tokens, utc_now
 from .handover import EVIDENCE_MODES as HANDOVER_EVIDENCE_MODES
+from .handover import PRESENTATION_VERSION as HANDOVER_PRESENTATION_VERSION
 from .handover import reference_records as handover_references
 from .handover import render as render_handover
 from .operations import DeadlineExceeded
@@ -343,6 +344,7 @@ def build(payload, document_type=None, progress=lambda message: None):
             include_selected_appendix=(
                 book.get('handover_evidence') == 'selected_appendix'))
         prepared['document_references'] = handover_references(sources, picked)
+        prepared['handover_presentation'] = HANDOVER_PRESENTATION_VERSION
         if book.get('handover_evidence') == 'selected_appendix':
             prepared['handover_evidence'] = 'selected_appendix'
     if scope_map:

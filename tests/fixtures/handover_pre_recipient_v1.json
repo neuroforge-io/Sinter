@@ -1,0 +1,828 @@
+{
+  "schema": "sinter-historical-handover-oracles/v1",
+  "source_commit": "246b91e0ee432cb1f6f6fcd17425f55cd7a4cabe",
+  "handover_source_sha256": "0a29fed573e365b44a747ada0ecb3934d22914b336b43cbf684fbf763e6f513d",
+  "fixtures": {
+    "unscoped_golden": {
+      "input": {
+        "title": "Fictional supplier and governing rules",
+        "questions": "Which applicants are eligible?\nWhat production costs need checking?",
+        "documents": [
+          {
+            "title": "Fictional supplier enquiry 0",
+            "content": "Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝"
+          },
+          {
+            "title": "Fictional supplier enquiry 1",
+            "content": "Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝"
+          },
+          {
+            "title": "Fictional supplier enquiry 2",
+            "content": "Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝"
+          },
+          {
+            "title": "Fictional governing rule",
+            "content": "Eligible applicants must check the current governing rule. Eligibility is not confirmed. Costs are not supplied."
+          }
+        ],
+        "document_type": "handover"
+      },
+      "report": {
+        "document_markdown": "# Fictional supplier and governing rules\n\nSource-only handover checklist — review before using.\n\n## Handover next steps\n\nReview each question against its related wording, then record the confirmed response and who will follow it up. A wording match is not an answer; no owner or target date is assigned by this checklist.\n\n### 1. Which applicants are eligible?\n\nRelated wording — review required: Passage 1, Passage 2, Passage 3.\n\n### 2. What production costs need checking?\n\nRelated wording — review required: Passage 1, Passage 2, Passage 3.\n\n## Selected source wording\n\nQuoted source notes below preserve the supplied words, with readable layout. Read the exact originals and surrounding context in Evidence before confirming any commitment.\n\nShowing 3 of 3 selected passages from 3 sources. All selected passages remain available in Evidence.\n\n### Passage 1\n\n> Original source: Fictional supplier enquiry 0\n\n> Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝\n\n### Passage 2\n\n> Original source: Fictional supplier enquiry 1\n\n> Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝\n\n### Passage 3\n\n> Original source: Fictional supplier enquiry 2\n\n> Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝\n\n## Passage reference key\n\nThese short labels refer to the exact selected excerpts. Offsets count Unicode code points from zero. The start is included; the end is excluded. Selection does not establish a verified answer.\n\n> **Passage 1** — Original source: Fictional supplier enquiry 0\n> Excerpt ID: `E1634e88eedd8fc9f0600704c`; source ID: `S2275314d2d69de1e9348346d`.\n> Unicode characters: 0–101; quoted above.\n\n> **Passage 2** — Original source: Fictional supplier enquiry 1\n> Excerpt ID: `Ebfbcd599b04fb5b6cd7620b9`; source ID: `Sc2e43e20dadebcad3489e8a9`.\n> Unicode characters: 0–101; quoted above.\n\n> **Passage 3** — Original source: Fictional supplier enquiry 2\n> Excerpt ID: `Eb985cd746d79029ec7a876d4`; source ID: `S2036e551a03c0a77b4a80034`.\n> Unicode characters: 0–101; quoted above.",
+        "document_title": "Fictional supplier and governing rules",
+        "document_type": "handover",
+        "document_details": {
+          "recipient": "",
+          "signatory": "",
+          "organisation": "",
+          "sender_role": "",
+          "contact_details": ""
+        },
+        "document_questions": [
+          "Which applicants are eligible?",
+          "What production costs need checking?"
+        ],
+        "missing_fields": [],
+        "document_ready": true,
+        "document_references": [
+          {
+            "label": "Passage 1",
+            "excerpt_id": "E1634e88eedd8fc9f0600704c",
+            "source_id": "S2275314d2d69de1e9348346d",
+            "start": 0,
+            "end": 101
+          },
+          {
+            "label": "Passage 2",
+            "excerpt_id": "Ebfbcd599b04fb5b6cd7620b9",
+            "source_id": "Sc2e43e20dadebcad3489e8a9",
+            "start": 0,
+            "end": 101
+          },
+          {
+            "label": "Passage 3",
+            "excerpt_id": "Eb985cd746d79029ec7a876d4",
+            "source_id": "S2036e551a03c0a77b4a80034",
+            "start": 0,
+            "end": 101
+          }
+        ],
+        "workflow": "casebook",
+        "title": "Fictional supplier and governing rules",
+        "created_at": "2026-10-01T00:00:00Z",
+        "review_status": "draft",
+        "markdown": "# Fictional supplier and governing rules\n\nVolunteer handover - DRAFT / HUMAN REVIEW REQUIRED\n\n# Fictional supplier and governing rules\n\n## Background\n\n### Fictional supplier enquiry 0\n\n> Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝\n\n### Fictional supplier enquiry 1\n\n> Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝\n\n### Fictional supplier enquiry 2\n\n> Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝\n\n## Questions requiring clarification\n\n1. Which applicants are eligible?\n2. What production costs need checking?\n\n## Handover next steps\n\n- Review the background and confirm which information is current.\n- Resolve the open questions with the relevant people or source owners.\n- Record the agreed response and who will follow it up.\n\n## Questions and evidence\n\n### Which applicants are eligible?\n\nRelated passages: E1634e88eedd8fc9f0600704c, Ebfbcd599b04fb5b6cd7620b9, Eb985cd746d79029ec7a876d4. Review before drawing a conclusion.\n\n### What production costs need checking?\n\nRelated passages: E1634e88eedd8fc9f0600704c, Ebfbcd599b04fb5b6cd7620b9, Eb985cd746d79029ec7a876d4. Review before drawing a conclusion.\n\n## Evidence excerpts\n\nExact excerpts are traceable, not independently verified facts. Read surrounding context before interpreting them.\n\n### Fictional supplier enquiry 0 [E1634e88eedd8fc9f0600704c]\n\n> Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝\n\nSource: S2275314d2d69de1e9348346d; characters 0-101; reference_excerpt.\n\n### Fictional supplier enquiry 1 [Ebfbcd599b04fb5b6cd7620b9]\n\n> Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝\n\nSource: Sc2e43e20dadebcad3489e8a9; characters 0-101; reference_excerpt.\n\n### Fictional supplier enquiry 2 [Eb985cd746d79029ec7a876d4]\n\n> Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝\n\nSource: S2036e551a03c0a77b4a80034; characters 0-101; reference_excerpt.\n\n## Source register\n\n### [S2275314d2d69de1e9348346d] Fictional supplier enquiry 0\n\nKind: reference_excerpt. Retrieved/imported: Source date unknown.\n\nURL: User-supplied; no external URL.\n\nSHA-256: 19abd42fc14e100baf7bb981c2f773f1f8512c096203327ed31726b6c48e324b\n\n### [Sc2e43e20dadebcad3489e8a9] Fictional supplier enquiry 1\n\nKind: reference_excerpt. Retrieved/imported: Source date unknown.\n\nURL: User-supplied; no external URL.\n\nSHA-256: 19abd42fc14e100baf7bb981c2f773f1f8512c096203327ed31726b6c48e324b\n\n### [S2036e551a03c0a77b4a80034] Fictional supplier enquiry 2\n\nKind: reference_excerpt. Retrieved/imported: Source date unknown.\n\nURL: User-supplied; no external URL.\n\nSHA-256: 19abd42fc14e100baf7bb981c2f773f1f8512c096203327ed31726b6c48e324b\n\n### [S10ac745d94a3fda28b7e8a13] Fictional governing rule\n\nKind: reference_excerpt. Retrieved/imported: Source date unknown.\n\nURL: User-supplied; no external URL.\n\nSHA-256: e6d50f7e2220058f3b318a903c9fdfc0f5421ad0fb5bbaae6a836611c2580e20\n\n## What this report covers\n\n3 selected passages from 3 of 4 supplied documents. 4 passages indexed. This is not an exhaustive review.\n\n## Still to check\n\nEvery question still requires human interpretation of the related passages.\n\n## Review checklist\n\n- Check original wording, dates and permissions.\n- Resolve conflicting accounts.\n- Confirm owners and commitments.\n- Remove private material before sharing.\n\n## Limitations\n\n- Related wording is not an answered question. No match does not prove an issue is absent.\n- This is selected evidence, not a whole-collection review. Dates are supplied labels, not verified chronology.\n- Check disagreements, negation, conditions and missing attachments in the originals. Nothing is sent automatically.",
+        "sources": [
+          {
+            "id": "S2275314d2d69de1e9348346d",
+            "title": "Fictional supplier enquiry 0",
+            "url": "",
+            "content": "Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date unknown",
+            "sha256": "19abd42fc14e100baf7bb981c2f773f1f8512c096203327ed31726b6c48e324b"
+          },
+          {
+            "id": "Sc2e43e20dadebcad3489e8a9",
+            "title": "Fictional supplier enquiry 1",
+            "url": "",
+            "content": "Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date unknown",
+            "sha256": "19abd42fc14e100baf7bb981c2f773f1f8512c096203327ed31726b6c48e324b"
+          },
+          {
+            "id": "S2036e551a03c0a77b4a80034",
+            "title": "Fictional supplier enquiry 2",
+            "url": "",
+            "content": "Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date unknown",
+            "sha256": "19abd42fc14e100baf7bb981c2f773f1f8512c096203327ed31726b6c48e324b"
+          }
+        ],
+        "excerpts": [
+          {
+            "id": "E1634e88eedd8fc9f0600704c",
+            "source_id": "S2275314d2d69de1e9348346d",
+            "start": 0,
+            "end": 101,
+            "quote": "Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝"
+          },
+          {
+            "id": "Ebfbcd599b04fb5b6cd7620b9",
+            "source_id": "Sc2e43e20dadebcad3489e8a9",
+            "start": 0,
+            "end": 101,
+            "quote": "Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝"
+          },
+          {
+            "id": "Eb985cd746d79029ec7a876d4",
+            "source_id": "S2036e551a03c0a77b4a80034",
+            "start": 0,
+            "end": 101,
+            "quote": "Eligible applicants ask production costs. No supplier quote, approval or availability was received. 🐝"
+          }
+        ],
+        "question_index": [
+          {
+            "question": "Which applicants are eligible?",
+            "excerpt_ids": [
+              "E1634e88eedd8fc9f0600704c",
+              "Ebfbcd599b04fb5b6cd7620b9",
+              "Eb985cd746d79029ec7a876d4"
+            ],
+            "status": "related_wording"
+          },
+          {
+            "question": "What production costs need checking?",
+            "excerpt_ids": [
+              "E1634e88eedd8fc9f0600704c",
+              "Ebfbcd599b04fb5b6cd7620b9",
+              "Eb985cd746d79029ec7a876d4"
+            ],
+            "status": "related_wording"
+          }
+        ],
+        "coverage": {
+          "documents_supplied": 4,
+          "characters_supplied": 415,
+          "passages_indexed": 4,
+          "passages_selected": 3,
+          "documents_represented": 3,
+          "unrepresented_documents": [
+            "Fictional governing rule"
+          ],
+          "questions_without_wording_matches": 0,
+          "exhaustive_review": false
+        },
+        "warnings": [
+          "Related wording is not an answered question. No match does not prove an issue is absent.",
+          "This is selected evidence, not a whole-collection review. Dates are supplied labels, not verified chronology.",
+          "Check disagreements, negation, conditions and missing attachments in the originals. Nothing is sent automatically."
+        ],
+        "casebook_fingerprint": "e0a9c3532b1350225255306fb6c0e4f82db3ae58831fff5643ca76c05fa574c3",
+        "source_register": [
+          {
+            "id": "S2275314d2d69de1e9348346d",
+            "title": "Fictional supplier enquiry 0",
+            "url": "",
+            "date": "",
+            "sha256": "19abd42fc14e100baf7bb981c2f773f1f8512c096203327ed31726b6c48e324b"
+          },
+          {
+            "id": "Sc2e43e20dadebcad3489e8a9",
+            "title": "Fictional supplier enquiry 1",
+            "url": "",
+            "date": "",
+            "sha256": "19abd42fc14e100baf7bb981c2f773f1f8512c096203327ed31726b6c48e324b"
+          },
+          {
+            "id": "S2036e551a03c0a77b4a80034",
+            "title": "Fictional supplier enquiry 2",
+            "url": "",
+            "date": "",
+            "sha256": "19abd42fc14e100baf7bb981c2f773f1f8512c096203327ed31726b6c48e324b"
+          },
+          {
+            "id": "S10ac745d94a3fda28b7e8a13",
+            "title": "Fictional governing rule",
+            "url": "",
+            "date": "",
+            "sha256": "e6d50f7e2220058f3b318a903c9fdfc0f5421ad0fb5bbaae6a836611c2580e20"
+          }
+        ]
+      }
+    },
+    "installed_garden": {
+      "input": {
+        "schema": "sinter-casebook/v1",
+        "title": "Fictional garden project - volunteer handover",
+        "questions": "Has the equipment quote been received?\nWho has accepted checking the current funding guidance?\nIs the treasurer a named person or an unconfirmed owner type?\nWhat does the 9 October practice target mean?\nWhich earlier source wording needs review before reuse?\nWhat insurance excess applies?",
+        "document_type": "handover",
+        "documents": [
+          {
+            "id": "S16954cf5530cdf18c1ecbf2b",
+            "title": "Funding review - fictional original",
+            "content": "Fictional example — for practice only.\n\n# Example school garden funding\n\n## Funding opportunities and guidance to review\n\n### 1. Fictional example: Fictional garden programme - demonstration only\n\n> This fictional example supports school garden materials.\n\nRequirements have not been checked for this source yet.\n\nNext action: check the current official programme page for the application window, applicant conditions and exclusions.\n\n## Before applying\n\nConfirm the current application window and every applicant condition with the funder. A source excerpt or a matching requirement does not establish eligibility.",
+            "url": "",
+            "date": "",
+            "sha256": "4f29644e15d0306764a82a57cd8cf7c9138a9a2aa3ad894cafc2293f72cbbae4"
+          },
+          {
+            "id": "S7d2aba4dedc7c8a7c9e722f9",
+            "title": "Handover plan - fictional original",
+            "content": "# Fictional community project handover\n\nUSER-ENTERED PLAN - CONFIRM OWNERS AND DATES\n\n- Check current funder guidelines | Scope: Not specified | Owner: Unassigned | Proposed target (not confirmed): Not set | not_started\n\n- Obtain equipment quote | Scope: Not specified | Owner: Fictional treasurer | Proposed target (not confirmed): 2026-10-09 | in_progress",
+            "url": "",
+            "date": "",
+            "sha256": "399e1eaac2ffcbcdb265147d4126c179dcadf03e4e024b5eaf7498e8dab9a49f"
+          },
+          {
+            "id": "S4b871e2f7490c221a69bcade",
+            "title": "Action table - fictional original",
+            "content": "Action,Scope,Owner,Proposed target date (unconfirmed),Status\r\nCheck current funder guidelines,,,,not_started\r\nObtain equipment quote,,Fictional treasurer,2026-10-09,in_progress\r\n",
+            "url": "",
+            "date": "",
+            "sha256": "b55bb28ee965859f60aa3b0249fbe8e82ffd8aa24566fc4535ecc069ffba63fd"
+          },
+          {
+            "id": "Sc28ed478cf83d0570e55818a",
+            "title": "Review note - fictional practice conditions",
+            "content": "Fictional practice note only. No real person, school, funding offer or commitment is represented.\n\nThe guideline-checking action has no assigned owner. The earlier action table says Fictional treasurer; this owner type and acceptance remain unconfirmed. A volunteer coordinator is only a suggested role. No person has accepted the actions.\n\nThe equipment quote has not been received. The 9 October 2026 date is a proposed practice target, not a confirmed deadline or grant closing date. Applicant conditions, current application window and supported costs have not been checked.\n\nAn older eligibility excerpt records https://example.invalid/garden/earlier, checked 12 September 2026. The current fictional source register records https://example.invalid/garden/current, checked 30 September 2026. This mismatch is deliberate: preserve the earlier wording and review it before reuse. No website was opened or verified.\n\nEarlier-round answers, dates and actions are historical practice records. That round is recorded closed. No application or enquiry was sent. Keep those records for reference without using them as current work.",
+            "url": "",
+            "date": "",
+            "sha256": "14fa14a148d094a6914cc84999db0385b538a02579d0f88ad7c102ddaf865d3d"
+          }
+        ],
+        "recipient": "Fictional incoming team",
+        "organisation": "Fictional School Community Association",
+        "signatory": "",
+        "sender_role": "",
+        "contact_details": ""
+      },
+      "report": {
+        "document_markdown": "# Fictional garden project - volunteer handover\n\nSource-only handover checklist — review before using.\n\nPrepared for: Fictional incoming team\n\nFictional School Community Association\n\n## Handover next steps\n\nReview each question against its related wording, then record the confirmed response and who will follow it up. A wording match is not an answer; no owner or target date is assigned by this checklist.\n\n### 1. Has the equipment quote been received?\n\nRelated wording — review required: Passage 1, Passage 2, Passage 3.\n\n### 2. Who has accepted checking the current funding guidance?\n\nRelated wording — review required: Passage 1, Passage 4, Passage 2.\n\n### 3. Is the treasurer a named person or an unconfirmed owner type?\n\nRelated wording — review required: Passage 1, Passage 3, Passage 2.\n\n### 4. What does the 9 October practice target mean?\n\nRelated wording — review required: Passage 1, Passage 4, Passage 2.\n\n### 5. Which earlier source wording needs review before reuse?\n\nRelated wording — review required: Passage 1, Passage 4.\n\n### 6. What insurance excess applies?\n\nNo wording match was found in the admitted text. The real-world answer remains unknown; ask for clarification or add a source.\n\n## Selected source wording\n\nQuoted source notes below preserve the supplied words, with readable layout. Read the exact originals and surrounding context in Evidence before confirming any commitment.\n\nShowing 4 of 4 selected passages from 4 sources. All selected passages remain available in Evidence.\n\n### Passage 1\n\n> Original source: Review note - fictional practice conditions\n\n> Fictional practice note only. No real person, school, funding offer or commitment is represented.\n> \n> The guideline-checking action has no assigned owner. The earlier action table says Fictional treasurer; this owner type and acceptance remain unconfirmed. A volunteer coordinator is only a suggested role. No person has accepted the actions.\n> \n> The equipment quote has not been received. The 9 October 2026 date is a proposed practice target, not a confirmed deadline or grant closing date. Applicant conditions, current application window and supported costs have not been checked.\n> \n> An older eligibility excerpt records https://example.invalid/garden/earlier, checked 12 September 2026. The current fictional source register records https://example.invalid/garden/current, checked 30 September 2026. This mismatch is deliberate: preserve the earlier wording and review it before reuse. No website was opened or verified.\n> \n> Earlier-round answers, dates and actions are historical practice records. That round is recorded closed. No application or enquiry was sent. Keep those records for reference without using them as current work.\n\n### Passage 2\n\n> Original source: Handover plan - fictional original\n\n> **Fictional community project handover**\n> \n> USER-ENTERED PLAN - CONFIRM OWNERS AND DATES\n> \n> - Check current funder guidelines \\| Scope: Not specified \\| Owner: Unassigned \\| Proposed target (not confirmed): Not set \\| not\\_started\n> \n> - Obtain equipment quote \\| Scope: Not specified \\| Owner: Fictional treasurer \\| Proposed target (not confirmed): 2026-10-09 \\| in\\_progress\n\n### Passage 3\n\n> Original source: Action table - fictional original\n\nQuoted source table. Blank cells are shown as —; entries do not confirm assignments or dates.\n\n> | Action | Scope | Owner | Proposed target date (unconfirmed) | Status |\n> | --- | --- | --- | --- | --- |\n> | Check current funder guidelines | — | — | — | not\\_started |\n> | Obtain equipment quote | — | Fictional treasurer | 2026-10-09 | in\\_progress |\n\n### Passage 4\n\n> Original source: Funding review - fictional original\n\n> Fictional example — for practice only.\n> \n> **Example school garden funding**\n> \n> **Funding opportunities and guidance to review**\n> \n> **1. Fictional example: Fictional garden programme - demonstration only**\n> \n> > This fictional example supports school garden materials.\n> \n> Requirements have not been checked for this source yet.\n> \n> Next action: check the current official programme page for the application window, applicant conditions and exclusions.\n> \n> **Before applying**\n> \n> Confirm the current application window and every applicant condition with the funder. A source excerpt or a matching requirement does not establish eligibility.\n\n## Passage reference key\n\nThese short labels refer to the exact selected excerpts. Offsets count Unicode code points from zero. The start is included; the end is excluded. Selection does not establish a verified answer.\n\n> **Passage 1** — Original source: Review note - fictional practice conditions\n> Excerpt ID: `E796d70fbee2d36565a7b0e61`; source ID: `Sc28ed478cf83d0570e55818a`.\n> Unicode characters: 0–1128; quoted above.\n\n> **Passage 2** — Original source: Handover plan - fictional original\n> Excerpt ID: `E1499f2b10a096402ecc4a34a`; source ID: `S7d2aba4dedc7c8a7c9e722f9`.\n> Unicode characters: 0–357; quoted above.\n\n> **Passage 3** — Original source: Action table - fictional original\n> Excerpt ID: `E9f3943ef1c978bf85180821a`; source ID: `S4b871e2f7490c221a69bcade`.\n> Unicode characters: 0–178; quoted above.\n\n> **Passage 4** — Original source: Funding review - fictional original\n> Excerpt ID: `E3b72385f5989e9cf0557b667`; source ID: `S16954cf5530cdf18c1ecbf2b`.\n> Unicode characters: 0–615; quoted above.",
+        "document_title": "Fictional garden project - volunteer handover",
+        "document_type": "handover",
+        "document_details": {
+          "recipient": "Fictional incoming team",
+          "signatory": "",
+          "organisation": "Fictional School Community Association",
+          "sender_role": "",
+          "contact_details": ""
+        },
+        "document_questions": [
+          "Has the equipment quote been received?",
+          "Who has accepted checking the current funding guidance?",
+          "Is the treasurer a named person or an unconfirmed owner type?",
+          "What does the 9 October practice target mean?",
+          "Which earlier source wording needs review before reuse?",
+          "What insurance excess applies?"
+        ],
+        "missing_fields": [],
+        "document_ready": true,
+        "document_references": [
+          {
+            "label": "Passage 1",
+            "excerpt_id": "E796d70fbee2d36565a7b0e61",
+            "source_id": "Sc28ed478cf83d0570e55818a",
+            "start": 0,
+            "end": 1128
+          },
+          {
+            "label": "Passage 2",
+            "excerpt_id": "E1499f2b10a096402ecc4a34a",
+            "source_id": "S7d2aba4dedc7c8a7c9e722f9",
+            "start": 0,
+            "end": 357
+          },
+          {
+            "label": "Passage 3",
+            "excerpt_id": "E9f3943ef1c978bf85180821a",
+            "source_id": "S4b871e2f7490c221a69bcade",
+            "start": 0,
+            "end": 178
+          },
+          {
+            "label": "Passage 4",
+            "excerpt_id": "E3b72385f5989e9cf0557b667",
+            "source_id": "S16954cf5530cdf18c1ecbf2b",
+            "start": 0,
+            "end": 615
+          }
+        ],
+        "workflow": "casebook",
+        "title": "Fictional garden project - volunteer handover",
+        "created_at": "2026-10-01T00:00:00Z",
+        "review_status": "draft",
+        "markdown": "# Fictional garden project - volunteer handover\n\nVolunteer handover - DRAFT / HUMAN REVIEW REQUIRED\n\n# Fictional garden project - volunteer handover\n\nPrepared for: Fictional incoming team\n\nFictional School Community Association\n\n## Background\n\n### Review note - fictional practice conditions\n\n> Fictional practice note only. No real person, school, funding offer or commitment is represented.\n> \n> The guideline-checking action has no assigned owner. The earlier action table says Fictional treasurer; this owner type and acceptance remain unconfirmed. A volunteer coordinator is only a suggested role. No person has accepted the actions.\n> \n> The equipment quote has not been received. The 9 October 2026 date is a proposed practice target, not a confirmed deadline or grant closing date. Applicant conditions, current application window and supported costs have not been checked.\n> \n> An older eligibility excerpt records https://example.invalid/garden/earlier, checked 12 September 2026. The current fictional source register records https://example.invalid/garden/current, checked 30 September 2026. This mismatch is deliberate: preserve the earlier wording and review it before reuse. No website was opened or verified.\n> \n> Earlier-round answers, dates and actions are historical practice records. That round is recorded closed. No application or enquiry was sent. Keep those records for reference without using them as current work.\n\n### Handover plan - fictional original\n\n> \\# Fictional community project handover\n> \n> USER-ENTERED PLAN - CONFIRM OWNERS AND DATES\n> \n> - Check current funder guidelines \\| Scope: Not specified \\| Owner: Unassigned \\| Proposed target (not confirmed): Not set \\| not\\_started\n> \n> - Obtain equipment quote \\| Scope: Not specified \\| Owner: Fictional treasurer \\| Proposed target (not confirmed): 2026-10-09 \\| in\\_progress\n\n### Action table - fictional original\n\n> Action,Scope,Owner,Proposed target date (unconfirmed),Status\r\n> Check current funder guidelines,,,,not\\_started\r\n> Obtain equipment quote,,Fictional treasurer,2026-10-09,in\\_progress\r\n> \n\n### Funding review - fictional original\n\n> Fictional example — for practice only.\n> \n> \\# Example school garden funding\n> \n> \\#\\# Funding opportunities and guidance to review\n> \n> \\#\\#\\# 1. Fictional example: Fictional garden programme - demonstration only\n> \n> &gt; This fictional example supports school garden materials.\n> \n> Requirements have not been checked for this source yet.\n> \n> Next action: check the current official programme page for the application window, applicant conditions and exclusions.\n> \n> \\#\\# Before applying\n> \n> Confirm the current application window and every applicant condition with the funder. A source excerpt or a matching requirement does not establish eligibility.\n\n## Questions requiring clarification\n\n1. Has the equipment quote been received?\n2. Who has accepted checking the current funding guidance?\n3. Is the treasurer a named person or an unconfirmed owner type?\n4. What does the 9 October practice target mean?\n5. Which earlier source wording needs review before reuse?\n6. What insurance excess applies?\n\n## Handover next steps\n\n- Review the background and confirm which information is current.\n- Resolve the open questions with the relevant people or source owners.\n- Record the agreed response and who will follow it up.\n\n## Questions and evidence\n\n### Has the equipment quote been received?\n\nRelated passages: E796d70fbee2d36565a7b0e61, E1499f2b10a096402ecc4a34a, E9f3943ef1c978bf85180821a. Review before drawing a conclusion.\n\n### Who has accepted checking the current funding guidance?\n\nRelated passages: E796d70fbee2d36565a7b0e61, E3b72385f5989e9cf0557b667, E1499f2b10a096402ecc4a34a. Review before drawing a conclusion.\n\n### Is the treasurer a named person or an unconfirmed owner type?\n\nRelated passages: E796d70fbee2d36565a7b0e61, E9f3943ef1c978bf85180821a, E1499f2b10a096402ecc4a34a. Review before drawing a conclusion.\n\n### What does the 9 October practice target mean?\n\nRelated passages: E796d70fbee2d36565a7b0e61, E3b72385f5989e9cf0557b667, E1499f2b10a096402ecc4a34a. Review before drawing a conclusion.\n\n### Which earlier source wording needs review before reuse?\n\nRelated passages: E796d70fbee2d36565a7b0e61, E3b72385f5989e9cf0557b667. Review before drawing a conclusion.\n\n### What insurance excess applies?\n\nNo wording match in the admitted text. Ask for clarification or add the missing source.\n\n## Evidence excerpts\n\nExact excerpts are traceable, not independently verified facts. Read surrounding context before interpreting them.\n\n### Review note - fictional practice conditions [E796d70fbee2d36565a7b0e61]\n\n> Fictional practice note only. No real person, school, funding offer or commitment is represented.\n> \n> The guideline-checking action has no assigned owner. The earlier action table says Fictional treasurer; this owner type and acceptance remain unconfirmed. A volunteer coordinator is only a suggested role. No person has accepted the actions.\n> \n> The equipment quote has not been received. The 9 October 2026 date is a proposed practice target, not a confirmed deadline or grant closing date. Applicant conditions, current application window and supported costs have not been checked.\n> \n> An older eligibility excerpt records https://example.invalid/garden/earlier, checked 12 September 2026. The current fictional source register records https://example.invalid/garden/current, checked 30 September 2026. This mismatch is deliberate: preserve the earlier wording and review it before reuse. No website was opened or verified.\n> \n> Earlier-round answers, dates and actions are historical practice records. That round is recorded closed. No application or enquiry was sent. Keep those records for reference without using them as current work.\n\nSource: Sc28ed478cf83d0570e55818a; characters 0-1128; reference_excerpt.\n\n### Handover plan - fictional original [E1499f2b10a096402ecc4a34a]\n\n> \\# Fictional community project handover\n> \n> USER-ENTERED PLAN - CONFIRM OWNERS AND DATES\n> \n> - Check current funder guidelines \\| Scope: Not specified \\| Owner: Unassigned \\| Proposed target (not confirmed): Not set \\| not\\_started\n> \n> - Obtain equipment quote \\| Scope: Not specified \\| Owner: Fictional treasurer \\| Proposed target (not confirmed): 2026-10-09 \\| in\\_progress\n\nSource: S7d2aba4dedc7c8a7c9e722f9; characters 0-357; reference_excerpt.\n\n### Action table - fictional original [E9f3943ef1c978bf85180821a]\n\n> Action,Scope,Owner,Proposed target date (unconfirmed),Status\r\n> Check current funder guidelines,,,,not\\_started\r\n> Obtain equipment quote,,Fictional treasurer,2026-10-09,in\\_progress\r\n> \n\nSource: S4b871e2f7490c221a69bcade; characters 0-178; reference_excerpt.\n\n### Funding review - fictional original [E3b72385f5989e9cf0557b667]\n\n> Fictional example — for practice only.\n> \n> \\# Example school garden funding\n> \n> \\#\\# Funding opportunities and guidance to review\n> \n> \\#\\#\\# 1. Fictional example: Fictional garden programme - demonstration only\n> \n> &gt; This fictional example supports school garden materials.\n> \n> Requirements have not been checked for this source yet.\n> \n> Next action: check the current official programme page for the application window, applicant conditions and exclusions.\n> \n> \\#\\# Before applying\n> \n> Confirm the current application window and every applicant condition with the funder. A source excerpt or a matching requirement does not establish eligibility.\n\nSource: S16954cf5530cdf18c1ecbf2b; characters 0-615; reference_excerpt.\n\n## Source register\n\n### [S16954cf5530cdf18c1ecbf2b] Funding review - fictional original\n\nKind: reference_excerpt. Retrieved/imported: Source date unknown.\n\nURL: User-supplied; no external URL.\n\nSHA-256: 4f29644e15d0306764a82a57cd8cf7c9138a9a2aa3ad894cafc2293f72cbbae4\n\n### [S7d2aba4dedc7c8a7c9e722f9] Handover plan - fictional original\n\nKind: reference_excerpt. Retrieved/imported: Source date unknown.\n\nURL: User-supplied; no external URL.\n\nSHA-256: 399e1eaac2ffcbcdb265147d4126c179dcadf03e4e024b5eaf7498e8dab9a49f\n\n### [S4b871e2f7490c221a69bcade] Action table - fictional original\n\nKind: reference_excerpt. Retrieved/imported: Source date unknown.\n\nURL: User-supplied; no external URL.\n\nSHA-256: b55bb28ee965859f60aa3b0249fbe8e82ffd8aa24566fc4535ecc069ffba63fd\n\n### [Sc28ed478cf83d0570e55818a] Review note - fictional practice conditions\n\nKind: reference_excerpt. Retrieved/imported: Source date unknown.\n\nURL: User-supplied; no external URL.\n\nSHA-256: 14fa14a148d094a6914cc84999db0385b538a02579d0f88ad7c102ddaf865d3d\n\n## What this report covers\n\n4 selected passages from 4 of 4 supplied documents. 4 passages indexed. This is not an exhaustive review.\n\n## Still to check\n\n- What insurance excess applies?\n\n## Review checklist\n\n- Check original wording, dates and permissions.\n- Resolve conflicting accounts.\n- Confirm owners and commitments.\n- Remove private material before sharing.\n\n## Limitations\n\n- Related wording is not an answered question. No match does not prove an issue is absent.\n- This is selected evidence, not a whole-collection review. Dates are supplied labels, not verified chronology.\n- Check disagreements, negation, conditions and missing attachments in the originals. Nothing is sent automatically.",
+        "sources": [
+          {
+            "id": "S16954cf5530cdf18c1ecbf2b",
+            "title": "Funding review - fictional original",
+            "url": "",
+            "content": "Fictional example — for practice only.\n\n# Example school garden funding\n\n## Funding opportunities and guidance to review\n\n### 1. Fictional example: Fictional garden programme - demonstration only\n\n> This fictional example supports school garden materials.\n\nRequirements have not been checked for this source yet.\n\nNext action: check the current official programme page for the application window, applicant conditions and exclusions.\n\n## Before applying\n\nConfirm the current application window and every applicant condition with the funder. A source excerpt or a matching requirement does not establish eligibility.",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date unknown",
+            "sha256": "4f29644e15d0306764a82a57cd8cf7c9138a9a2aa3ad894cafc2293f72cbbae4"
+          },
+          {
+            "id": "S7d2aba4dedc7c8a7c9e722f9",
+            "title": "Handover plan - fictional original",
+            "url": "",
+            "content": "# Fictional community project handover\n\nUSER-ENTERED PLAN - CONFIRM OWNERS AND DATES\n\n- Check current funder guidelines | Scope: Not specified | Owner: Unassigned | Proposed target (not confirmed): Not set | not_started\n\n- Obtain equipment quote | Scope: Not specified | Owner: Fictional treasurer | Proposed target (not confirmed): 2026-10-09 | in_progress",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date unknown",
+            "sha256": "399e1eaac2ffcbcdb265147d4126c179dcadf03e4e024b5eaf7498e8dab9a49f"
+          },
+          {
+            "id": "S4b871e2f7490c221a69bcade",
+            "title": "Action table - fictional original",
+            "url": "",
+            "content": "Action,Scope,Owner,Proposed target date (unconfirmed),Status\r\nCheck current funder guidelines,,,,not_started\r\nObtain equipment quote,,Fictional treasurer,2026-10-09,in_progress\r\n",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date unknown",
+            "sha256": "b55bb28ee965859f60aa3b0249fbe8e82ffd8aa24566fc4535ecc069ffba63fd"
+          },
+          {
+            "id": "Sc28ed478cf83d0570e55818a",
+            "title": "Review note - fictional practice conditions",
+            "url": "",
+            "content": "Fictional practice note only. No real person, school, funding offer or commitment is represented.\n\nThe guideline-checking action has no assigned owner. The earlier action table says Fictional treasurer; this owner type and acceptance remain unconfirmed. A volunteer coordinator is only a suggested role. No person has accepted the actions.\n\nThe equipment quote has not been received. The 9 October 2026 date is a proposed practice target, not a confirmed deadline or grant closing date. Applicant conditions, current application window and supported costs have not been checked.\n\nAn older eligibility excerpt records https://example.invalid/garden/earlier, checked 12 September 2026. The current fictional source register records https://example.invalid/garden/current, checked 30 September 2026. This mismatch is deliberate: preserve the earlier wording and review it before reuse. No website was opened or verified.\n\nEarlier-round answers, dates and actions are historical practice records. That round is recorded closed. No application or enquiry was sent. Keep those records for reference without using them as current work.",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date unknown",
+            "sha256": "14fa14a148d094a6914cc84999db0385b538a02579d0f88ad7c102ddaf865d3d"
+          }
+        ],
+        "excerpts": [
+          {
+            "id": "E796d70fbee2d36565a7b0e61",
+            "source_id": "Sc28ed478cf83d0570e55818a",
+            "start": 0,
+            "end": 1128,
+            "quote": "Fictional practice note only. No real person, school, funding offer or commitment is represented.\n\nThe guideline-checking action has no assigned owner. The earlier action table says Fictional treasurer; this owner type and acceptance remain unconfirmed. A volunteer coordinator is only a suggested role. No person has accepted the actions.\n\nThe equipment quote has not been received. The 9 October 2026 date is a proposed practice target, not a confirmed deadline or grant closing date. Applicant conditions, current application window and supported costs have not been checked.\n\nAn older eligibility excerpt records https://example.invalid/garden/earlier, checked 12 September 2026. The current fictional source register records https://example.invalid/garden/current, checked 30 September 2026. This mismatch is deliberate: preserve the earlier wording and review it before reuse. No website was opened or verified.\n\nEarlier-round answers, dates and actions are historical practice records. That round is recorded closed. No application or enquiry was sent. Keep those records for reference without using them as current work."
+          },
+          {
+            "id": "E1499f2b10a096402ecc4a34a",
+            "source_id": "S7d2aba4dedc7c8a7c9e722f9",
+            "start": 0,
+            "end": 357,
+            "quote": "# Fictional community project handover\n\nUSER-ENTERED PLAN - CONFIRM OWNERS AND DATES\n\n- Check current funder guidelines | Scope: Not specified | Owner: Unassigned | Proposed target (not confirmed): Not set | not_started\n\n- Obtain equipment quote | Scope: Not specified | Owner: Fictional treasurer | Proposed target (not confirmed): 2026-10-09 | in_progress"
+          },
+          {
+            "id": "E9f3943ef1c978bf85180821a",
+            "source_id": "S4b871e2f7490c221a69bcade",
+            "start": 0,
+            "end": 178,
+            "quote": "Action,Scope,Owner,Proposed target date (unconfirmed),Status\r\nCheck current funder guidelines,,,,not_started\r\nObtain equipment quote,,Fictional treasurer,2026-10-09,in_progress\r\n"
+          },
+          {
+            "id": "E3b72385f5989e9cf0557b667",
+            "source_id": "S16954cf5530cdf18c1ecbf2b",
+            "start": 0,
+            "end": 615,
+            "quote": "Fictional example — for practice only.\n\n# Example school garden funding\n\n## Funding opportunities and guidance to review\n\n### 1. Fictional example: Fictional garden programme - demonstration only\n\n> This fictional example supports school garden materials.\n\nRequirements have not been checked for this source yet.\n\nNext action: check the current official programme page for the application window, applicant conditions and exclusions.\n\n## Before applying\n\nConfirm the current application window and every applicant condition with the funder. A source excerpt or a matching requirement does not establish eligibility."
+          }
+        ],
+        "question_index": [
+          {
+            "question": "Has the equipment quote been received?",
+            "excerpt_ids": [
+              "E796d70fbee2d36565a7b0e61",
+              "E1499f2b10a096402ecc4a34a",
+              "E9f3943ef1c978bf85180821a"
+            ],
+            "status": "related_wording"
+          },
+          {
+            "question": "Who has accepted checking the current funding guidance?",
+            "excerpt_ids": [
+              "E796d70fbee2d36565a7b0e61",
+              "E3b72385f5989e9cf0557b667",
+              "E1499f2b10a096402ecc4a34a"
+            ],
+            "status": "related_wording"
+          },
+          {
+            "question": "Is the treasurer a named person or an unconfirmed owner type?",
+            "excerpt_ids": [
+              "E796d70fbee2d36565a7b0e61",
+              "E9f3943ef1c978bf85180821a",
+              "E1499f2b10a096402ecc4a34a"
+            ],
+            "status": "related_wording"
+          },
+          {
+            "question": "What does the 9 October practice target mean?",
+            "excerpt_ids": [
+              "E796d70fbee2d36565a7b0e61",
+              "E3b72385f5989e9cf0557b667",
+              "E1499f2b10a096402ecc4a34a"
+            ],
+            "status": "related_wording"
+          },
+          {
+            "question": "Which earlier source wording needs review before reuse?",
+            "excerpt_ids": [
+              "E796d70fbee2d36565a7b0e61",
+              "E3b72385f5989e9cf0557b667"
+            ],
+            "status": "related_wording"
+          },
+          {
+            "question": "What insurance excess applies?",
+            "excerpt_ids": [],
+            "status": "no_wording_match"
+          }
+        ],
+        "coverage": {
+          "documents_supplied": 4,
+          "characters_supplied": 2278,
+          "passages_indexed": 4,
+          "passages_selected": 4,
+          "documents_represented": 4,
+          "unrepresented_documents": [],
+          "questions_without_wording_matches": 1,
+          "exhaustive_review": false
+        },
+        "warnings": [
+          "Related wording is not an answered question. No match does not prove an issue is absent.",
+          "This is selected evidence, not a whole-collection review. Dates are supplied labels, not verified chronology.",
+          "Check disagreements, negation, conditions and missing attachments in the originals. Nothing is sent automatically."
+        ],
+        "casebook_fingerprint": "01513c646e91d5e150b76ad71d9074e17c1023cf24ad7692f4eccc4cdae7fced",
+        "source_register": [
+          {
+            "id": "S16954cf5530cdf18c1ecbf2b",
+            "title": "Funding review - fictional original",
+            "url": "",
+            "date": "",
+            "sha256": "4f29644e15d0306764a82a57cd8cf7c9138a9a2aa3ad894cafc2293f72cbbae4"
+          },
+          {
+            "id": "S7d2aba4dedc7c8a7c9e722f9",
+            "title": "Handover plan - fictional original",
+            "url": "",
+            "date": "",
+            "sha256": "399e1eaac2ffcbcdb265147d4126c179dcadf03e4e024b5eaf7498e8dab9a49f"
+          },
+          {
+            "id": "S4b871e2f7490c221a69bcade",
+            "title": "Action table - fictional original",
+            "url": "",
+            "date": "",
+            "sha256": "b55bb28ee965859f60aa3b0249fbe8e82ffd8aa24566fc4535ecc069ffba63fd"
+          },
+          {
+            "id": "Sc28ed478cf83d0570e55818a",
+            "title": "Review note - fictional practice conditions",
+            "url": "",
+            "date": "",
+            "sha256": "14fa14a148d094a6914cc84999db0385b538a02579d0f88ad7c102ddaf865d3d"
+          }
+        ]
+      },
+      "word_base64": "UEsDBBQAAAAIAAAAIQBHrt4gFwEAABkDAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbK2SzU7DMBCE7zyF5UsOVeLAASHUpAfgCj3wAsbZJFb9J69T2rdnk9IIodIKqUd7Z+YbW7tc7axhW4iovauy26LMGDjlG+26KhtSmz9kq/pm+b4PgIy0DivepxQehUDVg5VY+ACOJq2PViY6xk4EqTayA3FXlvdCeZfApTyNGbxePkMrB5PYy46uJy6PYJCzp4NwZFVchmC0konmYuuaX5T8m1CQc9JgrwMuSMCZOImYRn8SjsY3+oqoG2BrGdOrtCQTnz42ovFqsGQtzuecaOrbViuY/WNaiF4BIv2xNcU8sVK7xcUimPYG8Po1DrmX+W6wHxDJc/0Kc/TZFuRfRx+Q9irC/0scF2d054QPEJP+8XAxrXr9BVBLAwQUAAAACAAAACEA5AZTlcwAAAC2AQAACwAAAF9yZWxzLy5yZWxzjZDLTgMxDEX3fEWUzaw6HlgghJrppht2CPEDVuKZiWgeclwef4+FCmJQkbpMcn3ucba793Qwr8Qtluy6637oDGVfQsyz644ybe663Xi1faIDikbaEmszOpObs4tIvQdofqGErS+Vsr5MhROKHnmGiv4FZ4KbYbgF/s2w44ppHoKzofhjoizWPH9UuoRfpil62p/mztT8SSgZeSZx9q1wgO/CXrHWwBmlytrKEqldLvX/0pBIMKAg+MK0WcFPXqr0qNftK/HjBav/Hz8BUEsDBBQAAAAIAAAAIQCVU9UHsgsAAJpKAAARAAAAd29yZC9kb2N1bWVudC54bWztXN1y2zYWvt+nwOgm7YwtidS/XKfjxPYms62dtdLN5Q4IghIbimAB0Ioye5F32D5hnmTPAUCKsuXUUmRLcXbGI4l/wPnHdw4O/dPPH6YJueZSxSI9fubVm88IT5kI43R8/CzX0WH/2c/P//bTbBgKlk95qgk8kKrh7Lg20TobNhqKTfiUqrrIeArXIiGnVMOhHDdmQoaZFIwrBeNNk4bfbHYbUxqntecwZCDCOX5n5uONNF8jPU84mQ2vaXJcexvrhNdI4/lPjfIO+/FG4tnZ0NAzVBll/LiWSa64vOa15+cx08ARTciYypCnBMj4nTNNDsm1SPJUcy7JhKahAN5xcG2mkHaiKlF2mntNOhK5ZPxQpMm8HJuAdNj7JFaafP70J5H8OuYzEnAQEyc5iqW+renfSJ5RyUMCYw/JQgIx6HMKExHN6XRbky2GH7GJEAl5KabTPI31nJwoJVhM8fIXZ7ut7lecouH5m2j8VSHwlH/QRGmeqW3xemWVximbkD9yrpAzQsdgxqDVWCvQakI1CB7tHeg/IHoCJic5g2P8TZhIo1hO4RYYNBOp4gTIJbOJILM4SUBjSSJmMBbJszo5KQYi4EkwZ6xIKjQ8AX9qxuURHBIxS4FZIYmmcsw1CYECvJOCr41TmCmYw9RwojTALxvandpobaINr05eUWV453/kcWYixx+5ABoDbmXD42se/rw9HS2poOpsEikAvxiSNyAcOubEOyh/+oufrccUkF8n70D7ExASZYxnSLvRlHFUNJlcShRalKeGoXEehzRlfOcSa1eE95gSa9XJa2tRWnKqcgnmT0lK0asyWMDAJ8EbwEnydOFu1kv0PNu93Fo7klsbLY1CgBDcim9ALpkWAcglkxSiOONFDJlymu5cTruyrw7KKYZwy6lMYpCOMst5SX/KeahuLOCS52r3ltV+TDF1nTnB4pdLDEiEf0CAR2iWgdjU1qRxIW4sgzOIlZGAcAhzG0Om4TTWKDANS36dvJ2gQmhyCI8loVsr4QziTQVR4X0K0eAIFsj3iJAIS6iMo5gZoGJCRwgPOa1vKNGNkMuIJ4BMgY1lg9uWHP+Jq245OAAJCAMBR7hR3GOEqXKjP2t96gBwiZ6gOEMaAJsJnYscZHwFJ+yq/gFCB0gtHscAApWBM2AQUrjlCkIwagVVdXYdAwJnvHAaF53xLprO4XAKakSAsDUkPJqIGQ7fJiKCD1UIOLMOA2YkxRQvGJkoQFyAwW7fZU2H0GsaJ0YKFWYe0+VKl19zTqP5mh36PefZL3EKXJWHF6if9am5dDp30hsSB4/RsiC9isrEoFxdQOFhjCe/jMjXYGDjbLCkyVCLmVqdQKDBsOFAxAFRJqE5KJGXiCKLtBeWikAbsi2cAMw8XNcYtsUXRjzEhTyBAQ5L+EgNtwZbQqJQJgQGC9kwWSxx7k5trFvRuaqkjSXKOrJ5xAJKGWe3qNUsAM5PKrgLc5hFns2EiWhUgwxxIMyPIdDmY3AydDgpEm7U4GDcEig2gd7QpHYp5ptZjBWuXs5mrHAX+Mpv+t1FYoY1iEwojDDLuOvApneVLDGEaIE6RasbwyqrYbUSWCwwo4F0MVYzc770rYMyZaD2qlEtxMEQQr0Nz1kmpEk0hIKsdUKv+YIHYz27M+UTWIKTEGQGtjyOgzjBSgIiC5lpl0kDxVpnathowOIzzcBm4hRoiMOGrfE0nFUfFLwQzycjtKJpoQyroDK1Km3dLY6SjyFPNqDhXhO6gRYTtporJgTdT2NVpvLorXAZ9DhcXoELpyxQD+rMwb9YLyFO4ywzHqgYTAthEdbe0MMllvIA1OxOj2eWiUMDBBwGA9NEs1UubhhrJRSYAdFATABTrQRmJ3oUHKBMO4yJtngabTdBFzISqNo5sM5TxMhzIxCMy3XyD2AERAsPlBpF5Cc5BHSDSBDkAK6xhThUwhTCZWkfoIj3u1jn/f1c58sKW5ZAll1d6QsY+HA2h1+Bu+QO/3KtZ2VFsij+3qvg+3C+8dvo7Orw7OLt2dXZKXnzy8kFCPHl5cX566tfyeW7i7OrETm5OCWnJ2/PRtszgTSf2ifi5Dop7vdq5cXX4fLJRuURZAE9YzakEcTF41q/uYlhv8TwuFTRAisqgYsiS8zec8z/bPIQGTEIlUMIHpqojDMTKh9x+kvEUEPyW1qCsseb+02BPlyx5wdc+kvI8aMTClx4PJKAgk2e+/cmDylgG7DPk/Kry0Aj8L6JTb83d1qRs+yTXyEOPPSah83BI1IVp4/mWbC6juFg3eR+G0iptaOV/BY2Oqkm0mtDo42reWa+OnkBgAzWV54kFlerCSTriGQ/f/rzCHCxljGwGQpSMU1XF8CwoRA9G4S+Gu3qIHFfDnkFyTuQ6Oy4BlELDucZkEhzLZxk4foLBOtSmSORFeJHlI37+RAAPx7X2viDiURA/Dv1TjunL9zzCY/0mo8EQmsxXfMhUM1k3YniVAFsebXRU/9a66nGLUEGyUtQ8a9ULsQKOvCaFS2EH+iyEO++oRTZ3bcUArrrjsYyUY1lG/m7jEP8OYbvlyJx4/R7vhv9Yc83lmjQliiXOmDlZAS5oy7tFYMRl8VzRYbB7Gdx9K46xW1pqQmu+FGcgIbPvfPWeadWKJwlkNyXZLkBq2Hqd1bcinq7IyQard0rCbLhaIUzNxZcfau8GczxNFkzeOZpsnYTJZmq6A+VkvGPT5PvkaY6XwWNHG+NRWy6M0JtGpK+hsOvyee3pskHYwBw0f+J/H6I3I86w7fs8asrDfuv+W/CPFfUL/af6EVVY/9p3Y9iyLL/2/ykymvB2E3+t182aW+rbLLdDaZz13DhNj0fd4fpnh7qdoJNbx7uJZb7lqaX5OHIw6/7Ic4zR6FtYynef3DNLPtAYKFmYdoRcIcudnvDRY8z0cIZwT7Q69XJLf1Xi86LN0zGkk6nWP8L+VSkSku3Nw2msSPDNd0H0S3rda0g6oaRTCEpkzFNdtZpc2XbXG1RcmV/inE604/kSqBzvvaLDdui1sQ9288wtPQtde6LCAQfm96GwjIyjL6WA76iTeegOLfU2GNcg39gSa4euAvq/j7xwnajILnzBw0rX85DXSm7KvU7mp/4NZfzVeK1ja44gs1jsXXNmVbRfoS9wbYH2a5OpY3anno0Ua6wFB+rSbV/6TGbiIulfdHb8p5/OeissenwdgK/cFdBapLQgCfKzoNxetEMXDbQOrmpOrmMIsXBlZnIQVq/pTETIfaDwkcmYnRy04n7kUthW7NM9oT9PnEK9h7y8MhOYJuAjBOE2P1je6ZRfStUQMsuKNeAtDWXqe7c2oYstwdS2cadDbEIclzz2+XBVZ5Ud0i+xvFW9wLfU48GtWytf/fmpEGBYO9P0JnzsNenw7v2Rs3XuUBbATErFsfHtZdAOXbKXfAZinhykqrbZ5m6ccrq72OhZL/ccv8LPNUbdMNeM4JVyA9b3U63Q3tBk3c30sBREVv2meMR8/s8bPf6LOq3wman1+SdTt/r0004rm/bZsooMqFooFyqIWl+/vRfz/P7R7YuAX4fiOu1e/S/Abf3t+f2a7bzfS/e7rUHg8gPvCZtDrrtps8Za9NWeyPb/za8vRf6NKBtWFdZj/Vpjw14z/ejwV57e6vTe/LO3tqes6/Xn/K9+Pogag3aLR55bNDrB1G/4/Wbfd97wr7eDvo9j/tRrz1oMh9Y7Q4CRkO+177u9Z7+wt7enq+vW0b9Xry9FfT8Vr8TdQb9AR+wqNnp9IJut/d0vd3rDjptFnU6rSYLI6/PPM4CADd77e1dr/N13v41ZZRFVVdk+I6WkCYv3lYhZcWLqFgcHt5q4S7eWs+48WXzupPpBKy+6ITvIJraqLrz5WnFmXYyGo8+us03b9DsGuuD391+q+8MLBv/SiVuyokMb2qZvkTTAgiHfq+Fh7ZpcHEZd+QWVyemi+641un28DASQlcOx7k2h6X1FsQ1in8F1Vj8m6nn/wNQSwMEFAAAAAgAAAAhAHUdOA5iAgAAgw0AAA8AAAB3b3JkL3N0eWxlcy54bWzVlltvmzAUx9/3KRAveVq5hJAUlVRppmiTqu6ifQEHTLBqbGab0O7T79hAmoaiZUqkNU/mf2yfy+/Ywje3TwW1tlhIwlk88q7ckYVZwlPCNvGoUtnH2eh2/uGmjqR6plhasJzJqI7tXKkychyZ5LhA8oqXmMFcxkWBFEixcWou0lLwBEsJ3grq+K4bOgUizJ6Dw5Qnn3CGKqqkluKbaGWrzLDiTEmrjpBMCInthSCI2qDzBZP7OpE74eiN8jcYt4jGtu8bk9P6dA4jlYdKDzVJeb2E2ILT1mGJEqhCp5IpLGLbC10dmBKGIcg07MSPioIBVYp3ccs27n4kp1e/4Qs+1HMJ+0sk0EagMtduzdSXNLYfNF1Tb9rshDQMS4YK3BXcLTJp/1qZhjQCEmg+WroJp1x027ypvwzcI/CZbI7N+CdRFPdSbKxNqDWSOP3K3sye4Sd1VFl6eMS4fNAbnE7dQzvkYfvWGM6obllg+rffzb127Ritm/3HoBqHJ6H6jJG+df2G5s2E5b1LYnXEK6UP/v2WdpHPwNI7B0t/kKV/MSy9k1n6s3OwHA+yHF8MS/90lpNzsAwGWQYXw3J8OsvTfi0ty8kgy8nFsAzeCctwkGV4MSwn/5vl94qr/pOnsf4dYpt1eZeakeJsx1S/ovWzSecKyfvmC0hBJp6hY4qL7bvpYjp9OVKtJ8JSq/EHd9c16wXZ5KB89/X/+l8LXvK0X68xHl2uzNNuOqEYCe0/IxTkarwKVt1NPkcNSQ5FJHCMXl8AmBNwkh57hbzMDL+d/WByPbtuF1SH/XrzLHVfcv4HUEsDBBQAAAAIAAAAIQCAaRoCjgEAAGIJAAASAAAAd29yZC9udW1iZXJpbmcueG1szZaxboMwEIb3PgXywtQYCEkQCslWqVXVdsgLOOAkSLZBtoF067P00fokNYaEEFVW2bxgfP9/Z38Mx623Z0qcGnORFyxx/ZnnOpilRZazY+JW8vAYudvNw7qJWUX3mKuwozKYiJsEnKQsYwhFesIUiVlRYqa0Q8EpkmrLj7ApeFbyIsVCqExKYOB5S0hRzsBG1UR7ITlK5VtFndHuOUuAry20IjJ/xTUmu88SK1eNSAJ0lLRR4MDWRmqitFwtCfB0opCIy4vf720K4oleo/uKECyHCjt8vmo/X9+D8JJewgQfLgnlB28Xqa7drxeTOgWo97IQCZgvPe2HgzNnmVLbSr3cxCfEju0XB0F4tev6UJ9/T+jbRLgKjIRankwY2EToe5ERsdMnM86tYgxDM6PWJzOGVjFGnplR65MZFzYxBr654XT6ZMalVYwLc8vp9MmMK6sYI3PP6fTJjJFNjPPA3HM6/R+McDQ89DCOfg6TxGi8uIdXZd7VFMTzDP/1l73RbtLgKE/vWXs8vJmWNr9QSwMEFAAAAAgAAAAhAG1K+l2zAAAAmAEAABwAAAB3b3JkL19yZWxzL2RvY3VtZW50LnhtbC5yZWxzrZC9DsIgEIB3n4KwMFmqgzGmtIuLq/EFkB6UWH4C1Ni3l0GbNung4Hh/3313VfMyPXpCiNpZRnZFSRBY4VptFSNDktsjaepNdYWep9wSO+0jyjM2Mtyl5E+URtGB4bFwHmyuSBcMTzkMinouHlwB3ZflgYY5A9cLJrq0DMc09hAxuo0efqE7KbWAsxODAZtWltCJyIOC9N1QZA5GdMXADuYOId/+T4k59OMxpSYVuvhw/QZQSwMEFAAAAAgAAAAhAB62c+PMAAAAMQEAABEAAABkb2NQcm9wcy9jb3JlLnhtbGWPO27EMAxE+5xCcOPKpp0iCAxZ26UOkBMQEtdWoh8oepHjR5uPm7ScNzMcffmMQd2Iq89p7edx6hUlm51P29ofch2e+4t50KlOi81Mr5wLsXiqqhlTXZxdu12kLADl4DBm3sBZoECRklSYxxm6X7aFnHC1O0WsY4tLTb1mjij1217QfuBG8DhNTxBJ0KEg3NuHctZ3Rju7iJdA5sVbae9jUBuyo6Qa9k5W1KBuORxJiFjtmFxuQzWcvnuCZULJbN58w37Ev5OG/6vNF1BLAQIUAxQAAAAIAAAAIQBHrt4gFwEAABkDAAATAAAAAAAAAAAAAACAAQAAAABbQ29udGVudF9UeXBlc10ueG1sUEsBAhQDFAAAAAgAAAAhAOQGU5XMAAAAtgEAAAsAAAAAAAAAAAAAAIABSAEAAF9yZWxzLy5yZWxzUEsBAhQDFAAAAAgAAAAhAJVT1QeyCwAAmkoAABEAAAAAAAAAAAAAAIABPQIAAHdvcmQvZG9jdW1lbnQueG1sUEsBAhQDFAAAAAgAAAAhAHUdOA5iAgAAgw0AAA8AAAAAAAAAAAAAAIABHg4AAHdvcmQvc3R5bGVzLnhtbFBLAQIUAxQAAAAIAAAAIQCAaRoCjgEAAGIJAAASAAAAAAAAAAAAAACAAa0QAAB3b3JkL251bWJlcmluZy54bWxQSwECFAMUAAAACAAAACEAbUr6XbMAAACYAQAAHAAAAAAAAAAAAAAAgAFrEgAAd29yZC9fcmVscy9kb2N1bWVudC54bWwucmVsc1BLAQIUAxQAAAAIAAAAIQAetnPjzAAAADEBAAARAAAAAAAAAAAAAACAAVgTAABkb2NQcm9wcy9jb3JlLnhtbFBLBQYAAAAABwAHAL8BAABTFAAAAAA=",
+      "word_sha256": "f7307d5bf1808288e9a9697f4f45a514c25ae85d60353518ec7f7d243d4b7030"
+    },
+    "appendix_compact": {
+      "report": {
+        "casebook_fingerprint": "5f6cfe99167df257ad2d0a791c0c2091a71b3db994e161674bc7fd31fbf6ba20",
+        "coverage": {
+          "characters_supplied": 4706,
+          "documents_represented": 7,
+          "documents_supplied": 7,
+          "exhaustive_review": false,
+          "passages_indexed": 10,
+          "passages_selected": 9,
+          "questions_without_wording_matches": 0,
+          "unrepresented_documents": []
+        },
+        "created_at": "fictional-fixed-time",
+        "document_details": {
+          "contact_details": "",
+          "organisation": "Fictional Community Association",
+          "recipient": "",
+          "sender_role": "",
+          "signatory": ""
+        },
+        "document_markdown": "# Fictional self-contained pilot handover\n\nSource-only handover checklist — review before using.\n\nFictional Community Association\n\n## Handover next steps\n\nReview each question against its related wording, then record the confirmed response and who will follow it up. A wording match is not an answer; no owner or target date is assigned by this checklist.\n\n### 1. preparationmarker?\n\nRelated wording — review required: Passage 1.\n\n### 2. budgetmarker?\n\nRelated wording — review required: Passage 2.\n\n### 3. backgroundmarker?\n\nRelated wording — review required: Passage 3.\n\n### 4. historymarker?\n\nRelated wording — review required: Passage 4.\n\n### 5. meetingmarker?\n\nRelated wording — review required: Passage 5.\n\n### 6. scopemarker?\n\nRelated wording — review required: Passage 6.\n\n### 7. ipmarker?\n\nRelated wording — review required: Passage 7.\n\n### 8. ownermarker?\n\nRelated wording — review required: Passage 8.\n\n### 9. finalmarker?\n\nRelated wording — review required: Passage 9.\n\n## Selected source wording\n\nQuoted source notes below preserve the supplied words, with readable layout. Read the exact originals and surrounding context in Evidence before confirming any commitment.\n\nShowing 4 of 9 selected passages from 2 sources. All selected passages remain available in Evidence.\n\n### Passage 1\n\n> Original source: Fictional preparation and budget.md\n\n> preparationmarker The fictional preparation has no approval or commitment. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n\n### Passage 2\n\n> Original source: Fictional preparation and budget.md\n\n> budgetmarker The fictional budget is unknown; cash matching is not available. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n\n### Passage 3\n\n> Original source: Fictional background and history.md\n\n> backgroundmarker The fictional background is supplied for context only. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n\n### Passage 4\n\n> Original source: Fictional background and history.md\n\n> historymarker The earlier fictional request is superseded historical wording. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n\n5 additional selected passages remain in Evidence. This handover is not a full source review.\n\n## Passage reference key\n\nThese short labels refer to the exact selected excerpts. Offsets count Unicode code points from zero. The start is included; the end is excluded. Selection does not establish a verified answer.\n\n> **Passage 1** — Original source: Fictional preparation and budget.md\n> Excerpt ID: `E8cb58defc34d611390dccc84`; source ID: `Sc443f933070f6c17428a708b`.\n> Unicode characters: 0–832; quoted above.\n\n> **Passage 2** — Original source: Fictional preparation and budget.md\n> Excerpt ID: `E5d1e4aec3a2089f06af82f7a`; source ID: `Sc443f933070f6c17428a708b`.\n> Unicode characters: 832–1667; quoted above.\n\n> **Passage 3** — Original source: Fictional background and history.md\n> Excerpt ID: `E8aafd7141dd70c9c396a3bed`; source ID: `S684c5b4e2c6b94738e2bd963`.\n> Unicode characters: 0–829; quoted above.\n\n> **Passage 4** — Original source: Fictional background and history.md\n> Excerpt ID: `Ee32886b02748ceae5b89d9d0`; source ID: `S684c5b4e2c6b94738e2bd963`.\n> Unicode characters: 829–1663; quoted above.\n\n> **Passage 5** — Original source: Fictional proposed meeting.txt\n> Excerpt ID: `E7c9a3df3efc2112dcb24909f`; source ID: `S29ca652009d1172520a502c7`.\n> Unicode characters: 0–94; Evidence only — not reproduced in this document. Read its exact wording in Evidence.\n\n> **Passage 6** — Original source: Fictional current scope.txt\n> Excerpt ID: `E5b8f61772859db1e645bba0f`; source ID: `S4800a281237662c4bd436166`.\n> Unicode characters: 0–92; Evidence only — not reproduced in this document. Read its exact wording in Evidence.\n\n> **Passage 7** — Original source: Fictional IP review.txt\n> Excerpt ID: `Ec72768df0af04bc036e953f2`; source ID: `Sb828f110e2682bf194d0802d`.\n> Unicode characters: 0–85; Evidence only — not reproduced in this document. Read its exact wording in Evidence.\n\n> **Passage 8** — Original source: Fictional ownership.txt\n> Excerpt ID: `E5c6d8c375e0adff1a1a0ba5b`; source ID: `Sefd6d5e986e3a30b6fb9c0bf`.\n> Unicode characters: 0–89; Evidence only — not reproduced in this document. Read its exact wording in Evidence.\n\n> **Passage 9** — Original source: Fictional unanswered final question.txt\n> Excerpt ID: `Edd35832a0c9ad3c637e0398a`; source ID: `Scb2d0f8ee20f3ffa4761fa51`.\n> Unicode characters: 0–86; Evidence only — not reproduced in this document. Read its exact wording in Evidence.",
+        "document_questions": [
+          "preparationmarker?",
+          "budgetmarker?",
+          "backgroundmarker?",
+          "historymarker?",
+          "meetingmarker?",
+          "scopemarker?",
+          "ipmarker?",
+          "ownermarker?",
+          "finalmarker?"
+        ],
+        "document_ready": true,
+        "document_references": [
+          {
+            "end": 832,
+            "excerpt_id": "E8cb58defc34d611390dccc84",
+            "label": "Passage 1",
+            "source_id": "Sc443f933070f6c17428a708b",
+            "start": 0
+          },
+          {
+            "end": 1667,
+            "excerpt_id": "E5d1e4aec3a2089f06af82f7a",
+            "label": "Passage 2",
+            "source_id": "Sc443f933070f6c17428a708b",
+            "start": 832
+          },
+          {
+            "end": 829,
+            "excerpt_id": "E8aafd7141dd70c9c396a3bed",
+            "label": "Passage 3",
+            "source_id": "S684c5b4e2c6b94738e2bd963",
+            "start": 0
+          },
+          {
+            "end": 1663,
+            "excerpt_id": "Ee32886b02748ceae5b89d9d0",
+            "label": "Passage 4",
+            "source_id": "S684c5b4e2c6b94738e2bd963",
+            "start": 829
+          },
+          {
+            "end": 94,
+            "excerpt_id": "E7c9a3df3efc2112dcb24909f",
+            "label": "Passage 5",
+            "source_id": "S29ca652009d1172520a502c7",
+            "start": 0
+          },
+          {
+            "end": 92,
+            "excerpt_id": "E5b8f61772859db1e645bba0f",
+            "label": "Passage 6",
+            "source_id": "S4800a281237662c4bd436166",
+            "start": 0
+          },
+          {
+            "end": 85,
+            "excerpt_id": "Ec72768df0af04bc036e953f2",
+            "label": "Passage 7",
+            "source_id": "Sb828f110e2682bf194d0802d",
+            "start": 0
+          },
+          {
+            "end": 89,
+            "excerpt_id": "E5c6d8c375e0adff1a1a0ba5b",
+            "label": "Passage 8",
+            "source_id": "Sefd6d5e986e3a30b6fb9c0bf",
+            "start": 0
+          },
+          {
+            "end": 86,
+            "excerpt_id": "Edd35832a0c9ad3c637e0398a",
+            "label": "Passage 9",
+            "source_id": "Scb2d0f8ee20f3ffa4761fa51",
+            "start": 0
+          }
+        ],
+        "document_title": "Fictional self-contained pilot handover",
+        "document_type": "handover",
+        "excerpts": [
+          {
+            "end": 832,
+            "id": "E8cb58defc34d611390dccc84",
+            "quote": "preparationmarker The fictional preparation has no approval or commitment. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n",
+            "source_id": "Sc443f933070f6c17428a708b",
+            "start": 0
+          },
+          {
+            "end": 1667,
+            "id": "E5d1e4aec3a2089f06af82f7a",
+            "quote": "budgetmarker The fictional budget is unknown; cash matching is not available. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n",
+            "source_id": "Sc443f933070f6c17428a708b",
+            "start": 832
+          },
+          {
+            "end": 829,
+            "id": "E8aafd7141dd70c9c396a3bed",
+            "quote": "backgroundmarker The fictional background is supplied for context only. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n",
+            "source_id": "S684c5b4e2c6b94738e2bd963",
+            "start": 0
+          },
+          {
+            "end": 1663,
+            "id": "Ee32886b02748ceae5b89d9d0",
+            "quote": "historymarker The earlier fictional request is superseded historical wording. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. ",
+            "source_id": "S684c5b4e2c6b94738e2bd963",
+            "start": 829
+          },
+          {
+            "end": 94,
+            "id": "E7c9a3df3efc2112dcb24909f",
+            "quote": "meetingmarker The fictional meeting time is 09:45 on 7 October; it is proposed, not confirmed.",
+            "source_id": "S29ca652009d1172520a502c7",
+            "start": 0
+          },
+          {
+            "end": 92,
+            "id": "E5b8f61772859db1e645bba0f",
+            "quote": "scopemarker The current fictional scope is one small pilot; further commitments are unknown.",
+            "source_id": "S4800a281237662c4bd436166",
+            "start": 0
+          },
+          {
+            "end": 85,
+            "id": "Ec72768df0af04bc036e953f2",
+            "quote": "ipmarker Fictional IP ownership and novelty remain unverified; seek qualified review.",
+            "source_id": "Sb828f110e2682bf194d0802d",
+            "start": 0
+          },
+          {
+            "end": 89,
+            "id": "E5c6d8c375e0adff1a1a0ba5b",
+            "quote": "ownermarker No named person has accepted the fictional follow-up; the role is unassigned.",
+            "source_id": "Sefd6d5e986e3a30b6fb9c0bf",
+            "start": 0
+          },
+          {
+            "end": 86,
+            "id": "Edd35832a0c9ad3c637e0398a",
+            "quote": "finalmarker The final fictional answer remains unknown — ask 李 😀 before relying on it.",
+            "source_id": "Scb2d0f8ee20f3ffa4761fa51",
+            "start": 0
+          }
+        ],
+        "markdown": "# Fictional self-contained pilot handover\n\nVolunteer handover - DRAFT / HUMAN REVIEW REQUIRED\n\n# Fictional self-contained pilot handover\n\nFictional Community Association\n\n## Background\n\n### Fictional preparation and budget.md\n\n> preparationmarker The fictional preparation has no approval or commitment. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n> \n\nSource: https://example.invalid/fictional/preparation\n\n### Fictional preparation and budget.md\n\n> budgetmarker The fictional budget is unknown; cash matching is not available. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n> \n\nSource: https://example.invalid/fictional/preparation\n\n### Fictional background and history.md\n\n> backgroundmarker The fictional background is supplied for context only. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n> \n\nSource: https://example.invalid/fictional/history\n\n### Fictional background and history.md\n\n> historymarker The earlier fictional request is superseded historical wording. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n\nSource: https://example.invalid/fictional/history\n\n## Questions requiring clarification\n\n1. preparationmarker?\n2. budgetmarker?\n3. backgroundmarker?\n4. historymarker?\n5. meetingmarker?\n6. scopemarker?\n7. ipmarker?\n8. ownermarker?\n9. finalmarker?\n\n## Handover next steps\n\n- Review the background and confirm which information is current.\n- Resolve the open questions with the relevant people or source owners.\n- Record the agreed response and who will follow it up.\n\n## Questions and evidence\n\n### preparationmarker?\n\nRelated passages: E8cb58defc34d611390dccc84. Review before drawing a conclusion.\n\n### budgetmarker?\n\nRelated passages: E5d1e4aec3a2089f06af82f7a. Review before drawing a conclusion.\n\n### backgroundmarker?\n\nRelated passages: E8aafd7141dd70c9c396a3bed. Review before drawing a conclusion.\n\n### historymarker?\n\nRelated passages: Ee32886b02748ceae5b89d9d0. Review before drawing a conclusion.\n\n### meetingmarker?\n\nRelated passages: E7c9a3df3efc2112dcb24909f. Review before drawing a conclusion.\n\n### scopemarker?\n\nRelated passages: E5b8f61772859db1e645bba0f. Review before drawing a conclusion.\n\n### ipmarker?\n\nRelated passages: Ec72768df0af04bc036e953f2. Review before drawing a conclusion.\n\n### ownermarker?\n\nRelated passages: E5c6d8c375e0adff1a1a0ba5b. Review before drawing a conclusion.\n\n### finalmarker?\n\nRelated passages: Edd35832a0c9ad3c637e0398a. Review before drawing a conclusion.\n\n## Evidence excerpts\n\nExact excerpts are traceable, not independently verified facts. Read surrounding context before interpreting them.\n\n### Fictional preparation and budget.md [E8cb58defc34d611390dccc84]\n\n> preparationmarker The fictional preparation has no approval or commitment. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n> \n\nSource: Sc443f933070f6c17428a708b; characters 0-832; reference_excerpt.\n\n### Fictional preparation and budget.md [E5d1e4aec3a2089f06af82f7a]\n\n> budgetmarker The fictional budget is unknown; cash matching is not available. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n> \n\nSource: Sc443f933070f6c17428a708b; characters 832-1667; reference_excerpt.\n\n### Fictional background and history.md [E8aafd7141dd70c9c396a3bed]\n\n> backgroundmarker The fictional background is supplied for context only. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n> \n\nSource: S684c5b4e2c6b94738e2bd963; characters 0-829; reference_excerpt.\n\n### Fictional background and history.md [Ee32886b02748ceae5b89d9d0]\n\n> historymarker The earlier fictional request is superseded historical wording. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \n\nSource: S684c5b4e2c6b94738e2bd963; characters 829-1663; reference_excerpt.\n\n### Fictional proposed meeting.txt [E7c9a3df3efc2112dcb24909f]\n\n> meetingmarker The fictional meeting time is 09:45 on 7 October; it is proposed, not confirmed.\n\nSource: S29ca652009d1172520a502c7; characters 0-94; reference_excerpt.\n\n### Fictional current scope.txt [E5b8f61772859db1e645bba0f]\n\n> scopemarker The current fictional scope is one small pilot; further commitments are unknown.\n\nSource: S4800a281237662c4bd436166; characters 0-92; reference_excerpt.\n\n### Fictional IP review.txt [Ec72768df0af04bc036e953f2]\n\n> ipmarker Fictional IP ownership and novelty remain unverified; seek qualified review.\n\nSource: Sb828f110e2682bf194d0802d; characters 0-85; reference_excerpt.\n\n### Fictional ownership.txt [E5c6d8c375e0adff1a1a0ba5b]\n\n> ownermarker No named person has accepted the fictional follow-up; the role is unassigned.\n\nSource: Sefd6d5e986e3a30b6fb9c0bf; characters 0-89; reference_excerpt.\n\n### Fictional unanswered final question.txt [Edd35832a0c9ad3c637e0398a]\n\n> finalmarker The final fictional answer remains unknown — ask 李 😀 before relying on it.\n\nSource: Scb2d0f8ee20f3ffa4761fa51; characters 0-86; reference_excerpt.\n\n## Source register\n\n### [Sc443f933070f6c17428a708b] Fictional preparation and budget.md\n\nKind: reference_excerpt. Retrieved/imported: Source date (unverified): 2026-09-01.\n\nURL: https://example.invalid/fictional/preparation\n\nSHA-256: aa191426546ed9da77658734bbcc74b36bf86f94503254d26979157113a88486\n\n### [S684c5b4e2c6b94738e2bd963] Fictional background and history.md\n\nKind: reference_excerpt. Retrieved/imported: Source date (unverified): 2026-08-25.\n\nURL: https://example.invalid/fictional/history\n\nSHA-256: 659dec6a8c27d8760ebf76897786d558f02c72f1365c318915ea1dff7c40084c\n\n### [S29ca652009d1172520a502c7] Fictional proposed meeting.txt\n\nKind: reference_excerpt. Retrieved/imported: Source date (unverified): 2026-09-30.\n\nURL: https://example.invalid/fictional/source-3\n\nSHA-256: 7c86907fcb02dee94e51c3370b928b7ecda9fa265b0ce0f6ffaf015aea8906f3\n\n### [S4800a281237662c4bd436166] Fictional current scope.txt\n\nKind: reference_excerpt. Retrieved/imported: Source date (unverified): 2026-09-30.\n\nURL: https://example.invalid/fictional/source-4\n\nSHA-256: c20ecd412d186d65d271e305f34fd2b5a4694ca2cf56c0a5989f3e44d88d6116\n\n### [Sb828f110e2682bf194d0802d] Fictional IP review.txt\n\nKind: reference_excerpt. Retrieved/imported: Source date (unverified): 2026-09-30.\n\nURL: https://example.invalid/fictional/source-5\n\nSHA-256: fa770471cdc115401dd258d4deeca59cf7f17dae347d5c6360ba7ba865aa72ae\n\n### [Sefd6d5e986e3a30b6fb9c0bf] Fictional ownership.txt\n\nKind: reference_excerpt. Retrieved/imported: Source date (unverified): 2026-09-30.\n\nURL: https://example.invalid/fictional/source-6\n\nSHA-256: af49be1fa609e8717ddd6b3b4d73e20452ec0efb4e574f81b1f2c1cd5bdf0747\n\n### [Scb2d0f8ee20f3ffa4761fa51] Fictional unanswered final question.txt\n\nKind: reference_excerpt. Retrieved/imported: Source date (unverified): 2026-09-30.\n\nURL: https://example.invalid/fictional/source-7\n\nSHA-256: a58f0f8142efdaaa1c8f43b891600ac4a73750093f7233f5116ae3c37734d2ba\n\n## What this report covers\n\n9 selected passages from 7 of 7 supplied documents. 10 passages indexed. This is not an exhaustive review.\n\n## Still to check\n\nEvery question still requires human interpretation of the related passages.\n\n## Review checklist\n\n- Check original wording, dates and permissions.\n- Resolve conflicting accounts.\n- Confirm owners and commitments.\n- Remove private material before sharing.\n\n## Limitations\n\n- Related wording is not an answered question. No match does not prove an issue is absent.\n- This is selected evidence, not a whole-collection review. Dates are supplied labels, not verified chronology.\n- Check disagreements, negation, conditions and missing attachments in the originals. Nothing is sent automatically.",
+        "missing_fields": [],
+        "question_index": [
+          {
+            "excerpt_ids": [
+              "E8cb58defc34d611390dccc84"
+            ],
+            "question": "preparationmarker?",
+            "status": "related_wording"
+          },
+          {
+            "excerpt_ids": [
+              "E5d1e4aec3a2089f06af82f7a"
+            ],
+            "question": "budgetmarker?",
+            "status": "related_wording"
+          },
+          {
+            "excerpt_ids": [
+              "E8aafd7141dd70c9c396a3bed"
+            ],
+            "question": "backgroundmarker?",
+            "status": "related_wording"
+          },
+          {
+            "excerpt_ids": [
+              "Ee32886b02748ceae5b89d9d0"
+            ],
+            "question": "historymarker?",
+            "status": "related_wording"
+          },
+          {
+            "excerpt_ids": [
+              "E7c9a3df3efc2112dcb24909f"
+            ],
+            "question": "meetingmarker?",
+            "status": "related_wording"
+          },
+          {
+            "excerpt_ids": [
+              "E5b8f61772859db1e645bba0f"
+            ],
+            "question": "scopemarker?",
+            "status": "related_wording"
+          },
+          {
+            "excerpt_ids": [
+              "Ec72768df0af04bc036e953f2"
+            ],
+            "question": "ipmarker?",
+            "status": "related_wording"
+          },
+          {
+            "excerpt_ids": [
+              "E5c6d8c375e0adff1a1a0ba5b"
+            ],
+            "question": "ownermarker?",
+            "status": "related_wording"
+          },
+          {
+            "excerpt_ids": [
+              "Edd35832a0c9ad3c637e0398a"
+            ],
+            "question": "finalmarker?",
+            "status": "related_wording"
+          }
+        ],
+        "review_status": "draft",
+        "source_register": [
+          {
+            "date": "2026-09-01",
+            "id": "Sc443f933070f6c17428a708b",
+            "sha256": "aa191426546ed9da77658734bbcc74b36bf86f94503254d26979157113a88486",
+            "title": "Fictional preparation and budget.md",
+            "url": "https://example.invalid/fictional/preparation"
+          },
+          {
+            "date": "2026-08-25",
+            "id": "S684c5b4e2c6b94738e2bd963",
+            "sha256": "659dec6a8c27d8760ebf76897786d558f02c72f1365c318915ea1dff7c40084c",
+            "title": "Fictional background and history.md",
+            "url": "https://example.invalid/fictional/history"
+          },
+          {
+            "date": "2026-09-30",
+            "id": "S29ca652009d1172520a502c7",
+            "sha256": "7c86907fcb02dee94e51c3370b928b7ecda9fa265b0ce0f6ffaf015aea8906f3",
+            "title": "Fictional proposed meeting.txt",
+            "url": "https://example.invalid/fictional/source-3"
+          },
+          {
+            "date": "2026-09-30",
+            "id": "S4800a281237662c4bd436166",
+            "sha256": "c20ecd412d186d65d271e305f34fd2b5a4694ca2cf56c0a5989f3e44d88d6116",
+            "title": "Fictional current scope.txt",
+            "url": "https://example.invalid/fictional/source-4"
+          },
+          {
+            "date": "2026-09-30",
+            "id": "Sb828f110e2682bf194d0802d",
+            "sha256": "fa770471cdc115401dd258d4deeca59cf7f17dae347d5c6360ba7ba865aa72ae",
+            "title": "Fictional IP review.txt",
+            "url": "https://example.invalid/fictional/source-5"
+          },
+          {
+            "date": "2026-09-30",
+            "id": "Sefd6d5e986e3a30b6fb9c0bf",
+            "sha256": "af49be1fa609e8717ddd6b3b4d73e20452ec0efb4e574f81b1f2c1cd5bdf0747",
+            "title": "Fictional ownership.txt",
+            "url": "https://example.invalid/fictional/source-6"
+          },
+          {
+            "date": "2026-09-30",
+            "id": "Scb2d0f8ee20f3ffa4761fa51",
+            "sha256": "a58f0f8142efdaaa1c8f43b891600ac4a73750093f7233f5116ae3c37734d2ba",
+            "title": "Fictional unanswered final question.txt",
+            "url": "https://example.invalid/fictional/source-7"
+          }
+        ],
+        "sources": [
+          {
+            "content": "preparationmarker The fictional preparation has no approval or commitment. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \nbudgetmarker The fictional budget is unknown; cash matching is not available. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \nUNSELECTED ORIGINAL CONTEXT: this unrelated retained wording must not enter the appendix. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. Unrelated archived wording. ",
+            "id": "Sc443f933070f6c17428a708b",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date (unverified): 2026-09-01",
+            "sha256": "aa191426546ed9da77658734bbcc74b36bf86f94503254d26979157113a88486",
+            "title": "Fictional preparation and budget.md",
+            "url": "https://example.invalid/fictional/preparation"
+          },
+          {
+            "content": "backgroundmarker The fictional background is supplied for context only. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. \nhistorymarker The earlier fictional request is superseded historical wording. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. Neutral background record. ",
+            "id": "S684c5b4e2c6b94738e2bd963",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date (unverified): 2026-08-25",
+            "sha256": "659dec6a8c27d8760ebf76897786d558f02c72f1365c318915ea1dff7c40084c",
+            "title": "Fictional background and history.md",
+            "url": "https://example.invalid/fictional/history"
+          },
+          {
+            "content": "meetingmarker The fictional meeting time is 09:45 on 7 October; it is proposed, not confirmed.",
+            "id": "S29ca652009d1172520a502c7",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date (unverified): 2026-09-30",
+            "sha256": "7c86907fcb02dee94e51c3370b928b7ecda9fa265b0ce0f6ffaf015aea8906f3",
+            "title": "Fictional proposed meeting.txt",
+            "url": "https://example.invalid/fictional/source-3"
+          },
+          {
+            "content": "scopemarker The current fictional scope is one small pilot; further commitments are unknown.",
+            "id": "S4800a281237662c4bd436166",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date (unverified): 2026-09-30",
+            "sha256": "c20ecd412d186d65d271e305f34fd2b5a4694ca2cf56c0a5989f3e44d88d6116",
+            "title": "Fictional current scope.txt",
+            "url": "https://example.invalid/fictional/source-4"
+          },
+          {
+            "content": "ipmarker Fictional IP ownership and novelty remain unverified; seek qualified review.",
+            "id": "Sb828f110e2682bf194d0802d",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date (unverified): 2026-09-30",
+            "sha256": "fa770471cdc115401dd258d4deeca59cf7f17dae347d5c6360ba7ba865aa72ae",
+            "title": "Fictional IP review.txt",
+            "url": "https://example.invalid/fictional/source-5"
+          },
+          {
+            "content": "ownermarker No named person has accepted the fictional follow-up; the role is unassigned.",
+            "id": "Sefd6d5e986e3a30b6fb9c0bf",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date (unverified): 2026-09-30",
+            "sha256": "af49be1fa609e8717ddd6b3b4d73e20452ec0efb4e574f81b1f2c1cd5bdf0747",
+            "title": "Fictional ownership.txt",
+            "url": "https://example.invalid/fictional/source-6"
+          },
+          {
+            "content": "finalmarker The final fictional answer remains unknown — ask 李 😀 before relying on it.",
+            "id": "Scb2d0f8ee20f3ffa4761fa51",
+            "kind": "reference_excerpt",
+            "retrieved_at": "Source date (unverified): 2026-09-30",
+            "sha256": "a58f0f8142efdaaa1c8f43b891600ac4a73750093f7233f5116ae3c37734d2ba",
+            "title": "Fictional unanswered final question.txt",
+            "url": "https://example.invalid/fictional/source-7"
+          }
+        ],
+        "title": "Fictional self-contained pilot handover",
+        "warnings": [
+          "Related wording is not an answered question. No match does not prove an issue is absent.",
+          "This is selected evidence, not a whole-collection review. Dates are supplied labels, not verified chronology.",
+          "Check disagreements, negation, conditions and missing attachments in the originals. Nothing is sent automatically."
+        ],
+        "workflow": "casebook"
+      }
+    }
+  }
+}

@@ -10,7 +10,7 @@ import io
 import re
 import zipfile
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from xml.etree import ElementTree as ET
 
 from .document_markup import Block, PageBreak, Paragraph, Span, Table, parse
@@ -20,6 +20,7 @@ MAX_MARKDOWN = 500_000
 # Keep one bounded source note together, never an arbitrary quote dossier.
 _MAX_SOURCE_NOTE_GROUP_CHARS = 2400
 _MAX_SOURCE_NOTE_GROUP_LINES = 20
+_MAX_PASSAGE_NAVIGATION_RECORDS = 64
 _REFERENCE_KEY_HEADING = "Passage reference key"
 _REFERENCE_KEY_INTRO = (
     "These short labels refer to the exact selected excerpts. Offsets count "
@@ -31,6 +32,8 @@ _REFERENCE_SCOPES = {
     "quoted in the selected evidence appendix.",
     "Evidence only — not reproduced in this document. "
     "Read its exact wording in Evidence.",
+    "Selected passage not reproduced in this copy. "
+    "Ask the sender for its original wording and surrounding context.",
 }
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -242,6 +245,122 @@ def _reference_key_spacing(markdown: str, blocks: tuple[Block, ...]) -> frozense
     return frozenset(admitted)
 
 
+def _passage_navigation(
+    markdown: str, blocks: tuple[Block, ...], references: frozenset[int]
+) -> tuple[dict[int, str], dict[int, tuple[tuple[int, int, str], ...]]]:
+    """Link admitted literal labels, never infer or verify source identities.
+
+    Existing source IDs, ranges and quote text stay literal. Ambiguous headings
+    cannot become a quote destination; their reference entry remains available.
+    Larger mappings retain all wording without this optional navigation layer.
+    """
+    if not references or len(references) > _MAX_PASSAGE_NAVIGATION_RECORDS:
+        return {}, {}
+    normalized = markdown.replace("\r\n", "\n").replace("\r", "\n")
+    bookmarks: dict[int, str] = {}
+    links: dict[int, tuple[tuple[int, int, str], ...]] = {}
+    destinations = {}
+    for number, index in enumerate(sorted(references), 1):
+        record = blocks[index]
+        label = f"Passage {number}"
+        reference = f"SinterReference{number}"
+        bookmarks[index] = reference
+        destinations[label] = reference
+        lines = "".join(span.text for span in record.spans).split("\n")
+        if not lines[-1].endswith(
+            ("; quoted above.", "; quoted in the selected evidence appendix.")
+        ):
+            continue
+        caption = "\n".join(lines[:-2])[len(label + " — ") :]
+        headings = [
+            at
+            for at, block in enumerate(blocks[:index])
+            if isinstance(block, Paragraph)
+            and block.heading == 3
+            and not (block.quote or block.code or block.list_id)
+            and block.spans == (Span(label),)
+        ]
+        raw = list(re.finditer(r"(?m)^### " + re.escape(label) + r"$", normalized))
+        if len(headings) != 1 or len(raw) != 1:
+            continue
+        heading = headings[0]
+        # Typed blocks flatten nesting. Match the raw top-level location too.
+        prefix = parse(normalized[: raw[0].end()])
+        if len(prefix) != heading + 1 or prefix[-1] != blocks[heading]:
+            continue
+        source = blocks[heading + 1] if heading + 1 < len(blocks) else None
+        if (
+            not isinstance(source, Paragraph)
+            or not source.quote
+            or source.heading
+            or source.code
+            or source.list_id
+            or "".join(span.text for span in source.spans) != caption
+        ):
+            continue
+        end = next(
+            (
+                at
+                for at in range(heading + 2, index)
+                if isinstance(blocks[at], Paragraph) and blocks[at].heading
+            ),
+            index,
+        )
+        if not any(
+            isinstance(block, Table)
+            or (
+                isinstance(block, Paragraph)
+                and block.quote
+                and not "".join(span.text for span in block.spans).startswith(
+                    "Source link (supplied): "
+                )
+            )
+            for block in blocks[heading + 2 : end]
+        ):
+            continue
+        passage = f"SinterPassage{number}"
+        bookmarks[heading] = passage
+        destinations[label] = passage
+        links[index] = ((0, len(label), passage),)
+        links[heading] = ((0, len(label), reference),)
+
+    for index, block in enumerate(blocks):
+        if (
+            not isinstance(block, Paragraph)
+            or block.heading
+            or block.quote
+            or block.code
+            or block.list_id
+            or len(block.spans) != 1
+            or block.spans[0] != Span(block.spans[0].text)
+            or index == 0
+        ):
+            continue
+        text = block.spans[0].text
+        if not re.fullmatch(
+            r"Related wording — review required: Passage [1-9][0-9]*"
+            r"(?:, Passage [1-9][0-9]*)*\.",
+            text,
+        ):
+            continue
+        previous = blocks[index - 1]
+        if (
+            not isinstance(previous, Paragraph)
+            or previous.heading != 3
+            or previous.quote
+            or previous.code
+            or previous.list_id
+            or not re.match(r"^[1-9][0-9]*\. ", "".join(s.text for s in previous.spans))
+        ):
+            continue
+        labels = list(re.finditer(r"Passage [1-9][0-9]*", text))
+        if all(match[0] in destinations for match in labels):
+            links[index] = tuple(
+                (match.start(), match.end(), destinations[match[0]]) for match in labels
+            )
+    return bookmarks, links
+
+
 class _Package:
     def __init__(self) -> None:
         self.document = ET.Element(f"{{{W}}}document")
@@ -251,6 +370,7 @@ class _Package:
         self.numbers: list[ET.Element] = []
         self.lists: dict[int, int] = {}
         self.links: dict[str, str] = {}
+        self.bookmark_count = 0
         for name in ("styles", "numbering"):
             ET.SubElement(
                 self.relationships,
@@ -260,10 +380,43 @@ class _Package:
                 Target=f"{name}.xml",
             )
 
-    def runs(self, parent: ET.Element, spans: tuple[Span, ...]) -> None:
+    def runs(
+        self,
+        parent: ET.Element,
+        spans: tuple[Span, ...],
+        internal_links: tuple[tuple[int, int, str], ...] = (),
+    ) -> None:
+        offset = 0
+        fragments = []
         for span in spans:
+            end = offset + len(span.text)
+            boundaries = {offset, end}
+            for first, last, _ in internal_links:
+                boundaries.update(at for at in (first, last) if offset < at < end)
+            positions = sorted(boundaries)
+            if len(positions) == 1:
+                fragments.append((span, None))
+            for first, last in zip(positions, positions[1:]):
+                anchor = next(
+                    (
+                        name
+                        for start, stop, name in internal_links
+                        if start <= first and last <= stop
+                    ),
+                    None,
+                )
+                fragments.append(
+                    (
+                        replace(span, text=span.text[first - offset : last - offset]),
+                        anchor,
+                    )
+                )
+            offset = end
+        for span, anchor in fragments:
             target = parent
-            if span.href:
+            if anchor:
+                target = _element(parent, "hyperlink", anchor=anchor)
+            elif span.href:
                 if span.href not in self.links:
                     identifier = "link" + str(len(self.links) + 1)
                     self.links[span.href] = identifier
@@ -280,7 +433,7 @@ class _Package:
                 )
             run = _element(target, "r")
             properties = _element(run, "rPr")
-            if span.href:
+            if span.href or anchor:
                 _element(properties, "rStyle", val="Hyperlink")
             if span.code:
                 _element(
@@ -345,6 +498,8 @@ class _Package:
         align: str | None = None,
         keep_next: bool = False,
         compact_reference: bool = False,
+        bookmark: str | None = None,
+        internal_links: tuple[tuple[int, int, str], ...] = (),
     ) -> None:
         node = _element(parent, "p")
         properties = _element(node, "pPr")
@@ -377,7 +532,13 @@ class _Package:
             _element(properties, "spacing", after=80)
         if align:
             _element(properties, "jc", val=align)
-        self.runs(node, paragraph.spans)
+        if bookmark:
+            identifier = self.bookmark_count
+            self.bookmark_count += 1
+            _element(node, "bookmarkStart", id=identifier, name=bookmark)
+        self.runs(node, paragraph.spans, internal_links)
+        if bookmark:
+            _element(node, "bookmarkEnd", id=identifier)
 
     def table(self, table: Table) -> None:
         node = _element(self.body, "tbl")
@@ -485,6 +646,9 @@ def export_docx(payload: object) -> WordDocument:
     blocks = parse(markdown)
     keep_next = _source_note_keep_next(blocks)
     compact_references = _reference_key_spacing(markdown, blocks)
+    bookmarks, internal_links = _passage_navigation(
+        markdown, blocks, compact_references
+    )
     for index, block in enumerate(blocks):
         if isinstance(block, PageBreak):
             package.page_break()
@@ -497,6 +661,8 @@ def export_docx(payload: object) -> WordDocument:
                 title=index == 0 and block.heading == 1,
                 keep_next=index in keep_next,
                 compact_reference=index in compact_references,
+                bookmark=bookmarks.get(index),
+                internal_links=internal_links.get(index, ()),
             )
     package.numbering.extend(package.numbers)
     section = _element(package.body, "sectPr")

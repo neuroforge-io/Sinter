@@ -51,7 +51,7 @@ def test_nine_selected_passages_from_seven_sources_survive_word_export():
     assert full["handover_evidence"] == "selected_appendix"
     assert "Including all 9 selected passages from 7 sources" in text
     assert "Selected evidence appendix" in text
-    assert "Evidence only — not reproduced" not in text
+    assert "Selected passage not reproduced" not in text
     assert "Read its exact wording in Evidence" not in text
     assert "A wording match is not an answer" in text
     assert "not an exhaustive source review" in text
@@ -68,7 +68,7 @@ def test_nine_selected_passages_from_seven_sources_survive_word_export():
     assert original == before
 
 
-def test_compact_default_and_explicit_compact_keep_legacy_fingerprint_and_document():
+def test_compact_default_and_explicit_compact_keep_fingerprint_and_presentation():
     original = project()
     normalized = casebooks.validate(original)
     explicit = casebooks.validate({**original, "handover_evidence": "compact"})
@@ -79,7 +79,7 @@ def test_compact_default_and_explicit_compact_keep_legacy_fingerprint_and_docume
         compact = casebooks.build({**original, "handover_evidence": "compact"})
     assert default == compact
     assert "Showing 4 of 9 selected passages" in compact["document_markdown"]
-    assert compact["document_markdown"].count("Evidence only — not reproduced") == 5
+    assert compact["document_markdown"].count("Selected passage not reproduced") == 5
     assert "## Selected evidence appendix" not in compact["document_markdown"]
 
 

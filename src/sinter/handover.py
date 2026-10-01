@@ -14,6 +14,7 @@ from .document_markup import inline
 from .evidence import Excerpt, Source, literal, validate_excerpt
 
 MAX_NOTES = 4
+PRESENTATION_VERSION = "sinter-handover-presentation/v2"
 EVIDENCE_MODES = frozenset({"compact", "selected_appendix"})
 MAX_TABLE_ROWS = 40
 MAX_TABLE_COLUMNS = 12
@@ -294,9 +295,10 @@ def render(
     lines.extend(
         [
             "## Selected source wording",
-            "Quoted source notes below preserve the supplied words, with "
-            "readable layout. Read the exact originals and surrounding "
-            "context in Evidence before confirming any commitment.",
+            "Quoted notes below reproduce the included selected wording, with "
+            "readable layout. They are excerpts, not every original document "
+            "or its surrounding text. Ask the sender for the full originals "
+            "or project backup before confirming any commitment.",
         ]
     )
     displayed = selected[:MAX_NOTES]
@@ -307,7 +309,8 @@ def render(
             "This document reproduces every selected passage, not every original "
             "source or its unselected surrounding text. Selection does not "
             "answer the questions or confirm commitments. Full originals remain "
-            "in the project backup."
+            "in the project backup; ask the sender for those originals when "
+            "surrounding context matters."
         )
         source_count = len({item.source_id for item in selected})
         lines.append(
@@ -319,8 +322,13 @@ def render(
         source_count = len({item.source_id for item in displayed})
         lines.append(
             f"Showing {len(displayed)} of {len(selected)} selected passages from "
-            f"{source_count} source{'s' if source_count != 1 else ''}. All selected "
-            "passages remain available in Evidence."
+            f"{source_count} source{'s' if source_count != 1 else ''}. "
+            + (
+                "The remaining selected passages are not reproduced in this copy. "
+                "Ask the sender for the full selected evidence or project backup."
+                if len(selected) > len(displayed)
+                else "Unselected original text is not reproduced."
+            )
         )
 
     def quoted_passage(excerpt):
@@ -351,12 +359,13 @@ def render(
     elif len(selected) > MAX_NOTES:
         lines.append(
             f"{len(selected) - MAX_NOTES} additional selected passages "
-            "remain in Evidence. This handover is not a full source review."
+            "are not reproduced in this copy. This handover is not a full source "
+            "review; ask the sender for the missing wording and context."
         )
     elif not selected:
         lines.append(
-            "No passages were selected. The original documents remain "
-            "in the casebook; add relevant wording before drawing conclusions."
+            "No passages were selected. Ask the sender for relevant original "
+            "wording before drawing conclusions."
         )
     if records:
         lines.extend(
@@ -374,8 +383,8 @@ def render(
                 if number < MAX_NOTES
                 else "quoted in the selected evidence appendix."
                 if include_selected_appendix
-                else "Evidence only — not reproduced in this document. "
-                "Read its exact wording in Evidence."
+                else "Selected passage not reproduced in this copy. "
+                "Ask the sender for its original wording and surrounding context."
             )
             # One quoted paragraph keeps each identity/range mapping together.
             # The supplied title remains inside the literal metadata boundary.

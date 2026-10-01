@@ -19,6 +19,7 @@ from sinter import casebooks, client
 from sinter.casebook_scope import EMPTY_ANSWER, draft_context, scoped_draft
 from sinter.preferences import Preferences
 from sinter.store import Store
+from tools.historical_handover_fixture import historical_handover
 
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY_PATH = ROOT / "tests/fixtures/casebooks_pre_scope_v1.py"
@@ -205,7 +206,7 @@ def test_v2_is_required_so_old_previews_cannot_silently_discard_choices():
         legacy.validate(book)
 
 
-def test_unscoped_normalization_fingerprint_report_and_packet_are_exact_legacy(
+def test_unscoped_legacy_identity_and_presentation_change_are_separate(
     monkeypatch,
 ):
     legacy = legacy_module()
@@ -219,10 +220,23 @@ def test_unscoped_normalization_fingerprint_report_and_packet_are_exact_legacy(
             book
         )
         actual = casebooks.build(book)
+        current = actual
         golden = identity["formats"][kind]
         assert (
             serialized_digest(casebooks.validate(book)) == golden["normalized_sha256"]
         )
+        if kind == "handover":
+            captured = historical_handover("unscoped_golden")
+            assert captured["input"] == book
+            actual = captured["report"]
+            projected = dict(current)
+            assert projected.pop("handover_presentation") == (
+                "sinter-handover-presentation/v2"
+            )
+            assert current["document_markdown"] != actual["document_markdown"]
+            projected["document_markdown"] = actual["document_markdown"]
+            assert projected == actual
+            assert draft_context(current) == draft_context(actual)
         assert serialized_digest(actual) == golden["report_sha256"]
         assert serialized_digest(draft_context(actual)) == golden["packet_sha256"]
         response = client.ChatResult(
@@ -237,6 +251,22 @@ def test_unscoped_normalization_fingerprint_report_and_packet_are_exact_legacy(
             }
         assert serialized_digest(actual_draft) == golden["draft_sha256"]
         assert serialized_digest(request) == golden["request_sha256"]
+        if kind == "handover":
+            with patch.object(client, "chat", return_value=response) as remote:
+                current_draft = casebooks.draft(current, True)
+            assert {
+                "messages": [asdict(row) for row in remote.call_args.args[0]],
+                "options": remote.call_args.kwargs,
+            } == request
+            assert current_draft.pop("handover_presentation") == (
+                "sinter-handover-presentation/v2"
+            )
+            assert (
+                current_draft["source_document_markdown"]
+                == current["document_markdown"]
+            )
+            current_draft["source_document_markdown"] = actual["document_markdown"]
+            assert serialized_digest(current_draft) == golden["draft_sha256"]
 
 
 def test_scopes_change_fingerprint_and_survive_save_reopen_distinct_restore(tmp_path):
