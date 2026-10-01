@@ -33,6 +33,7 @@ PATHS = (
     "src/sinter/web/desktop.css",
     "src/sinter/web/casebooks.js",
     "src/sinter/web/casebook-scope.js",
+    "src/sinter/web/casebook-source-filter.js",
     "src/sinter/web/casebook-backup.js",
     "src/sinter/web/local-backup.js",
     "src/sinter/web/campaign-backup.js",
@@ -126,7 +127,9 @@ def capacity_profile(browser, base, artifacts, expect, width):
             page.get_by_text("Backup opened as a new unsaved project.", exact=True)
         ).to_be_visible()
         times["restore_300_sources_20_scopes_ms"] = (time.perf_counter() - began) * 1000
-        controls = '[data-question-scope-index] input[type="checkbox"]'
+        controls = (
+            '[data-question-scope-index] [data-source-choice-id] input[type="checkbox"]'
+        )
         counts = {"checkboxes_after_restore": page.locator(controls).count()}
         outer = page.locator("details").filter(
             has=page.get_by_text("Choose sources for each question", exact=True)
@@ -135,7 +138,7 @@ def capacity_profile(browser, base, artifacts, expect, width):
         first = page.locator('[data-question-scope-index="0"]')
         began = time.perf_counter()
         first.locator("summary").first.click()
-        selected = first.get_by_role("checkbox").first
+        selected = first.locator('[data-source-choice-id] input[type="checkbox"]').first
         expect(selected).to_be_checked()
         times["open_first_300_source_choice_ms"] = (time.perf_counter() - began) * 1000
         counts["checkboxes_after_first_open"] = page.locator(controls).count()
@@ -259,6 +262,7 @@ def explicit_clear_proof(
         expect(page.get_by_label("Project save state", exact=True)).to_contain_text(
             "Unsaved"
         )
+
         def navigate(label):
             page.get_by_role("button", name="Find a tool", exact=True).click()
             page.get_by_label("Find a Sinter tool", exact=True).fill(label)

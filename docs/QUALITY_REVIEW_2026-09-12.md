@@ -505,3 +505,43 @@ The ERAIS per-completion runtime-identity proposal was retrieved from its exact
 GitHub blob and matched the supplied 12-case fixture hash. It remains explicitly
 pending installed-origin verification; current public 57-case compatibility
 fixtures and live Sinter behavior were not changed by that proposal.
+
+### Qualified combined source and actual operator recovery
+
+Commit `5f7f9e2a7f9535c83ee683df68512f669b6c7df9` passed **2,596 Python
+checks, with seven explicit skips**, 24 focused JavaScript checks, fatal lint and
+the public-boundary check. All 348 files in the tested copy matched the committed
+Git archive, including the existing checkout line-ending policy. Independent
+cached-interface, capability, deliberate-clear, Unicode, keyboard, cancellation
+and backup refusal checks cleared the repaired source. This qualifies those
+source bytes, not a release installer or every optional capability.
+
+The operator saved a real project's explicit question/source choice, prepared
+and separately saved its source-only handover, closed both the browser tab and
+the owned local server, then reopened the saved project. A complete manual
+backup was restored through Sinter's file chooser as a new unsaved project;
+the visible restored JSON exactly matched the captured recovery text. All seven
+originals and the prior saved project remained intact. The browser download
+event again timed out, so no downloaded-file success is claimed.
+
+Replacing the restored unsaved editor exposed a native browser-confirmation
+trap in the in-app browser: the popup blocked further tab controls, including
+dialog dismissal and tab cleanup. The Linux keyboard tool also failed to
+initialize its input portal and did not replay the input through another
+backend. The popup needs manual dismissal; an accessible, non-blocking local
+confirmation is being qualified separately. This failed operator step remains
+evidence and is not covered by earlier automated dialog acceptance.
+
+A bounded mailbox search subsequently found a supplier quotation in a separate
+conversation from the original sent enquiry. Reading only the original threads
+had returned no replies; that never established mailbox-wide absence. The new
+original is retained privately with its source identity and dated selection.
+No booking, accepted terms, confirmed internal responsibility or eligibility
+conclusion follows from it. No hosted generation or outgoing communication was
+made in these operator steps. Business correspondence remains outside Git.
+
+Five independent capacity journeys retained every original, choice and complete
+backup, but two first-inspection layout stalls measured 712 and 820 ms. These
+negative timings remain open performance evidence. The bounded assessment is
+still **7.5 for experience, 8 for functionality and 7 for appearance**; it does
+not establish a product-wide score or a 10/10 experience.

@@ -352,9 +352,11 @@ def build(payload, document_type=None, progress=lambda message: None):
             'All original sources remain in the project backup.']
         for index, item in enumerate(question_index):
             scope = item['source_scope']
+            source_word = 'source' if scope['sources_searched'] == 1 else 'sources'
+            scope_kind = 'selected' if scope['mode'] == 'selected' else 'supplied'
+            scope_suffix = '.' if scope['mode'] == 'selected' else ' (all).'
             scope_text += [f"### Question {index + 1}: {literal(item['question'])}",
-                f"{scope['sources_searched']} "
-                + ('selected sources searched.' if scope['mode'] == 'selected' else 'supplied sources searched (all).')]
+                f"{scope['sources_searched']} {scope_kind} {source_word} searched{scope_suffix}"]
             if scope['mode'] == 'selected':
                 scope_text += ['> Selected original source: ' + literal(source_titles[identity])
                                for identity in scope['source_ids']]
