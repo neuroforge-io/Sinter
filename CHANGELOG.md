@@ -5,6 +5,12 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Make installed Linux-menu qualification retain full observed diagnostic counts
+  and hashes, with an explicitly bounded reversible sample. Require the exact
+  notice from the pinned build source and reject unexpected errors even after
+  a successful exit or cleanup failure. Existing receipts remain historical;
+  the next combined installer must execute the strengthened checker.
+
 - Show per-question source coverage in source-only casebook reports, including
   chosen sources without an exact retained quote. Missing or damaged records
   stay unknown. Offer explicit, hash-checked local inspection of the retained

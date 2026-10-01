@@ -8,6 +8,8 @@ provider. It proves the installed entry's command, not a physical menu click.
 from __future__ import annotations
 
 import argparse
+import ast
+import base64
 import configparser
 import hashlib
 import json
@@ -29,6 +31,7 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from tools.native_window_smoke import (  # noqa: E402
+    capture_stderr,
     clean_environment,
     group_alive,
     stop_process,
@@ -39,10 +42,67 @@ BINARY = Path(BINARY_COMMAND)
 ENTRIES = Path("/usr/share/applications")
 TITLE = "Fictional installed-menu first-run handover"
 NOTE = "\n\nFictional reviewer note: approval remains unconfirmed."
+BROWSER_NOTICE = (
+    b"Press Ctrl+C to stop. Closing a browser tab alone does not quit Sinter.\n"
+)
 
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def browser_notice(source):
+    """Admit only the known browser notice declared by this candidate source."""
+    try:
+        tree = ast.parse(source.decode("utf-8"))
+    except (UnicodeDecodeError, SyntaxError) as error:
+        raise ValueError("The candidate browser notice source is malformed.") from error
+    functions = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "serve_desktop"
+    ]
+    matches = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "print"
+        and len(node.args) == 1
+        and isinstance(node.args[0], ast.Constant)
+        and node.args[0].value == BROWSER_NOTICE[:-1].decode("ascii")
+        and len(node.keywords) == 1
+        and node.keywords[0].arg == "file"
+        and isinstance(node.keywords[0].value, ast.Attribute)
+        and isinstance(node.keywords[0].value.value, ast.Name)
+        and node.keywords[0].value.value.id == "sys"
+        and node.keywords[0].value.attr == "stderr"
+    ]
+    if (
+        len(functions) != 1
+        or len(matches) != 1
+        or matches[0] not in ast.walk(functions[0])
+    ):
+        raise ValueError("The candidate browser notice is missing or ambiguous.")
+    return BROWSER_NOTICE
+
+
+def source_browser_notice(source_commit):
+    """Bind the notice to the exact build commit and unchanged checkout bytes."""
+    if not isinstance(source_commit, str) or not re.fullmatch(
+        r"[0-9a-f]{40}", source_commit
+    ):
+        raise ValueError("Use an exact browser notice source identity.")
+    source = subprocess.run(
+        ["git", "show", f"{source_commit}:src/sinter/desktop.py"],
+        cwd=ROOT,
+        capture_output=True,
+        check=True,
+        timeout=10,
+    ).stdout
+    if source != (ROOT / "src/sinter/desktop.py").read_bytes():
+        raise ValueError("The browser notice checkout differs from the build source.")
+    return browser_notice(source), hashlib.sha256(source).hexdigest()
 
 
 def menu_command(path, *, native=False):
@@ -124,7 +184,11 @@ def cancellation_cleanup():
 
 
 @contextmanager
-def installed_launch(command, home, script, provider, row):
+def installed_launch(command, home, script, provider, row, *, expected_notice=None):
+    if expected_notice is None:
+        expected_notice = browser_notice((ROOT / "src/sinter/desktop.py").read_bytes())
+    if not isinstance(expected_notice, bytes) or expected_notice != BROWSER_NOTICE:
+        raise ValueError("Use the exact candidate browser notice.")
     capture = home / f"launch-{row['launch']}.txt"
     start = time.monotonic()
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
@@ -138,20 +202,54 @@ def installed_launch(command, home, script, provider, row):
             start_new_session=True,
         )
         row["pid"] = process.pid
+        body_failed = False
         try:
             origin = wait_launch(process, capture)
             row["origin"] = origin
             yield process, origin
+        except BaseException:
+            body_failed = True
+            row["passed"] = False
+            raise
         finally:
-            if process.poll() is None or group_alive(process.pid):
-                stop_process(process, row)
-            stderr.seek(0)
-            raw = stderr.read(65_537)
-            row.update(
-                stderr_bytes=len(raw),
-                stderr_sha256=hashlib.sha256(raw).hexdigest(),
-                seconds=round(time.monotonic() - start, 3),
+            cleanup_failure = capture_failure = None
+            try:
+                if process.poll() is None or group_alive(process.pid):
+                    stop_process(process, row)
+            except BaseException as error:
+                cleanup_failure = error
+                row["cleanup_error"] = type(error).__name__
+                row["passed"] = False
+            try:
+                capture_stderr(stderr, row)
+            except BaseException as error:
+                capture_failure = error
+                row["stderr_capture_error"] = type(error).__name__
+                row["passed"] = False
+            finally:
+                row["seconds"] = round(time.monotonic() - start, 3)
+            expected = (
+                capture_failure is None
+                and row.get("stderr_bytes") == len(expected_notice)
+                and row.get("stderr_sha256")
+                == hashlib.sha256(expected_notice).hexdigest()
+                and row.get("stderr_base64")
+                == base64.b64encode(expected_notice).decode("ascii")
+                and row.get("stderr_truncated") is False
             )
+            row["stderr_expected_browser_notice"] = expected
+            if not expected:
+                row["passed"] = False
+            if not body_failed:
+                if cleanup_failure is not None:
+                    raise cleanup_failure
+                if capture_failure is not None:
+                    raise capture_failure
+                if not expected:
+                    raise RuntimeError(
+                        "Installed browser command emitted unexpected diagnostics; "
+                        "see exact retained stderr evidence."
+                    )
 
 
 def saved_snapshots(read):
@@ -319,6 +417,12 @@ def run(args):
             or package.get("frozen_cli_test", {}).get("binary_sha256") != digest(BINARY)
         ):
             raise ValueError("Bind the same-run package receipt and installed bytes.")
+        notice, source_sha256 = source_browser_notice(args.source_commit)
+        receipt.update(
+            browser_notice_source_sha256=source_sha256,
+            expected_browser_notice_bytes=len(notice),
+            expected_browser_notice_sha256=hashlib.sha256(notice).hexdigest(),
+        )
         command = menu_command(ENTRIES / "sinter.desktop")
         native = menu_command(ENTRIES / "sinter-native.desktop", native=True)
         receipt.update(
@@ -366,7 +470,12 @@ def run(args):
                             }
                             receipt["launches"].append(row)
                             with installed_launch(
-                                command, home, script, provider, row
+                                command,
+                                home,
+                                script,
+                                provider,
+                                row,
+                                expected_notice=notice,
                             ) as launch:
                                 before = browser_cycle(
                                     browser,
@@ -396,7 +505,10 @@ def run(args):
             )
         if (
             any(observations.values())
-            or not all(r["passed"] for r in receipt["launches"])
+            or not all(
+                r["passed"] is True and r["stderr_expected_browser_notice"] is True
+                for r in receipt["launches"]
+            )
             or not receipt["provider_trap_stopped"]
         ):
             raise RuntimeError("Installed offline first-run or isolation failed.")

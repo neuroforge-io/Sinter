@@ -1013,3 +1013,23 @@ for sampled evidence-panel usability. Semantic retrieval, selecting new passages
 missing original bodies, maximum-size performance and broader release/customer
 qualification remain work. See the
 [bounded evidence review](CASEBOOK_EVIDENCE_CONTEXT_REVIEW_2026-10-01.md).
+
+### 2 October: installed-menu diagnostic checker repair
+
+Independent review reproduces three checker gaps: a callback error accepted as
+success, a 78,000-byte stream reported as a 65,537-byte prefix and diagnostics
+lost when cleanup raises. The narrow two-path repair captures the full observed
+count/hash and a bounded reversible sample, pins the sole accepted console
+notice to exact build-source bytes and preserves error/cancellation priorities.
+Its source-only review passes 148 focused tests and 19 independent probes.
+Root's current-main composition also passes those 148 focused tests. A separate
+actual fictional source startup/SIGTERM observes the exact 72-byte notice,
+exit zero, closed port/process group and no provider requests.
+
+The accepted independent receipt is
+`7b81559f2af1225a8f7ee0be631a30d09cb741e26174229830a7e76d76f6f511`.
+This is checker correctness, not a new installed-app pass or a product rating.
+Failed cleanup cannot certify future output from a still-live writer; that
+receipt is refused. Historical receipts and published RC3 remain unchanged.
+Fresh candidate packaging, both menu entries, native/browser handoff, recovery
+and actual RC3 replacement still need their own source-bound execution.
