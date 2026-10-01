@@ -116,14 +116,22 @@ class RouteDispatch:
                 raise KeyError("Unknown asset")
             self._send(asset.read_bytes(), MIME[suffix])
         elif path == "/api/session":
-            self._json(
-                {
-                    "token": self.app.token,
-                    "version": __version__,
-                    "workflows": workbench.WORKFLOWS,
-                    "desktop": self.app.desktop_shutdown is not None,
-                }
-            )
+            value = {
+                "token": self.app.token,
+                "version": __version__,
+                "workflows": workbench.WORKFLOWS,
+                "desktop": self.app.desktop_shutdown is not None,
+            }
+            if getattr(self.app, "native_browser_owner", False):
+                from .native_browser import SESSION_DETAILS, SESSION_NOTICE
+
+                value.update(
+                    native_window_owner=True,
+                    session_notice=SESSION_NOTICE,
+                    session_details=SESSION_DETAILS,
+                    native_quit=self.app.native_browser_owner.session_state(),
+                )
+            self._json(value)
         elif path == "/api/settings":
             self._json(self.app.preferences.public())
         elif path == "/api/account":

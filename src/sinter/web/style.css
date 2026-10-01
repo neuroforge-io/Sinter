@@ -169,3 +169,8 @@ pre.help-code { padding: 15px; border: 1px solid var(--line); border-radius: 10p
   .document { border: 0; padding: 0; border-radius: 0; } .document h2, .document h3 { break-after: avoid; }
   .document blockquote { break-inside: avoid; } .report-header { display: none; } .report-area { margin: 0; } a { color: black; }
 }
+
+/* Owned native browser session: keep recovery reachable without a large banner. */
+.native-session > details { border: 0; padding: 4px 0; }
+.native-session p { margin: 6px 0; }
+.native-session > button { margin-top: 4px; }

@@ -36,10 +36,37 @@ and exit contracts described below. Help and operation discovery do not open a
 workspace, server or graphical window.
 
 The default native window uses Tcl/Tk and calls the application directly. It does
-not start an HTTP server, launch a browser or run the watch scheduler. It supports
+not start an HTTP server, launch a browser or run the watch scheduler on startup. It supports
 source text, revisioned projects, evidence/gap reports, report history, JSON and
 Markdown exports, and an optional short source answer. **Assistant setup** provides
 shared connection/model preferences without opening an external browser.
+
+The **Open full workbench** controls and owned-session close flow below are in
+current development source after the published RC3 preview. They have not been
+qualified in an installer; RC3 uses the separate launch modes shown above.
+
+Choose **Open full workbench** to use campaigns, Word files and the other browser
+tools without a terminal. The button starts one loopback listener over the same
+application and exact current workspace. Keep the native window open: it owns
+the local service. For unsaved source edits, choose **Yes** to save first, **No**
+to keep them in the native window, or **Cancel** to stay there. Unsaved native
+inputs and report results stay in that window; the browser sees saved records.
+No document text, workspace path or credential is put in the launch URL.
+
+The native source editor supports ordinary v1 projects. Choosing sources for
+individual questions in the full workbench saves a scoped v2 project; the native
+editor cannot reopen or edit that project. Keep its v2 backup and use the full
+workbench to continue. Existing unsaved native edits stay there after a refused
+open or changed save. Sinter does not reset the source choices to All sources.
+An unchanged native save can return its cached revision without checking for a
+newer browser revision; that no-op does not overwrite the saved project.
+
+This explicitly opened session keeps scheduled watch checks paused. A visible
+browser notice explains that **Check now** remains an explicit service request.
+Opening the workbench does not discover models, download one or ask one a question.
+If the browser refuses to open, native inputs and the owned local service remain
+available. **Copy local address** lets you use the displayed loopback address if
+your browser policy permits it; no security-policy bypass is suggested.
 
 The full web workbench remains an explicit browser presentation for campaigns,
 meeting tools, Word export, broader profile settings and account sign-in. Browser and
@@ -53,9 +80,31 @@ browser/server fallback. The packaged executable's `--diagnose` command checks
 assets and toolkit resources without contacting a provider. Resource availability
 does not establish that a graphical display works.
 
-Close the native window to stop its own jobs and exit. Save/export before closing;
-unsaved edits are not a backup. Browser mode retains **Quit Sinter**; closing a
-browser tab alone does not stop the server.
+Closing the native window first waits for admitted local browser requests, then
+stops its listener and requests the existing job cancellation before closing the
+runtime. Tk stays responsive. If requests or cleanup do not finish within five
+seconds, close is refused and native work remains open; check saved work and retry
+explicitly. **Keep window open** cancels while requests are still draining. No
+request is automatically replayed. A successful listener shutdown does not prove
+that every cooperative job has already stopped.
+
+Save/export both views before closing; unsaved edits are not a backup. **Quit
+Sinter** in the owned browser view always requests native confirmation, even
+with a saved source project, and preserves its inputs. The compact session notice
+exposes cancellation/refusal and keeps the full saved-work/watch explanation under **About this local session**. Native edits
+made while waiting also keep the native window open after listener shutdown.
+Closing a browser tab alone does not stop the service. Separately launched browser
+mode retains its existing direct **Quit Sinter** behavior.
+
+SIGTERM initiates the same request drain at Tk's safe idle boundary. An early
+mainloop return resumes the usable event loop through that close flow. If Tk is
+already unavailable, emergency cleanup either drains within the bound or raises
+an explicit error before closing the runtime. A Python caller that continues owns
+cleanup and can still inspect the in-memory inputs. The graphical launcher catches
+that error, returns exit code 1 and exits the process: those unsaved inputs are not
+a recovery copy, and unfinished local requests are not guaranteed to complete.
+No automatic retry or save occurs. Hard process or OS termination has the same
+preservation limit.
 
 ## A fictional offline workflow
 

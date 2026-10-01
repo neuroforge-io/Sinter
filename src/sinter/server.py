@@ -57,21 +57,41 @@ class LocalServer(ThreadingHTTPServer):
         request.settimeout(15)
         return request, address
 
+    def _admit_request(self, request, client_address):
+        """Protected owner seam; standalone requests are always admitted here."""
+        return True
+
+    def _complete_request(self, request, client_address):
+        """Protected owner seam, after a handler or failed dispatch completes."""
+
     def process_request(self, request, client_address):
         if not self._connections.acquire(blocking=False):
             request.close()
             return
+        admitted = dispatched = False
         try:
+            admitted = self._admit_request(request, client_address)
+            if not admitted:
+                request.close()
+                return
             super().process_request(request, client_address)
-        except Exception:
-            self._connections.release()
-            raise
+            dispatched = True
+        finally:
+            if not dispatched:
+                try:
+                    if admitted:
+                        self._complete_request(request, client_address)
+                finally:
+                    self._connections.release()
 
     def process_request_thread(self, request, client_address):
         try:
             super().process_request_thread(request, client_address)
         finally:
-            self._connections.release()
+            try:
+                self._complete_request(request, client_address)
+            finally:
+                self._connections.release()
 
 
 class LocalIPv6Server(LocalServer):

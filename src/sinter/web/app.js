@@ -137,10 +137,51 @@ window.addEventListener('hashchange', route);
 window.addEventListener('beforeunload', event => { if (shouldWarnBeforeExit(dirtyDrafts, busy) || hasUnsavedReportDrafts()) { event.preventDefault(); event.returnValue = ''; } });
 session().then(value => {
   document.getElementById('version').textContent = `v${value.version} / Apache 2.0`;
-  if (value.desktop) navigation.append(button('Quit Sinter', async () => {
-    if ((shouldWarnBeforeExit(dirtyDrafts, busy) || hasUnsavedReportDrafts()) && !confirm('Quit Sinter? Download or save your work first. Unsaved work will be lost.')) return;
-    try { await request('/api/desktop/quit', {data: {}}); busy = false; drafts.clear(); dirtyDrafts.clear(); clearReportDrafts(); view.replaceChildren(notice('Sinter has stopped. You can close this window.')); }
-    catch (error) { announce(error.message); }
-  }, 'quiet'));
+  const ownerMessage = value.native_window_owner ? h('span', {}, value.session_notice) : null;
+  const ownerStatus = ownerMessage ? h('p', {'aria-live': 'polite'}) : null;
+  const ownerNotice = ownerMessage ? notice(ownerMessage, 'native-session') : null;
+  let ownerPoll = null;
+  let ownerActive = true;
+  const updateOwnerState = state => {
+    const messages = {
+      requested: 'Quit requested. Check Sinter; inputs stay here.',
+      confirming: 'Check Sinter for confirmation; inputs stay here.',
+      waiting: 'Finishing local requests. Keep Sinter open.',
+      cancelled: 'Quit cancelled. Both views stay open.',
+      refused: 'Close refused: local work is still running. Both views stay open. Nothing was retried.',
+      failed: 'Cleanup failed. Native work stays open; retry closing in Sinter.'
+    };
+    ownerStatus.textContent = messages[state?.state] || '';
+    ownerStatus.hidden = !ownerStatus.textContent;
+  };
+  if (ownerNotice) {
+    const about = h('details', {}, h('summary', {}, 'About this local session'), h('p', {}, value.session_details));
+    ownerNotice.append(about, ownerStatus);
+    document.getElementById('content').insertBefore(ownerNotice, view);
+    updateOwnerState(value.native_quit);
+    const poll = async () => {
+      try { updateOwnerState((await request('/api/session')).native_quit); }
+      catch (_) { /* A draining/stopped listener cannot answer; keep inputs and last state. */ }
+      if (ownerActive) ownerPoll = window.setTimeout(poll, 1000);
+    };
+    ownerPoll = window.setTimeout(poll, 1000);
+    window.addEventListener('pagehide', () => { ownerActive = false; window.clearTimeout(ownerPoll); });
+    window.addEventListener('pageshow', () => { if (!ownerActive) { ownerActive = true; ownerPoll = window.setTimeout(poll, 1000); } });
+  }
+  if (value.desktop) {
+    const quit = button('Quit Sinter', async () => {
+      if ((shouldWarnBeforeExit(dirtyDrafts, busy) || hasUnsavedReportDrafts()) && !confirm('Quit Sinter? Download or save your work first. Unsaved work will be lost.')) return;
+      try {
+        await request('/api/desktop/quit', {data: {}});
+        if (ownerNotice) {
+          updateOwnerState({state: 'requested'});
+          announce('Quit requested. Check Sinter; inputs stay here.'); return;
+        }
+        busy = false; drafts.clear(); dirtyDrafts.clear(); clearReportDrafts(); view.replaceChildren(notice('Sinter has stopped. You can close this window.'));
+      }
+      catch (error) { announce(error.message); }
+    }, 'quiet');
+    if (ownerNotice) ownerNotice.append(quit); else navigation.append(quit);
+  }
 }).catch(() => {});
 request('/api/settings').then(state => applyAppearance(state.settings)).catch(() => {}).finally(route);

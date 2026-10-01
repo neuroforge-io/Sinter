@@ -38,6 +38,13 @@ release-tool changes are separate from the published RC3 evidence. Read the
 [Word handover source review](docs/WORD_HANDOVER_NAVIGATION_2026-10-01.md) for the
 tested scope and remaining installer gates.
 
+Development source also offers **Open full workbench** from the native window,
+with a bounded shutdown that preserves work when close must be refused. The
+[native-to-browser source review](docs/NATIVE_BROWSER_REVIEW_2026-10-01.md)
+records its evidence and the limits of sharing saved work between the two views.
+Current Linux menu builds open the full workbench and offer the native source
+window as a separate entry; the published RC3 menu behavior below is unchanged.
+
 The app defaults to a smaller native **source workspace**. For funding campaigns,
 rich documents and account sign-in, open the full browser workbench with
 `/opt/neuroforge/sinter/Sinter app --mode browser` after installing the Debian

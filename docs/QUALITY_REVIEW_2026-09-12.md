@@ -967,3 +967,28 @@ context being omitted, costly saved-output discovery and a manually written
 decision summary. It did not operate the newer Word navigation or save label,
 so it does not establish current whole-product scores. Those concrete gaps
 remain improvement work; no 10/10 is claimed.
+
+### 1 October: bounded native-to-browser source acceptance
+
+The held shortcut now has independently reviewed admission and shutdown handling.
+Root's fresh composition on main `917bb92` passes 3,173 Python tests with nine
+explicit display/platform skips, 282 JavaScript tests and 44 browser checks.
+Independent native-v2 review passes 19 read-only conservation probes and three
+focused regressions: scoped projects and all 11 original documents survive native
+open/save refusal. An unchanged native save may report an obsolete cached
+revision without writing; no fresh-revision check is claimed for that no-op.
+
+The actual in-app browser saves an isolated real-case handover with 16 exact
+passages from eight of 11 retained sources. Its native Quit confirmation blocks
+browser control, so user dismissal remains pending; no manual cancellation or
+normal native-close pass is claimed. The owned service is stopped and cold
+inspection verifies the saved originals/report. The user's intentional closure
+was not treated as a crash or used to reopen their app.
+
+Component scores remain UX 7.2, functionality 7.8 and aesthetics 7.0. Selected
+but unused evidence, truncated table context, two-view coordination and fresh
+combined installed/upgrade qualification remain work. The separate upstream
+Linux-menu CI has actual package evidence for its own tree, without this native
+repair; it does not qualify the combined candidate. See the
+[source acceptance](NATIVE_BROWSER_REVIEW_2026-10-01.md). Historical failures,
+published RC3 and its receipts remain unchanged.

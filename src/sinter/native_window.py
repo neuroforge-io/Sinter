@@ -1,8 +1,8 @@
 """A scoped portable desktop workspace over the application's shared operations.
 
 Tk displays untrusted source text as text. It does not host web pages, open a
-socket, run a watch scheduler or invent a separate model/source implementation.
-The full web workbench remains a separate, explicit presentation choice.
+socket until requested, run a watch scheduler or invent another model/source
+implementation. The full web workbench is an explicit, owned browser view.
 """
 
 from __future__ import annotations
@@ -77,14 +77,15 @@ def readable_report_lines(markdown, *, report=None):
     ):
         heading = "# " + literal(report["title"])
         preface = [
-            heading, "",
+            heading,
+            "",
             FORMATS[report["document_type"]] + " - DRAFT / HUMAN REVIEW REQUIRED",
-            "", heading,
+            "",
+            heading,
         ]
-        if (
-            [line.rstrip("\r\n") for line in lines[:5]] == preface
-            and report["document_markdown"].splitlines()[:1] == [heading]
-        ):
+        if [line.rstrip("\r\n") for line in lines[:5]] == preface and report[
+            "document_markdown"
+        ].splitlines()[:1] == [heading]:
             duplicate = 4
 
     # The model fallback includes unfenced exact JSON provenance. It is already
@@ -106,8 +107,10 @@ def readable_report_lines(markdown, *, report=None):
         marker = re.fullmatch(r"[ \t]*(`{3,}|~{3,})([^\r\n]*)\r?\n?", line)
         if fence is not None:
             if (
-                marker and marker[1][0] == fence[0]
-                and len(marker[1]) >= fence[1] and not marker[2].strip()
+                marker
+                and marker[1][0] == fence[0]
+                and len(marker[1]) >= fence[1]
+                and not marker[2].strip()
             ):
                 fence = None
             yield line, "code"
@@ -443,6 +446,10 @@ class NativeWindow:
         self._setup_generation = 0
         self._setting_paint = False
         self._connection_key_edited = False
+        self._browser_workbench = None
+        self._close_pending = False
+        self._close_poll_id = None
+        self._close_generation = None
         try:
             if runtime_factory is None:
                 from .runtime import Runtime
@@ -494,6 +501,27 @@ class NativeWindow:
             "send only an approved excerpt.",
             wraplength=1000,
         ).pack(anchor="w", pady=(2, 10))
+        browser_bar = ttk.Frame(outer)
+        browser_bar.pack(fill="x")
+        self._button(browser_bar, "Open full workbench", self.open_workbench)
+        self.browser_address = tk.StringVar(value="")
+        ttk.Entry(
+            browser_bar, textvariable=self.browser_address, state="readonly"
+        ).pack(side="left", fill="x", expand=True, padx=6)
+        self.browser_copy = self._button(
+            browser_bar, "Copy local address", self.copy_workbench_address
+        )
+        self.browser_copy.state(["disabled"])
+        self.browser_keep = self._button(
+            browser_bar, "Keep window open", self.cancel_workbench_close
+        )
+        self.browser_keep.state(["disabled"])
+        ttk.Label(
+            outer,
+            text="Campaigns, Word files and other tools open in your browser. "
+            "Keep this window open; saved work is shared, unsaved inputs stay here.",
+            wraplength=1000,
+        ).pack(anchor="w", pady=(0, 6))
         toolbar = ttk.Frame(outer)
         toolbar.pack(fill="x")
         self._button(toolbar, "New project", self.new_project)
@@ -1501,7 +1529,89 @@ class NativeWindow:
                 "original selected source files were protected."
             )
 
-    def request_close(self):
+    def open_workbench(self) -> None:
+        """Open an explicit local browser view while retaining native inputs."""
+        if self.closed:
+            return
+        if getattr(self, "_close_pending", False):
+            raise ValueError("Wait for the local close result or keep the window open.")
+        if self.active_job:
+            raise ValueError(
+                "Finish or stop the current task before opening the workbench."
+            )
+        self._document_changed()
+        if self._browser_workbench is None or self._browser_workbench.closed:
+            if self.controller.dirty:
+                answer = self.messages.askyesnocancel(
+                    "Open full workbench",
+                    "Save this source project before opening your browser?\n\n"
+                    "Yes saves it locally. No keeps your unsaved edits here; "
+                    "the browser sees only saved records. Cancel stays here.",
+                    parent=self.root,
+                )
+                if answer is None:
+                    return
+                if answer:
+                    # Save only the source project. Repainting it would also
+                    # clear the separate, unsaved short-answer excerpt.
+                    self.controller.save()
+                    self._refresh()
+            from .native_browser import NativeBrowserWorkbench
+
+            self._browser_workbench = NativeBrowserWorkbench(
+                self.controller.runtime.app
+            )
+            self.browser_address.set(self._browser_workbench.url)
+            self.browser_copy.state(["!disabled"])
+        opened = self._browser_workbench.open_browser()
+        self.status_var.set(
+            (
+                "Browser launch requested. "
+                if opened
+                else "No browser accepted the launch. The local workbench is running; "
+                "copy its address if your browser policy permits it. "
+            )
+            + "Your native inputs remain here. Scheduled watch checks stay paused. "
+            "Closing waits for local requests before stopping the browser service."
+        )
+
+    def copy_workbench_address(self) -> None:
+        """Copy only the owned loopback URL, without credentials or payload."""
+        workbench = self._browser_workbench
+        if workbench is None or workbench.closed:
+            raise ValueError("Open the full workbench first.")
+        self.root.clipboard_clear()
+        self.root.clipboard_append(workbench.url)
+        self.status_var.set(
+            "Local workbench address copied. No document text or key is in it."
+        )
+
+    def _poll_browser_quit(self) -> None:
+        workbench = getattr(self, "_browser_workbench", None)
+        if self.closed or workbench is None or not workbench.quit_requested.is_set():
+            return
+        if getattr(self, "_close_pending", False):
+            return
+        workbench.quit_requested.clear()
+        workbench.set_quit_state("confirming")
+        self._perform(lambda: self.request_close(browser_requested=True))
+
+    def request_close(self, *, browser_requested: bool = False) -> None:
+        if self.closed or getattr(self, "_close_pending", False):
+            return
+        if (
+            getattr(self, "_browser_workbench", None) is not None
+            and not self._browser_workbench.closed
+        ):
+            if not self.messages.askyesno(
+                "Close Sinter and its workbench?",
+                "This waits for local browser requests, stops the listener and "
+                "requests task cancellation. Save or export browser work first. "
+                "Close both views?",
+                parent=self.root,
+            ):
+                self._browser_workbench.set_quit_state("cancelled")
+                return
         if self.controller.dirty:
             answer = self.messages.askyesnocancel(
                 "Unsaved source edits",
@@ -1509,14 +1619,23 @@ class NativeWindow:
                 parent=self.root,
             )
             if answer is None:
+                workbench = getattr(self, "_browser_workbench", None)
+                if workbench is not None:
+                    workbench.set_quit_state("cancelled")
                 return
             if answer:
                 try:
-                    self.save_project()
+                    # A refused close must keep separate answer/setup drafts.
+                    self._document_changed()
+                    self.controller.save()
+                    self._refresh()
                 except Exception as exc:
                     self.messages.showerror(
                         "Sinter — keep your edits", str(exc), parent=self.root
                     )
+                    workbench = getattr(self, "_browser_workbench", None)
+                    if workbench is not None:
+                        workbench.set_quit_state("refused")
                     return
         self.close()
 
@@ -1543,23 +1662,127 @@ class NativeWindow:
             self._signal_close_pending = False
             raise
 
+    def _set_keep_enabled(self, enabled):
+        button = getattr(self, "browser_keep", None)
+        if button is not None:
+            button.state(["!disabled"] if enabled else ["disabled"])
+
     def close(self):
-        if not self.closed:
-            self.closed = True
-            self._signal_close_pending = False
-            if self._signal_close_id is not None:
-                self.root.after_cancel(self._signal_close_id)
-                self._signal_close_id = None
-            if self._poll_id is not None:
-                self.root.after_cancel(self._poll_id)
-                self._poll_id = None
-            if self._heartbeat_id is not None:
-                self.root.after_cancel(self._heartbeat_id)
-                self._heartbeat_id = None
-            try:
-                self.controller.close()
-            finally:
+        """Begin owned cleanup; retain the GUI and runtime until it succeeds."""
+        if self.closed or getattr(self, "_close_pending", False):
+            return
+        workbench = getattr(self, "_browser_workbench", None)
+        if workbench is None or workbench.closed:
+            self._finish_close()
+            return
+        self._close_generation = self.controller.generation
+        self._close_pending = True
+        workbench.retry_close()
+        self._set_keep_enabled(True)
+        self._poll_workbench_close()
+
+    def cancel_workbench_close(self):
+        workbench = getattr(self, "_browser_workbench", None)
+        if not getattr(self, "_close_pending", False) or workbench is None:
+            return
+        if not workbench.cancel_close():
+            self.status_var.set(
+                "The listener is already stopping. Wait for its result."
+            )
+            return
+        self._close_pending = False
+        if self._close_poll_id is not None:
+            self.root.after_cancel(self._close_poll_id)
+            self._close_poll_id = None
+        self._set_keep_enabled(False)
+        self.status_var.set(
+            "Close cancelled. Both views and native inputs remain open."
+        )
+
+    def _poll_workbench_close(self):
+        self._close_poll_id = None
+        if self.closed or not getattr(self, "_close_pending", False):
+            return
+        workbench = self._browser_workbench
+        state = workbench.poll_close()
+        if state == "closed":
+            self._close_pending = False
+            self._set_keep_enabled(False)
+            if self.controller.generation != self._close_generation:
+                self.status_var.set(
+                    "Native inputs changed while waiting. The browser service stopped; "
+                    "your runtime and inputs remain open. Save or close explicitly."
+                )
+                return
+            self._finish_close()
+        elif state in {"refused", "failed"}:
+            self._close_pending = False
+            self._set_keep_enabled(False)
+            self.status_var.set(
+                "Close refused: local requests or listener cleanup did not finish. "
+                "Your native runtime and inputs remain open. Check saved work, then "
+                "close again explicitly; no request was replayed."
+            )
+        else:
+            self._set_keep_enabled(workbench.phase == "draining")
+            self.status_var.set(
+                "Finishing local requests or listener cleanup. Keep this window open; "
+                "you can keep it open while requests are still running."
+            )
+            self._close_poll_id = self.root.after(50, self._poll_workbench_close)
+
+    def _finish_close(self):
+        if self.closed:
+            return
+        root_available = self._root_available()
+        self.closed = True
+        self._signal_close_pending = False
+        for field in (
+            "_signal_close_id",
+            "_poll_id",
+            "_heartbeat_id",
+            "_close_poll_id",
+        ):
+            identifier = getattr(self, field, None)
+            if identifier is not None:
+                if root_available:
+                    self.root.after_cancel(identifier)
+                setattr(self, field, None)
+        try:
+            self.controller.close()
+        finally:
+            if root_available:
                 self.root.destroy()
+
+    def _root_available(self):
+        try:
+            exists = getattr(self.root, "winfo_exists", None)
+            return (
+                bool(exists())
+                if exists is not None
+                else not getattr(self.root, "destroyed", False)
+            )
+        except Exception:
+            return False
+
+    def _emergency_close(self):
+        """No usable Tk loop: bounded drain, or explicit error with runtime retained."""
+        workbench = getattr(self, "_browser_workbench", None)
+        if workbench is not None and not workbench.closed:
+            from .native_browser import WorkbenchCloseRefused
+
+            try:
+                workbench.close()
+            except WorkbenchCloseRefused as exc:
+                raise NativeWindowError(
+                    "Tk stopped before local requests or cleanup finished. "
+                    "This cleanup did not close the runtime; retained inputs are "
+                    "only in process memory. The graphical launcher exits with an "
+                    "error, so unsaved inputs and unfinished local requests are not "
+                    "guaranteed. No request was replayed. A caller that continues "
+                    "must clean up explicitly."
+                ) from exc
+        self._finish_close()
 
     def run(self):
         previous = None
@@ -1571,16 +1794,33 @@ class NativeWindow:
         def heartbeat():
             self._heartbeat_id = None
             if not self.closed:
-                self._heartbeat_id = self.root.after(200, heartbeat)
+                self._poll_browser_quit()
+                if not self.closed:
+                    self._heartbeat_id = self.root.after(200, heartbeat)
 
+        result = 0
         try:
-            heartbeat()
-            self.root.mainloop()
-            return 0
-        except KeyboardInterrupt:
-            return 130
+            try:
+                heartbeat()
+            except BaseException:
+                self._emergency_close()
+                raise
+            while not self.closed:
+                try:
+                    self.root.mainloop()
+                except KeyboardInterrupt:
+                    result = 130
+                except BaseException:
+                    self._emergency_close()
+                    raise
+                if not self.closed:
+                    if self._root_available():
+                        # A quit/early mainloop return must not bypass request drain.
+                        self.close()
+                    else:
+                        self._emergency_close()
+            return result
         finally:
-            self.close()
             if installed:
                 signal.signal(signal.SIGTERM, previous)
 

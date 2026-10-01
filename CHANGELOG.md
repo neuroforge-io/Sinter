@@ -5,6 +5,14 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Open the full browser workbench explicitly from the native source window over
+  its current local workspace. Keep unsaved inputs in their own view, pause
+  scheduled watch checks and wait for admitted requests before shutdown. A
+  five-second refusal keeps native work open for explicit retry; no request is
+  replayed. Preserve scoped browser projects when the native editor refuses them.
+  [Source review](docs/NATIVE_BROWSER_REVIEW_2026-10-01.md) records the full-suite,
+  independent and real-case evidence; fresh combined installers remain required.
+
 - Label the local report action **Save to My workspace**, distinguishing it from
   saving a separate Word file. Keep pending-edit protection, explicit saving and
   earlier reports intact. Published RC3 still uses **Save to this computer**.
