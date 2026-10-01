@@ -63,6 +63,32 @@ jobs:
           path: release/frozen-native-window.json
           if-no-files-found: warn
           retention-days: 14
+      - name: Prepare installed Linux first-run browser tooling
+        if: runner.os == 'Linux' && matrix.arch == 'x64'
+        run: |
+          python -m pip install '.[browser]'
+          python -m playwright install --with-deps chromium
+      - name: Qualify the actual installed Linux menu command
+        if: runner.os == 'Linux' && matrix.arch == 'x64'
+        timeout-minutes: 4
+        run: |
+          PACKAGE_PREFIX="Sinter-$(PYTHONPATH=src python -c 'from sinter import __version__; print(__version__)')-linux-x64"
+          trap 'sudo dpkg -r sinter' EXIT
+          sudo dpkg -i "release/$PACKAGE_PREFIX.deb"
+          python tools/installed_menu_browser.py --installer "release/$PACKAGE_PREFIX.deb" \
+            --package-receipt "release/$PACKAGE_PREFIX-test.json" --source-commit "$GITHUB_SHA" \
+            --receipt first-run/installed-menu.json
+          sudo dpkg -r sinter
+          trap - EXIT
+          python -c 'import json; from pathlib import Path; p=Path("first-run/installed-menu.json"); d=json.loads(p.read_bytes()); d["package_removed"]=not Path("/opt/neuroforge/sinter/Sinter").exists() and not Path("/usr/share/applications/sinter.desktop").exists() and not Path("/usr/share/applications/sinter-native.desktop").exists(); d["passed"]=d.get("workflow_passed") is True and d["package_removed"]; p.write_text(json.dumps(d,indent=2)+"\n"); assert d["passed"]'
+      - name: Retain installed Linux first-run evidence
+        if: always() && runner.os == 'Linux' && matrix.arch == 'x64'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: installed-menu-Linux-x64
+          path: first-run/
+          if-no-files-found: warn
+          retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: native-${{ runner.os }}-${{ matrix.arch }}
