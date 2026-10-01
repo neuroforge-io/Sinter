@@ -16,7 +16,7 @@ import re
 import sys
 import tempfile
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -42,6 +42,11 @@ NATIVE = ["/opt/neuroforge/sinter/Sinter", "app", "--mode", "native"]
 VERSION_QUERY = ["dpkg-query", "-W", "-f=${Status}\n${Version}\n", "sinter"]
 STATUS_QUERY = ["dpkg-query", "-W", "-f=${Status}", "sinter"]
 ABSENT = b"dpkg-query: no packages found matching sinter\n"
+# dpkg retains the shared /opt parent containing the qualification interpreter.
+# Only this exact observed warning is accepted, and only for Sinter removal.
+SHARED_OPT_REMOVAL_WARNING = (
+    b"dpkg: warning: while removing sinter, directory '/opt' not empty so not removed\n"
+)
 OUTER_SCHEMA = "sinter-owned-native-entry-container/v1"
 INNER_SCHEMA = "sinter-installed-native-entry-test/v2"
 ARCHIVE_INNER_SCHEMA = owner.ARCHIVE_INNER_SCHEMA
@@ -286,7 +291,7 @@ def private_mounts(pins, mount_spec=None):
         and len({row[1] for row in spec}) == len(spec),
         "Fixed mount keys/destinations must be distinct.",
     )
-    trees = [Path(pins[key]) for key, _destination, _rw in spec]
+    trees = [PurePosixPath(pins[key]) for key, _destination, _rw in spec]
     require(
         all(
             path.is_absolute() and ".." not in path.parts and str(path) == pins[key]
@@ -723,7 +728,9 @@ def offline(rows, operations, version, document, observations, workspace_path):
                 "run",
                 operation,
                 "--input",
-                str(Path(workspace_path).parent / "qualification-request.json"),
+                str(
+                    PurePosixPath(workspace_path).parent / "qualification-request.json"
+                ),
                 "--directory",
                 workspace_path,
                 "--format",
@@ -955,7 +962,13 @@ def validate_inner(receipt, source, package, archive_bytes, pins):
         )
         stream_bytes(row["stdout"], complete=False)
         stream_bytes(row["stderr"])
-        if index not in (0, 16):
+        if index == 15:
+            exact(row["argv"], ["dpkg", "-r", "sinter"], "Removal command differs.")
+            require(
+                stream_bytes(row["stderr"]) in (b"", SHARED_OPT_REMOVAL_WARNING),
+                "Package removal emitted unexpected diagnostics.",
+            )
+        elif index not in (0, 16):
             quiet(row["stderr"])
     # Package-absence probes are the only permitted nonzero command exits.
     # Validate them separately before applying the normal stopped requirement.
@@ -1405,7 +1418,7 @@ def validate_inner(receipt, source, package, archive_bytes, pins):
             13,
             [
                 home,
-                str(Path(path).parent),
+                str(PurePosixPath(path).parent),
                 "/tmp/.X11-unix/X97",
                 "/tmp/.X97-lock",
                 home + "/xauthority",

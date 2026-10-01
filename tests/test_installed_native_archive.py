@@ -5,6 +5,7 @@ import copy
 import io
 import json
 import tarfile
+from pathlib import PurePosixPath, PureWindowsPath
 
 import pytest
 from test_installed_native_entry_contract import inner_fixture
@@ -50,7 +51,7 @@ def fixture(tmp_path, monkeypatch):
         path.write_bytes(raw)
     monkeypatch.setattr(owner, "ROOT", source)
     rows = [
-        member(str(path.relative_to(source)), b"", tarfile.DIRTYPE)
+        member(path.relative_to(source).as_posix(), b"", tarfile.DIRTYPE)
         for path in sorted(source.rglob("*"))
         if path.is_dir()
     ] + [member(name, raw) for name, raw in files.items()]
@@ -295,3 +296,15 @@ def test_actual_missing_git_is_explicitly_optional_only_for_archive_route():
     outer.require_installed_tooling(evidence, "archive")
     with pytest.raises(ValueError, match="lacks installed-owner tooling"):
         outer.require_installed_tooling(evidence, "git")
+
+
+@pytest.mark.parametrize("path_type", [PurePosixPath, PureWindowsPath])
+def test_logical_archive_members_keep_posix_names_on_either_host(
+    tmp_path, monkeypatch, path_type
+):
+    _source, _repository, _rows, archive, expected = fixture(tmp_path, monkeypatch)
+    assert (
+        path_type("src") / "sinter" / "__init__.py"
+    ).as_posix() == "src/sinter/__init__.py"
+    monkeypatch.setattr(owner, "Path", path_type)
+    assert owner.strict_archive(archive, COMMIT) == expected

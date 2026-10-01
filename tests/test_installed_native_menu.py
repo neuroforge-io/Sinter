@@ -72,6 +72,10 @@ def test_regular_read_refuses_without_following_or_blocking(tmp_path, kind):
     if kind == "symlink":
         target.symlink_to(tmp_path / "missing")
     elif kind == "fifo":
+        if not hasattr(os, "mkfifo"):
+            pytest.skip(
+                "Requires an actual POSIX FIFO, never a regular-file replacement."
+            )
         os.mkfifo(target)
     else:
         target.write_bytes(b"too large")
@@ -376,20 +380,20 @@ def test_old_or_tampered_launch_evidence_cannot_be_menu_proof(attack):
 
 def test_preexisting_package_is_never_removed_or_launched(tmp_path, monkeypatch):
     monkeypatch.setattr(tool.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(tool.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(tool.os, "geteuid", lambda: 0, raising=False)
     monkeypatch.delenv("DISPLAY", raising=False)
     original_isfile = Path.is_file
     monkeypatch.setattr(
         Path,
         "is_file",
-        lambda p: True if str(p) == "/.dockerenv" else original_isfile(p),
+        lambda p: True if p == Path("/.dockerenv") else original_isfile(p),
     )
     original_iterdir = Path.iterdir
     monkeypatch.setattr(
         Path,
         "iterdir",
         lambda p: (
-            iter([Path("lo")]) if str(p) == "/sys/class/net" else original_iterdir(p)
+            iter([Path("lo")]) if p == Path("/sys/class/net") else original_iterdir(p)
         ),
     )
     monkeypatch.setattr(tool, "package_state", lambda _: "install ok installed")
@@ -444,20 +448,20 @@ def test_absence_requires_exact_query_result_not_arbitrary_exit_one(
 
 def owner_environment(monkeypatch):
     monkeypatch.setattr(tool.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(tool.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(tool.os, "geteuid", lambda: 0, raising=False)
     monkeypatch.delenv("DISPLAY", raising=False)
     original_isfile = Path.is_file
     monkeypatch.setattr(
         Path,
         "is_file",
-        lambda p: True if str(p) == "/.dockerenv" else original_isfile(p),
+        lambda p: True if p == Path("/.dockerenv") else original_isfile(p),
     )
     original_iterdir = Path.iterdir
     monkeypatch.setattr(
         Path,
         "iterdir",
         lambda p: (
-            iter([Path("lo")]) if str(p) == "/sys/class/net" else original_iterdir(p)
+            iter([Path("lo")]) if p == Path("/sys/class/net") else original_iterdir(p)
         ),
     )
     monkeypatch.setattr(tool.os.path, "lexists", lambda _: False)

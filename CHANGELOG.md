@@ -15,7 +15,16 @@ qualification and does not change any published RC3 asset or historical receipt.
   container settings, complete diagnostics and cleanup; reject malformed state
   and ambiguous removal responses. A closed archive route verifies exact Git
   source in the retained image, where Git is absent. Source-only mechanics and
-  independent adversarial checks pass; matching installed execution is pending.
+  independent adversarial checks pass. A first private DEV package saves and
+  reopens a fictional native casebook; its original admission refuses a shared
+  directory removal warning. Accept only that exact warning after checking actual
+  package removal and absence of Sinter's files; fresh matching execution is pending.
+
+- Keep Linux qualification paths in their POSIX namespace on every test host.
+  Preserve real host filesystem reads and exact archive-member checks, distinguish
+  mocked Linux guards from actual host admission, and require the actual POSIX
+  resources for process-group, FIFO and private-permission tests. Portable byte,
+  JSON, type and lifecycle checks stay active. Fresh hosted replay is required.
 
 - Save source-recovery evidence with explicit UTF-8 and stable newlines, keeping
   complete literal Unicode originals and atomic replacement. Reproduce the Windows

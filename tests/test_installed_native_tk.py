@@ -1,5 +1,7 @@
 """Bounded Tk driver admission; actual source-Xvfb evidence is separate."""
 
+import os
+
 import pytest
 
 from tools import installed_native_tk as tool
@@ -88,17 +90,21 @@ def controlled_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("XAUTHORITY", str(auth))
     old = Path.is_file
     monkeypatch.setattr(
-        Path, "is_file", lambda p: True if str(p) == "/.dockerenv" else old(p)
+        Path, "is_file", lambda p: True if p == Path("/.dockerenv") else old(p)
     )
     old_iter = Path.iterdir
     monkeypatch.setattr(
         Path,
         "iterdir",
-        lambda p: iter([Path("lo")]) if str(p) == "/sys/class/net" else old_iter(p),
+        lambda p: iter([Path("lo")]) if p == Path("/sys/class/net") else old_iter(p),
     )
     return auth, req
 
 
+@pytest.mark.skipif(
+    not hasattr(os, "geteuid"),
+    reason="Requires actual POSIX ownership and private file permissions.",
+)
 def test_owned_container_environment_is_admitted_without_loading_tk(
     tmp_path, monkeypatch
 ):
@@ -109,6 +115,10 @@ def test_owned_container_environment_is_admitted_without_loading_tk(
 @pytest.mark.parametrize(
     "attack",
     ["public_display", "foreign_auth", "auth_symlink", "auth_public", "request_large"],
+)
+@pytest.mark.skipif(
+    not hasattr(os, "geteuid"),
+    reason="Requires actual POSIX ownership and private file permissions.",
 )
 def test_driver_refuses_display_or_file_ownership_gaps_before_tk(
     tmp_path, monkeypatch, attack
@@ -141,7 +151,7 @@ def test_main_refuses_host_before_tk_or_target_action(tmp_path, monkeypatch):
     req.write_text(json.dumps(request()), encoding="utf-8")
     old = Path.is_file
     monkeypatch.setattr(
-        Path, "is_file", lambda p: False if str(p) == "/.dockerenv" else old(p)
+        Path, "is_file", lambda p: False if p == Path("/.dockerenv") else old(p)
     )
     monkeypatch.setitem(
         sys.modules,

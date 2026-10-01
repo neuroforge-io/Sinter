@@ -4,7 +4,8 @@ import base64
 import copy
 import io
 import json
-from pathlib import Path
+import os
+from pathlib import PurePosixPath
 from types import SimpleNamespace
 
 import pytest
@@ -168,7 +169,7 @@ def inner_fixture(tmp_path):
             ensure_ascii=False,
             indent=2 if formatted else None,
         ) + ("\n" if formatted else "")
-        (path / "preferences.json").write_text(preferences)
+        (path / "preferences.json").write_text(preferences, encoding="utf-8")
         documents.append(document)
         snapshots.append(native.retained_workspace_snapshot(path))
     diag = {
@@ -293,7 +294,7 @@ def inner_fixture(tmp_path):
         )
     cleanup_paths = [
         home,
-        str(Path(mapped_path).parent),
+        str(PurePosixPath(mapped_path).parent),
         "/tmp/.X11-unix/X97",
         "/tmp/.X97-lock",
         home + "/xauthority",
@@ -509,7 +510,7 @@ def inner_fixture(tmp_path):
                     "run",
                     row["operation"],
                     "--input",
-                    str(Path(path).parent / "qualification-request.json"),
+                    str(PurePosixPath(path).parent / "qualification-request.json"),
                     "--directory",
                     path,
                     "--format",
@@ -887,6 +888,10 @@ def test_outer_refuses_writable_ancestor_alias_of_readonly_inputs():
         contract.validate_outer(bundle, pins)
 
 
+@pytest.mark.skipif(
+    not hasattr(os, "killpg"),
+    reason="Requires an actual POSIX process-group cleanup probe.",
+)
 def test_workspace_cleanup_is_corroborated_by_the_actual_probe(tmp_path, monkeypatch):
     missing = tmp_path / "absent"
     rows = []
@@ -899,3 +904,71 @@ def test_workspace_cleanup_is_corroborated_by_the_actual_probe(tmp_path, monkeyp
     assert (
         json.loads(base64.b64decode(rows[-1]["stdout"]["base64"]))[0]["lexists"] is True
     )
+
+
+OBSERVED_REMOVAL_WARNING = (
+    b"dpkg: warning: while removing sinter, directory '/opt' not empty so not removed\n"
+)
+
+
+@pytest.mark.parametrize("raw", [b"", OBSERVED_REMOVAL_WARNING])
+def test_exact_shared_opt_warning_keeps_full_removal_checks(tmp_path, raw):
+    receipt, source, package, pins = inner_fixture(tmp_path)
+    receipt["commands"][15]["stderr"] = stream(raw)
+    result = contract.validate_inner(receipt, source, package, 7, pins)
+    assert result["scope"] == "installed Linux native-entry command only"
+
+
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "unknown",
+        "mixed",
+        "different_directory",
+        "different_package",
+        "wrong_index",
+        "wrong_argv",
+        "residual_binary",
+        "residual_native_entry",
+        "unconfirmed_absence",
+        "nonzero_exit",
+        "pre_reap",
+        "truncated",
+    ],
+)
+def test_shared_opt_warning_never_substitutes_for_removal(tmp_path, attack):
+    receipt, source, package, pins = inner_fixture(tmp_path)
+    row = receipt["commands"][15]
+    row["stderr"] = stream(OBSERVED_REMOVAL_WARNING)
+    if attack == "unknown":
+        row["stderr"] = stream(b"dpkg: unrelated warning\n")
+    elif attack == "mixed":
+        row["stderr"] = stream(OBSERVED_REMOVAL_WARNING + b"unexpected\n")
+    elif attack == "different_directory":
+        row["stderr"] = stream(
+            OBSERVED_REMOVAL_WARNING.replace(b"'/opt'", b"'/opt/neuroforge/sinter'")
+        )
+    elif attack == "different_package":
+        row["stderr"] = stream(
+            OBSERVED_REMOVAL_WARNING.replace(b"removing sinter", b"removing another")
+        )
+    elif attack == "wrong_index":
+        row["stderr"] = stream()
+        receipt["commands"][6]["stderr"] = stream(OBSERVED_REMOVAL_WARNING)
+    elif attack == "wrong_argv":
+        row["argv"] = ["dpkg", "-r", "another"]
+    elif attack in ("residual_binary", "residual_native_entry"):
+        probe = receipt["commands"][17]
+        records = json.loads(contract.stream_bytes(probe["stdout"]))
+        records[0 if attack == "residual_binary" else 2]["lexists"] = True
+        probe["stdout"] = stream(output(records))
+    elif attack == "unconfirmed_absence":
+        receipt["commands"][16]["stderr"] = stream(b"dpkg-query: access denied\n")
+    elif attack == "nonzero_exit":
+        row["exit_code"] = 1
+    elif attack == "pre_reap":
+        row["streams_complete"] = False
+    else:
+        row["stderr"]["truncated"] = True
+    with pytest.raises(ValueError):
+        contract.validate_inner(receipt, source, package, 7, pins)

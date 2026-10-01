@@ -26,7 +26,7 @@ import tarfile
 import tempfile
 import time
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -177,7 +177,7 @@ def archive_identity(archive, commit):
                 raise ValueError(
                     "Source archive contains an unsupported or repeated member."
                 )
-            path = Path(item.name)
+            path = PurePosixPath(item.name)
             if path.is_absolute() or ".." in path.parts:
                 raise ValueError("Source archive member is unsafe.")
             raw = bundle.extractfile(item).read()
@@ -189,7 +189,9 @@ def archive_identity(archive, commit):
             "This source does not contain the installed native-entry producer."
         )
     actual_paths = {
-        str(path.relative_to(ROOT)) for path in ROOT.rglob("*") if not path.is_dir()
+        path.relative_to(ROOT).as_posix()
+        for path in ROOT.rglob("*")
+        if not path.is_dir()
     }
     if actual_paths != set(records):
         raise ValueError(
@@ -240,7 +242,7 @@ def strict_archive(archive, commit):
             )
         for item in bundle:
             name = item.name.rstrip("/") if item.isdir() else item.name
-            path = Path(name)
+            path = PurePosixPath(name)
             if (
                 not name
                 or path.is_absolute()
@@ -277,7 +279,7 @@ def strict_archive(archive, commit):
                 raise ValueError(
                     "Source archive links/special member types are refused."
                 )
-    if seen != {str(path.relative_to(ROOT)) for path in ROOT.rglob("*")}:
+    if seen != {path.relative_to(ROOT).as_posix() for path in ROOT.rglob("*")}:
         raise ValueError("Source archive complete member set differs.")
     return archive_identity(archive, commit)
 
@@ -871,7 +873,7 @@ def admit_invocations(proof, observations, command_prefix, package):
             raise ValueError(
                 "Mapped native windows must match the actual invoked PID and title."
             )
-        if not Path(observation["argv"][-1]).is_absolute():
+        if not PurePosixPath(observation["argv"][-1]).is_absolute():
             raise ValueError("Use an absolute owned fictional workspace.")
         directories.add(observation["argv"][-1])
         pids.add(observation["pid"])

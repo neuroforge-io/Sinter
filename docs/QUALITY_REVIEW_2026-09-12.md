@@ -1358,3 +1358,51 @@ physical native editing, office rendering, model quality or grant-submission
 claim. The physical user app stays closed and no hosted Sinter request is made.
 Installed recovery, the four-prior replacement and final candidate admission
 remain required. See [the scoped rehearsal guide](RC4_SCOPED_SOURCE_RECOVERY.md).
+
+### 2 October: first private DEV native run and portable qualification checks
+
+An isolated offline build at exact `9722a58211c0f16f536af028a176839d28996b00`
+produces version `0.5.4rc4.dev0`. Its original same-run package receipt passes and
+its 435 source files remain exact. The private Linux DEB is
+`5ea2c05261d5bee46efdc132736c86375b24683333a8708d3967236f2b7df198`;
+the package receipt is
+`5bdf258261658de1ee77788e73ba536a8f6ee7b164248b0522bbdc60e98a8098`.
+These assets are development rehearsals, not a published or admitted RC4 release.
+
+The first actual archive-source owner installs that matching DEB and observes
+four native invocations: create/save/WM-close, reopen/WM-close and the two existing
+mapped SIGTERM launches. Exact fictional work and explicit model preferences
+survive. All owning containers are removed without forced cleanup. The original
+admission remains refused because `dpkg -r sinter` reports its shared `/opt`
+parent is nonempty. The retained image's qualification interpreter occupies that
+parent; independent probes confirm all three Sinter paths absent. The source
+repair accepts only this exact observed warning at the exact removal command,
+retains its bytes, and still requires actual status and independent absence.
+The removal-only proposal preserves all seventeen original test/helper ASTs;
+fourteen focused controls and 25 additional critic boundary probes protect that
+narrow allowance. The actual historical
+receipt stays unchanged; a semantic diagnostic with the repaired checker does
+not qualify a new source or replace a fresh installed run.
+
+Actual quality run `36912392945` at that same original source fails three new
+fixture expectations in each macOS job and 52 new qualification-fixture cases in
+each Windows job. No application `src` test fails. The exact failed logs and
+API-digest-verified ZIP/XMLs remain retained. The source repair distinguishes
+logical Linux paths from the host filesystem, serializes inventory names as
+POSIX, and tests early unsupported-host refusal separately from mocked Linux
+guard contexts. Portable byte/JSON/type/lifecycle controls remain active. Only
+the actual unavailable process-group, FIFO and private-permission resources have
+explicit, narrow predicates; no whole test file is skipped to conceal a failure.
+
+The final eight-path proposal passes 344 unique Linux checks without skips,
+Ruff F/I and formatting. Independent review confirms another 115 overlapping
+semantic controls and 27 actual private Git archive refusals; those counts are
+not extra unique test totals. All 427 unrelated proposal files and all 432
+unrelated files when composed onto `e966d2ffc2ecb8fc4b15ca0252af92261735f20c`
+remain exact. The independent source acceptance is
+`a1e6bfe9fd6ff70d60b80f4bd32c10c5a0b8ab4ad6e85e36b2f13f61a0e0d88b`.
+Root's combined current-main rehearsal and native qualification suite passes
+562 unique checks in 29.03 seconds without skips.
+Initial lint/format and reviewer cache-guard failures remain separate historical
+records. Fresh combined hosted replay and all installed/canonical gates remain
+required. The physical user app stays closed; hosted Sinter requests remain zero.

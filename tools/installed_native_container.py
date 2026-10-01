@@ -17,7 +17,7 @@ import shutil
 import signal
 import stat
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,7 +62,7 @@ def source_records(source):
         contract.require(
             len(records) < inner.MAX_ENTRIES, "Source snapshot has too many paths."
         )
-        records[str(path.relative_to(source))] = {
+        records[path.relative_to(source).as_posix()] = {
             "bytes": len(raw),
             "sha256": contract.sha(raw),
         }
@@ -308,7 +308,7 @@ def validate_mechanics(bundle, pins):
         type(tool_paths) is dict
         and set(tool_paths) == set(REQUIRED_TOOLS)
         and all(
-            value is None or (type(value) is str and Path(value).is_absolute())
+            value is None or (type(value) is str and PurePosixPath(value).is_absolute())
             for value in tool_paths.values()
         ),
         "Complete actual image tool paths are missing.",
@@ -332,7 +332,7 @@ def validate_mechanics(bundle, pins):
     )
     inner.exact_text(identity["sha256"], r"[0-9a-f]{64}", "actual Docker client bytes")
     contract.require(
-        type(identity["path"]) is str and Path(identity["path"]).is_absolute(),
+        type(identity["path"]) is str and PurePosixPath(identity["path"]).is_absolute(),
         "Actual Docker client path is missing.",
     )
     row = identity["version"]
@@ -375,7 +375,7 @@ def require_installed_tooling(evidence, source_route="git"):
         type(paths) is dict
         and set(paths) == set(REQUIRED_TOOLS)
         and all(
-            type(paths[key]) is str and Path(paths[key]).is_absolute()
+            type(paths[key]) is str and PurePosixPath(paths[key]).is_absolute()
             for key in REQUIRED_TOOLS
             if key != "git" or source_route == "git"
         ),
@@ -491,7 +491,7 @@ def evidence_pins(bundle):
         set(host) == {"/source", "/repository", "/candidate", "/out"},
         "Mechanics evidence has another mount set.",
     )
-    root = Path(host["/source"]).parent
+    root = PurePosixPath(host["/source"]).parent
     pins = pins_for(root, bundle["owner_sha256"])
     contract.exact(
         [host[key] for key in ("/source", "/repository", "/candidate", "/out")],

@@ -1,6 +1,7 @@
 """Owning lifecycle controls; only inert Python byte/probe children are run here."""
 
 import json
+import os
 import sys
 from types import SimpleNamespace
 
@@ -144,6 +145,10 @@ def test_redundant_inner_exit_summaries_keep_integer_meaning(tmp_path, field):
         contract.validate_inner(receipt, source, package, 7, pins)
 
 
+@pytest.mark.skipif(
+    not hasattr(os, "killpg"),
+    reason="Requires an actual POSIX process-group byte capture.",
+)
 def test_full_original_stream_files_survive_beyond_the_bounded_prefix(tmp_path):
     rows = []
     stdout = tmp_path / "full.stdout"
@@ -176,6 +181,7 @@ def test_full_original_stream_files_survive_beyond_the_bounded_prefix(tmp_path):
 def test_missing_review_pin_refuses_before_any_owned_resource_or_docker_call(
     tmp_path, monkeypatch
 ):
+    monkeypatch.setattr(outer.platform, "system", lambda: "Linux")
     target = tmp_path / "unused"
     monkeypatch.setattr(
         outer, "capture", lambda *_a, **_k: pytest.fail("No command before source pin")
@@ -188,6 +194,7 @@ def test_missing_review_pin_refuses_before_any_owned_resource_or_docker_call(
 
 
 def test_missing_matching_package_refuses_without_a_container(tmp_path, monkeypatch):
+    monkeypatch.setattr(outer.platform, "system", lambda: "Linux")
     target = tmp_path / "unused"
     expected = contract.sha((outer.ROOT / outer.SOURCE_FILE).read_bytes())
     monkeypatch.setattr(
@@ -309,6 +316,7 @@ def test_owned_cleanup_targets_only_actual_id_and_keeps_primary_failure(
 
 
 def test_output_ancestor_alias_refuses_before_copy_or_command(tmp_path, monkeypatch):
+    monkeypatch.setattr(outer.platform, "system", lambda: "Linux")
     expected = contract.sha((outer.ROOT / outer.SOURCE_FILE).read_bytes())
     with pytest.raises(ValueError, match="outside"):
         outer.prepare(
@@ -446,3 +454,26 @@ def test_shared_lifecycle_accepts_only_the_trusted_callers_exact_fifth_mount():
     pins["prior_directory"] = pins["output_directory"] + "/aliased-prior"
     with pytest.raises(ValueError, match="disjoint"):
         contract.validate_lifecycle(bundle["commands"], pins, fixed_creation, spec)
+
+
+@pytest.mark.parametrize("system", ["Windows", "Darwin"])
+def test_actual_unsupported_host_refuses_before_any_resource(
+    tmp_path, monkeypatch, system
+):
+    target = tmp_path / "must-stay-absent"
+    monkeypatch.setattr(outer.platform, "system", lambda: system)
+    monkeypatch.setattr(
+        outer,
+        "capture",
+        lambda *_a, **_k: pytest.fail("No command on unsupported host"),
+    )
+    monkeypatch.setattr(
+        outer,
+        "source_records",
+        lambda *_a, **_k: pytest.fail("No source copy on unsupported host"),
+    )
+    with pytest.raises(ValueError, match="Linux host only"):
+        outer.prepare(
+            SimpleNamespace(mode="mechanics", output=target, owner_sha256="0" * 64)
+        )
+    assert not target.exists()
