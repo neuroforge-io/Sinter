@@ -1206,3 +1206,37 @@ retains its ten-second stack and last completed stage before the unchanged
 20-second timeout, leaving process exit and cleanup honestly unknown. Its review
 also corrects a private evidence filename; the actual fixture guide's bytes were
 preserved. Hosted macOS replay and installed qualification remain outstanding.
+
+The subsequent `673cba2` hosted run passes both macOS 3.10/3.13 jobs. Each retained
+XML contains 2,969 passing cases and 328 explicit skips; all 51 listener/startup/
+native-handoff cases execute and pass. The intentionally failed graphical-launcher
+fixture exits 1 after 329/282 milliseconds and retains its expected emergency
+diagnostic. This is source-fixture evidence, not an actual macOS native UI or
+installer pass. The original stall's precise cause remains unknown. The aggregate
+run fails both Windows jobs on a newly added occupied-socket errno assertion;
+their actual OS refusal and the source-test correction require separate review.
+
+### 2 October: functional local recovery source rehearsal
+
+Five new preparation paths add a separate Linux source-only campaign-v1 rehearsal
+and a closed artifact verifier. Six actual source processes stop and reopen through
+the browser, preserving complete originals, history, typed SQLite records and
+explicit fictional preferences/model selection. The ten campaign phases retain
+unknown versus unassigned owners, proposed dates and held/historical scope. A real
+phone conflict and committed save/Quit with lost replies retain full local backups;
+no automatic replay occurs during the documented 250-millisecond observation.
+
+Independent execution produces 47 artifacts, six exit-0/closed-port observations
+and a visibly expanded stale-source warning. All 45 separately resealed hostile
+artifact mutations refuse. Root's current composition passes 160 focused tests in
+18.39 seconds with no skips; fatal lint and whitespace checks pass. The three
+original cleanup failures and earlier hidden-DOM visibility overstatement remain
+historical evidence, rather than being rewritten as current passes.
+
+The reviewed handoff is
+`7ad0a03dcf539493adb9d6dc4141330539cd687fb0b0a6c1fbb80ae593a7a1d8`.
+The source receipt explicitly keeps installed, candidate and release admission
+false. Scoped casebook-v2 editor recovery, native ownership, actual installed
+execution, exact published-RC3 replacement and the new canonical release gate
+remain outstanding. No physical user app or provider is opened. See the
+[recovery guide](RC4_LOCAL_RECOVERY.md) for the runnable subset and remaining gates.

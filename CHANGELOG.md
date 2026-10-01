@@ -5,15 +5,22 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Add a Linux source rehearsal that runs six real stop/reopen cycles with
+  fictional campaigns. Check complete backups, conflicting edits, lost save
+  and Quit confirmations, visible stale-source warnings and unchanged local
+  history/preferences. Its separate source receipt refuses installed or release
+  claims. See the [recovery guide](docs/RC4_LOCAL_RECOVERY.md).
+
 - Start the local workbench without an unnecessary reverse hostname lookup.
   Keep real IPv4/IPv6 binding, Host/Origin/session checks and native shutdown
-  limits intact. Add finer startup diagnostics for the unresolved hosted macOS
-  timeout; the controlled lookup reproduction does not establish its Darwin cause.
+  limits intact. Retain finer startup diagnostics; fresh hosted macOS 3.10/3.13
+  source tests pass. The controlled lookup and successful replay do not establish
+  the original stall's precise cause or qualify a macOS installer.
 
 - Preserve Windows interpreter startup requirements in the fictional upgrade
   test, with a fictional profile directory and no inherited model credentials.
-  POSIX behavior and Linux-only fixture admission remain unchanged. Hosted
-  Windows replay remains required; this does not qualify a Windows installer.
+  POSIX behavior and Linux-only fixture admission remain unchanged. Both hosted
+  Windows fixture runs pass; this does not qualify a Windows installer.
 
 - Add a separate, pinned fictional workspace fixture for testing a future upgrade
   from the published RC3 preview. Retain original source snapshots, report JSON,
