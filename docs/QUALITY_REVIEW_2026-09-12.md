@@ -746,3 +746,28 @@ browser probe confirms the copy survives, Overview remains active and the
 announcement says only that the copy was saved. The 34 focused Word state,
 filesystem and route checks also pass. This small follow-on does not replace the
 preceding composition receipt or qualify browser download delivery or an installer.
+
+### 1 October: native signal shutdown repair, source acceptance only
+
+An independent actual Tk/Xvfb probe reproduced the earlier deleted-scrollbar
+callback error on the original source. The two-path repair schedules shutdown at
+a safe idle boundary and coalesces repeated stop signals. It passes 43 normal
+assertions across eight scenarios and five stale-timer cancellation assertions;
+94 focused checks pass, with three host-display checks skipped. Fictional saved
+records and exact preferences survive the checked paths, except an explicitly
+requested user save. No provider, network or real-workspace operation was used.
+
+These are bounded source checks. Direct external widget destruction and injected
+timer-cancellation faults expose exception-cleanup limits in both the original
+and repaired versions; probe cleanup is not counted as product success. Native
+modal interruption and indefinite idle starvation are untested. A fresh frozen
+installed build still needs clean shutdown, operator-workflow, saved-work upgrade
+and artifact qualification; the previous prototype traceback remains retained.
+
+The follow-on composition on `57781a8` passed 2,849 source checks with eight
+skipped. Its initial run passed 2,842 checks and encountered seven fixture-setup
+errors when the shared temporary filesystem filled; those same seven checks
+passed on explicit retry in a private folder with available space. All 387 frozen
+source paths remained unchanged. Fatal lint and the narrow public-boundary guard
+passed. The [bounded receipt](releases/SINTER_NATIVE_SIGNAL_SOURCE_ACCEPTANCE_20261001.json)
+retains the initial setup failure separately from successful source coverage.

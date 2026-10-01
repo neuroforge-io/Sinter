@@ -388,6 +388,8 @@ class NativeWindow:
         self._selected_source = None
         self._poll_id = None
         self._heartbeat_id = None
+        self._signal_close_id = None
+        self._signal_close_pending = False
         self.active_job = None
         self._job_generation = None
         self._job_kind = None
@@ -1471,9 +1473,36 @@ class NativeWindow:
                     return
         self.close()
 
+    def _request_signal_close(self):
+        # A Python signal can interrupt a live Tk callback between resolving a
+        # widget and calling its Tcl command. Destroying it synchronously makes
+        # the resumed callback address a deleted widget. Leave that callback
+        # intact and close at the next safe idle boundary; repeated signals do
+        # not queue multiple closes.
+        if self.closed or self._signal_close_pending:
+            return
+        # Mark this before registering with Tk: another Python signal can also
+        # interrupt the registration itself.
+        self._signal_close_pending = True
+
+        def close_when_idle():
+            self._signal_close_id = None
+            self._signal_close_pending = False
+            self.close()
+
+        try:
+            self._signal_close_id = self.root.after_idle(close_when_idle)
+        except Exception:
+            self._signal_close_pending = False
+            raise
+
     def close(self):
         if not self.closed:
             self.closed = True
+            self._signal_close_pending = False
+            if self._signal_close_id is not None:
+                self.root.after_cancel(self._signal_close_id)
+                self._signal_close_id = None
             if self._poll_id is not None:
                 self.root.after_cancel(self._poll_id)
                 self._poll_id = None
@@ -1490,7 +1519,7 @@ class NativeWindow:
         installed = threading.current_thread() is threading.main_thread()
         if installed:
             previous = signal.getsignal(signal.SIGTERM)
-            signal.signal(signal.SIGTERM, lambda *_: self.close())
+            signal.signal(signal.SIGTERM, lambda *_: self._request_signal_close())
 
         def heartbeat():
             self._heartbeat_id = None

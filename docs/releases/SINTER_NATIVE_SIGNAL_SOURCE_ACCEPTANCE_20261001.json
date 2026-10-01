@@ -1,0 +1,41 @@
+{
+  "schema": "sinter-native-signal-source-acceptance/v1",
+  "base_source_commit": "57781a88d70f7c99e95011f3ec6b8fd98e9c2d25",
+  "scope": "Exact2pathSIGTERMrepair and neutralDEBdescription onannouncementpolish. Source acceptance only; no freshfrozen/installedqualification.",
+  "changed_paths_sha256": {
+    "src/sinter/native_window.py": "bee815475dc6091139e7d67759b099c9a0d93f5df86ba9cae8d5e39ef93ca74d",
+    "tests/test_native_window.py": "ad101ec20c0c2ee717754755016c8e1e1b96a76fe863cd85dc4bfb2a40874aeb",
+    "tools/package_native.py": "1438684ec9f882e51da8ce1e1101a4a7da5c275ac375e86c83aa94472b3cbda1"
+  },
+  "full_source_coverage": {
+    "passed": 2849,
+    "skipped": 8,
+    "initial_run": {
+      "passed": 2842,
+      "skipped": 8,
+      "setup_errors": 7,
+      "reason": "ENOSPC whilecreatingtestdirectories"
+    },
+    "unchanged_source_explicit_retry": {
+      "passed": 7,
+      "setup_errors": 0
+    },
+    "all_frozen_source_paths_unchanged": true
+  },
+  "independent_actual_tk": {
+    "normal_assertions": 43,
+    "stale_timer_assertions": 5,
+    "scenarios": 8,
+    "baseline_error_reproduced": true,
+    "fictional_records_and_preferences_preserved": true,
+    "network_and_provider_calls": 0,
+    "source_only": true,
+    "review_sha256": "b11b7cf85fcbda764a707afb294c61633b2d298344322bde2db4b0ffa71c7ce2"
+  },
+  "remaining_limits": [
+    "Finalfrozenandinstalledwindow/workflow/upgradequalificationrequired",
+    "Existingdirectwidgetdestructionandtimer-cancellationfaultlimitsremain",
+    "Modaldialoginterruptionandinfiniteidlestarvationuntested"
+  ],
+  "source_manifest_sha256": "0795cdaed365bde84da6bbeccb2e6b0db0fafa81ebd23f73da756a2865604ffb"
+}

@@ -458,6 +458,9 @@ class FakeRoot:
         self.timers[identifier] = callback
         return identifier
 
+    def after_idle(self, callback):
+        return self.after("idle", callback)
+
     def after_cancel(self, identifier):
         self.cancelled.append(identifier)
         self.timers.pop(identifier, None)
@@ -489,6 +492,8 @@ def bare_window(controller):
     window.closed = False
     window._poll_id = None
     window._heartbeat_id = None
+    window._signal_close_id = None
+    window._signal_close_pending = False
     window.active_job = None
     return window
 
@@ -519,6 +524,63 @@ def test_native_run_sigterm_closes_and_restores_previous_handler(controller):
     assert window.run() == 0
     assert window.closed and controller.closed and window.root.destroyed
     assert signal.getsignal(signal.SIGTERM) == before
+
+
+def test_native_sigterm_preserves_live_callback_until_safe_idle(controller):
+    window = bare_window(controller)
+    before = signal.getsignal(signal.SIGTERM)
+    active = {"callback": True}
+    normal_destroy = window.root.destroy
+
+    def guarded_destroy():
+        assert not active["callback"], "Do not destroy a widget inside its callback"
+        normal_destroy()
+
+    window.root.destroy = guarded_destroy
+
+    def live_widget_callback():
+        handler = signal.getsignal(signal.SIGTERM)
+        handler(signal.SIGTERM, None)
+        handler(signal.SIGTERM, None)
+        assert not window.root.destroyed and not controller.closed
+        # One heartbeat plus one coalesced close, despite two stop signals.
+        assert len(window.root.timers) == 2
+        active["callback"] = False
+        window.root.timers.pop(window._signal_close_id)()
+
+    window.root.mainloop = live_widget_callback
+    assert window.run() == 0
+    assert window.root.destroyed and controller.closed and not window.root.timers
+    assert signal.getsignal(signal.SIGTERM) == before
+
+
+def test_second_sigterm_during_idle_registration_still_queues_one_close(controller):
+    window = bare_window(controller)
+    after_idle = window.root.after_idle
+    registrations = []
+
+    def interrupted_registration(callback):
+        registrations.append(callback)
+        window._request_signal_close()
+        return after_idle(callback)
+
+    window.root.after_idle = interrupted_registration
+    window._request_signal_close()
+    assert len(registrations) == 1 and len(window.root.timers) == 1
+    window.root.timers.pop(window._signal_close_id)()
+    assert window.closed and controller.closed and not window.root.timers
+
+
+def test_manual_close_cancels_pending_signal_close_and_late_callback(controller):
+    window = bare_window(controller)
+    window._request_signal_close()
+    queued_close = window.root.timers[window._signal_close_id]
+    window.close()
+    window.root.destroy = lambda: pytest.fail("Already closed widget was touched")
+    queued_close()
+    window._request_signal_close()
+    assert controller.closed and not window.root.timers
+    assert len(window.root.cancelled) == 1
 
 
 def test_native_run_keyboard_interrupt_closes_and_restores_handler(controller):
