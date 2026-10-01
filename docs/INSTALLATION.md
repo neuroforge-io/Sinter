@@ -136,8 +136,9 @@ the bare executable and source wrappers still default to native mode.
 The full workbench opens a loopback address in a local browser. A browser's
 acceptance of the launch does not prove that a restricted environment permits
 that address. Keep its protections in place and choose the native alternative
-where appropriate. Save project inputs and edited reports separately, wait for
-the Saved confirmation, then choose **Quit Sinter**. Closing a browser tab alone
+where appropriate. Use **Save project** for inputs and **Save to My workspace**
+for edited reports. Wait for the Saved confirmation, then choose **Quit Sinter**.
+Closing a browser tab alone
 does not stop the installed app. Quit before opening it again.
 
 This is a development packaging change, not a change to the published RC3

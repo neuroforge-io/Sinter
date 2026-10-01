@@ -15,7 +15,7 @@ export function home(go, drafts, settings = {}, openGarden) {
       h('h2', {}, settings.full_name ? 'What are we working on, ' + settings.full_name.split(' ')[0] + '?' : 'Your next piece of work starts here.'),
       h('p', {}, 'Research a question, write a letter or make sense of meeting notes. Leave with a document you can actually use.')),
       button('Try an example', () => go('brief?example=1'), 'quiet')),
-    h('p', {class: 'muted'}, 'Save project inputs and edited reports separately. Wait for the Saved confirmation. In the installed app, choose Quit Sinter when you finish; closing this browser tab does not stop the app.'),
+    h('p', {class: 'muted'}, 'Use Save project for inputs and Save to My workspace for edited reports. Wait for the Saved confirmation. In the installed app, choose Quit Sinter when you finish; closing this browser tab does not stop the app.'),
     openGarden ? gardenCard(openGarden) : null,
     !settings.full_name ? h('section', {class: 'profile-nudge'}, h('div', {}, h('strong', {}, 'Your details, ready for every draft'),
       h('p', {}, 'Add your name, group and contact details once. Sinter will complete the sign-off for you.')),

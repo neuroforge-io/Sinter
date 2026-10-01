@@ -192,7 +192,7 @@ def first_journey(page, process, read, expect, row):
     editor = report.get_by_label("Edit your draft", exact=True)
     editor.fill(editor.input_value() + NOTE)
     report.get_by_role("button", name="Apply edits", exact=True).click()
-    report.get_by_role("button", name="Save to this computer", exact=True).click()
+    report.get_by_role("button", name="Save to My workspace", exact=True).click()
     expect(
         report.get_by_text(
             "Saved in My workspace, including your edits and original evidence.",
