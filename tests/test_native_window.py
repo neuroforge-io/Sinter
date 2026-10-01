@@ -86,6 +86,154 @@ def source_request(controller):
     return controller.preview()
 
 
+@pytest.mark.parametrize(
+    ("markdown", "expected"),
+    [
+        (r"\[qa copy\] \#1 \\notes\folder", r"[qa copy] #1 \notes\folder"),
+        (r"\`literal\` \*\*wording\*\*", "`literal` **wording**"),
+        (r"`\[code\] \# \\path` and \[body\]", r"\[code\] \# \\path and [body]"),
+        (r"`` `\[code\] \#` `` and \[body\]", r"`\[code\] \#` and [body]"),
+        ("[guide](https://example.invalid/notes_(fictional))",
+         "guide (https://example.invalid/notes_(fictional))"),
+        (r"\[guide\](https://example.invalid)", "[guide](https://example.invalid)"),
+        ("[unsafe](javascript:alert(1))", "[unsafe](javascript:alert(1))"),
+        ("&lt;script&gt;fictional&lt;/script&gt;", "<script>fictional</script>"),
+        ("&amp;lt;original entity&amp;gt;", "&lt;original entity&gt;"),
+    ],
+)
+def test_readable_report_uses_safe_inline_text_without_opening_links(
+    markdown, expected
+):
+    assert list(native_window.readable_report_lines(markdown + "\n")) == [
+        (expected + "\n", "body")
+    ]
+
+
+def test_readable_report_source_escapes_are_decoded_once_without_reparsing():
+    from sinter.evidence import literal
+
+    source = (
+        r"# [fictional](https://example.invalid) **literal** `code` \notes"
+        " <script>original</script> &lt;original entity&gt;"
+    )
+    assert list(native_window.readable_report_lines(literal(source) + "\n")) == [
+        (source + "\n", "body")
+    ]
+    assert list(native_window.readable_report_lines("> " + literal(source) + "\n")) == [
+        (source + "\n", "quote")
+    ]
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "```text\n" + r"\[code\] \# \\path" + "\n```\n",
+        "````text\n```\n" + r"\[code\] \# \\path" + "\n````\n",
+        "~~~text\n```\n" + r"\[code\] \# \\path" + "\n~~~\n",
+        "  ```text\n```language\n" + r"\[code\] \# \\path" + "\n  ````\n",
+        "```python title=fictional\n" + r"\[code\] \# \\path" + "\n```  \n",
+    ],
+)
+def test_readable_report_keeps_fenced_code_exact(code):
+    rows = list(native_window.readable_report_lines(code + r"\[body\]" + "\n"))
+    assert "".join(text for text, _ in rows[:-1]) == code
+    assert all(style == "code" for _, style in rows[:-1])
+    assert rows[-1] == ("[body]\n", "body")
+
+
+def test_readable_report_keeps_unclosed_code_and_model_provenance_literal():
+    code = "```text\n" + r"\[code\] \# \\path" + "\n"
+    assert list(native_window.readable_report_lines(code)) == [
+        (line, "code") for line in code.splitlines(keepends=True)
+    ]
+    model = {
+        "complete": False,
+        "partial": {"content": r"Fictional \[unfinished\] output"},
+        "sources": [{"quote": r"\[source\] \# \\path **literal**"}],
+    }
+    exact = copy.deepcopy(model)
+    markdown = native_window.result_markdown(model)
+    readable = "".join(
+        text for text, _ in native_window.readable_report_lines(markdown, report=model)
+    )
+    assert json.dumps(model["sources"], ensure_ascii=False, indent=2) in readable
+    assert r"Fictional \[unfinished\] output" in readable
+    assert "INCOMPLETE:" in readable and "UNVERIFIED MODEL DRAFT" in readable
+    assert model == exact
+
+
+def test_readable_report_hides_only_generated_duplicate_and_preserves_exports(
+    controller, tmp_path
+):
+    book = fictional_book()
+    book["title"] = r"Fictional [qa copy] #1 \notes"
+    controller.edit_document(book)
+    report = build(controller)
+    original = copy.deepcopy(report)
+    markdown, structured = tmp_path / "exact.md", tmp_path / "exact.json"
+    controller.export_result(markdown, "md")
+    controller.export_result(structured, "json")
+    before = markdown.read_bytes(), structured.read_bytes()
+    rows = list(native_window.readable_report_lines(report["markdown"], report=report))
+    assert [text.strip() for text, style in rows if style == "heading"].count(
+        book["title"]
+    ) == 1
+    assert "DRAFT / HUMAN REVIEW REQUIRED" in "".join(text for text, _ in rows)
+    assert report == original
+    controller.export_result(markdown, "md")
+    controller.export_result(structured, "json")
+    assert (markdown.read_bytes(), structured.read_bytes()) == before
+    identifier = controller.save_report()["id"]
+    reopened = controller.runtime.call("reports.get", {"id": identifier})
+    assert reopened["markdown"] == original["markdown"]
+    assert reopened["sources"] == original["sources"]
+    assert reopened["question_index"] == original["question_index"]
+    saved = controller.runtime.call("casebooks.get", {"id": controller.identifier})
+    assert saved["document"]["questions"] == book["questions"]
+
+
+@pytest.mark.parametrize(
+    "mutation", ["workflow", "model", "marker", "document", "unknown_kind"]
+)
+def test_readable_report_preserves_headings_outside_known_generated_intro(
+    controller, mutation
+):
+    controller.edit_document(fictional_book())
+    report = build(controller)
+    if mutation == "workflow":
+        report["workflow"] = "unknown"
+    elif mutation == "model":
+        report["model_draft"] = True
+    elif mutation == "marker":
+        report["markdown"] = report["markdown"].replace(
+            "DRAFT / HUMAN REVIEW REQUIRED", "Fictional custom introduction", 1
+        )
+    elif mutation == "document":
+        report["document_markdown"] = "# A different embedded document\n"
+    else:
+        report["document_type"] = ["unsupported legacy label"]
+    rows = list(native_window.readable_report_lines(report["markdown"], report=report))
+    assert [text.strip() for text, style in rows if style == "heading"].count(
+        report["title"]
+    ) == 2
+
+
+def test_readable_report_keeps_later_equal_and_enquiry_headings(controller):
+    controller.edit_document(fictional_book())
+    report = build(controller)
+    report["markdown"] += "\n# Fictional Lantern project\n"
+    rows = list(native_window.readable_report_lines(report["markdown"], report=report))
+    assert [text.strip() for text, style in rows if style == "heading"].count(
+        report["title"]
+    ) == 2
+    controller.edit_document({**fictional_book(), "document_type": "enquiry"})
+    report = build(controller)
+    rows = list(native_window.readable_report_lines(report["markdown"], report=report))
+    assert [text.strip() for text, style in rows if style == "heading"].count(
+        report["title"]
+    ) == 1
+
+
 def test_shared_source_update_history_and_backup_round_trip(controller, tmp_path):
     controller.edit_document(fictional_book())
     old = build(controller)
@@ -896,5 +1044,68 @@ def test_real_native_first_run_setup_catalogue_save_preview_negation_and_restart
             == "erais-native-qwen3"
         )
         assert len(catalogue_calls) == 1 and len(model_calls) == 1
+    finally:
+        window.close()
+
+
+@pytest.mark.skipif(
+    os.environ.get("SINTER_NATIVE_GUI_TEST") != "1",
+    reason="Real Tk readable-report journey requires explicit desktop access.",
+)
+def test_real_native_readable_report_save_restart_and_exact_exports(
+    tmp_path, monkeypatch
+):
+    workspace = tmp_path / "fictional-readable-report"
+    window = NativeWindow(workspace)
+    monkeypatch.setattr(
+        window.messages,
+        "showerror",
+        lambda *_a, **_k: pytest.fail("unexpected GUI error"),
+    )
+    monkeypatch.setattr(window.messages, "askyesno", lambda *_a, **_k: True)
+    title = r"Fictional [qa copy] #1 \notes <literal>"
+    try:
+        window.example()
+        window.title_var.set(title)
+        window.root.update()
+        window.build_report()
+        deadline = time.monotonic() + 5
+        while window.active_job and time.monotonic() < deadline:
+            window.root.update()
+            time.sleep(0.01)
+        assert window.active_job is None
+        report = copy.deepcopy(window.controller.result)
+        project_id = window.controller.identifier
+        original_project = window.controller.runtime.call(
+            "casebooks.get", {"id": project_id}
+        )
+        visible = window.report_text.get("1.0", "end")
+        assert visible.splitlines().count(title) == 1
+        assert r"\[qa copy\]" not in visible and r"\#1" not in visible
+        assert "DRAFT / HUMAN REVIEW REQUIRED" in visible
+        assert window.report_text.tag_ranges("heading")
+        assert json.loads(window.report_json.get("1.0", "end")) == report
+        markdown, structured = tmp_path / "exact.md", tmp_path / "exact.json"
+        window.controller.export_result(markdown, "md")
+        window.controller.export_result(structured, "json")
+        before = markdown.read_bytes(), structured.read_bytes()
+        window._paint_result()
+        window.controller.export_result(markdown, "md")
+        window.controller.export_result(structured, "json")
+        assert (markdown.read_bytes(), structured.read_bytes()) == before
+        assert window.controller.result == report
+        window.save_report()
+        report_id = window.reports_tree.get_children()[0]
+        window.close()
+        window = NativeWindow(workspace)
+        window.reports_tree.selection_set(report_id)
+        window.open_report()
+        window.root.update()
+        assert window.report_text.get("1.0", "end").splitlines().count(title) == 1
+        assert window.controller.result["markdown"] == report["markdown"]
+        assert window.controller.result["sources"] == report["sources"]
+        assert window.controller.runtime.call(
+            "casebooks.get", {"id": project_id}
+        ) == original_project
     finally:
         window.close()
