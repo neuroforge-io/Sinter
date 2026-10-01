@@ -22,8 +22,8 @@ import subprocess
 import sys
 import tempfile
 import threading
-import traceback
 import time
+import traceback
 import uuid
 import zipfile
 from pathlib import Path
@@ -90,7 +90,11 @@ def lifecycle(root: Path, executable: list[str], identity: dict) -> None:
                     env["PYTHONPATH"] = str(ROOT / "src")
                 process = subprocess.Popen(
                     executable,
-                    **(transport.qualification_application_user(root) if INTERNAL else {}),
+                    **(
+                        transport.qualification_application_user(root)
+                        if INTERNAL
+                        else {}
+                    ),
                     env=env,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -721,7 +725,7 @@ def validate_inputs(args: argparse.Namespace) -> dict:
         raise ValueError("The preceding installed-workflow receipt is not pinned.")
     workflow = json.loads(path.read_text())
     identities = {
-        "schema": "sinter-installed-workflow/v1",
+        "schema": transport.workflow_schema(fixture["source"]),
         "passed": True,
         "source_commit": args.source_commit,
         "version": args.version,
@@ -735,15 +739,32 @@ def validate_inputs(args: argparse.Namespace) -> dict:
         raise ValueError(
             "The preceding installed workflow binds different source/assets."
         )
-    from tools.installed_workflow_contract import CHECKS, RECEIPT_FIELDS, RESOURCE_FLAGS
+    from tools.installed_workflow_contract import RECEIPT_FIELDS, RESOURCE_FLAGS
 
     if (
         set(workflow) != RECEIPT_FIELDS
-        or tuple(workflow["checks"]) != CHECKS
+        or tuple(workflow["checks"]) != transport.workflow_checks(fixture["source"])
         or set(workflow["resources"]) != set(RESOURCE_FLAGS)
         or not all(value is True for value in workflow["resources"].values())
     ):
         raise ValueError("The preceding installed workflow is incomplete.")
+    if transport.requires_word_copy(fixture["source"]):
+        from tools.installed_workflow_qualification import verify_installed_workflow
+
+        verify_installed_workflow(
+            path.parent,
+            args.version,
+            args.source_commit,
+            {
+                f"sinter-{args.version}-source.zip": args.source_sha256,
+                f"Sinter-{args.version}-linux-x64-test.json": transport.digest(
+                    args.native_receipt
+                ),
+            },
+            fixture["source"],
+            json.loads(args.native_receipt.read_text()),
+            workflow["installed_binary_sha256"],
+        )
     with zipfile.ZipFile(args.source_archive) as archive:
         source = {name: archive.read(name) for name in fixture["web"]}
     return {"source": source, "workflow": workflow}
@@ -1059,7 +1080,8 @@ def main(argv=None) -> None:
         frames = traceback.extract_tb(error.__traceback__)
         origin = (
             f" at {Path(frames[-1].filename).name}:{frames[-1].lineno}"
-            if frames else ""
+            if frames
+            else ""
         )
         raise SystemExit(
             f"Recovery proof failed ({type(error).__name__}{origin}); "

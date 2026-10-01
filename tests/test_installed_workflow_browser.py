@@ -434,3 +434,128 @@ def test_failed_installed_flow_retains_false_receipt_and_removes_container(
     assert "--pull=never" in create and "--network=none" in create
     assert any(call[:3] == ("docker", "rm", "--force") for call in calls)
     assert runtime is not None and not runtime.exists()
+
+
+def actual_word_files(tmp_path):
+    from sinter.docx_export import export_docx
+
+    runtime, output = tmp_path / "runtime", tmp_path / "output"
+    exports = runtime / "data/exports"
+    exports.mkdir(parents=True)
+    output.mkdir()
+    content = export_docx(
+        {"title": "Fictional", "markdown": "# No approval\n\nOwner remains unknown."}
+    ).content
+    rows = []
+    for index in range(3):
+        name = f"Fictional-{index}.docx"
+        path = exports / name
+        path.write_bytes(content)
+        path.chmod(0o600)
+        rows.append(
+            {
+                "response": {
+                    "filename": name,
+                    "path": "/proof/data/exports/" + name,
+                    "bytes": len(content),
+                    "sha256": hashlib.sha256(content).hexdigest(),
+                }
+            }
+        )
+    return runtime, output, {"snapshots": rows}, content
+
+
+def test_word_capture_reads_three_actual_private_files_and_retains_exact_bytes(
+    tmp_path,
+):
+    runtime, output, proof, content = actual_word_files(tmp_path)
+    flow.retain_word_copies(runtime, output, proof)
+    assert {path.name for path in output.iterdir()} == {
+        "word-copy-applied.docx",
+        "word-copy-changed.docx",
+        "word-copy-unconfirmed.docx",
+    }
+    assert all(path.read_bytes() == content for path in output.iterdir())
+    assert all(
+        row["file_mode"] == 0o600 and row["file_links"] == 1
+        for row in proof["snapshots"]
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "missing",
+        "hash",
+        "mode",
+        "links",
+        "symlink",
+        "folder_symlink",
+        "escape",
+        "duplicates",
+        "short_list",
+    ],
+)
+def test_success_response_does_not_replace_actual_word_file_admission(
+    tmp_path, mutation
+):
+    runtime, output, proof, _ = actual_word_files(tmp_path)
+    path = runtime / "data/exports/Fictional-0.docx"
+    if mutation == "missing":
+        path.unlink()
+    elif mutation == "hash":
+        path.write_bytes(b"changed actual file")
+    elif mutation == "mode":
+        path.chmod(0o644)
+    elif mutation == "links":
+        (tmp_path / "other.docx").hardlink_to(path)
+    elif mutation == "symlink":
+        original = tmp_path / "original.docx"
+        path.rename(original)
+        path.symlink_to(original)
+    elif mutation == "folder_symlink":
+        original = tmp_path / "original-folder"
+        path.parent.rename(original)
+        path.parent.symlink_to(original)
+    elif mutation == "escape":
+        proof["snapshots"][0]["response"]["filename"] = "../Fictional-0.docx"
+        proof["snapshots"][0]["response"]["path"] = (
+            "/proof/data/exports/../Fictional-0.docx"
+        )
+    elif mutation == "duplicates":
+        proof["snapshots"][1] = copy.deepcopy(proof["snapshots"][0])
+    else:
+        proof["snapshots"].pop()
+    with pytest.raises((ValueError, FileNotFoundError)):
+        flow.retain_word_copies(runtime, output, proof)
+
+
+def test_word_observations_track_rows_and_ignore_unrelated_sidecars(
+    tmp_path,
+):
+    import sqlite3
+
+    runtime = tmp_path / "runtime"
+    data = runtime / "data"
+    data.mkdir(parents=True)
+    for name in ("workspace.sqlite3", "campaigns.sqlite3"):
+        with sqlite3.connect(data / name) as database:
+            database.execute("CREATE TABLE fictional (id TEXT PRIMARY KEY, value TEXT)")
+            database.execute(
+                "INSERT INTO fictional VALUES (?,?)", ("fixture", "Unknown — 🐝")
+            )
+    (data / "preferences.json").write_text(
+        '{"model":"fictional-explicit","provider":"neuroforge"}'
+    )
+    before = flow.workspace_observations(runtime, {"model": "fictional-explicit"})
+    (data / "workspace.sqlite3-fixture-sidecar").write_bytes(
+        b"fictional unrelated sidecar"
+    )
+    assert (
+        flow.workspace_observations(runtime, {"model": "fictional-explicit"}) == before
+    )
+    with sqlite3.connect(data / "workspace.sqlite3") as database:
+        database.execute("UPDATE fictional SET value='changed'")
+    assert (
+        flow.workspace_observations(runtime, {"model": "fictional-explicit"}) != before
+    )

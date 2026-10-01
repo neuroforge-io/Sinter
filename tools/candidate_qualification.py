@@ -339,11 +339,17 @@ def _canonical_roles(folder: Path, version: str, receipt: dict) -> None:
         for notice in dependency.get("licences", []):
             expected.add("licenses/" + _safe_name(notice["path"]))
     if version in {"0.5.4rc2", "0.5.4rc3"}:
-        from tools.installed_workflow_contract import ARTIFACT_PATHS
+        from tools.installed_workflow_contract import workflow_artifact_paths
 
         expected.update(prior_roles(QUALIFIED_PRIORS["0.5.4rc1"]))
         expected.add("installed-workflow-browser.json")
-        expected.update(ARTIFACT_PATHS.values())
+        with zipfile.ZipFile(folder / f"sinter-{version}-source.zip") as archive:
+            source = {
+                name: archive.read(name)
+                for name in archive.namelist()
+                if not name.endswith("/")
+            }
+        expected.update(workflow_artifact_paths(source).values())
     if version == "0.5.4rc3":
         from tools.installed_recovery_contract import (
             ARTIFACT_PATHS as RECOVERY_PATHS,

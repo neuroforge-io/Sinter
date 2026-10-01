@@ -16,6 +16,8 @@ import re
 import shutil
 import socket
 import socketserver
+import sqlite3
+import stat
 import struct
 import subprocess
 import sys
@@ -49,7 +51,12 @@ if sys.argv[1:] != ["--container"]:
         RESOURCE_FLAGS,
         RESTORED_CAMPAIGN_TITLE,
         RESTORED_CASEBOOK_TITLE,
-        SCHEMA,
+        WORD_CHANGED_NOTE,
+        WORD_CHECKS,
+        requires_word_copy,
+        workflow_artifact_paths,
+        workflow_checks,
+        workflow_schema,
     )
 
     ARTIFACTS = {role: Path(path).name for role, path in ARTIFACT_PATHS.items()}
@@ -77,7 +84,10 @@ def browser_launch_command(
     native_default = release > (0, 5, 4) or (
         release == (0, 5, 4) and (match[4] is None or int(match[4]) >= 3)
     )
-    return [*executable, *(["--mode", "browser"] if native_default and not legacy else [])]
+    return [
+        *executable,
+        *(["--mode", "browser"] if native_default and not legacy else []),
+    ]
 
 
 def qualification_container_labels() -> list[str]:
@@ -386,6 +396,10 @@ def container_main() -> None:
         info["libc"] = list(platform.libc_ver())
         command(str(BINARY), "--self-test", str(root / "frozen.json"), timeout=60)
         info["frozen_test"] = json.loads((root / "frozen.json").read_text())
+        if os.environ.get("SINTER_WORD_GATE") == "1":
+            info["operations_catalog"] = json.loads(
+                command(str(BINARY), "operations", "--format", "json")
+            )
         relay = InnerRelay(root)
         relay_thread = threading.Thread(target=relay.serve_forever, daemon=True)
         relay_thread.start()
@@ -536,6 +550,7 @@ def validate_inputs(args: argparse.Namespace) -> tuple[dict, dict]:
         match = re.search(rb'__version__\s*=\s*["\']([^"\']+)["\']', init)
         if not match or match[1].decode() != args.version:
             raise ValueError("The source archive declares another version.")
+        source = {name: archive.read(name) for name in names if not name.endswith("/")}
         fixture = {
             kind: json.loads(archive.read(f"src/sinter/web/offline-garden-{kind}.json"))
             for kind in ("casebook", "campaign")
@@ -551,6 +566,11 @@ def validate_inputs(args: argparse.Namespace) -> tuple[dict, dict]:
             for name in names
             if name.startswith("src/sinter/web/") and not name.endswith("/")
         }
+    fixture["source"] = source
+    if requires_word_copy(source):
+        from tools.installed_workflow_qualification import source_operations
+
+        source_operations(source)
     native = json.loads(args.native_receipt.read_text())
     package = args.version.replace("rc", "~rc")
     if (
@@ -568,13 +588,17 @@ def validate_inputs(args: argparse.Namespace) -> tuple[dict, dict]:
     return fixture, native
 
 
-def artifact_inventory(output: Path) -> list[dict]:
+def artifact_inventory(output: Path, source=None) -> list[dict]:
     """Retain exactly the declared eight bounded fictional proof artifacts."""
     directory = output / "installed-workflow"
-    if {path.name for path in directory.iterdir()} != set(ARTIFACTS.values()):
+    artifacts = {
+        role: Path(path).name
+        for role, path in workflow_artifact_paths(source or {}).items()
+    }
+    if {path.name for path in directory.iterdir()} != set(artifacts.values()):
         raise ValueError("The installed workflow evidence roles differ.")
     records = []
-    for role, name in ARTIFACTS.items():
+    for role, name in artifacts.items():
         path = directory / name
         if (
             not path.is_file()
@@ -628,6 +652,241 @@ def word_check(path: Path, source_ids: list[str]) -> None:
             assert text.count(identifier) == 1
         assert "No order or enquiry has been sent." in text
         assert "The real-world answer remains unknown" in text
+
+
+def workspace_observations(runtime: Path, settings: dict) -> dict:
+    """Hash every logical row/definition, without SQLite journal false positives."""
+    tables = {}
+    for name in ("workspace.sqlite3", "campaigns.sqlite3"):
+        path = runtime / "data" / name
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(
+                "The installed fictional database is missing or redirected."
+            )
+        with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True) as database:
+            for table, definition in database.execute(
+                "SELECT name,sql FROM sqlite_master WHERE type='table' ORDER BY name"
+            ):
+                if not re.fullmatch(r"[a-z_][a-z_0-9]*", table):
+                    raise ValueError(
+                        "The fictional database has an unexpected table name."
+                    )
+                rows = sorted(
+                    database.execute('SELECT * FROM "' + table + '"').fetchall(),
+                    key=lambda row: json.dumps(row, ensure_ascii=False),
+                )
+                tables[name + "/" + table] = {
+                    "definition_sha256": hashlib.sha256(
+                        definition.encode()
+                    ).hexdigest(),
+                    "rows_sha256": object_digest(rows),
+                    "rows": len(rows),
+                }
+    preferences = runtime / "data/preferences.json"
+    if preferences.is_symlink():
+        raise ValueError("The fictional preference file is redirected.")
+    return {
+        "tables": tables,
+        "preferences_file": digest(preferences) if preferences.exists() else None,
+        "settings_sha256": object_digest(settings),
+    }
+
+
+def retain_word_copies(runtime: Path, output: Path, proof: dict) -> None:
+    """Read actual owned installed files; repeat after quit before admitting proof."""
+    if len(proof["snapshots"]) != 3:
+        raise ValueError("Three actual installed Word files must be retained.")
+    filenames = set()
+    for row, name in zip(proof["snapshots"], ("applied", "changed", "unconfirmed")):
+        result = row["response"]
+        filename = result["filename"]
+        if (
+            not isinstance(filename, str)
+            or Path(filename).name != filename
+            or re.search(r"[\\/\x00-\x1f]", filename)
+            or not filename.endswith(".docx")
+            or len(filename.encode()) > 150
+            or result["path"] != "/proof/data/exports/" + filename
+            or filename in filenames
+        ):
+            raise ValueError(
+                "The saved file is outside the installed fictional exports folder."
+            )
+        filenames.add(filename)
+        exports = runtime / "data/exports"
+        path = exports / result["filename"]
+        if exports.is_symlink() or path.is_symlink():
+            raise ValueError("The actual saved Word file or folder is redirected.")
+        information = path.stat()
+        if (
+            not stat.S_ISREG(information.st_mode)
+            or information.st_nlink != 1
+            or information.st_uid != os.getuid()
+            or stat.S_IMODE(information.st_mode) != 0o600
+            or not 0 < information.st_size <= MAX_ARTIFACT
+            or information.st_size != result["bytes"]
+            or digest(path) != result["sha256"]
+        ):
+            raise ValueError(
+                "The actual installed Word file differs from its response."
+            )
+        row["file_mode"], row["file_links"] = (
+            stat.S_IMODE(information.st_mode),
+            information.st_nlink,
+        )
+        (output / ("word-copy-" + name + ".docx")).write_bytes(path.read_bytes())
+
+
+def word_copy_workflow(page, context, report, runtime, output, read, saved_report):
+    """Explicit UI recovery after a synthetic download denial and lost reply."""
+    from playwright.sync_api import expect
+
+    title = saved_report.get("document_title") or saved_report["title"]
+    markdown = (
+        saved_report.get("document_edits", {}).get("markdown")
+        or saved_report.get("document_markdown")
+        or saved_report["markdown"]
+    )
+    original = {"title": title, "markdown": markdown}
+    changed = {**original, "markdown": markdown + WORD_CHANGED_NOTE}
+    proof = {
+        "schema": "sinter-installed-word-copy/v1",
+        "snapshots": [],
+        "saved_report": saved_report,
+        "pending": {},
+        "uncertain": {},
+        "before": workspace_observations(runtime, read("/api/settings")),
+        "after": {},
+        "synthetic_download_denials": 0,
+    }
+    requests = []
+
+    def observe(request):
+        if (
+            request.url.endswith("/api/documents/docx/save")
+            and request.method == "POST"
+        ):
+            requests.append(request.post_data_json)
+
+    page.on("request", observe)
+    # Preserve the preceding real ordinary download. This denial is deliberately
+    # synthetic; it cannot establish the cause of an IAB delivery restriction.
+    page.evaluate("""() => {
+      window.installedWordDownloadDenials = 0;
+      const click = HTMLAnchorElement.prototype.click;
+      window.installedWordAnchorClick = click;
+      HTMLAnchorElement.prototype.click = function() {
+        if (this.download.endsWith('.docx')) {
+          window.installedWordDownloadDenials++; return;
+        }
+        return click.call(this);
+      };
+    }""")
+    report.get_by_role("button", name="Download Word (.docx)", exact=True).click()
+    expect(report.locator(".document-feedback")).to_contain_text("download requested")
+    proof["synthetic_download_denials"] = page.evaluate(
+        "window.installedWordDownloadDenials"
+    )
+    report.locator(".document-word-save-options > summary").click()
+    save = report.get_by_role(
+        "button", name="Save Word copy on this computer", exact=True
+    )
+    path_control = report.get_by_label("Saved Word file path", exact=True)
+
+    def confirmed(payload):
+        with page.expect_response(
+            lambda response: response.url.endswith("/api/documents/docx/save")
+        ) as response:
+            save.click()
+        assert response.value.status == 200
+        result = response.value.json()
+        expect(path_control).to_have_value(result["path"])
+        assert requests[-1] == payload
+        proof["snapshots"].append({"payload": payload, "response": result})
+
+    try:
+        confirmed(original)
+        # Before an applied edit, this click must make no write request and must
+        # retain the complete pending text, including fictional qualifications.
+        menu = report.locator(".export-menu")
+        if menu.get_attribute("open") is None:
+            menu.locator("summary").click()
+        report.get_by_role("button", name="Edit draft", exact=True).click()
+        editor = report.get_by_label("Edit your draft", exact=True)
+        editor.fill(changed["markdown"])
+        before = len(requests)
+        save.click()
+        expect(report.locator(".document-feedback")).to_contain_text("Apply or cancel")
+        proof["pending"] = {
+            "requests_before": before,
+            "requests_after": len(requests),
+            "editor_text": editor.input_value(),
+        }
+        assert (
+            before == len(requests) == 1 and editor.input_value() == changed["markdown"]
+        )
+        report.get_by_role("button", name="Apply edits", exact=True).click()
+        expect(report.locator(".document-local-copy")).to_contain_text(
+            "Earlier saved copy"
+        )
+        confirmed(changed)
+        assert proof["snapshots"][0]["response"]["path"] != path_control.input_value()
+
+        def uncertain(route):
+            response = route.fetch()
+            assert response.status == 200
+            proof["snapshots"].append({"payload": changed, "response": response.json()})
+            route.fulfill(
+                status=503,
+                content_type="application/json",
+                body=json.dumps({"error": "Synthetic local confirmation lost"}),
+            )
+            response.dispose()
+
+        context.route("**/api/documents/docx/save", uncertain)
+        try:
+            save.click()
+            expect(report.locator(".document-feedback")).to_contain_text(
+                "not confirmed"
+            )
+            expect(report.locator(".document-local-copy")).to_contain_text(
+                "Previously confirmed copy"
+            )
+            count = len(requests)
+            page.wait_for_timeout(200)
+            proof["uncertain"] = {
+                "requests_after_failure": count,
+                "requests_after_idle": len(requests),
+                "displayed_path": path_control.input_value(),
+                "displayed_notice": "Previously confirmed copy",
+                "editor_text": editor.input_value(),
+            }
+            assert count == len(requests) == 3 and requests == [
+                original,
+                changed,
+                changed,
+            ]
+            assert (
+                path_control.input_value() == proof["snapshots"][1]["response"]["path"]
+            )
+        finally:
+            context.unroute("**/api/documents/docx/save", uncertain)
+        proof["after"] = workspace_observations(runtime, read("/api/settings"))
+        assert proof["before"] == proof["after"]
+        retain_word_copies(runtime, output, proof)
+        assert (output / "word-copy-applied.docx").read_bytes() == (
+            output / ARTIFACTS["handover_word"]
+        ).read_bytes()
+        assert (output / "word-copy-changed.docx").read_bytes() != (
+            output / "word-copy-applied.docx"
+        ).read_bytes()
+        return proof
+    finally:
+        page.remove_listener("request", observe)
+        page.evaluate("""() => {
+          HTMLAnchorElement.prototype.click = window.installedWordAnchorClick;
+          delete window.installedWordAnchorClick;
+        }""")
 
 
 def browser_workflow(
@@ -844,6 +1103,17 @@ def browser_workflow(
                 [row["id"] for row in snapshots["saved_report"]["excerpts"]],
             )
             checks.append(CHECKS[9])
+            word_proof = None
+            if requires_word_copy(fixture["source"]):
+                word_proof = word_copy_workflow(
+                    page,
+                    context,
+                    report,
+                    runtime,
+                    output,
+                    read,
+                    snapshots["saved_report"],
+                )
             page.get_by_role("link", name="Community casebooks", exact=True).click()
             page.get_by_role("button", name="Open project", exact=True).click()
             expect(
@@ -956,6 +1226,10 @@ def browser_workflow(
             checks.append(CHECKS[12])
             quit_app(2)
             checks.append(CHECKS[13])
+            if word_proof is not None:
+                retain_word_copies(runtime, output, word_proof)
+                write_json(output / "word-copy-recovery.json", word_proof)
+                checks.extend(WORD_CHECKS)
             context.close()
         finally:
             browser.close()
@@ -978,7 +1252,7 @@ def qualify(args: argparse.Namespace, fixture: dict) -> dict:
     args.output.mkdir(mode=0o700)
     (args.output / "installed-workflow").mkdir()
     receipt = {
-        "schema": SCHEMA,
+        "schema": workflow_schema(fixture["source"]),
         "passed": False,
         "version": args.version,
         "source_commit": args.source_commit,
@@ -1035,6 +1309,9 @@ def qualify(args: argparse.Namespace, fixture: dict) -> dict:
                 name,
                 *qualification_container_labels(),
                 "--env",
+                "SINTER_WORD_GATE="
+                + ("1" if requires_word_copy(fixture["source"]) else "0"),
+                "--env",
                 f"SINTER_TEST_UID={os.getuid()}",
                 "--env",
                 f"SINTER_TEST_GID={os.getgid()}",
@@ -1084,6 +1361,18 @@ def qualify(args: argparse.Namespace, fixture: dict) -> dict:
             receipt["frozen"] = True
             receipt["desktop"] = True
             receipt["checks"].append(CHECKS[1])
+            if requires_word_copy(fixture["source"]):
+                from tools.installed_workflow_qualification import (
+                    validate_operations_catalog,
+                )
+
+                validate_operations_catalog(
+                    state["operations_catalog"], fixture["source"], args.version
+                )
+                write_json(
+                    args.output / "installed-workflow/operations-catalog.json",
+                    state["operations_catalog"],
+                )
             relay = Relay(runtime)
             relay_thread = threading.Thread(target=relay.serve_forever, daemon=True)
             relay_thread.start()
@@ -1096,7 +1385,7 @@ def qualify(args: argparse.Namespace, fixture: dict) -> dict:
             receipt["page_errors"], receipt["external_requests"] = errors, external
             receipt["resources"]["browser_closed"] = True
             receipt["resources"]["installed_process_stopped"] = True
-            receipt["artifacts"] = artifact_inventory(args.output)
+            receipt["artifacts"] = artifact_inventory(args.output, fixture["source"])
         finally:
             if relay is not None:
                 relay.shutdown()
@@ -1123,7 +1412,9 @@ def qualify(args: argparse.Namespace, fixture: dict) -> dict:
             if all(receipt["resources"].values()):
                 receipt["checks"].append(CHECKS[14])
             write_json(path, receipt)
-    if tuple(receipt["checks"]) != CHECKS or not all(receipt["resources"].values()):
+    if tuple(receipt["checks"]) != workflow_checks(fixture["source"]) or not all(
+        receipt["resources"].values()
+    ):
         raise ValueError("The installed workflow did not complete every proof check.")
     receipt["passed"] = True
     write_json(path, receipt)

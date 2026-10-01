@@ -104,3 +104,53 @@ COMMUNICATION = MappingProxyType(
 )
 MAX_ARTIFACT_BYTES = 2 * 1024 * 1024
 MAX_TOTAL_BYTES = 12 * 1024 * 1024
+
+# Historical v1 remains unchanged. These roles are mandatory only when the
+# pinned source introduces the explicit local Word-copy operation.
+LATEST_SCHEMA = "sinter-installed-workflow/v2"
+WORD_CHANGED_NOTE = (
+    "\n\n## Fictional Word-only clarification\n\n"
+    "No grant was awarded; no owner or proposed date has been confirmed. 🐝"
+)
+WORD_CHECKS = (
+    "installed_catalog_exact_53_with_word_copy_write",
+    "ordinary_json_word_copy_actual_bytes",
+    "pending_word_edits_refused_without_request",
+    "changed_wording_distinct_prior_copy_retained",
+    "lost_word_confirmation_prior_path_no_replay",
+    "word_copy_original_records_preferences_retained",
+)
+LATEST_ARTIFACT_PATHS = MappingProxyType(
+    {
+        **ARTIFACT_PATHS,
+        "operations_catalog": "installed-workflow/operations-catalog.json",
+        "word_copy_recovery": "installed-workflow/word-copy-recovery.json",
+        "word_copy_applied": "installed-workflow/word-copy-applied.docx",
+        "word_copy_changed": "installed-workflow/word-copy-changed.docx",
+        "word_copy_unconfirmed": "installed-workflow/word-copy-unconfirmed.docx",
+    }
+)
+
+
+def requires_word_copy(source: dict[str, bytes]) -> bool:
+    """A missing/changed catalogue cannot downgrade a new module to v1."""
+    return (
+        "src/sinter/document_copies.py" in source
+        or b"documents.docx.save" in source.get("src/sinter/runtime.py", b"")
+    )
+
+
+def workflow_schema(source: dict[str, bytes]) -> str:
+    return LATEST_SCHEMA if requires_word_copy(source) else SCHEMA
+
+
+def workflow_artifact_paths(source: dict[str, bytes]):
+    return LATEST_ARTIFACT_PATHS if requires_word_copy(source) else ARTIFACT_PATHS
+
+
+def workflow_checks(source: dict[str, bytes]) -> tuple[str, ...]:
+    return (
+        (*CHECKS[:-1], *WORD_CHECKS, CHECKS[-1])
+        if requires_word_copy(source)
+        else CHECKS
+    )

@@ -271,3 +271,68 @@ def test_workspace_hash_keys_are_portable_for_windows_relative_paths(
         "folder/fictional.json": "a" * 64
     }
     assert source.read_bytes() == b'{"fictional":"unchanged"}'
+
+
+@pytest.mark.parametrize("old_schema", [True, False])
+def test_current_preceding_gate_cannot_fall_back_to_v1_or_a_passed_flag(
+    tmp_path, monkeypatch, old_schema
+):
+    """Admission plumbing only; no installer/browser receipt is invented."""
+    import hashlib
+    import json
+
+    from tools import installed_workflow_qualification as validator
+    from tools.installed_workflow_contract import (
+        RECEIPT_FIELDS,
+        RESOURCE_FLAGS,
+        SCHEMA,
+        workflow_checks,
+        workflow_schema,
+    )
+
+    args = source_args(tmp_path)
+    args.source_fixture = False
+    args.version = "0.5.4rc3"
+    args.source_commit = "a" * 40
+    args.installer = tmp_path / "candidate.deb"
+    args.installer_sha256 = "b" * 64
+    args.source_archive = tmp_path / "source.zip"
+    args.source_sha256 = "c" * 64
+    args.native_receipt = tmp_path / "native.json"
+    args.native_receipt.write_text('{"installer_sha256":"' + "b" * 64 + '"}')
+    args.installed_workflow_receipt = tmp_path / "installed-workflow-browser.json"
+    source = {"src/sinter/document_copies.py": b"fictional admission marker only"}
+    fixture = {"source": source, "web": {}, "practice_hashes": {}}
+    monkeypatch.setattr(
+        recovery.transport, "validate_inputs", lambda args: (fixture, {})
+    )
+    value = dict.fromkeys(RECEIPT_FIELDS)
+    value.update(
+        schema=SCHEMA if old_schema else workflow_schema(source),
+        passed=True,
+        source_commit=args.source_commit,
+        version=args.version,
+        installer_sha256=args.installer_sha256,
+        source_archive_sha256=args.source_sha256,
+        native_receipt_sha256=recovery.transport.digest(args.native_receipt),
+        web_assets_sha256={},
+        practice_fixture_sha256={},
+        checks=list(workflow_checks(source)),
+        resources=dict.fromkeys(RESOURCE_FLAGS, True),
+        installed_binary_sha256="d" * 64,
+    )
+    args.installed_workflow_receipt.write_text(json.dumps(value))
+    args.workflow_sha256 = hashlib.sha256(
+        args.installed_workflow_receipt.read_bytes()
+    ).hexdigest()
+    calls = []
+
+    def reject_actual_bytes(*arguments):
+        calls.append(arguments)
+        raise ValueError("Actual saved Word bytes differ")
+
+    monkeypatch.setattr(validator, "verify_installed_workflow", reject_actual_bytes)
+    with pytest.raises(ValueError):
+        recovery.validate_inputs(args)
+    assert len(calls) == (0 if old_schema else 1)
+    assert not args.output.exists()

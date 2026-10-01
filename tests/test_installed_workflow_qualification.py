@@ -532,3 +532,439 @@ def test_resealed_nested_zip_cannot_smuggle_private_extra_role(completed, tmp_pa
     candidate._write_checksums(manifest.parent)
     with pytest.raises(ValueError, match="unexpected artifact roles"):
         candidate.verify_plan(manifest, completed[2])
+
+
+@pytest.fixture
+def current_word_evidence(completed):
+    """Synthetic validator evidence only; no installed/browser pass is implied."""
+    from pathlib import Path
+
+    from tools.installed_workflow_contract import (
+        LATEST_ARTIFACT_PATHS,
+        WORD_CHANGED_NOTE,
+        workflow_checks,
+        workflow_schema,
+    )
+
+    folder, _, _, commit = completed
+    source = source_files(folder)
+    root = Path(workflow.__file__).resolve().parents[1]
+    source.update(
+        {
+            path.relative_to(root).as_posix(): path.read_bytes()
+            for path in (root / "src/sinter").rglob("*.py")
+        }
+    )
+    receipt_path = folder / "installed-workflow-browser.json"
+    receipt = json.loads(receipt_path.read_text())
+    receipt["schema"] = workflow_schema(source)
+    receipt["checks"] = list(workflow_checks(source))
+    _, _, book, _ = workflow.fictional_documents(source)
+    report = casebooks.build(book)
+    original = {
+        "title": book["title"],
+        "markdown": report["document_markdown"] + OPERATOR_NOTE,
+    }
+    report["document_edits"] = {
+        "markdown": original["markdown"],
+        "author": "user",
+        "edited_at": "2026-10-01T00:00:00Z",
+    }
+    receipt["result_hashes"]["saved_report"] = workflow.canonical_hash(report)
+    changed = {**original, "markdown": original["markdown"] + WORD_CHANGED_NOTE}
+    rows = []
+    for index, (payload, role) in enumerate(
+        zip(
+            (original, changed, changed),
+            ("word_copy_applied", "word_copy_changed", "word_copy_unconfirmed"),
+        )
+    ):
+        content = docx_export.export_docx(payload).content
+        (folder / LATEST_ARTIFACT_PATHS[role]).write_bytes(content)
+        name = f"Fictional-{index}.docx"
+        response = {
+            "path": "/proof/data/exports/" + name,
+            "filename": name,
+            "bytes": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "content_type": (
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+            "verification": "Word ZIP integrity and exact byte readback",
+            "title": payload["title"],
+            "markdown_sha256": hashlib.sha256(payload["markdown"].encode()).hexdigest(),
+            "snapshot_sha256": workflow.canonical_hash(payload),
+        }
+        rows.append(
+            {
+                "payload": payload,
+                "response": response,
+                "file_mode": 0o600,
+                "file_links": 1,
+            }
+        )
+    before = {
+        "tables": {
+            name: {
+                "definition_sha256": "a" * 64,
+                "rows_sha256": "b" * 64,
+                "rows": 0 if name.endswith(("/watches", "/casebooks_scoped_v2")) else 1,
+            }
+            for name in (
+                "workspace.sqlite3/reports",
+                "workspace.sqlite3/watches",
+                "workspace.sqlite3/casebooks",
+                "workspace.sqlite3/casebooks_scoped_v2",
+                "campaigns.sqlite3/campaigns",
+            )
+        },
+        "preferences_file": "c" * 64,
+        "settings_sha256": "d" * 64,
+    }
+    proof = {
+        "schema": "sinter-installed-word-copy/v1",
+        "snapshots": rows,
+        "saved_report": report,
+        "pending": {
+            "requests_before": 1,
+            "requests_after": 1,
+            "editor_text": changed["markdown"],
+        },
+        "uncertain": {
+            "requests_after_failure": 3,
+            "requests_after_idle": 3,
+            "displayed_path": rows[1]["response"]["path"],
+            "displayed_notice": "Previously confirmed copy",
+            "editor_text": changed["markdown"],
+        },
+        "before": before,
+        "after": json.loads(json.dumps(before)),
+        "synthetic_download_denials": 1,
+    }
+    write_json(folder / LATEST_ARTIFACT_PATHS["word_copy_recovery"], proof)
+    from sinter.runtime import catalog
+
+    operations = catalog()
+    operations["version"] = VERSION
+    write_json(folder / LATEST_ARTIFACT_PATHS["operations_catalog"], operations)
+    receipt["artifacts"] = [
+        {
+            "role": role,
+            "path": name,
+            "sha256": candidate.digest(folder / name),
+            "bytes": (folder / name).stat().st_size,
+        }
+        for role, name in LATEST_ARTIFACT_PATHS.items()
+    ]
+    write_json(receipt_path, receipt)
+    return folder, source, commit
+
+
+def verify_current_word(evidence):
+    folder, source, commit = evidence
+    receipt = json.loads((folder / "installed-workflow-browser.json").read_text())
+    native = json.loads((folder / f"Sinter-{VERSION}-linux-x64-test.json").read_text())
+    sums = {
+        f"sinter-{VERSION}-source.zip": receipt["source_archive_sha256"],
+        f"Sinter-{VERSION}-linux-x64-test.json": receipt["native_receipt_sha256"],
+    }
+    workflow.verify_installed_workflow(
+        folder,
+        VERSION,
+        commit,
+        sums,
+        source,
+        native,
+        receipt["installed_binary_sha256"],
+    )
+
+
+def test_current_word_requires_exact_catalog_saved_bytes_and_conservation(
+    current_word_evidence,
+):
+    verify_current_word(current_word_evidence)
+
+
+@pytest.mark.parametrize(
+    "mutation", ["old52", "duplicate", "effect", "route", "extra", "different_version"]
+)
+def test_resealed_current_catalog_forgery_fails(current_word_evidence, mutation):
+    folder = current_word_evidence[0]
+    path = folder / "installed-workflow/operations-catalog.json"
+    value = json.loads(path.read_text())
+    index = next(
+        i
+        for i, row in enumerate(value["operations"])
+        if row["id"] == "documents.docx.save"
+    )
+    if mutation == "old52":
+        value["operations"].pop(index)
+    elif mutation == "duplicate":
+        value["operations"][index] = value["operations"][0]
+    elif mutation in {"effect", "route"}:
+        value["operations"][index][mutation] = "local"
+    elif mutation == "extra":
+        value["secret"] = "fictional rejection sentinel"
+    else:
+        value["version"] = "0.5.4rc3"
+    write_json(path, value)
+    refresh_artifacts(folder)
+    with pytest.raises(ValueError):
+        verify_current_word(current_word_evidence)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "snapshot",
+        "markdown_hash",
+        "bytes",
+        "path",
+        "duplicate_path",
+        "mode",
+        "links",
+        "extra",
+        "pending_request",
+        "pending_text",
+        "replay",
+        "previous_path",
+        "no_denial",
+        "table_change",
+        "missing_table",
+        "settings",
+        "preferences",
+        "saved_report",
+        "changed_copy",
+        "original_copy",
+    ],
+)
+def test_resealed_word_metadata_status_or_conservation_cannot_replace_bytes(
+    current_word_evidence, mutation
+):
+    folder = current_word_evidence[0]
+    path = folder / "installed-workflow/word-copy-recovery.json"
+    value = json.loads(path.read_text())
+    row = value["snapshots"][0]
+    if mutation == "snapshot":
+        row["response"]["snapshot_sha256"] = "f" * 64
+    elif mutation == "markdown_hash":
+        row["response"]["markdown_sha256"] = "f" * 64
+    elif mutation == "bytes":
+        row["response"]["bytes"] = True
+    elif mutation == "path":
+        row["response"]["path"] = "/tmp/other/" + row["response"]["filename"]
+    elif mutation == "duplicate_path":
+        value["snapshots"][1]["response"] = row["response"]
+    elif mutation == "mode":
+        row["file_mode"] = 0o644
+    elif mutation == "links":
+        row["file_links"] = 2
+    elif mutation == "extra":
+        row["response"]["status"] = 200
+    elif mutation == "pending_request":
+        value["pending"]["requests_after"] = 2
+    elif mutation == "pending_text":
+        value["pending"]["editor_text"] = "lost"
+    elif mutation == "replay":
+        value["uncertain"]["requests_after_idle"] = 4
+    elif mutation == "previous_path":
+        value["uncertain"]["displayed_path"] = row["response"]["path"]
+    elif mutation == "no_denial":
+        value["synthetic_download_denials"] = False
+    elif mutation == "table_change":
+        value["after"]["tables"]["workspace.sqlite3/reports"]["rows_sha256"] = "f" * 64
+    elif mutation == "missing_table":
+        value["before"]["tables"].pop("workspace.sqlite3/watches")
+    elif mutation == "settings":
+        value["after"]["settings_sha256"] = "f" * 64
+    elif mutation == "preferences":
+        value["after"]["preferences_file"] = None
+    elif mutation == "saved_report":
+        value["saved_report"]["title"] = "changed"
+    else:
+        role = "changed" if mutation == "changed_copy" else "applied"
+        (folder / f"installed-workflow/word-copy-{role}.docx").write_bytes(
+            b"not an actual DOCX"
+        )
+    write_json(path, value)
+    refresh_artifacts(folder)
+    with pytest.raises(ValueError):
+        verify_current_word(current_word_evidence)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["schema", "missing_word_role", "changed_source52", "source_without_runtime"],
+)
+def test_old_receipts_and_source_downgrades_cannot_bless_current_word(
+    current_word_evidence, mutation
+):
+    folder, source, _ = current_word_evidence
+    path = folder / "installed-workflow-browser.json"
+    receipt = json.loads(path.read_text())
+    if mutation == "schema":
+        receipt["schema"] = SCHEMA
+    elif mutation == "missing_word_role":
+        receipt["artifacts"].pop()
+    elif mutation == "changed_source52":
+        source["src/sinter/runtime.py"] = source["src/sinter/runtime.py"].replace(
+            b'"documents.docx.save"', b'"documents.fake.save"'
+        )
+    else:
+        source.pop("src/sinter/runtime.py")
+    write_json(path, receipt)
+    with pytest.raises(ValueError):
+        verify_current_word(current_word_evidence)
+
+
+def test_canonical_roles_derive_current_word_requirements_from_source(
+    current_word_evidence,
+):
+    from tools.installed_workflow_contract import LATEST_ARTIFACT_PATHS
+
+    folder, source, _ = current_word_evidence
+    archive = folder / f"sinter-{VERSION}-source.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        for name, content in source.items():
+            bundle.writestr(name, content)
+    native = json.loads((folder / f"Sinter-{VERSION}-linux-x64-test.json").read_text())
+    qualification._canonical_roles(folder, VERSION, native)
+    (folder / LATEST_ARTIFACT_PATHS["word_copy_changed"]).unlink()
+    with pytest.raises(ValueError, match="artifact roles"):
+        qualification._canonical_roles(folder, VERSION, native)
+
+
+@pytest.mark.parametrize(
+    "mutation", ["52", "duplicate", "not_write", "keyword", "missing_module"]
+)
+def test_source_catalogue_itself_cannot_downgrade_current_capability(
+    current_word_evidence, mutation
+):
+    import ast
+
+    source = dict(current_word_evidence[1])
+    tree = ast.parse(source["src/sinter/runtime.py"])
+    entries = next(
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "_OPERATIONS"
+            for target in node.targets
+        )
+    )
+    index = next(
+        i
+        for i, entry in enumerate(entries.elts)
+        if entry.args[0].value == "documents.docx.save"
+    )
+    if mutation == "52":
+        entries.elts.pop(index)
+    elif mutation == "duplicate":
+        entries.elts[index] = entries.elts[0]
+    elif mutation == "not_write":
+        entries.elts[index].args[-1] = ast.Constant("local")
+    elif mutation == "keyword":
+        entries.elts[index].keywords.append(
+            ast.keyword(arg="effect", value=ast.Constant("write"))
+        )
+    else:
+        source.pop("src/sinter/runtime.py")
+    if mutation != "missing_module":
+        source["src/sinter/runtime.py"] = ast.unparse(tree).encode()
+    with pytest.raises(ValueError):
+        workflow.source_operations(source)
+
+
+def test_changed_transitive_renderer_cannot_verify_current_snapshot(
+    current_word_evidence,
+):
+    current_word_evidence[1]["src/sinter/handover.py"] += (
+        b"\n# fictional source drift\n"
+    )
+    with pytest.raises(ValueError, match="exact candidate Python"):
+        verify_current_word(current_word_evidence)
+
+
+def test_zip_codec_difference_keeps_actual_zip_hash_and_exact_ooxml_parts(
+    current_word_evidence,
+):
+    import io
+
+    folder = current_word_evidence[0]
+    path = folder / "installed-workflow/word-copy-applied.docx"
+    original = path.read_bytes()
+    output = io.BytesIO()
+    with (
+        zipfile.ZipFile(io.BytesIO(original)) as source,
+        zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as target,
+    ):
+        for item in source.infolist():
+            target.writestr(item.filename, source.read(item))
+    content = output.getvalue()
+    assert content != original
+    path.write_bytes(content)
+    (folder / "installed-workflow/handover.docx").write_bytes(content)
+    proof_path = folder / "installed-workflow/word-copy-recovery.json"
+    proof = json.loads(proof_path.read_text())
+    proof["snapshots"][0]["response"].update(
+        bytes=len(content), sha256=hashlib.sha256(content).hexdigest()
+    )
+    write_json(proof_path, proof)
+    refresh_artifacts(folder)
+    verify_current_word(current_word_evidence)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "archive_comment",
+        "member_comment",
+        "member_extra",
+        "trailing",
+        "prefix",
+        "bzip2",
+    ],
+)
+def test_resealed_zip_metadata_cannot_hide_data_outside_snapshot(
+    current_word_evidence, mutation
+):
+    import copy
+    import io
+
+    folder = current_word_evidence[0]
+    path = folder / "installed-workflow/word-copy-applied.docx"
+    original = path.read_bytes()
+    output = io.BytesIO()
+    with (
+        zipfile.ZipFile(io.BytesIO(original)) as source,
+        zipfile.ZipFile(output, "w") as target,
+    ):
+        for index, item in enumerate(source.infolist()):
+            entry = copy.copy(item)
+            if index == 0:
+                if mutation == "member_comment":
+                    entry.comment = b"fictional unadmitted comment"
+                elif mutation == "member_extra":
+                    entry.extra = b"\xfe\xca\x04\x00TEST"
+                elif mutation == "bzip2":
+                    entry.compress_type = zipfile.ZIP_BZIP2
+            target.writestr(entry, source.read(item))
+        if mutation == "archive_comment":
+            target.comment = b"fictional unadmitted archive comment"
+    content = output.getvalue()
+    if mutation == "trailing":
+        content += b"fictional unadmitted trailing data"
+    elif mutation == "prefix":
+        content = b"fictional unadmitted leading data" + content
+    path.write_bytes(content)
+    (folder / "installed-workflow/handover.docx").write_bytes(content)
+    proof_path = folder / "installed-workflow/word-copy-recovery.json"
+    proof = json.loads(proof_path.read_text())
+    proof["snapshots"][0]["response"].update(
+        bytes=len(content), sha256=hashlib.sha256(content).hexdigest()
+    )
+    write_json(proof_path, proof)
+    refresh_artifacts(folder)
+    with pytest.raises(ValueError, match="Saved Word ZIP"):
+        verify_current_word(current_word_evidence)
