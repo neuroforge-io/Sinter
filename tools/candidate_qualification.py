@@ -623,6 +623,38 @@ def _upgrade_records(
                     )
 
 
+def independent_review_checks(version: str) -> tuple[str, ...]:
+    """Preserve legacy exclusions; RC3 permits only fully noticed terminal libs."""
+    terminal_checks = (
+        ("readline_excluded", "terminal_library_notices_verified")
+        if version == "0.5.4rc3"
+        else ("readline_and_tinfo_excluded",)
+    )
+    return (
+        "source_commit_matches_with_declared_windows_CRLF",
+        "portable_source_bytes_match",
+        "packaged_static_source_bytes_match",
+        "actual_debian_notice_and_referenced_text_gate",
+        *terminal_checks,
+        "frozen_and_installed_receipts_match",
+        "github_prior_asset_digest_independently_matches",
+        "original_copied_and_replacement_fixture_hashes_match",
+        "prior_database_rows_and_preferences_preserved",
+        "nine_target_publisher_refuses_linux_only",
+        "clean_offline_Ubuntu22_install_self_test_remove",
+    )
+
+
+def verify_rc3_terminal_notices(folder: Path, receipt: dict) -> None:
+    """RC3 retained libraries require actual installer notice/reference bytes."""
+    from tools.native_licences import library_records, verify_debian_archive
+
+    inventory = receipt["bundled_dependencies"]
+    if any("readline" in name for name in library_records(inventory)):
+        raise ValueError("Readline is excluded from this scoped RC3 candidate.")
+    verify_debian_archive(folder / receipt["installer"], inventory)
+
+
 def verify_candidate(
     folder: Path, review: Path, version: str, commit: str, repository: Path = ROOT
 ) -> dict:
@@ -720,6 +752,8 @@ def verify_candidate(
         )
     source = _source(folder, version, commit, repository)
     binary_sha256 = _native_payload(folder, version, source, receipt)
+    if version == "0.5.4rc3":
+        verify_rc3_terminal_notices(folder, receipt)
     _prior_identity(folder, qualification)
     for prior in candidate_priors(version):
         if prior.version != QUALIFIED_PRIOR_VERSION:
@@ -738,19 +772,7 @@ def verify_candidate(
             folder, version, commit, sums, source, receipt, binary_sha256
         )
     independent = _json(review / "final-artifact-review.json")
-    required_checks = (
-        "source_commit_matches_with_declared_windows_CRLF",
-        "portable_source_bytes_match",
-        "packaged_static_source_bytes_match",
-        "actual_debian_notice_and_referenced_text_gate",
-        "readline_and_tinfo_excluded",
-        "frozen_and_installed_receipts_match",
-        "github_prior_asset_digest_independently_matches",
-        "original_copied_and_replacement_fixture_hashes_match",
-        "prior_database_rows_and_preferences_preserved",
-        "nine_target_publisher_refuses_linux_only",
-        "clean_offline_Ubuntu22_install_self_test_remove",
-    )
+    required_checks = independent_review_checks(version)
     if (
         independent.get("schema") != "sinter-independent-final-artifact-review/v1"
         or independent.get("source_commit") != commit
