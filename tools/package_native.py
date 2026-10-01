@@ -457,6 +457,26 @@ def native_window_bundle_arguments(enabled=True):
     return [value for name in ("tkinter", "_tkinter") for value in (flag, name)]
 
 
+def linux_native_window_library_arguments(enabled=True, *, resolve=None):
+    """Collect Tk's XCB dependency even when the freezer treats it as system-only."""
+    if not enabled or not sys.platform.startswith("linux"):
+        return []
+    if resolve is None:
+        from PyInstaller.depend.bindepend import resolve_library_path
+
+        resolve = resolve_library_path
+    resolved = resolve("libxcb.so.1")
+    library = Path(resolved) if resolved else None
+    if library is None or not library.is_absolute() or not library.is_file():
+        raise RuntimeError(
+            "Linux native-window packaging requires build-host libxcb.so.1. "
+            "Provide the normal libxcb1 package before building."
+        )
+    # Explicit binaries are traversed by PyInstaller; the existing Linux notice
+    # collector then binds all copied dependencies to their original Debian bytes.
+    return ["--add-binary", str(library) + os.pathsep + "."]
+
+
 def freezer_arguments(account_auth=True, native_window=True):
     """Share the exact runtime collection with isolated frozen-build validation."""
     return [
@@ -480,6 +500,7 @@ def freezer_arguments(account_auth=True, native_window=True):
         "--add-data",
         str(ROOT / "src" / "sinter" / "web") + os.pathsep + "sinter/web",
         *native_window_bundle_arguments(native_window),
+        *linux_native_window_library_arguments(native_window),
         "--exclude-module",
         "faster_whisper",
         "--exclude-module",

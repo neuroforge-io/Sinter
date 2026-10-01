@@ -4,7 +4,7 @@
 
 ## The simplest route: a desktop package
 
-Choose an actual published asset from [Releases](https://github.com/neuroforge-io/Sinter/releases). Versioned assets include a runtime, web interface, original licence notices and build receipts. The default experience is local and opens in your existing browser, without installing another browser engine.
+Choose an actual published asset from [Releases](https://github.com/neuroforge-io/Sinter/releases). Versioned assets include a runtime, web interface, original licence notices and build receipts. The published 0.5.4rc2 Linux preview opens the local workbench in your existing browser. Unreleased rc3 source defaults to the native source workspace; its full campaign and scoped casebook editors remain in browser mode. These source changes do not update the published installers.
 
 The current [0.5.4rc2 preview](https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc2)
 qualifies **Linux x64 on Ubuntu 22.04/glibc 2.35 only**. Choose its
@@ -50,6 +50,22 @@ in Settings. Provider API keys and compatible local models are still available.
 The installed-app receipt's `account_auth_bundled` field is authoritative for a
 download. An offline signed-token test proves the bundled verifier can run; it
 does not prove a live ChatGPT sign-in or access for your account.
+
+## Word save recovery in unreleased source
+
+Beside a draft's normal download, open **Word save options** and choose **Save
+Word copy on this computer**. Sinter creates a distinct verified local file and
+shows its path for your file manager or Word editor. Apply or cancel pending
+edits first. This saves the wording applied to the document; it does not save
+later edits back to the Sinter workspace or mark the content reviewed.
+
+Copies remain in the workspace's `exports` folder after closing Sinter
+(normally `~/.sinter/exports` on Linux). After an interrupted or unconfirmed save,
+inspect that folder before an explicit retry: a copy may already exist. Existing
+files are never replaced and requests are never automatically replayed. Direct
+saving requires supported safe local filesystem operations; other builds can
+use the ordinary download or copy controls. This feature is not in published
+rc2 installers and does not establish browser download delivery.
 
 ## Platform qualification
 

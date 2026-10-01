@@ -697,3 +697,45 @@ Earlier headless Word checks and a validated local recovery copy do not prove
 embedded-browser delivery. The published Linux-only **0.5.4rc2** remains the
 available tested installer; **0.5.4rc3.dev0** is source development. This round
 does not establish a whole-product 8/10 or 10/10 rating.
+
+
+### 1 October: explicit Word recovery and usable campaign navigation
+
+The reviewed composition starts from `901d4fb62424a1914d536449479d89c6e5ec40ee`
+and binds its 17 changed code/test paths in the
+[source acceptance receipt](releases/SINTER_SOURCE_WORKFLOW_ACCEPTANCE_20261001.json).
+It passed 2,846 Python checks (eight skipped), 107 campaign layout browser checks,
+50 Word recovery checks, fatal lint and the narrow public-boundary guard. Separate
+critics passed 80 layout journeys plus six focused cases, 74 Word browser checks
+and 17 filesystem/authentication/API cases. These are source gates, not final
+installed-platform qualification.
+
+The critic rejected an earlier restored-tab visibility gap and a later action
+field wholly below a short phone screen at larger text sizes. Both negative
+candidates are retained privately; the accepted layout reveals restored sections
+and scrolls to the actual focused task below measured sticky controls. Owners,
+unknowns, scopes, historical evidence, current reviews, dirty values and cost
+row disclosure choices remain intact in the checked journeys.
+
+Actual IAB use of the fictional draft saved an exact 2,697-byte Word copy, refused pending edits before
+writing, and saved an explicitly applied edit as a distinct 2,731-byte copy.
+Both files survived closing the app; the earlier file, five domain tables and
+preferences stayed unchanged. The new operation performs a bounded private
+local save, verifies ZIP integrity and byte readback, and shows an exact path.
+It retains text after unconfirmed outcomes and never replays automatically.
+Ordinary IAB Blob download delivery remains unconfirmed. Saving exact document
+wording does not certify facts or embed the separately retained evidence pack.
+
+Local preparation medians were 1.23 ms for the four-source fictional garden and
+178.47 ms for a 1.98-million-character synthetic workload. The latter represents
+only two of 300 repetitive documents in its selected passages; this is not an
+exhaustive review, inference result or browser-speed benchmark.
+
+Independent bounded scores remain below exceptional: layout UX 7.4/function 7.9/
+aesthetics 7.0; Word recovery 7.0/7.8/7.0. These do not establish a whole-product
+8 or 10. Dense forms, horizontal navigation discovery and real virtual-keyboard
+use remain improvement areas. A separate Linux prototype proves bundled XCB
+import and copied-workspace preservation on a Python-free offline Ubuntu base;
+its native launch probe also exposed a shutdown callback error. Final combined
+frozen builds, clean native shutdown, installed browser/recovery and actual prior
+installer replacement gates remain open. No new platform or release is qualified.

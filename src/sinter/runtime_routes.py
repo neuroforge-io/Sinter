@@ -19,6 +19,7 @@ from . import (
     speech,
     workbench,
 )
+from .document_copies import save_word_copy
 from .docx_export import export_docx
 from .evidence import collect, text
 from .grants import screen
@@ -516,6 +517,8 @@ class RouteDispatch:
             self._send(
                 document.content, document.content_type, filename=document.filename
             )
+        elif path == "/api/documents/docx/save":
+            self._json(save_word_copy(self.app.store.directory, body))
         elif path == "/api/reports/delete":
             self.app.store.delete_report(body.get("id", ""))
             self._json({"ok": True})

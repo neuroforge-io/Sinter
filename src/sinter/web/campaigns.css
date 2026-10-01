@@ -1,6 +1,6 @@
 /* A focused working area with details and evidence kept beside the application. */
 .campaign-source-matches{grid-column:1/-1;display:grid;gap:8px;margin:0 0 12px;min-width:0}.campaign-source-matches[hidden]{display:none}.campaign-source-match{display:grid;gap:3px;min-width:0}.campaign-source-match>.button{justify-content:flex-start;text-align:left;overflow-wrap:anywhere;min-width:0;padding:8px 12px;font-size:.8rem}.campaign-source-match>.fine{margin:0;overflow-wrap:anywhere}
-.campaign-page{max-width:1120px;padding-bottom:40px}.campaign-page .page-intro{margin-bottom:24px}.campaign-page input,.campaign-page textarea,.campaign-page select{scroll-margin-block:260px}.campaign-summary{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--line);border-radius:14px;margin:20px 0;background:var(--surface)}
+.campaign-page{max-width:1120px;padding-bottom:40px}.campaign-page .page-intro{margin-bottom:24px}.campaign-page input,.campaign-page textarea,.campaign-page select{scroll-margin-block-start:var(--campaign-scroll-clearance,0px);scroll-margin-block-end:16px}.campaign-summary{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--line);border-radius:14px;margin:20px 0;background:var(--surface)}
 .campaign-shelf h3{font-size:1.25rem;margin:0 0 5px;overflow-wrap:anywhere}.campaign-shelf p{margin:0}.campaign-shelf:empty{display:none}.campaign-proof-status{font-size:.82rem;color:var(--muted);border-left:2px solid var(--accent);padding-left:12px}
 .campaign-summary>div{padding:16px 20px;display:flex;flex-direction:column;gap:4px}.campaign-summary strong{font-size:1.5rem;line-height:1.2;font-variant-numeric:tabular-nums}.campaign-summary span{font-size:.77rem;color:var(--muted)}
 .campaign-details{padding:16px 20px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}.campaign-details>summary{font-weight:650}.campaign-details[open]>summary{margin-bottom:20px}
@@ -59,3 +59,25 @@
 .campaign-budget-basis-details { margin: -.3rem 0 1rem; }
 .campaign-budget-basis-details > summary { width: fit-content; font-size: .86rem; color: var(--muted); cursor: pointer; }
 .campaign-budget-basis-details > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+
+/* Keep the section choice available before the campaign's review dossier. */
+.campaign-section-navigation { position: sticky; top: var(--campaign-navigation-top, 0px); z-index: 5; min-width: 0; margin-bottom: 20px; padding: 4px 0; background: var(--bg); display: flow-root; }
+.campaign-section-navigation .campaign-tabs { margin: 0; }
+.campaign-section,
+.campaign-editor,
+.campaign-decision-card,
+.campaign-action,
+.campaign-output { scroll-margin-block-start: var(--campaign-scroll-clearance, 0px); }
+.campaign-section:focus-visible,
+.campaign-decision-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 6px; }
+.campaign-section-context { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.campaign-section-context p { flex: 1; min-width: 0; margin: 0; font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; }
+.campaign-section-context p > span { display: block; color: var(--muted); }
+.campaign-section-context .button { flex: 0 0 auto; min-height: 44px; padding: 8px 10px; font-size: .78rem; }
+@media (max-width: 940px) {
+  .campaign-section-navigation .campaign-tabs { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain; gap: 18px; padding-bottom: 4px; scrollbar-width: thin; }
+  .campaign-section-navigation .campaign-tab { flex: 0 0 auto; white-space: nowrap; }
+}
+@media (max-width: 650px) {
+  .campaign-section-context { align-items: flex-start; padding: 10px; }
+}

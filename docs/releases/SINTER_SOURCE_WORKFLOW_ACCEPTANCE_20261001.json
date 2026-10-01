@@ -1,0 +1,80 @@
+{
+  "schema": "sinter-source-workflow-acceptance/v1",
+  "date": "2026-10-01",
+  "version": "0.5.4rc3",
+  "qualification_scope": "Reviewed source composition; not installed final candidate or ordinary IAB download delivery",
+  "base_commit": "901d4fb62424a1914d536449479d89c6e5ec40ee",
+  "reviewed_paths": {
+    "src/sinter/document_copies.py": "7b6ef73abc67b60cc41162337e6350b11a3ca331493023decac8c4cb6c96609f",
+    "src/sinter/runtime.py": "c603c115ddcc133ae61faabf565ebfe0e49b4c211a09217c02015c197c89b05b",
+    "src/sinter/runtime_routes.py": "86e47fb56c7de82306293b8c82cc455b2612aeb4f9df10db67a6f4f47d65e22c",
+    "src/sinter/web/documents.js": "c79be5d9a0ba1d3e77b2352d5deeabf57afbfec7a4369bf762f77a16179b6ccf",
+    "tests/test_document_copies.py": "5fbe54ef6ea79a8da559eb36d9aea7d03c2a4c06f02697a9047eb9b43c94ec2c",
+    "tests/test_document_copy_browser.py": "cfd3f90e9e1e141fd63859edebefc919f6b9560ed85c9a2120bbf27704931a10",
+    "tests/test_document_copy_routes.py": "109302669bfff029e38196aa378e2ef6cd7bc1afb76f9b13a58edd1fa7b2fd54",
+    "tests/test_shared_runtime.py": "17e9fda3a89e0b2922d932383c58c63c89596bcbb7031659ce250a75afb3d0d7",
+    "tests/test_word_copy_state.py": "6af90ddc0d9dd7c725786fc0ba31897806524b1c8644b7a32daa49d4dfd70ba3",
+    "tests/word_copy_state.mjs": "99425fb54bdf069af35a4095cf2c0178ecf5dcd672bd69d553994bea783addfd",
+    "tools/document_copy_browser.py": "436896d22522cc6941d853b15429ed635e45d1cf3e440041431f529d3250f20e",
+    "src/sinter/web/campaigns.css": "bc21d07e28cd9f4f7e9349ed74df146ae3002d16530e4cf8547e3a4434b76344",
+    "src/sinter/web/campaigns.js": "c4773589498f88a3a5e376636b45cda40d44bbbb63e8547ed274e44fc7257493",
+    "tools/campaign_layout_browser.py": "a214fb06c76be11a067ebe902dd01a7d0cc81de11a2e10080bb5a533bcf586c3",
+    "tests/test_campaign_layout_browser.py": "f828cbd6f0703c8fff2cb25178acbfc547e547f8632cb8b7b5d8d0060bd74ea4",
+    "tests/test_native_launch_package.py": "49353ce404c2243391360b2622bf4eedba435d6e733e9cc1daa4bc3ea2884555",
+    "tools/package_native.py": "a336b0368e29053e410f2999a21e2e5c477d85d59fbcafd717cd5be8b9381fae"
+  },
+  "python": {
+    "passed": 2846,
+    "skipped": 8,
+    "seconds": 133.53
+  },
+  "composed_browser": {
+    "campaign_layout": 107,
+    "word_recovery": 50,
+    "provider_requests": 0
+  },
+  "independent_browser": {
+    "layout": 80,
+    "layout_focused": 6,
+    "word_recovery": 74
+  },
+  "independent_word_filesystem_and_api": 17,
+  "actual_IAB_word_copies": {
+    "original_bytes": 2697,
+    "original_sha256": "5cf8a6bc44f9e2d5f1dd30d08ade57a19d66f894f44a770063f23b9f3a38048e",
+    "edited_bytes": 2731,
+    "edited_sha256": "a89e66e92e72ead785450f04aaf0d3525c93a0f03dc51d82f874e17d375b8d44",
+    "pending_edits_blocked": true,
+    "earlier_copy_retained": true,
+    "saved_domain_tables_and_preferences_unchanged": true,
+    "provider_requests": 0,
+    "body_scope": "Exact applied Markdown; saved report evidence and draft review remain separately retained",
+    "browser_download_confirmed": false
+  },
+  "local_preparation_benchmark": {
+    "garden": {
+      "documents": 4,
+      "characters": 2278,
+      "samples": 15,
+      "median_ms": 1.2301619863137603
+    },
+    "synthetic": {
+      "documents": 300,
+      "characters": 1980000,
+      "samples": 3,
+      "median_ms": 178.4698599949479,
+      "documents_represented": 2,
+      "exhaustive_review": false
+    },
+    "scope": "Local selected-passage preparation only; no inference or browser-speed claim",
+    "provider_requests": 0
+  },
+  "remaining_gates": [
+    "Error-free native shutdown",
+    "Exact final-source frozen build and installed workflow/recovery",
+    "Actual prior-installer replacements",
+    "Final source/assets/notices/platform qualification and publication"
+  ],
+  "publication_executed": false,
+  "whole_product_rating": null
+}
