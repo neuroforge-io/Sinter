@@ -570,6 +570,72 @@ def test_legacy_compact_cli_cannot_bypass_preview_consent(tmp_path):
     provider.assert_not_called()
 
 
+def test_legacy_compact_cli_keeps_readable_source_packet(tmp_path, capsys):
+    payload = {"template": "native-source-question", "variables": variables()}
+    with configured(Runtime(tmp_path / "workspace")) as app:
+        prepared = app.call("template.preview", payload)
+    destination = tmp_path / "fictional-answer.md"
+    args = [
+        "template",
+        "native-source-question",
+        "--consent",
+        "--context-hash",
+        prepared["context_hash"],
+        "--no-stream",
+        "-o",
+        str(destination),
+    ]
+    for key, value in variables().items():
+        args.extend(["--var", f"{key}={value}"])
+    with patch(
+        "sinter.templates.chat",
+        return_value=client.ChatResult(
+            "Fictional loans last 14 days [e1].", 42, "stop", client.NATIVE_MODEL
+        ),
+    ) as provider:
+        cli.main(args)
+    readable = destination.read_text()
+    assert "UNVERIFIED MODEL DRAFT" in readable
+    assert '"source_id"' in readable and "Fictional handbook.md" in readable
+    assert project()["documents"][0]["content"] in readable
+    assert readable.rstrip() in capsys.readouterr().out
+    assert provider.call_count == 1
+
+
+def test_legacy_compact_export_refuses_runtime_state_before_generation(tmp_path):
+    with configured(Runtime(tmp_path / "workspace")) as app:
+        database = app.app.store.directory / "workspace.sqlite3"
+        prepared = app.call(
+            "template.preview",
+            {"template": "native-source-question", "variables": variables()},
+        )
+    original = database.read_bytes()
+    args = [
+        "template",
+        "native-source-question",
+        "--consent",
+        "--context-hash",
+        prepared["context_hash"],
+        "-o",
+        str(database),
+    ]
+    for key, value in variables().items():
+        args.extend(["--var", f"{key}={value}"])
+    with (
+        patch(
+            "sinter.templates.chat",
+            return_value=client.ChatResult(
+                "Fictional loans last 14 days [e1].", 42, "stop", client.NATIVE_MODEL
+            ),
+        ) as provider,
+        pytest.raises(SystemExit) as error,
+    ):
+        cli.main(args)
+    assert error.value.code == 1
+    provider.assert_not_called()
+    assert database.read_bytes() == original
+
+
 def test_wait_queued_executor_job_after_close_returns_closed_immediately(tmp_path):
     gate = threading.Event()
     app = Runtime(tmp_path)

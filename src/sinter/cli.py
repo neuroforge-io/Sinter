@@ -51,8 +51,14 @@ def main(argv: list[str] | None = None) -> None:
     template.add_argument("-v", "--var", action="append", default=[], metavar="KEY=VALUE")
     template.add_argument("-o", "--output")
     template.add_argument("--no-stream", action="store_true")
-    template.add_argument("--consent", action="store_true", help="For Short source answer, approve the exact previewed source request")
-    template.add_argument("--context-hash", help="For Short source answer, hash from sinter run template.preview")
+    template.add_argument(
+        "--consent", action="store_true",
+        help="For Short source answer, approve the exact previewed source request",
+    )
+    template.add_argument(
+        "--context-hash",
+        help="For Short source answer, hash from sinter run template.preview",
+    )
     workbench = sub.add_parser("workbench", help="Run a workflow from a JSON input file")
     workbench.add_argument("file")
     workbench.add_argument("-o", "--output", default="sinter_report.md")
@@ -186,17 +192,20 @@ def _dispatch(args) -> None:
                 raise ValueError("Template arguments use KEY=VALUE.")
             variables[key] = value
         if template.compact_source:
-            from .runtime import Runtime
+            from .presentation import result_markdown
+            from .runtime import Runtime, output_sources
+
+            if output:
+                sources = output_sources(None, output, sources)
             with Runtime() as runtime:
                 result = runtime.call('template.run', {
                     'template': args.name, 'variables': variables,
                     'consent': args.consent, 'context_hash': args.context_hash},
                     progress=lambda message: print(message, file=sys.stderr))
-            content = "\n\n".join(row['content'] for row in result['results'])
+            content = result_markdown(result)
             print(content)
             if output:
-                _write(output, '# Model-generated draft - review required\n\n' + content,
-                       sources=sources)
+                _write(output, content, sources=sources)
             return
         results, references, streamed = [], [], False
         for event in template_events(template, variables, stream=not args.no_stream):
