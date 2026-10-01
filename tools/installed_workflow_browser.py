@@ -357,7 +357,9 @@ class InnerRequest(socketserver.BaseRequestHandler):
 def write_json(path: Path, value: object) -> None:
     """Atomically publish bounded test state or a structured proof receipt."""
     temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2))
+    temporary.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     temporary.replace(path)
 
 
