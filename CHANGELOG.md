@@ -28,6 +28,12 @@ heading is not a qualification receipt or approval to publish.
   cannot destroy a scrollbar while its callback is still running; coalesce
   repeated signals and retain local saved work.
 
+- Make native-window qualification refuse every shutdown diagnostic, including
+  errors after a successful exit or during cleanup. Bind the tested executable,
+  retain bounded original error bytes and verify saved fictional sources,
+  preferences and persistent database metadata before reopening can repair them.
+  This strengthens the test gate; fresh installed qualification remains required.
+
 - Retain open and closed cost rows while navigating within the current browser
   campaign editor. Explicit campaign replacement starts fresh view choices;
   original inputs, review statuses and saved revisions are preserved. Use a
