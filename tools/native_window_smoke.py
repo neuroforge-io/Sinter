@@ -1,6 +1,7 @@
 """Qualify frozen Linux native launch on an explicitly supplied local X display.
 
-This checks a mapped, process-owned Tk window, repeat launch, SIGTERM and cleanup.
+This checks a mapped, process-owned Tk window, repeat launch, clean SIGTERM
+shutdown and preservation of saved fictional sources/preferences.
 It never opens a browser, starts an X server, exercises inference or uses a real
 workspace. A pass is launch qualification for this artifact/display only.
 """
@@ -8,6 +9,7 @@ workspace. A pass is launch qualification for this artifact/display only.
 from __future__ import annotations
 
 import argparse
+import base64
 import ctypes
 import ctypes.util
 import hashlib
@@ -16,16 +18,50 @@ import os
 import platform
 import re
 import signal
+import sqlite3
 import subprocess
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import BinaryIO
 
 TITLE = "Sinter — portable source workspace"
 START_SECONDS = 12
 STOP_SECONDS = 5
 MAX_WINDOWS = 512
+MAX_STDERR_BYTES = 65_536
+MAX_CLI_BYTES = 128_000
+FICTIONAL_DOCUMENT = {
+    "schema": "sinter-casebook/v1",
+    "title": "Fictional garden handover — native launch qualification",
+    "questions": "Is approval confirmed?\nWho will check the quote?",
+    "document_type": "handover",
+    "documents": [
+        {
+            "title": "Fictional original note",
+            "content": (
+                "Approval is unconfirmed — 🐝. The quote checker is unknown.\n"
+                "This fictional source must survive both native shutdowns exactly."
+            ),
+            "url": "",
+            "date": "",
+        }
+    ],
+}
+FICTIONAL_PREFERENCES = {
+    "schema_version": 1,
+    "theme": "light",
+    "text_size": "large",
+    "density": "compact",
+    "reduce_motion": True,
+    "api_url": "https://example.invalid/v1",
+    "model": "fictional-explicit-offline-model",
+    "provider": "openai-compatible",
+    "max_tokens": 256,
+    "full_name": "Fictional operator",
+    "organisation": "Fictional garden group",
+}
 
 
 class WindowAttributes(ctypes.Structure):
@@ -269,6 +305,192 @@ def stop_process(process, row):
     row["owned_group_remaining"] = group_alive(process.pid)
 
 
+def capture_stderr(stream: BinaryIO, row: dict) -> None:
+    """Retain bounded exact diagnostic bytes and bind the complete stream."""
+    stream.seek(0)
+    digest, prefix, size = hashlib.sha256(), bytearray(), 0
+    while block := stream.read(65_536):
+        digest.update(block)
+        size += len(block)
+        prefix.extend(block[: max(0, MAX_STDERR_BYTES - len(prefix))])
+    row.update(
+        stderr=bytes(prefix).decode("utf-8", errors="replace"),
+        stderr_base64=base64.b64encode(prefix).decode("ascii"),
+        stderr_bytes=size,
+        stderr_sha256=digest.hexdigest(),
+        stderr_truncated=size > MAX_STDERR_BYTES,
+    )
+
+
+def binary_digest(binary: Path) -> str:
+    """Bind the complete explicitly supplied executable before and after proof."""
+    digest = hashlib.sha256()
+    with binary.open("rb") as stream:
+        while content := stream.read(1024 * 1024):
+            digest.update(content)
+    return digest.hexdigest()
+
+
+def local_operation(
+    binary: Path,
+    workspace: Path,
+    environment: dict[str, str],
+    operation: str,
+    payload: dict,
+    receipt: dict,
+) -> dict:
+    """Use only the tested executable's offline CLI, retaining failure evidence."""
+    if operation not in {"casebooks.save", "casebooks.get", "runtime.status"}:
+        raise ValueError(
+            "Native launch qualification allows only fictional local operations."
+        )
+    request = workspace.parent / "qualification-request.json"
+    request.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    row = {"operation": operation, "passed": False}
+    receipt["offline_commands"].append(row)
+    with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+        process = subprocess.Popen(
+            [
+                str(binary),
+                "run",
+                operation,
+                "--input",
+                str(request),
+                "--directory",
+                str(workspace),
+                "--format",
+                "json",
+            ],
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=stdout,
+            stderr=stderr,
+            start_new_session=True,
+        )
+        row["pid"] = process.pid
+        try:
+            process.wait(timeout=10)
+        finally:
+            try:
+                stop_process(process, row)
+            finally:
+                capture_stderr(stderr, row)
+                stdout.seek(0)
+                raw = stdout.read(MAX_CLI_BYTES + 1)
+                row["stdout"] = raw[:MAX_CLI_BYTES].decode("utf-8", errors="replace")
+                row["stdout_truncated"] = len(raw) > MAX_CLI_BYTES
+        if (
+            row["exit_code"] != 0
+            or row.get("forced_cleanup")
+            or row["owned_group_remaining"]
+            or row["stderr_bytes"]
+            or row["stdout_truncated"]
+        ):
+            raise RuntimeError(
+                "Fictional offline CLI preparation/read failed; see evidence."
+            )
+        envelope = json.loads(raw)
+        if (
+            not isinstance(envelope, dict)
+            or envelope.get("schema") != "sinter-operation-result/v1"
+            or envelope.get("operation") != operation
+            or envelope.get("version") != receipt["frozen_diagnostics"]["version"]
+            or envelope.get("ok") is not True
+            or not isinstance(envelope.get("result"), dict)
+        ):
+            raise RuntimeError(
+                "Fictional offline CLI returned an unexpected result identity."
+            )
+        row["passed"] = True
+        return envelope["result"]
+
+
+def workspace_snapshot(workspace: Path) -> dict[str, str | int]:
+    """Read original preference bytes and all logical SQLite schema/row bytes."""
+    preferences = (workspace / "preferences.json").read_bytes()
+    path = workspace / "workspace.sqlite3"
+    with sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True) as db:
+        if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+            raise RuntimeError("The fictional saved workspace failed SQLite integrity.")
+        version = db.execute("PRAGMA user_version").fetchone()[0]
+        metadata = {
+            "sqlite_" + name: db.execute("PRAGMA " + name).fetchone()[0]
+            for name in ("application_id", "encoding", "page_size")
+        }
+        dump = "\n".join(db.iterdump()).encode("utf-8")
+    return {
+        "preferences_sha256": hashlib.sha256(preferences).hexdigest(),
+        "sqlite_logical_sha256": hashlib.sha256(dump).hexdigest(),
+        "sqlite_user_version": version,
+        **metadata,
+    }
+
+
+def same_json(left: object, right: object) -> bool:
+    """Require exact JSON values/types without Python's bool/int coercion."""
+    options = {
+        "sort_keys": True,
+        "ensure_ascii": True,
+        "separators": (",", ":"),
+        "allow_nan": False,
+    }
+    return json.dumps(left, **options) == json.dumps(right, **options)
+
+
+def verify_fictional_workspace(
+    binary: Path,
+    workspace: Path,
+    environment: dict[str, str],
+    saved: dict,
+    receipt: dict,
+    row: dict,
+) -> None:
+    """Check original saved data and the target's explicit connection selection."""
+    snapshot = workspace_snapshot(workspace)
+    row["workspace_snapshot"] = snapshot
+    row["saved_workspace_exact"] = (
+        snapshot == receipt["fictional_workspace"]["original"]
+    )
+    if not row["saved_workspace_exact"]:
+        raise RuntimeError(
+            "The fictional saved workspace/preferences changed during launch."
+        )
+    actual = local_operation(
+        binary, workspace, environment, "casebooks.get", {"id": saved["id"]}, receipt
+    )
+    row["saved_casebook_exact"] = same_json(actual, saved)
+    status = local_operation(
+        binary, workspace, environment, "runtime.status", {}, receipt
+    )
+    expected = {
+        key: FICTIONAL_PREFERENCES[key]
+        for key in ("api_url", "model", "provider", "max_tokens")
+    }
+    row["explicit_model_selection_exact"] = same_json(
+        status.get("connection"), expected
+    )
+    row["preferences_read_without_warning"] = status.get("preferences_warning") == ""
+    row["offline_status_exact"] = status.get("provider_tested") is False and same_json(
+        status.get("counts"),
+        {"casebooks": 1, "campaigns": 0, "reports": 0, "watches": 0},
+    )
+    row["cli_read_preserved_saved_bytes"] = workspace_snapshot(workspace) == snapshot
+    if not all(
+        row[key]
+        for key in (
+            "saved_casebook_exact",
+            "explicit_model_selection_exact",
+            "preferences_read_without_warning",
+            "offline_status_exact",
+            "cli_read_preserved_saved_bytes",
+        )
+    ):
+        raise RuntimeError(
+            "The tested executable did not recover the exact fictional "
+            "saved work/settings."
+        )
+
+
 def launch_once(binary, workspace, environment, observer, row):
     started = time.monotonic()
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
@@ -301,12 +523,20 @@ def launch_once(binary, workspace, environment, observer, row):
                     "and process ownership appeared."
                 )
         finally:
-            stop_process(process, row)
-            row["owned_windows_remaining"] = observer.windows(process.pid)
-            for name, stream in (("stdout", stdout), ("stderr", stderr)):
-                stream.seek(0)
-                row[name] = stream.read(4096).decode("utf-8", errors="replace")
-            row["elapsed_seconds"] = round(time.monotonic() - started, 4)
+            try:
+                stop_process(process, row)
+                row["owned_windows_remaining"] = observer.windows(process.pid)
+            finally:
+                capture_stderr(stderr, row)
+                stdout.seek(0)
+                row["stdout"] = stdout.read(4096).decode("utf-8", errors="replace")
+                row["elapsed_seconds"] = round(time.monotonic() - started, 4)
+        if row["stderr_bytes"]:
+            raise RuntimeError(
+                "Native shutdown emitted diagnostics (including possible "
+                "Tk/Tcl callback "
+                "failure); a zero exit code is insufficient. See exact stderr evidence."
+            )
         if (
             row["exit_code"] != 0
             or not row["sigterm_sent"]
@@ -321,7 +551,9 @@ def launch_once(binary, workspace, environment, observer, row):
         row["passed"] = True
 
 
-def diagnose(binary, environment):
+def diagnose(binary, environment, evidence=None):
+    evidence = {} if evidence is None else evidence
+    evidence["passed"] = False
     cleanup = {"sigterm_sent": False, "forced_cleanup": False}
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
         process = subprocess.Popen(
@@ -335,9 +567,19 @@ def diagnose(binary, environment):
         try:
             process.wait(timeout=10)
         finally:
-            stop_process(process, cleanup)
-        stdout.seek(0)
-        content = stdout.read(32_001)
+            try:
+                stop_process(process, cleanup)
+            finally:
+                evidence.update(cleanup)
+                capture_stderr(stderr, evidence)
+                stdout.seek(0)
+                content = stdout.read(32_001)
+                evidence["stdout"] = content[:32_000].decode("utf-8", errors="replace")
+                evidence["stdout_truncated"] = len(content) > 32_000
+    if evidence["stderr_bytes"]:
+        raise RuntimeError(
+            "Frozen launch diagnostics emitted stderr; see exact retained evidence."
+        )
     if (
         cleanup["exit_code"] != 0
         or cleanup["forced_cleanup"]
@@ -363,6 +605,7 @@ def diagnose(binary, environment):
     ):
         if receipt.get(name) is not True:
             raise RuntimeError(f"Frozen launch diagnostics did not establish {name}.")
+    evidence["passed"] = True
     return {
         name: receipt[name]
         for name in (
@@ -385,9 +628,12 @@ def smoke(binary):
         "system": platform.system(),
         "machine": platform.machine(),
         "launches": [],
+        "offline_commands": [],
         "boundary": (
-            "Frozen Linux native window launch, repeat launch and "
-            "SIGTERM cleanup on the supplied X display"
+            "Frozen Linux mapped native launch, repeat clean SIGTERM shutdown "
+            "and saved fictional workspace/preferences preservation on "
+            "supplied X display; not full native editing, installed upgrade "
+            "or customer-desktop qualification"
         ),
         "provider_inference_exercised": False,
         "api_credentials_supplied": False,
@@ -409,21 +655,105 @@ def smoke(binary):
         binary = Path(binary).resolve(strict=True)
         if not binary.is_file() or not os.access(binary, os.X_OK):
             raise RuntimeError("Choose an executable frozen Sinter artifact.")
-        digest = hashlib.sha256()
-        with binary.open("rb") as stream:
-            while content := stream.read(1024 * 1024):
-                digest.update(content)
-        receipt["binary_sha256"] = digest.hexdigest()
+        receipt["binary_sha256"] = binary_digest(binary)
         observer = X11Observer(display)
         with tempfile.TemporaryDirectory(prefix="sinter-frozen-window-") as temp:
             home = Path(temp)
             workspace = home / "workspace"
             environment = clean_environment(home, display, os.environ.get("XAUTHORITY"))
-            receipt["frozen_diagnostics"] = diagnose(binary, environment)
+            receipt["diagnostic_process"] = {"passed": False}
+            receipt["frozen_diagnostics"] = diagnose(
+                binary, environment, receipt["diagnostic_process"]
+            )
+            workspace.mkdir(mode=0o700)
+            (workspace / "preferences.json").write_text(
+                json.dumps(FICTIONAL_PREFERENCES, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            saved = local_operation(
+                binary,
+                workspace,
+                environment,
+                "casebooks.save",
+                {"document": FICTIONAL_DOCUMENT},
+                receipt,
+            )
+            if (
+                not isinstance(saved.get("id"), str)
+                or type(saved.get("revision")) is not int
+                or saved["revision"] != 1
+                or not isinstance(saved.get("document"), dict)
+            ):
+                raise RuntimeError(
+                    "The tested executable did not save the fictional casebook."
+                )
+            document = saved["document"]
+            sources = document.get("documents", [])
+            if (
+                any(
+                    document.get(key) != FICTIONAL_DOCUMENT[key]
+                    for key in ("schema", "title", "questions", "document_type")
+                )
+                or not isinstance(sources, list)
+                or len(sources) != 1
+                or not isinstance(sources[0], dict)
+                or any(
+                    sources[0].get(key) != value
+                    for key, value in FICTIONAL_DOCUMENT["documents"][0].items()
+                )
+                or not isinstance(sources[0].get("id"), str)
+                or sources[0].get("sha256")
+                != hashlib.sha256(
+                    FICTIONAL_DOCUMENT["documents"][0]["content"].encode("utf-8")
+                ).hexdigest()
+            ):
+                raise RuntimeError(
+                    "The tested executable changed the fictional source inputs."
+                )
+            receipt["fictional_workspace"] = {
+                "original": workspace_snapshot(workspace),
+                "source_id": sources[0]["id"],
+                "source_sha256": sources[0]["sha256"],
+                "saved_revision": saved["revision"],
+            }
+            verify_fictional_workspace(
+                binary,
+                workspace,
+                environment,
+                saved,
+                receipt,
+                receipt["fictional_workspace"],
+            )
             for index in (1, 2):
                 row = {"launch": index, "passed": False}
                 receipt["launches"].append(row)
-                launch_once(binary, workspace, environment, observer, row)
+                try:
+                    launch_once(binary, workspace, environment, observer, row)
+                except Exception:
+                    # Retain original launch failure even if the separate local
+                    # preservation check also fails. Neither check replays AI.
+                    row["passed"] = False
+                    try:
+                        verify_fictional_workspace(
+                            binary, workspace, environment, saved, receipt, row
+                        )
+                    except Exception as exc:
+                        row.update(
+                            workspace_verification_error_type=type(exc).__name__,
+                            workspace_verification_error=str(exc)[:4096],
+                        )
+                    raise
+                row["passed"] = False
+                verify_fictional_workspace(
+                    binary, workspace, environment, saved, receipt, row
+                )
+                row["passed"] = True
+        receipt["binary_sha256_after"] = binary_digest(binary)
+        receipt["binary_unchanged"] = (
+            receipt["binary_sha256_after"] == receipt["binary_sha256"]
+        )
+        if not receipt["binary_unchanged"]:
+            raise RuntimeError("The tested executable changed during qualification.")
         receipt["passed"] = True
     except Exception as exc:
         receipt.update(error_type=type(exc).__name__, error=str(exc)[:4096])

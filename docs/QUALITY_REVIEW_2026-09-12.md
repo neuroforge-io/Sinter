@@ -790,3 +790,20 @@ model generation or submission was performed. This is real local source-runtime
 use; it does not qualify ordinary IAB download delivery or an installed release.
 The fresh-start message is also corrected to name Your campaigns instead of
 claiming that the campaign choices are above the message.
+
+### 1 October: independent native qualifier review
+
+The exact two-path native launch qualifier now refuses nonempty stderr, even
+with a zero process exit, and retains the available original diagnostics through
+cleanup failures. It seeds and reads a fictional Unicode casebook using the
+actual target executable's offline CLI, checks type-sensitive identities, and
+compares exact preferences, logical schemas/rows and persistent live-file
+user_version, application_id, encoding and page_size before reopening.
+
+The independently reviewed source passes 27 adversarial admission probes and
+64 focused producer checks; the author's combined focused selection passes
+158 checks with three display-dependent skips. Historical false admissions and
+the original 266-byte frozen callback traceback are retained. SQLite schema
+cookies, journals and physical file equality are outside this gate. No fresh
+executable was supplied to these source reviews; installed native qualification
+and the complete operator workflow remain open.
