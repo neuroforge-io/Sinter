@@ -172,7 +172,9 @@ def workflow(commands):
     commands.json("export_sources", [
         "export", "casebook", saved["id"], "-o", str(exported), "--machine"
     ])
-    assert json.loads(exported.read_text()) == updated["document"]
+    assert json.loads(exported.read_text(encoding="utf-8")) == updated["document"], (
+        "UTF-8 exported backup changed."
+    )
     restored = commands.json("restore_separate_workspace", [
         "import", str(exported), "--kind", "casebook", "--format", "json",
         "--directory", str(commands.directory / "restored"),
