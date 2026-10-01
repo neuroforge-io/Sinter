@@ -223,7 +223,14 @@ def main(argv: list[str] | None = None) -> None:
                                 )
                                 expect(state).to_contain_text("Based on revision 1.")
                                 expect(
-                                    page.locator(".casebook-editor details.source")
+                                    page.locator(".casebook-editor details.source").filter(
+                                        has=page.get_by_role(
+                                            "button",
+                                            name="Remove source",
+                                            exact=True,
+                                            include_hidden=True,
+                                        )
+                                    )
                                 ).to_have_count(2)
                                 assert server.app.casebooks.get(saved_id) == baseline
                                 page.screenshot(

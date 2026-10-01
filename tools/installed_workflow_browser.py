@@ -640,7 +640,14 @@ def browser_workflow(
                 page.screenshot(path=str(output / ARTIFACTS[role]))
 
             def sources() -> None:
-                entries = page.locator(".casebook-editor details.source")
+                entries = page.locator(".casebook-editor details.source").filter(
+                    has=page.get_by_role(
+                        "button",
+                        name="Remove source",
+                        exact=True,
+                        include_hidden=True,
+                    )
+                )
                 expect(entries).to_have_count(len(fixture["casebook"]["documents"]))
                 for index, original in enumerate(fixture["casebook"]["documents"]):
                     if entries.nth(index).get_attribute("open") is None:

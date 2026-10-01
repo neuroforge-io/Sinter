@@ -36,7 +36,14 @@ def main(argv: list[str] | None = None) -> None:
                 page.goto(base + '/#casebooks')
                 page.get_by_role('button', name='Try a fictional community example', exact=True).click()
                 page.get_by_label('Prepare a', exact=True).select_option('handover')
-                originals = page.locator('.casebook-editor details.source')
+                originals = page.locator('.casebook-editor details.source').filter(
+                    has=page.get_by_role(
+                        "button",
+                        name="Remove source",
+                        exact=True,
+                        include_hidden=True,
+                    )
+                )
                 expect(originals).to_have_count(3)
                 for index in range(3):
                     originals.nth(index).locator('summary').click()

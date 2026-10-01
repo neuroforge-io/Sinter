@@ -265,7 +265,7 @@ def test_current_cli_lossless_import_export_and_call_preserve_v2(tmp_path, capsy
         tmp_path / "input.json",
         tmp_path / "export.json",
     )
-    original.write_text(json.dumps(scoped()))
+    original.write_text(json.dumps(scoped()), encoding="utf-8")
     with patch.object(
         client, "_open", side_effect=AssertionError("No hosted calls")
     ) as remote:
@@ -295,8 +295,8 @@ def test_current_cli_lossless_import_export_and_call_preserve_v2(tmp_path, capsy
             ]
         )
         assert json.loads(capsys.readouterr().out)["ok"] is True
-        assert json.loads(exported.read_text()) == saved["document"]
-        original.write_text(json.dumps({"id": saved["id"]}))
+        assert json.loads(exported.read_text(encoding="utf-8")) == saved["document"]
+        original.write_text(json.dumps({"id": saved["id"]}), encoding="utf-8")
         cli.main(
             [
                 "run",

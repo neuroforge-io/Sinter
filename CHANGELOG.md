@@ -5,6 +5,12 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Add native **Assistant setup** over the existing provider/settings operations:
+  explicitly load model names, choose an exact ID and save without a browser.
+  Preserve destination approval, write-only session keys, launcher overrides and
+  source consent; ignore stale catalogue outcomes. Style native report blocks
+  while retaining raw exports, and support standard text-field select-all.
+
 - Share application operations and persistence across the native Tcl/Tk source
   workspace, discoverable CLI and Python runtime. Keep exact source preview,
   explicit consent, citation packets, revision conflicts and guarded exports
