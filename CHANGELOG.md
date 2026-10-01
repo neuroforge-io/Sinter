@@ -5,6 +5,11 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Check occupied-port refusal by exact error propagation, one bind attempt,
+  closed failed socket and continued use of the existing listener. Preserve the
+  actual Windows refusal rather than assuming Linux's error code. This changes
+  the source regression check, with no runtime or timeout change.
+
 - Add a Linux source rehearsal that runs six real stop/reopen cycles with
   fictional campaigns. Check complete backups, conflicting edits, lost save
   and Quit confirmations, visible stale-source warnings and unchanged local

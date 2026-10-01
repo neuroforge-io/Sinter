@@ -1240,3 +1240,22 @@ false. Scoped casebook-v2 editor recovery, native ownership, actual installed
 execution, exact published-RC3 replacement and the new canonical release gate
 remain outstanding. No physical user app or provider is opened. See the
 [recovery guide](RC4_LOCAL_RECOVERY.md) for the runnable subset and remaining gates.
+
+### 2 October: occupied-port source regression on Windows
+
+Both retained `673cba2` Windows XMLs fail exactly one newly added assertion. The
+real occupied bind refuses with `PermissionError`, errno 13 and Windows error
+10013; the test incorrectly requires errno 10048. Both startup-watchdog cases
+execute and pass. The one-file test correction observes a real failed bind,
+requires its identical exception to propagate without retry, checks the failed
+socket is closed, and exchanges owned bytes through the untouched original
+listener. It also checks the captured Windows error shape only after a real
+occupied bind refuses. No runtime, deadline, skip or broad error allow-list changes.
+
+Root independently verifies all 24 retained references and both actual Windows
+ZIP/XML identities. A copied current-main composition preserves all 423 unrelated
+files and passes 12 focused cases in 4.31 seconds. The mapped-error control
+reproduces the original assertion failure and passes the correction with exactly
+one real occupied-bind refusal. This is a portable controlled regression, not
+Windows execution. Fresh hosted Windows replay and platform installer qualification
+remain outstanding; the original failed evidence is unchanged.

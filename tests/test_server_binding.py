@@ -127,14 +127,56 @@ def test_owned_native_listener_uses_same_numeric_binding_without_provider(
         assert runtime.app.desktop_shutdown is None
 
 
-def test_occupied_socket_is_not_retried_or_resolved(tmp_path, monkeypatch):
+@pytest.mark.parametrize("error_shape", ["actual", "captured_windows_permission"])
+def test_occupied_socket_is_not_retried_or_resolved(tmp_path, monkeypatch, error_shape):
     forbid_optional_lookup(monkeypatch)
     with socket.socket() as occupied:
         occupied.bind(("127.0.0.1", 0))
         occupied.listen()
+        occupied.settimeout(3)
+        address = occupied.getsockname()
+        actual_bind = socket.socket.bind
+        attempts, errors = [], []
+
+        def observe_bind(listener, requested):
+            attempts.append((listener, requested))
+            try:
+                return actual_bind(listener, requested)
+            except OSError as error:
+                if error_shape == "captured_windows_permission":
+                    # The actual hosted Windows conflict was errno13/winerror10013.
+                    # Inject that mapping only AFTER a real occupied bind refuses.
+                    mapped = PermissionError(
+                        13,
+                        "An attempt was made to access a socket in a way "
+                        "forbidden by its access permissions",
+                    )
+                    mapped.winerror = 10013
+                    errors.append(mapped)
+                    raise mapped from error
+                errors.append(error)
+                raise
+
+        monkeypatch.setattr(socket.socket, "bind", observe_bind)
         with pytest.raises(OSError) as refusal:
-            make_server("127.0.0.1", occupied.getsockname()[1], tmp_path)
-        assert refusal.value.errno == errno.EADDRINUSE
+            make_server("127.0.0.1", address[1], tmp_path)
+        # OS-specific errno names are not the binding/preservation contract.
+        assert len(attempts) == len(errors) == 1
+        failed_listener, requested = attempts[0]
+        assert requested == address
+        assert refusal.value is errors[0]
+        assert failed_listener.fileno() == -1
+        assert occupied.getsockname() == address
+        # Refusing Sinter must not disturb the listener that already owns the port.
+        with socket.socket() as peer:
+            peer.settimeout(3)
+            peer.connect(address)
+            connection, _ = occupied.accept()
+            with connection, peer.makefile("rb") as incoming:
+                marker = b"fictional original listener"
+                connection.sendall(marker)
+                assert incoming.read(len(marker)) == marker
+        assert len(attempts) == 1
 
 
 @pytest.mark.parametrize("bind", ["0.0.0.0", "::", "evil.invalid", "192.0.2.1"])
