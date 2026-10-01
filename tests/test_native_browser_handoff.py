@@ -1058,7 +1058,7 @@ def test_failed_tk_launcher_exit_does_not_claim_durable_in_memory_recovery(
 ):
     """A real subprocess exits; daemon requests and unsaved memory are not a backup."""
     script = r"""
-import json, sys, time
+import faulthandler, json, sys, time
 from pathlib import Path
 root = Path(sys.argv[1])
 root.mkdir(parents=True)
@@ -1067,6 +1067,8 @@ def checkpoint(stage):
     stages.append({'stage':stage, 'monotonic':time.monotonic()})
     (root/'child-stages.json').write_text(json.dumps(stages), encoding='utf-8')
 checkpoint('child_started')
+faulthandler.enable()
+faulthandler.dump_traceback_later(10, repeat=False)
 import signal, threading
 from http.client import HTTPConnection
 from types import SimpleNamespace
@@ -1080,14 +1082,21 @@ def refuse(*args, **kwargs):
     raise AssertionError('No provider or credential request')
 for key in ('_open', '_load_key', 'chat', 'search'):
     setattr(client, key, refuse)
+checkpoint('runtime_initialization_started')
 runtime = Runtime(root)
+checkpoint('runtime_initialized')
 controller = NativeController(runtime)
+checkpoint('controller_initialized')
 controller.edit_document({'title':'Saved original', 'questions':'Unknown approval?',
  'documents':[{'title':'Exact quote','content':'AUD110 including GST; production unknown.'}]})
+checkpoint('source_save_started')
 saved_source = controller.save()
+checkpoint('source_saved')
 controller.edit_document({**controller.document, 'title':'Unsaved in memory'})
 controller.variables = {'excerpt':'Unsaved answer — é.'}
+checkpoint('workbench_initialization_started')
 workbench = NativeBrowserWorkbench(runtime.app)
+checkpoint('workbench_initialized')
 saved = runtime.app.campaigns.save({'title':'Saved fictional campaign'})
 checkpoint('fixture_saved')
 actual_save = runtime.app.campaigns.save
@@ -1145,6 +1154,7 @@ observations = {'exit_code':code, 'runtime_closed_before_exit':runtime._closed,
  'signal_restored':signal.getsignal(signal.SIGTERM)==previous}
 (root/'before-process-exit.json').write_text(json.dumps(observations), encoding='utf-8')
 checkpoint('observations_saved')
+faulthandler.cancel_dump_traceback_later()
 raise SystemExit(code)
 """
     environment = dict(os.environ)
@@ -1209,6 +1219,13 @@ raise SystemExit(code)
     assert [row["stage"] for row in stages] == [
         "child_started",
         "imports_complete",
+        "runtime_initialization_started",
+        "runtime_initialized",
+        "controller_initialized",
+        "source_save_started",
+        "source_saved",
+        "workbench_initialization_started",
+        "workbench_initialized",
         "fixture_saved",
         "request_admitted",
         "cleanup_started",

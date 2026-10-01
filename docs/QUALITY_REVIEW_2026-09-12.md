@@ -1171,3 +1171,38 @@ import overrides. POSIX remains exact. All 45 focused tests pass locally,
 including seven bootstrap/refusal/contamination cases; actual hosted Windows
 replay is still required. Original failed XML remains retained. The Linux-only
 prior profile, published RC3 inputs and historical qualification stay unchanged.
+
+The subsequent `7a65158` hosted run passes both Windows Python 3.10/3.13 jobs.
+Each retained XML contains 2,913 passing cases and 373 explicit skips; all 45
+published-RC3 fixture cases execute and pass. This verifies the source-fixture
+bootstrap correction on those runners. The aggregate run still fails its two
+macOS jobs, and no Windows installer is qualified.
+
+### 2 October: remove local startup's reverse-lookup dependency
+
+Both retained `c5c219a` macOS child journals finish imports but never reach the
+saved-fixture checkpoint. They therefore show a startup stall before shutdown,
+without identifying its actual Darwin cause. A finite owned reproduction locates
+a concrete unbounded reverse lookup inherited from Python's HTTP server when
+constructing the local workbench. The numerical-binding change removes that
+descriptive lookup while preserving the actual socket binding and bound port.
+
+Root's current composition passes 198 focused tests in 64.34 seconds, including
+real IPv4/IPv6/localhost requests, source saves, Host/Origin/session checks,
+native ownership, occupied-socket refusal and the Windows fixture correction.
+The unchanged default five-second product deadline and measured 0.02-second
+failed close remain distinct from the finite 20-second child harness. Finer
+startup stages and a one-shot ten-second stack diagnostic make any further
+hosted stall observable. Three existing default-xunit2 property warnings remain
+visible; no strict-schema or warning-free claim is made.
+
+Original forbidden-resolver failures and the initial diagnostic-producer failure
+remain retained. This source fix does not establish the actual macOS cause,
+qualify a platform installer or change any published receipt. Fresh independent
+source review accepts this bounded change: 153 focused tests pass independently,
+and real requests preserve the same security/save outcomes while the four
+descriptive resolver calls fall to zero. A deliberately failed primary test
+retains its ten-second stack and last completed stage before the unchanged
+20-second timeout, leaving process exit and cleanup honestly unknown. Its review
+also corrects a private evidence filename; the actual fixture guide's bytes were
+preserved. Hosted macOS replay and installed qualification remain outstanding.

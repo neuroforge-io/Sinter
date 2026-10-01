@@ -5,6 +5,11 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Start the local workbench without an unnecessary reverse hostname lookup.
+  Keep real IPv4/IPv6 binding, Host/Origin/session checks and native shutdown
+  limits intact. Add finer startup diagnostics for the unresolved hosted macOS
+  timeout; the controlled lookup reproduction does not establish its Darwin cause.
+
 - Preserve Windows interpreter startup requirements in the fictional upgrade
   test, with a fictional profile directory and no inherited model credentials.
   POSIX behavior and Linux-only fixture admission remain unchanged. Hosted

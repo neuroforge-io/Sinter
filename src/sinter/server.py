@@ -12,6 +12,7 @@ import select
 import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import TCPServer
 from urllib.parse import quote, unquote, urlsplit
 
 from . import (
@@ -51,6 +52,12 @@ class LocalServer(ThreadingHTTPServer):
         self.app = app
         self._connections = threading.BoundedSemaphore(16)
         super().__init__(address, Handler)
+
+    def server_bind(self):
+        # A local listener needs its bound address, not an unbounded reverse
+        # hostname lookup before the offline workbench can start.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
     def get_request(self):
         request, address = super().get_request()
