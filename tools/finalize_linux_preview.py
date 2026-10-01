@@ -42,6 +42,7 @@ test "$(id -u)" = 0
 grep -q '^VERSION_ID="22.04"$' /etc/os-release
 cat /etc/os-release > /proof/os-release.txt
 getconf GNU_LIBC_VERSION > /proof/libc.txt
+cat /proof/os-release.txt /proof/libc.txt
 # Check installed packages and actual filesystem, not just PATH discovery.
 dpkg-query -W -f='${binary:Package} ${db:Status-Abbrev}\n' \
   > /proof/preinstalled-packages.txt
@@ -56,19 +57,28 @@ find / -xdev -type d \( -name site-packages -o -name dist-packages \
 test ! -s /proof/preinstalled-python-files.txt
 test ! -s /proof/preinstalled-account-files.txt
 test ! -e /opt/neuroforge/sinter/Sinter
+printf '%s\n' 'Actual preinstall package inventory:'
+cat /proof/preinstalled-packages.txt
+printf '%s\n' 'Python/account filesystem inventories are empty; candidate absent.'
 printf '%s\n' '{"schema":"sinter-clean-preflight/v1",' \
   '"python_packages":0,"python_files":0,"account_packages":0,' \
   '"candidate_preinstalled":false}' > /proof/preflight.json
+cat /proof/preflight.json
 dpkg -i /candidate/Sinter-0.5.4rc3-linux-x64.deb
+dpkg-query -W -f='${binary:Package} ${Version} ${db:Status-Abbrev}\n' sinter
+sha256sum /opt/neuroforge/sinter/Sinter > /proof/installed-binary.sha256
+cat /proof/installed-binary.sha256
 mkdir -p /tmp/sinter-clean-home /tmp/sinter-clean-data
 chmod 700 /tmp/sinter-clean-home /tmp/sinter-clean-data
 env -i PATH=/usr/bin:/bin LANG=C.UTF-8 TZ=UTC HOME=/tmp/sinter-clean-home \
   XDG_DATA_HOME=/tmp/sinter-clean-data /opt/neuroforge/sinter/Sinter \
   --self-test /proof/clean-ubuntu-installed-test.json
+cat /proof/clean-ubuntu-installed-test.json
 dpkg -r sinter
 test ! -e /opt/neuroforge/sinter/Sinter
 printf '%s\n' '{"installed_selftest_completed":true,"package_removed":true}' \
   > /proof/removal.json
+cat /proof/removal.json
 """
 
 
@@ -119,7 +129,7 @@ def admit_archive(path: Path) -> None:
             seen.add(row.filename)
 
 
-def validate_clean(proof: Path, native: dict) -> dict:
+def validate_clean(proof: Path, native: dict, binary: str) -> dict:
     preflight = json.loads((proof / "preflight.json").read_bytes())
     expected = {
         "schema": "sinter-clean-preflight/v1",
@@ -139,6 +149,12 @@ def validate_clean(proof: Path, native: dict) -> dict:
         name, status = line.split(maxsplit=1)
         if name.startswith(("python", "libpython", "pypy")) and status.startswith("ii"):
             raise ValueError("A system Python package was preinstalled.")
+    if (proof / "installed-binary.sha256").read_text().strip() != (
+        binary + "  /opt/neuroforge/sinter/Sinter"
+    ):
+        raise ValueError(
+            "Actually installed executable differs from the original binary."
+        )
     clean = json.loads((proof / "clean-ubuntu-installed-test.json").read_bytes())
     if json.dumps(clean, sort_keys=True) != json.dumps(
         native["installed_test"], sort_keys=True
@@ -157,7 +173,7 @@ def validate_clean(proof: Path, native: dict) -> dict:
     return clean
 
 
-def clean_install(candidate: Path, proof: Path, native: dict) -> dict:
+def clean_install(candidate: Path, proof: Path, native: dict, binary: str) -> dict:
     proof.mkdir()
     runner = proof / "clean-install.sh"
     runner.write_text(CLEAN_SCRIPT)
@@ -217,7 +233,7 @@ def clean_install(candidate: Path, proof: Path, native: dict) -> dict:
             ["docker", "start", "--attach", container],
             log=proof / "clean-ubuntu-installed-test.log",
         )
-        result = validate_clean(proof, native)
+        result = validate_clean(proof, native, binary)
     finally:
         command(["docker", "rm", "--force", container], timeout=30)
     remaining = command(
@@ -343,7 +359,7 @@ def finalize(artifact: Path, output: Path) -> None:
     source = _source(folder, VERSION, COMMIT, ROOT)
     binary = _native_payload(folder, VERSION, source, native)
     started = time.monotonic()
-    clean_install(folder, proof, native)
+    clean_install(folder, proof, native, binary)
     clean_seconds = round(time.monotonic() - started, 3)
     try:
         assemble(folder, ROOT, COMMIT)

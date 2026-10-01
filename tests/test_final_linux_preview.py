@@ -10,6 +10,8 @@ import pytest
 
 from tools import finalize_linux_preview as final
 
+BINARY = "a" * 64
+
 
 def proof(tmp_path):
     values = {
@@ -34,12 +36,15 @@ def proof(tmp_path):
     (tmp_path / "preinstalled-account-files.txt").write_text("")
     (tmp_path / "os-release.txt").write_text('VERSION_ID="22.04"\n')
     (tmp_path / "libc.txt").write_text("glibc 2.35\n")
+    (tmp_path / "installed-binary.sha256").write_text(
+        BINARY + "  /opt/neuroforge/sinter/Sinter\n"
+    )
     return {"installed_test": values["clean-ubuntu-installed-test.json"]}
 
 
 def test_actual_package_and_filesystem_proof_matches(tmp_path):
     native = proof(tmp_path)
-    assert final.validate_clean(tmp_path, native) == native["installed_test"]
+    assert final.validate_clean(tmp_path, native, BINARY) == native["installed_test"]
 
 
 @pytest.mark.parametrize(
@@ -51,6 +56,7 @@ def test_actual_package_and_filesystem_proof_matches(tmp_path):
         ("os-release.txt", 'VERSION_ID="24.04"\n'),
         ("libc.txt", "glibc 2.39\n"),
         ("clean-ubuntu-installed-test.json", '{"frozen":false}'),
+        ("installed-binary.sha256", "changed  /opt/neuroforge/sinter/Sinter\n"),
         (
             "removal.json",
             '{"installed_selftest_completed":true,"package_removed":false}',
@@ -64,7 +70,7 @@ def test_absence_claim_or_hidden_path_cannot_replace_independent_proof(
     native = proof(tmp_path)
     (tmp_path / name).write_text(content)
     with pytest.raises(ValueError):
-        final.validate_clean(tmp_path, native)
+        final.validate_clean(tmp_path, native, BINARY)
 
 
 @pytest.mark.parametrize("path", ["../escape", "/escape", "a\\b", "a:b"])
@@ -112,7 +118,7 @@ def test_false_does_not_substitute_for_measured_zero(tmp_path, field, value):
     data[field] = value
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError):
-        final.validate_clean(tmp_path, native)
+        final.validate_clean(tmp_path, native, BINARY)
 
 
 def test_clean_image_has_no_python_tooling_and_app_is_not_source_mode():
