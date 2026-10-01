@@ -8,6 +8,7 @@ import json
 import signal
 import sqlite3
 import subprocess
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,6 +25,42 @@ DIAGNOSTICS = {
     "Tcl_resources_available": True,
     "bundled_Tk_resources_available": True,
 }
+
+
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_workspace_snapshot_closes_sqlite_handles_on_success_and_failure(
+    tmp_path, monkeypatch, corrupt
+):
+    (tmp_path / "preferences.json").write_text("{}", encoding="utf-8")
+    connect = sqlite3.connect
+    with closing(connect(tmp_path / "workspace.sqlite3")) as db, db:
+        db.execute("CREATE TABLE fictional (value TEXT)")
+    connections = []
+
+    class TrackedConnection(sqlite3.Connection):
+        def execute(self, statement, *args, **kwargs):
+            if corrupt and statement == "PRAGMA integrity_check":
+                return SimpleNamespace(fetchall=lambda: [("fictional corruption",)])
+            return super().execute(statement, *args, **kwargs)
+
+    def tracked_connect(*args, **kwargs):
+        connection = connect(*args, factory=TrackedConnection, **kwargs)
+        connections.append(connection)
+        return connection
+
+    # Retain strong references: collection must not substitute for explicit
+    # closure before Windows cleanup/replacement or an exceptional return.
+    monkeypatch.setattr(sqlite3, "connect", tracked_connect)
+    if corrupt:
+        with pytest.raises(RuntimeError, match="SQLite integrity"):
+            tool.workspace_snapshot(tmp_path)
+    else:
+        assert tool.workspace_snapshot(tmp_path)["sqlite_user_version"] == 0
+    assert len(connections) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+        connections[0].execute("SELECT 1")
+
+
 OLD_CALLBACK_STDERR = (
     "Exception in Tkinter callback\n"
     "Traceback (most recent call last):\n"
@@ -447,7 +484,7 @@ def test_saved_fictional_bytes_must_survive_clean_shutdown(harness, mutation):
             # Even semantically equivalent whitespace must not rewrite originals.
             preferences.write_bytes(preferences.read_bytes() + b" ")
             return
-        with sqlite3.connect(workspace / "workspace.sqlite3") as db:
+        with closing(sqlite3.connect(workspace / "workspace.sqlite3")) as db, db:
             if mutation == "revision":
                 db.execute("UPDATE casebooks SET revision=revision+1")
             elif mutation == "schema":
@@ -717,17 +754,17 @@ def test_same_live_file_persistent_metadata_must_survive_launch(harness, name):
         if name == "encoding":
             # Reconstruct identical logical bytes in a differently encoded file.
             # No current source text or preference is edited by this probe.
-            with sqlite3.connect(original) as db:
+            with closing(sqlite3.connect(original)) as db, db:
                 dump = "\n".join(db.iterdump())
                 version = db.execute("PRAGMA user_version").fetchone()[0]
             replacement = workspace / "fictional-reencoded.sqlite3"
-            with sqlite3.connect(replacement) as db:
+            with closing(sqlite3.connect(replacement)) as db, db:
                 db.execute("PRAGMA encoding='UTF-16le'")
                 db.executescript(dump)
                 db.execute("PRAGMA user_version=" + str(version))
             replacement.replace(original)
         else:
-            with sqlite3.connect(original) as db:
+            with closing(sqlite3.connect(original)) as db, db:
                 if name == "application_id":
                     db.execute("PRAGMA application_id=7319")
                 elif name == "page_size":
