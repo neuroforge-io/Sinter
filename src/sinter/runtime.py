@@ -693,13 +693,91 @@ class Runtime:
             "connection_warning": warning,
             "model_selection_help": (
                 "For exact source previews, choose an explicit model through "
-                "browser Settings or launch with NEUROFORGE_MODEL set to your "
+                "native Assistant setup, browser Settings, or launch with "
+                "NEUROFORGE_MODEL set to your "
                 "provider's verified model ID. "
                 "This status check never discovers or tests models."
                 if connection["model"] == client.AUTO_MODEL
                 else ""
             ),
         }
+
+    def _dispatch(self, method, route, body):
+        """One route adapter for domain calls and trusted presentation settings."""
+        parsed = urlsplit(route)
+        capture = _Capture(self.app)
+        with capture._request_connection(
+            parsed.path, body if method == "POST" else None
+        ):
+            if method == "GET":
+                capture._dispatch_get(parsed, parsed.path)
+            else:
+                capture._dispatch_post(parsed.path, body)
+        if capture.status >= 400:
+            raise OperationError(
+                capture.result.get("error")
+                or capture.result.get("message")
+                or "The operation was unavailable.",
+                code="operation_unavailable",
+                status=capture.status,
+                partial_result=capture.result,
+            )
+        return capture
+
+    def connection_settings(
+        self,
+        values=None,
+        *,
+        confirm_endpoint=False,
+        api_key=None,
+        discover=False,
+        wait=True,
+    ):
+        """Trusted UI settings/catalogue over the same web routes.
+
+        Keys are write-only session inputs. This is deliberately outside the
+        CLI operation catalogue; arbitrary routes/account actions remain closed.
+        Discovery is explicit metadata retrieval, never inference or a save.
+        """
+        if self._closed:
+            raise OperationError("This runtime is closed.", code="runtime_closed")
+        try:
+            if values is None:
+                if discover or api_key is not None:
+                    raise ValueError("Provide the model connection fields.")
+                return self._dispatch("GET", "/api/settings", {}).result
+            if not isinstance(values, dict) or set(values) - {
+                "api_url",
+                "provider",
+                "model",
+                "max_tokens",
+            }:
+                raise ValueError("Provide only the model connection fields.")
+            body = json.loads(
+                json.dumps(
+                    {
+                        "settings": values,
+                        "confirm_endpoint": confirm_endpoint is True,
+                        **({"api_key": api_key} if api_key is not None else {}),
+                    },
+                    ensure_ascii=False,
+                    allow_nan=False,
+                )
+            )
+            route = "/api/models" if discover else "/api/settings"
+            if discover and not wait:
+                identifier = self.app.jobs.submit(
+                    lambda progress: (
+                        progress("Loading model names; no source content is sent."),
+                        self._dispatch("POST", route, body).result,
+                    )[1],
+                    label="Model catalogue",
+                    timeout=65,
+                )
+                return {"id": identifier}
+            return self._dispatch("POST", route, body).result
+        except Exception as exc:
+            raise _public_error(exc) from None
 
     def call(self, operation_id, payload=None, *, wait=True, progress=None):
         """Return existing domain JSON; wait for this runtime's jobs by default."""
@@ -749,24 +827,7 @@ class Runtime:
                 route = route.replace("{id}", quote(identifier, safe=""))
             if operation_id == "workbench.example":
                 route += "?" + urlencode({"workflow": body.get("workflow", "brief")})
-            parsed = urlsplit(route)
-            capture = _Capture(self.app)
-            with capture._request_connection(
-                parsed.path, body if operation["method"] == "POST" else None
-            ):
-                if operation["method"] == "GET":
-                    capture._dispatch_get(parsed, parsed.path)
-                else:
-                    capture._dispatch_post(parsed.path, body)
-            if capture.status >= 400:
-                raise OperationError(
-                    capture.result.get("error")
-                    or capture.result.get("message")
-                    or "The operation was unavailable.",
-                    code="operation_unavailable",
-                    status=capture.status,
-                    partial_result=capture.result,
-                )
+            capture = self._dispatch(operation["method"], route, body)
             if capture.status == 202 and wait:
                 identifier = capture.result.get("id") or capture.result.get("job_id")
                 return self.wait(identifier, progress=progress)

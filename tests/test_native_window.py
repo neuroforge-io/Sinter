@@ -708,3 +708,120 @@ def test_real_native_sigterm_restores_handler_and_allows_repeat_launch(tmp_path)
             assert signal.getsignal(signal.SIGTERM) is previous
         finally:
             window.close()
+
+
+@pytest.mark.skipif(
+    os.environ.get("SINTER_NATIVE_GUI_TEST") != "1",
+    reason="Real Tk onboarding requires explicitly enabled desktop access.",
+)
+def test_real_native_first_run_setup_catalogue_save_preview_negation_and_restart(
+    tmp_path, monkeypatch
+):
+    monkeypatch.delenv("NEUROFORGE_MODEL", raising=False)
+    workspace = tmp_path / "fictional-first-run"
+    window = NativeWindow(workspace)
+    monkeypatch.setattr(
+        window.messages,
+        "showerror",
+        lambda *_a, **_k: pytest.fail("unexpected GUI error"),
+    )
+    monkeypatch.setattr(window.messages, "askyesno", lambda *_a, **_k: True)
+    catalogue_calls, model_calls = [], []
+
+    def catalogue():
+        catalogue_calls.append(client.connection_identity())
+        return [{"id": "erais-native-qwen3", "object": "model"}]
+
+    def answer(messages, max_tokens):
+        model_calls.append((messages, max_tokens))
+        return client.ChatResult(
+            "The ramp inspection remains unconfirmed. [e1]",
+            total_tokens=18,
+            finish_reason="stop",
+            model="erais-native-qwen3",
+        )
+
+    monkeypatch.setattr(client, "list_models", catalogue)
+    monkeypatch.setattr(templates, "chat", answer)
+
+    def wait():
+        deadline = time.monotonic() + 5
+        while window.active_job and time.monotonic() < deadline:
+            window.root.update()
+            time.sleep(0.01)
+        assert window.active_job is None
+
+    try:
+        window.example()
+        window.title_var.set("Fictional ramp note")
+        window.root.update()
+        window.title_entry.focus_force()
+        window.root.update()
+        window.title_entry.event_generate("<Control-a>")
+        window.root.update()
+        assert window.title_entry.selection_present()
+        assert window.title_entry.index("sel.first") == 0
+        assert window.title_entry.index("sel.last") == len("Fictional ramp note")
+        window.sources_tree.selection_set("0")
+        window._source_selected()
+        exact = "Wholly fictional test note: The ramp inspection remains unconfirmed."
+        window.source_text.delete("1.0", "end")
+        window.source_text.insert("1.0", exact)
+        window.questions_text.delete("1.0", "end")
+        window.questions_text.insert("1.0", "Is the ramp inspection confirmed?")
+        window.root.update()
+        window.save_project()
+        window.build_report()
+        wait()
+        report = copy.deepcopy(window.controller.result)
+        assert report["markdown"].startswith("#")
+        assert not window.report_text.get("1.0", "end").startswith("#")
+        assert window.report_text.tag_ranges("heading")
+        window.excerpts_tree.selection_set("0")
+        window.use_excerpt()
+        with pytest.raises(OperationError, match="exact identifier"):
+            window.preview()
+        assert not catalogue_calls and not model_calls
+        window.pages.select(window.setup_page)
+        assert window.connection_vars["model"].get() == "auto"
+        window.connection_confirm_box.invoke()
+        window.models_button.invoke()
+        wait()
+        assert len(catalogue_calls) == 1
+        assert window.controller.result == report
+        assert window.connection_vars["model"].get() == "auto"
+        assert tuple(window.connection_boxes["model"]["values"]) == (
+            "erais-native-qwen3",
+        )
+        window.connection_vars["model"].set("erais-native-qwen3")
+        window.connection_save_button.invoke()
+        assert not window.controller.consent
+        window.pages.select(window.answer_page)
+        window.preview_button.invoke()
+        prepared = copy.deepcopy(window.controller.prepared)
+        assert prepared["request"]["model"] == "erais-native-qwen3"
+        window.consent_box.invoke()
+        window.ask_button.invoke()
+        wait()
+        assert len(model_calls) == 1
+        assert [vars(message) for message in model_calls[0][0]] == prepared["request"][
+            "messages"
+        ]
+        result = window.controller.result
+        assert result["sources"][0]["excerpts"] == prepared["excerpts"]
+        assert "remains unconfirmed" in window.report_text.get("1.0", "end")
+        assert "UNVERIFIED MODEL DRAFT" in window.report_text.get("1.0", "end")
+        exported = tmp_path / "fictional-ramp-answer.json"
+        window.controller.export_result(exported)
+        assert json.loads(exported.read_text(encoding="utf-8")) == result
+        assert not window.consent_var.get()
+        window.close()
+        window = NativeWindow(workspace)
+        assert window.connection_vars["model"].get() == "erais-native-qwen3"
+        assert (
+            window.controller.runtime.status()["connection"]["model"]
+            == "erais-native-qwen3"
+        )
+        assert len(catalogue_calls) == 1 and len(model_calls) == 1
+    finally:
+        window.close()

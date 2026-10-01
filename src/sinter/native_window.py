@@ -16,6 +16,7 @@ import stat
 import threading
 from pathlib import Path
 
+from . import client
 from .outputs import atomic_write_text
 from .presentation import result_markdown
 
@@ -55,6 +56,39 @@ def read_selected_text(path: str | Path, limit: int = TEXT_BYTES) -> str:
         return content.decode("utf-8-sig")
     except UnicodeError as exc:
         raise ValueError("Choose UTF-8 text or a Sinter JSON backup.") from exc
+
+
+def readable_report_lines(markdown):
+    """Presentation-only block styles; the original Markdown remains exported."""
+    fenced = False
+    for line in markdown.splitlines(keepends=True):
+        if line.startswith("```"):
+            fenced = not fenced
+            yield line, "code"
+        elif fenced:
+            yield line, "code"
+        elif line.startswith("> "):
+            yield line[2:], "quote"
+        elif line.startswith(("# ", "## ", "### ", "#### ")):
+            yield line.split(" ", 1)[1], "heading"
+        elif line.startswith("- "):
+            yield "• " + line[2:], "bullet"
+        else:
+            yield line, "body"
+
+
+def select_all(event):
+    """Standard select-all for this window's entries and source/report text."""
+    widget = event.widget
+    if widget.winfo_class() in {"Entry", "TEntry", "TCombobox"}:
+        widget.selection_range(0, "end")
+        widget.icursor("end")
+    elif widget.winfo_class() == "Text":
+        widget.tag_add("sel", "1.0", "end-1c")
+        widget.mark_set("insert", "end-1c")
+    else:
+        return None
+    return "break"
 
 
 class NativeController:
@@ -191,6 +225,30 @@ class NativeController:
         if values != self.variables:
             self.variables = values
             self.invalidate()
+
+    def connection_settings(self):
+        self._check()
+        return self.runtime.connection_settings()
+
+    def save_connection(self, values, *, confirm_endpoint=False, api_key=None):
+        self._check()
+        result = self.runtime.connection_settings(
+            values,
+            confirm_endpoint=confirm_endpoint,
+            api_key=api_key,
+        )
+        self.invalidate()
+        return result
+
+    def start_models(self, values, *, confirm_endpoint=False, api_key=None):
+        self._check()
+        return self.runtime.connection_settings(
+            values,
+            confirm_endpoint=confirm_endpoint,
+            api_key=api_key,
+            discover=True,
+            wait=False,
+        )["id"]
 
     def preview(self):
         self._check()
@@ -333,6 +391,9 @@ class NativeWindow:
         self.active_job = None
         self._job_generation = None
         self._job_kind = None
+        self._setup_generation = 0
+        self._setting_paint = False
+        self._connection_key_edited = False
         try:
             if runtime_factory is None:
                 from .runtime import Runtime
@@ -406,10 +467,12 @@ class NativeWindow:
         self.source_page = ttk.Frame(self.pages, padding=12)
         self.report_page = ttk.Frame(self.pages, padding=12)
         self.answer_page = ttk.Frame(self.pages, padding=12)
+        self.setup_page = ttk.Frame(self.pages, padding=12)
         self.status_page = ttk.Frame(self.pages, padding=12)
         for page, name in (
             (self.source_page, "Sources"),
             (self.report_page, "Evidence & reports"),
+            (self.setup_page, "Assistant setup"),
             (self.answer_page, "Short AI answer"),
             (self.status_page, "Status & scope"),
         ):
@@ -419,9 +482,8 @@ class NativeWindow:
         header = ttk.Frame(self.source_page)
         header.pack(fill="x")
         ttk.Label(header, text="Project title").pack(side="left")
-        ttk.Entry(header, textvariable=self.title_var).pack(
-            side="left", fill="x", expand=True, padx=8
-        )
+        self.title_entry = ttk.Entry(header, textvariable=self.title_var)
+        self.title_entry.pack(side="left", fill="x", expand=True, padx=8)
         self.format_box = ttk.Combobox(
             header,
             textvariable=self.format_var,
@@ -450,9 +512,11 @@ class NativeWindow:
         self.sources_tree.pack(fill="x", pady=4)
         self.sources_tree.bind("<<TreeviewSelect>>", self._source_selected)
         self.source_title_var = tk.StringVar(value="")
+        ttk.Label(self.source_page, text="Selected source title").pack(anchor="w")
         ttk.Entry(self.source_page, textvariable=self.source_title_var).pack(
             fill="x", pady=4
         )
+        ttk.Label(self.source_page, text="Selected source text").pack(anchor="w")
         self.source_text = self._text(self.source_page, height=8)
         ttk.Label(
             self.source_page,
@@ -505,6 +569,7 @@ class NativeWindow:
         report_tabs.add(exact, text="Exact JSON / provenance")
         self.report_text = self._text(readable, readonly=True)
         self.report_json = self._text(exact, readonly=True)
+        self._build_connection_widgets()
         ttk.Label(
             self.answer_page,
             text="Optional short draft. A selected excerpt "
@@ -512,6 +577,12 @@ class NativeWindow:
             "Model output and citation IDs do not establish factual support.",
             wraplength=800,
         ).pack(anchor="w")
+        self._button(
+            self.answer_page,
+            "Choose provider & model…",
+            lambda: self.pages.select(self.setup_page),
+            inline=False,
+        )
         self.answer_title_var = tk.StringVar(value="")
         ttk.Label(self.answer_page, text="Selected source title").pack(
             anchor="w", pady=(8, 0)
@@ -572,6 +643,291 @@ class NativeWindow:
                 lambda event, callback=handler: self._modified(event, callback),
             )
         self.root.bind("<Control-s>", lambda event: self._perform(self.save_project))
+        self.root.bind("<Control-a>", select_all)
+        if self.root.tk.call("tk", "windowingsystem") == "aqua":
+            self.root.bind("<Command-a>", select_all)
+
+    def _build_connection_widgets(self):
+        tk, ttk = self.tk, self.ttk
+        # Keep setup usable at the minimum window height rather than clipping
+        # the explicit destination approval and Save controls below the page.
+        self.setup_scroll = tk.Canvas(self.setup_page, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(
+            self.setup_page, orient="vertical", command=self.setup_scroll.yview
+        )
+        self.setup_scroll.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        self.setup_scroll.pack(side="left", fill="both", expand=True)
+        page = ttk.Frame(self.setup_scroll, padding=(0, 0, 12, 0))
+        item = self.setup_scroll.create_window((0, 0), window=page, anchor="nw")
+        page.bind(
+            "<Configure>",
+            lambda _event: self.setup_scroll.configure(
+                scrollregion=self.setup_scroll.bbox("all")
+            ),
+        )
+        self.setup_scroll.bind(
+            "<Configure>",
+            lambda event: self.setup_scroll.itemconfigure(item, width=event.width),
+        )
+        ttk.Label(
+            page,
+            text="Choose the optional assistant connection",
+            font=("TkDefaultFont", 14, "bold"),
+        ).pack(anchor="w")
+        ttk.Label(
+            page,
+            text="Source evidence works offline. Loading model names sends "
+            "no source text and generates no answer. A catalogue does not prove "
+            "free inference, availability or quality.",
+            wraplength=760,
+        ).pack(anchor="w", pady=8)
+        self.connection_vars = {
+            name: tk.StringVar()
+            for name in ("provider", "api_url", "model", "max_tokens")
+        }
+        self.connection_boxes = {}
+        for name, label in (
+            ("provider", "API style"),
+            ("api_url", "API base address"),
+            ("model", "Exact model identifier"),
+            ("max_tokens", "Maximum output tokens"),
+        ):
+            ttk.Label(page, text=label).pack(anchor="w", pady=(6, 0))
+            if name in {"provider", "model"}:
+                box = ttk.Combobox(page, textvariable=self.connection_vars[name])
+                if name == "provider":
+                    box.configure(
+                        values=("openai-compatible", "anthropic", "chatgpt"),
+                        state="readonly",
+                    )
+            else:
+                box = ttk.Entry(page, textvariable=self.connection_vars[name])
+            box.pack(fill="x", pady=2)
+            self.connection_boxes[name] = box
+        ttk.Label(
+            page,
+            text="Remote APIs require HTTPS; an installed local server may "
+            "use HTTP on loopback. Enter an exact provider ID or load the catalogue "
+            "and explicitly select one. ChatGPT subscriptions and provider API keys "
+            "are separate. The chatgpt style uses an already configured Sinter "
+            "account; account sign-in remains in the full workbench.",
+            wraplength=760,
+        ).pack(anchor="w", pady=8)
+        self.connection_key_var = tk.StringVar()
+        ttk.Label(
+            page, text="New API key for this session (optional, write-only)"
+        ).pack(anchor="w")
+        self.connection_key_box = ttk.Entry(
+            page,
+            textvariable=self.connection_key_var,
+            show="•",
+        )
+        self.connection_key_box.pack(fill="x", pady=2)
+        ttk.Label(
+            page,
+            text="Leave blank to retain a saved session key. Keys are never "
+            "saved to disk or exports. Public endpoints may allow anonymous access; "
+            "authentication or charges can still be required. Default NeuroForge "
+            "environment/key-file credentials may apply if configured by you.",
+            wraplength=760,
+        ).pack(anchor="w", pady=4)
+        self.connection_confirm_var = tk.BooleanVar(value=False)
+        self.connection_confirm_box = ttk.Checkbutton(
+            page,
+            variable=self.connection_confirm_var,
+            text="I approve contacting the API address displayed above.",
+        )
+        self.connection_confirm_box.pack(anchor="w", pady=6)
+        buttons = ttk.Frame(page)
+        buttons.pack(fill="x")
+        self.models_button = self._button(
+            buttons, "Load available models", self.load_models
+        )
+        self.connection_save_button = self._button(
+            buttons, "Save connection locally", self.save_connection
+        )
+        secondary = ttk.Frame(page)
+        secondary.pack(fill="x")
+        self._button(secondary, "Forget session key", self.forget_connection_key)
+        self._button(secondary, "Reload saved connection", self.reload_connection)
+        self.connection_notice = tk.StringVar()
+        ttk.Label(page, textvariable=self.connection_notice, wraplength=760).pack(
+            anchor="w", pady=8
+        )
+        self._paint_connection(self.controller.connection_settings())
+        for name, variable in self.connection_vars.items():
+            variable.trace_add(
+                "write", lambda *_, field=name: self._connection_changed(field)
+            )
+        self.connection_key_var.trace_add(
+            "write", lambda *_: self._connection_changed("key")
+        )
+
+    def _paint_connection(self, public):
+        self._setting_paint = True
+        try:
+            self._connection_saved = public["settings"]
+            for name, variable in self.connection_vars.items():
+                variable.set(str(public["settings"][name]))
+            self.connection_key_var.set("")
+            self.connection_key_box.configure(
+                state="disabled"
+                if public["settings"]["provider"] == "chatgpt"
+                else "normal"
+            )
+            self._connection_key_edited = False
+            self.connection_confirm_var.set(False)
+            self.connection_boxes["model"].configure(values=())
+            message = (
+                "Connection saved locally. "
+                + (
+                    "A write-only key is held for this session. "
+                    if public["has_session_key"]
+                    else "No session key is held. "
+                )
+                + "Preview and approve the exact source request before asking."
+            )
+            if public["environment_override"]:
+                message += (
+                    " Launcher environment overrides the saved API address/model; "
+                    "Status shows the effective connection. Change that launcher "
+                    "configuration to use the selection here."
+                )
+            if public.get("warning"):
+                message += " " + public["warning"]
+            self.connection_notice.set(message)
+        finally:
+            self._setting_paint = False
+
+    def _connection_changed(self, field):
+        if self._setting_paint or self.closed:
+            return
+        self._setup_generation += 1
+        self.controller.invalidate()
+        if hasattr(self, "consent_var"):
+            self._clear_preview()
+        if field in {"api_url", "provider"}:
+            self._setting_paint = True
+            try:
+                self.connection_key_var.set("")
+                self._connection_key_edited = False
+                self.connection_confirm_var.set(False)
+                self.connection_boxes["model"].configure(values=())
+                self.connection_key_box.configure(
+                    state="disabled"
+                    if self.connection_vars["provider"].get() == "chatgpt"
+                    else "normal"
+                )
+            finally:
+                self._setting_paint = False
+        elif field == "key":
+            self._connection_key_edited = True
+        self.connection_notice.set(
+            "Unsaved connection changes. Save before previewing a source request."
+        )
+
+    def _connection_draft(self):
+        values = {
+            name: variable.get().strip()
+            for name, variable in self.connection_vars.items()
+        }
+        try:
+            values["max_tokens"] = int(values["max_tokens"])
+        except ValueError:
+            raise ValueError(
+                "Enter a whole number for maximum output tokens."
+            ) from None
+        return values
+
+    def load_models(self):
+        if self.active_job:
+            raise ValueError("One task is already active. Stop or finish it first.")
+        if not self.connection_confirm_var.get():
+            raise ValueError(
+                "Approve the displayed API destination before loading its model list."
+            )
+        values = self._connection_draft()
+        values["model"] = "probe-placeholder"
+        # Discovery has no output. A valid native 1-token cap must not fail
+        # the placeholder's general-provider minimum or change the saved cap.
+        values["max_tokens"] = max(client.MIN_OUTPUT_TOKENS, values["max_tokens"])
+        identifier = self.controller.start_models(
+            values,
+            confirm_endpoint=True,
+            api_key=self.connection_key_var.get()
+            if self._connection_key_edited
+            else None,
+        )
+        self.connection_notice.set(
+            "Loading model names only. This does not save the connection "
+            "or generate an answer."
+        )
+        self._begin_job(identifier, self._setup_generation, "models")
+
+    def _accept_models(self, generation, value):
+        if generation != self._setup_generation:
+            self.connection_notice.set(
+                "Connection inputs changed. The older catalogue was not applied; "
+                "load again explicitly."
+            )
+            return
+        ids = tuple(model["id"] for model in value.get("models", []))
+        self.connection_boxes["model"].configure(values=ids)
+        self.connection_notice.set(
+            f"{len(ids)} model identifiers returned. Select one explicitly, then save. "
+            "No answer or source transfer was tested."
+            if ids
+            else "No model identifiers returned. Enter the exact ID "
+            "supplied by your provider."
+        )
+
+    def save_connection(self):
+        if self.active_job:
+            raise ValueError(
+                "Stop or finish the active task before changing its connection."
+            )
+        public = self.controller.save_connection(
+            self._connection_draft(),
+            confirm_endpoint=self.connection_confirm_var.get(),
+            api_key=self.connection_key_var.get()
+            if self._connection_key_edited
+            else None,
+        )
+        self._setup_generation += 1
+        self._paint_connection(public)
+        self._clear_preview()
+        self._refresh()
+        self.status_var.set(
+            "Connection saved locally. Preview the exact source request again; "
+            "nothing was sent."
+        )
+
+    def forget_connection_key(self):
+        if self.active_job:
+            raise ValueError(
+                "Stop or finish the active task before clearing its session key."
+            )
+        values = {name: self._connection_saved[name] for name in self.connection_vars}
+        public = self.controller.save_connection(values, api_key="")
+        self._setup_generation += 1
+        self._paint_connection(public)
+        self.connection_notice.set(
+            "Session key forgotten. Default NeuroForge environment/key-file "
+            "credentials may still apply."
+        )
+        self._clear_preview()
+        self._refresh()
+
+    def reload_connection(self):
+        if self.active_job:
+            raise ValueError(
+                "Stop or finish the active task before reloading settings."
+            )
+        self.controller.invalidate()
+        self._setup_generation += 1
+        self._paint_connection(self.controller.connection_settings())
+        self._clear_preview()
 
     def _catalogue(self, parent, title, button, command):
         frame = self.ttk.Frame(parent, padding=8)
@@ -722,7 +1078,9 @@ class NativeWindow:
             "use the same Sinter runtime as the web UI and CLI.\n\n"
             "The full browser workbench provides the remaining campaign, "
             "recording and rich-document screens. This window does not run "
-            "scheduled watches, configure accounts or handle credentials.\n\n"
+            "scheduled watches or sign into accounts. Assistant setup shares "
+            "saved connection preferences and write-only session keys with "
+            "the full workbench.\n\n"
             "No provider has been tested by opening this window. "
             "No AI quality or platform qualification is implied.\n\n"
             + json.dumps(state, ensure_ascii=False, indent=2),
@@ -881,7 +1239,19 @@ class NativeWindow:
             if state["status"] in {"queued", "running"}:
                 self._poll_id = self.root.after(100, self._poll_job)
                 return
-            if isinstance(state.get("result"), dict):
+            if self._job_kind == "models":
+                if self._job_generation != self._setup_generation:
+                    self._accept_models(self._job_generation, {})
+                    self.status_var.set(
+                        "Older catalogue outcome ignored after connection edits."
+                    )
+                elif state["status"] == "done":
+                    self._accept_models(self._job_generation, state["result"])
+                else:
+                    self.connection_notice.set(
+                        state.get("error") or state.get("message") or state["status"]
+                    )
+            elif isinstance(state.get("result"), dict):
                 if self.controller.accept_result(self._job_generation, state["result"]):
                     self._paint_result()
                 else:
@@ -923,7 +1293,17 @@ class NativeWindow:
 
     def _paint_result(self):
         value = self.controller.result
-        self._put(self.report_text, result_markdown(value), readonly=True)
+        self.report_text.configure(state="normal")
+        self.report_text.delete("1.0", "end")
+        self.report_text.tag_configure(
+            "heading", font=("TkDefaultFont", 13, "bold"), spacing1=10, spacing3=4
+        )
+        self.report_text.tag_configure("quote", lmargin1=16, lmargin2=16, spacing3=6)
+        self.report_text.tag_configure("code", font="TkFixedFont")
+        for line, style in readable_report_lines(result_markdown(value)):
+            self.report_text.insert("end", line, style)
+        self.report_text.edit_modified(False)
+        self.report_text.configure(state="disabled")
         self._put(
             self.report_json,
             json.dumps(value, ensure_ascii=False, indent=2),
@@ -998,6 +1378,15 @@ class NativeWindow:
         self.pages.select(self.answer_page)
 
     def preview(self):
+        if hasattr(self, "connection_vars") and (
+            self._connection_key_edited
+            or self._connection_draft()
+            != {name: self._connection_saved[name] for name in self.connection_vars}
+        ):
+            self.pages.select(self.setup_page)
+            raise ValueError(
+                "Save or discard the connection changes before previewing."
+            )
         self._request_changed()
         value = self.controller.preview()
         self._put(

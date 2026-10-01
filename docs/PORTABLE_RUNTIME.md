@@ -19,10 +19,11 @@ sinter app --mode headless --directory ./workspace
 The default native window uses Tcl/Tk and calls the application directly. It does
 not start an HTTP server, launch a browser or run the watch scheduler. It supports
 source text, revisioned projects, evidence/gap reports, report history, JSON and
-Markdown exports, and an optional short source answer.
+Markdown exports, and an optional short source answer. **Assistant setup** provides
+shared connection/model preferences without opening an external browser.
 
 The full web workbench remains an explicit browser presentation for campaigns,
-meeting tools, Word export, connection settings and account setup. Browser and
+meeting tools, Word export, broader profile settings and account sign-in. Browser and
 headless modes start the existing loopback server. They require an environment
 that permits that server and, for browser mode, access to its URL. Follow managed
 browser policy; changing presentation does not remove that policy.
@@ -102,7 +103,27 @@ For CLI/Python callers, inspect `template.preview`. This workflow's input is:
 
 Preview is local. It requires an explicit model selection; `auto` does not silently
 discover a model during an exact preview. Configure a verified model through
-browser Settings or `NEUROFORGE_MODEL`. To send, supply unchanged input to
+native **Assistant setup**, browser Settings or `NEUROFORGE_MODEL`. In the native
+window, approve the displayed API address and explicitly load its model catalogue,
+select an exact identifier and save the connection locally. Manual entry works
+without discovery. Catalogue requests send no source text and do not generate an
+answer or establish free inference, availability or quality. Unsaved connection
+changes and successful saves reset source preview/consent. Launcher environment
+overrides remain effective and are shown in Status and the setup notice.
+
+Assistant setup uses the existing settings/model routes and the same preference
+file. API keys are optional write-only session inputs: leaving an untouched field
+blank retains a session key; **Forget session key** clears it. Keys never enter
+saved preferences or exports. Environment/key-file credentials can still apply to
+the default NeuroForge endpoint; an empty field does not establish anonymous
+access. Endpoint/style changes clear draft keys and require confirmation before
+contacting or saving a new destination. The `chatgpt` style uses an already
+configured account; account sign-in remains in the full workbench, and a ChatGPT
+subscription is separate from a provider API key. The native panel creates no
+account connection or access grant. CLI operations continue to exclude credential
+and account mutations.
+
+To send, supply unchanged input to
 `template.job` or `template.run`, with `consent: true` and the preview's
 `context_hash`. This is a real provider operation, subject to authentication,
 limits and costs. No example command here sends it. Consent and destination-bound
@@ -146,6 +167,12 @@ Native saved-report history/import supports completed report objects. Model-run
 JSON exports retain their source packets but are not saved-report imports. Native
 model answers show provenance in readable/JSON output, not the source-report
 excerpt picker.
+
+The readable native report styles headings, source quotes and bullets while
+retaining the original Markdown and exact JSON exports. Ctrl+A selects all in
+the window's text fields; macOS also binds Command+A. Tk's platform accessibility
+bridge varies: visible labels and keyboard bindings do not establish accessible
+roles/names in an external accessibility tree.
 
 ## Build and test boundaries
 
