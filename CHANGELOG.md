@@ -5,6 +5,11 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Retain bounded launcher-fixture diagnostics in the uploaded test report before
+  assertions, including partial output after a timeout. The five-second fixture
+  wait and application wrappers are unchanged. This helps diagnose an intermittent
+  Windows test timeout; it does not establish its cause or qualify Windows.
+
 - Make browser Quit visible on narrow screens and use an accessible in-page
   decision for pending work. Keep inputs after an unconfirmed reply, require an
   explicit retry, and prevent delayed page responses from replacing the stopped

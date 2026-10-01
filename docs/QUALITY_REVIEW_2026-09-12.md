@@ -1083,3 +1083,24 @@ payloads and a cold source-app reopen retain their wording and identities. The
 source receipt is
 `dc4c9f258f630442c0268f1fc6681a1af3c0f6859d199a2882c91b97b7d0b25e`.
 This later documentation note is separate from runtime and installed proof.
+
+### 2 October: preserve platform-wrapper timeout evidence
+
+The original `1382ce3` Windows launcher fixture timed out without retaining its
+selected interpreter, child marker or partial output in the uploaded XML. Later
+unmodified `465b437` Windows 3.10/3.13 wrapper cases pass; the historical timeout
+remains unexplained. The narrow test-only change records executable/version,
+arguments, working directory and bounded reversible output before assertions,
+including when the fixture still fails at its unchanged five-second limit.
+
+Independent root composition passes 140 focused tests with five Windows skips
+on Linux/Python 3.12. Actual XML retains ten passing shell-wrapper observations
+and a separately forced, expected timeout failure with exact non-UTF8 partial
+bytes. Three finite controls exercise timeout, a surviving inherited writer and
+large output. The independent receipt is
+`f406feeccaa3013a33450394c07f8cd07d1a2e40d4926e509620f177a49b4550`.
+Only the owned parent is killed/reaped with bounded cleanup; descendants are
+unobserved. Regular-file snapshots are not final stream hashes, and retained
+samples are bounded without claiming a hard disk bound for fixture spooling.
+Application wrappers, runtime, workflow and old receipt schemas are unchanged.
+No Windows reproduction, causal repair, installed pass or rating follows.

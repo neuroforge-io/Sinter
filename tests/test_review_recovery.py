@@ -10,6 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
+from wrapper_diagnostics import observe_wrapper
+
 from sinter import cli, client, review, review_checkpoints
 
 
@@ -675,7 +677,7 @@ def test_source_launcher_preserves_other_commands(monkeypatch, capsys):
     ['review', 'notes with spaces.txt', '--offline'],
 ])
 def test_platform_wrappers_preserve_arguments_from_another_directory(
-    tmp_path, wrapper, arguments,
+    tmp_path, wrapper, arguments, request,
 ):
     windows = wrapper.endswith('.bat')
     if windows != (os.name == 'nt'):
@@ -684,8 +686,13 @@ def test_platform_wrappers_preserve_arguments_from_another_directory(
     directory.mkdir()
     launcher = directory / wrapper
     shutil.copyfile(Path(__file__).parents[1] / wrapper, launcher)
+    marker = tmp_path / 'wrapper-marker.json'
     (directory / 'start.py').write_text(
         'import json, os, sys\n'
+        'from pathlib import Path\n'
+        'observation = {"executable": sys.executable, "version": sys.version, '
+        '"argv": sys.argv, "cwd": os.getcwd(), "pid": os.getpid()}\n'
+        f'Path({str(marker)!r}).write_text(json.dumps(observation), encoding="utf-8")\n'
         'print(json.dumps({"arguments": sys.argv[1:], "cwd": os.getcwd()}))\n',
         encoding='utf-8',
     )
@@ -697,12 +704,23 @@ def test_platform_wrappers_preserve_arguments_from_another_directory(
         command = f'{shell} /d /s /c "{invocation}"'
     else:
         command = ['sh', str(launcher), *arguments]
-    result = subprocess.run(command, cwd=tmp_path, capture_output=True,
-                            text=True, timeout=5)
-    assert result.returncode == 0, result.stderr
-    recorded = json.loads(result.stdout)
+    observation, stdout = observe_wrapper(command, tmp_path, marker, timeout=5)
+    diagnostics = json.dumps(observation, sort_keys=True, separators=(',', ':'))
+    # JUnit retains this property even when the assertions below fail. CI already
+    # uploads test-results/results.xml; no ephemeral-temp artifact is required.
+    request.node.user_properties.append(('sinter_wrapper_diagnostics', diagnostics))
+    assert not observation['timed_out'], diagnostics
+    assert observation['parent_exited'], diagnostics
+    assert observation['cleanup_errors'] == [], diagnostics
+    assert observation['returncode'] == 0, diagnostics
+    assert stdout is not None, diagnostics
+    assert observation['stderr'].get('metadata_stable_snapshot'), diagnostics
+    assert 'value' in observation['marker'], diagnostics
+    recorded = json.loads(stdout)
     assert recorded['arguments'] == arguments
     assert Path(recorded['cwd']) == directory
+    assert observation['marker']['value']['argv'][1:] == arguments, diagnostics
+    assert Path(observation['marker']['value']['cwd']) == directory, diagnostics
 
 
 def test_research_cli_dispatches_research_questions(tmp_path):
