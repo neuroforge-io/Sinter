@@ -15,9 +15,10 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterator
 
+from .campaign_budget import quoted_budget_summary
+from .campaign_budget import quoted_budget_total as _budget_total
 from .campaign_capacity import text_characters
 from .campaign_currency import (
-    can_compare_ceiling,
     ceiling_comparison_note,
     ceiling_currency,
     funding_amount,
@@ -716,48 +717,9 @@ def _answer_metrics(rows: list[dict]) -> list[dict]:
             for index, row in enumerate(rows)]
 
 
-def _budget_total(rows: list[dict]) -> dict:
-    known = sum((Decimal(row["unit_cost"]) * row["quantity"] for row in rows
-                 if row["unit_cost"] is not None), Decimal("0.00"))
-    unknown = sum(row["unit_cost"] is None for row in rows)
-    complete = bool(rows) and not unknown
-    return {"known_total": format(known, ".2f"),
-            "total": format(known, ".2f") if complete else None,
-            "complete": complete, "unknown_costs": unknown,
-            "unquoted_costs": sum(not row["quote_reference"].strip() for row in rows),
-            "items": len(rows)}
-
-
 def _budget_summary(document: dict) -> dict:
-    active_names = {row["name"] for row in document["opportunities"]
-                    if row["status"] in ACTIONABLE_OPPORTUNITY_STATES}
-    active_rows = [row for row in document["budget"]
-                   if not row["opportunity"] or row["opportunity"] in active_names]
-    historical_rows = [row for row in document["budget"]
-                       if row["opportunity"] and row["opportunity"] not in active_names]
-    result = _budget_total(active_rows)
-    result["historical"] = _budget_total(historical_rows)
-    result["active_items"] = len(active_rows)
-    result["historical_items"] = len(historical_rows)
-    groups = []
-    for opportunity in document["opportunities"]:
-        rows = [row for row in document["budget"]
-                if row["opportunity"] == opportunity["name"]]
-        totals = _budget_total(rows)
-        ceiling = opportunity["ceiling"]
-        # A known subtotal can already exceed a ceiling even with unknown lines.
-        over = (Decimal(totals["known_total"]) > Decimal(ceiling)
-                if can_compare_ceiling(opportunity) else None)
-        active = opportunity["status"] in ACTIONABLE_OPPORTUNITY_STATES
-        groups.append({"opportunity": opportunity["name"], **totals,
-                       "status": opportunity["status"], "historical": not active,
-                       "ceiling": ceiling, "over_ceiling": over,
-                       "ceiling_currency": ceiling_currency(opportunity),
-                       "comparison_note": ceiling_comparison_note(opportunity)})
-    result["by_opportunity"] = groups
-    result["unallocated_items"] = sum(not row["opportunity"]
-                                      for row in document["budget"])
-    return result
+    """Keep quote arithmetic independent from unqualified application budgets."""
+    return quoted_budget_summary(document, ACTIONABLE_OPPORTUNITY_STATES)
 
 
 def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
@@ -867,6 +829,16 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
         "budgets_over_ceiling": sum(row["over_ceiling"] is True
                                     for row in budget["by_opportunity"]
                                     if row["opportunity"] in active_names),
+        # Count quoted groups whose application basis this v1 workflow cannot
+        # qualify; this is not a GST-wording or eligibility assessment.
+        "budget_amount_basis_review": sum(
+            row["items"] > 0 and row["opportunity"] in active_names
+            for row in budget["by_opportunity"]
+        ) + int(any(not row["opportunity"] for row in active_budget_rows)),
+        "quoted_subtotals_above_ceiling": sum(
+            row["quoted_subtotal_over_ceiling"] is True
+            for row in budget["by_opportunity"]
+            if row["opportunity"] in active_names),
         "funding_currency_review": sum(
             bool(row["comparison_note"]) for row in budget["by_opportunity"]
             if row["opportunity"] in active_names),
@@ -889,7 +861,8 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
     if core_missing or any(value for key, value in result.items()
                            if key not in {"status", "notice", "missing_sections",
                                           "requirements_total", "requirements_archived",
-                                          "actions_held"}):
+                                          "actions_held", "budget_amount_basis_review",
+                                          "quoted_subtotals_above_ceiling"}):
         result["status"] = "needs_attention"
     return result
 
@@ -1355,14 +1328,28 @@ def _render_decision_brief(document: dict, readiness: dict,
             f"{window_count} active application window(s) need current official wording "
             "and a dated check within 90 days")
     if not budget["items"]:
-        review_items.append("No costs are linked to active opportunities; the current project total is unknown")
+        review_items.append("No quoted amounts are linked to active opportunities; "
+                            "the current quoted subtotal is unknown")
     elif not budget["complete"]:
         count = budget["unknown_costs"]
         cost_label = "cost remains" if count == 1 else "costs remain"
         review_items.append(
-            f"{count} {cost_label} unknown; known subtotal {_brief_amount(budget['known_total'])}; total unknown")
+            f"{count} {cost_label} unknown; known quoted subtotal "
+            f"{_brief_amount(budget['known_total'])}; quoted total unknown")
     else:
-        review_items.append("Recorded cost total: " + _brief_amount(budget["total"]))
+        review_items.append(
+            "Recorded quoted subtotal: " + _brief_amount(budget["total"]))
+    review_items.append(budget["amount_basis_note"])
+    if readiness["budget_amount_basis_review"]:
+        review_items.append(
+            f"{readiness['budget_amount_basis_review']} quoted budget group(s) "
+            "have an application amount basis unqualified in Sinter; "
+            "this is not a finding of missing GST wording or a tax error")
+    if readiness["quoted_subtotals_above_ceiling"]:
+        review_items.append(
+            f"{readiness['quoted_subtotals_above_ceiling']} current quoted subtotal(s) "
+            "are numerically above the recorded AUD ceiling(s); the application "
+            "comparison remains unqualified")
     if readiness["funding_currency_review"]:
         review_items.append(
             f"{readiness['funding_currency_review']} active funding ceiling(s) "
@@ -1431,11 +1418,13 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
         lines.extend(["## Project objective",
                       _objective_markdown(document["objective"])])
     if not budget["items"]:
-        budget_progress = "current project budget not entered; total unknown"
+        budget_progress = "current quoted subtotal not entered; quoted total unknown"
     elif not budget["complete"]:
-        budget_progress = "current project total incomplete"
+        budget_progress = "current quoted subtotal incomplete"
     else:
-        budget_progress = f"{readiness['unquoted_costs']} budget items without quotes"
+        budget_progress = (
+            f"{readiness['unquoted_costs']} quoted subtotal items "
+            "without quote references")
     lines.extend(["## Work still to complete",
                   f"{readiness['requirements_unresolved']} requirements unresolved; "
                   f"{readiness['requirements_not_met']} marked not met; "
@@ -1443,6 +1432,11 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                   f"{readiness['answers_over_limit']} answers over their limits; "
                   f"{budget_progress}; "
                   f"{readiness['open_actions']} open actions (confirmed current scope only).", NOTICE])
+    if readiness["budget_amount_basis_review"]:
+        lines.append(
+            f"{readiness['budget_amount_basis_review']} quoted budget group(s) "
+            "have an application amount basis unqualified in Sinter; "
+            "this is not a finding of missing GST wording or a tax error.")
     if readiness["funding_currency_review"]:
         lines.append(
             f"{readiness['funding_currency_review']} active funding ceiling(s) "
@@ -1576,13 +1570,13 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                           if not row["opportunity"] or row["opportunity"] in active_names]
     historical_budget_rows = [row for row in document["budget"]
                               if row["opportunity"] and row["opportunity"] not in active_names]
-    lines.append("## Current project budget")
+    lines.extend(["## Current quoted subtotal", budget["amount_basis_note"]])
     if not active_budget_rows:
         lines.append("No budget items are recorded for active opportunities. "
-                     "The project total is unknown.")
+                     "The quoted total is unknown.")
     else:
-        lines.extend(["| Item | Opportunity | Quantity | Unit cost | Line total "
-                      "| Quote |",
+        lines.extend(["| Item | Opportunity | Quantity | Quoted unit cost "
+                      "| Quoted line total | Quote |",
                       "| --- | --- | ---: | ---: | ---: | --- |"])
         for row in active_budget_rows:
             total = (None if row["unit_cost"] is None else
@@ -1592,26 +1586,31 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                      _inline(row["quote_reference"] or "Quote needed")]
             lines.append("| " + " | ".join(cells) + " |")
         if budget["complete"]:
-            lines.append("**Current entered cost: " + _amount(budget["total"]) + "**")
+            lines.append("**Quoted subtotal: " + _amount(budget["total"]) + "**")
         else:
-            lines.append("**Known subtotal: " + _amount(budget["known_total"])
-                         + f". Total incomplete: {budget['unknown_costs']} items "
-                         "still need costs.**")
+            lines.append("**Known quoted subtotal: " + _amount(budget["known_total"])
+                         + f". Quoted total incomplete: {budget['unknown_costs']} "
+                         "items still need costs.**")
         for group in budget["by_opportunity"]:
             if group["items"] and group["opportunity"] in active_names:
                 lines.append(_inline(group["opportunity"]) + ": "
-                             + _amount(group["known_total"])
-                             + (" known subtotal" if not group["complete"]
-                                else " allocated")
-                             + (" — exceeds the entered funding ceiling."
-                                if group["over_ceiling"] else "."))
+                             + "quoted subtotal " + _amount(group["known_total"])
+                             + (" (incomplete)" if not group["complete"] else "")
+                             + (" — numerically above the recorded AUD ceiling; "
+                                "application comparison unqualified."
+                                if group["quoted_subtotal_over_ceiling"] is True
+                                else "."))
                 if group["comparison_note"]:
                     lines.append(_inline(group["opportunity"]) + ": "
                                  + group["comparison_note"])
     if historical_budget_rows:
         lines.extend(["### Historical budget items · inactive routes",
-                      "These costs belong to closed, submitted, paused or not-pursued routes. They are excluded from the current project total and readiness checks.",
-                      "| Item | Opportunity | Quantity | Unit cost | Line total | Quote |",
+                      "These costs belong to closed, submitted, paused or "
+                      "not-pursued routes. They are excluded from the current "
+                      "quoted subtotal and readiness checks.",
+                      budget["historical"]["amount_basis_note"],
+                      "| Item | Opportunity | Quantity | Quoted unit cost "
+                      "| Quoted line total | Quote |",
                       "| --- | --- | ---: | ---: | ---: | --- |"])
         for row in historical_budget_rows:
             total = (None if row["unit_cost"] is None else
@@ -1622,10 +1621,10 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
             lines.append("| " + " | ".join(cells) + " |")
         historical = budget["historical"]
         if historical["complete"]:
-            lines.append("**Historical known subtotal (excluded above): "
+            lines.append("**Historical quoted subtotal (excluded above): "
                          + _amount(historical["total"]) + "**")
         else:
-            lines.append("**Historical known subtotal (excluded above): "
+            lines.append("**Historical quoted subtotal (excluded above): "
                          + _amount(historical["known_total"])
                          + f" · {historical['unknown_costs']} historical items remain uncosted.**")
     lines.append("## Next actions")

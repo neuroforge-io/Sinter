@@ -72,8 +72,11 @@ def test_legacy_absent_and_explicit_aud_keep_input_serialization_and_meaning():
     for book in (legacy, explicit):
         report = campaigns.prepare(book)
         assert "**Cash award / ceiling:** A$50,000" in report["document_markdown"]
-        assert report["budget_summary"]["by_opportunity"][0]["over_ceiling"] is True
-        assert report["readiness"]["budgets_over_ceiling"] == 1
+        group = report["budget_summary"]["by_opportunity"][0]
+        assert group["over_ceiling"] is None
+        assert group["quoted_subtotal_over_ceiling"] is True
+        assert report["readiness"]["budgets_over_ceiling"] == 0
+        assert report["readiness"]["quoted_subtotals_above_ceiling"] == 1
         assert report["readiness"]["funding_currency_review"] == 0
 
 
@@ -91,8 +94,10 @@ def test_non_aud_or_unconfirmed_ceiling_is_never_compared_with_aud(currency):
     group = report["budget_summary"]["by_opportunity"][0]
     assert group["known_total"] == "60000.00"
     assert group["over_ceiling"] is None
+    assert group["quoted_subtotal_over_ceiling"] is None
     assert group["comparison_note"]
     assert report["readiness"]["budgets_over_ceiling"] == 0
+    assert report["readiness"]["quoted_subtotals_above_ceiling"] == 0
     assert report["readiness"]["funding_currency_review"] == 1
     for wording in (report["markdown"], report["document_markdown"]):
         assert "project costs are AUD" in wording
@@ -114,6 +119,7 @@ def test_non_comparable_subtotals_remain_unknown_on_both_sides_of_ceiling(
     report = campaigns.prepare(document)
     assert report["budget_summary"]["by_opportunity"][0]["over_ceiling"] is None
     assert report["readiness"]["budgets_over_ceiling"] == 0
+    assert report["readiness"]["quoted_subtotals_above_ceiling"] == 0
     assert report["readiness"]["funding_currency_review"] == 1
 
 
@@ -155,6 +161,11 @@ def test_non_cash_route_remains_no_grant_cash_and_requires_no_currency_compariso
     report = campaigns.prepare(fixture(currency, route_type="non_cash_support"))
     assert "No grant cash (non-cash support)" in report["document_markdown"]
     assert report["budget_summary"]["by_opportunity"][0]["over_ceiling"] is None
+    assert (
+        report["budget_summary"]["by_opportunity"][0]["quoted_subtotal_over_ceiling"]
+        is None
+    )
+    assert report["readiness"]["quoted_subtotals_above_ceiling"] == 0
     assert report["readiness"]["funding_currency_review"] == 0
     assert report["readiness"]["budgets_over_ceiling"] == 0
 

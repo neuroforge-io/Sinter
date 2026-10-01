@@ -176,9 +176,11 @@ class CurrencyChecks(CampaignChecks):
         assert "ceiling_currency" not in saved_legacy["document"]["opportunities"][0]
         legacy_report, region = self.brief(page)
         assert "A$50,000" in legacy_report["document_markdown"]
-        assert (
-            legacy_report["budget_summary"]["by_opportunity"][0]["over_ceiling"] is True
-        )
+        quoted = legacy_report["budget_summary"]["by_opportunity"][0]
+        assert quoted["over_ceiling"] is None
+        assert quoted["quoted_subtotal_over_ceiling"] is True
+        assert "No GST conversion was made" in quoted["amount_basis_note"]
+        assert legacy_report["readiness"]["budgets_over_ceiling"] == 0
         with page.expect_response("**/api/reports") as saved_report:
             region.get_by_role(
                 "button", name="Save to this computer", exact=True
@@ -204,7 +206,7 @@ class CurrencyChecks(CampaignChecks):
         ).to_contain_text("Retain the explicitly recorded action")
         page.get_by_role("tab", name="Budget", exact=True).click()
         expect(page.locator(".campaign-budget-total")).to_have_text(
-            "Known cost estimate: A$60,000.00"
+            "Recorded quoted subtotal (AUD): A$60,000.00"
         )
         expect(
             page.locator(".campaign-section .campaign-currency-comparison")

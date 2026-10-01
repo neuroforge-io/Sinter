@@ -777,7 +777,10 @@ def test_unknown_cost_is_not_zero_and_totals_remain_incomplete():
     assert budget["total"] is None and budget["complete"] is False
     assert budget["unknown_costs"] == 1 and budget["unquoted_costs"] == 1
     assert budget["by_opportunity"][0]["total"] is None
-    assert "Known subtotal: A$125.00. Total incomplete" in report["markdown"]
+    assert (
+        "Known quoted subtotal: A$125.00. Quoted total incomplete"
+        in report["markdown"]
+    )
     assert "Not yet costed" in report["markdown"]
 
 
@@ -798,18 +801,27 @@ def test_no_budget_is_not_a_complete_zero_budget():
     report = campaigns.prepare(campaign(budget=[]))
     assert report["budget_summary"]["total"] is None
     assert report["readiness"]["budget_incomplete"]
-    assert "project total is unknown" in report["markdown"]
-    assert "current project budget not entered; total unknown" in report["markdown"]
+    assert "quoted total is unknown" in report["markdown"]
+    assert (
+        "current quoted subtotal not entered; quoted total unknown"
+        in report["markdown"]
+    )
 
 
 def test_known_subtotal_can_exceed_ceiling_with_other_costs_still_unknown():
     document = campaign()
     document["opportunities"][0]["ceiling"] = 100
     report = campaigns.prepare(document)
-    assert report["budget_summary"]["by_opportunity"][0]["over_ceiling"] is True
-    assert report["readiness"]["budgets_over_ceiling"] == 1
+    assert report["budget_summary"]["by_opportunity"][0]["over_ceiling"] is None
+    assert (
+        report["budget_summary"]["by_opportunity"][0]["quoted_subtotal_over_ceiling"]
+        is True
+    )
+    assert report["readiness"]["budgets_over_ceiling"] == 0
+    assert report["readiness"]["quoted_subtotals_above_ceiling"] == 1
     assert report["budget_summary"]["total"] is None
-    assert "exceeds the entered funding ceiling" in report["markdown"]
+    assert "numerically above the recorded AUD ceiling" in report["markdown"]
+    assert "application comparison unqualified" in report["markdown"]
 
 
 def test_answer_count_measures_exact_untrimmed_text_and_keeps_overlimit_draft():
@@ -923,6 +935,14 @@ def test_complete_entered_checks_never_become_an_eligibility_determination():
     report = campaigns.prepare(document)
     assert report["readiness"]["requirements_unresolved"] == 0
     assert report["readiness"]["status"] == "human_review"
+    assert report["readiness"]["budget_amount_basis_review"] == 1
+    assert report["readiness"]["quoted_subtotals_above_ceiling"] == 0
+    above = copy.deepcopy(document)
+    above["opportunities"][0]["ceiling"] = "100.00"
+    observation = campaigns.prepare(above)
+    assert observation["readiness"]["quoted_subtotals_above_ceiling"] == 1
+    assert observation["readiness"]["budgets_over_ceiling"] == 0
+    assert observation["readiness"]["status"] == "human_review"
     assert "does not determine eligibility" in report["markdown"]
     assert "eligible" not in report["readiness"] and "ready" not in report["readiness"]
 
@@ -1493,10 +1513,10 @@ def test_inactive_route_costs_are_separated_from_current_project_total():
     assert groups["Closed equipment round"]["status"] == "closed"
     assert groups["Closed equipment round"]["historical"] is True
     markdown = report["markdown"]
-    assert "Current entered cost: A$25.00" in markdown
+    assert "Quoted subtotal: A$25.00" in markdown
     assert "### Historical budget items · inactive routes" in markdown
     assert "These costs belong to closed, submitted, paused or not-pursued routes." in markdown
-    assert "Historical known subtotal (excluded above): A$250.00" in markdown
+    assert "Historical quoted subtotal (excluded above): A$250.00" in markdown
     assert "| Old equipment | Closed equipment round |" in markdown
 
 

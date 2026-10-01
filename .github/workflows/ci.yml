@@ -84,6 +84,7 @@ jobs:
       - run: python tools/campaign_backup_browser.py
       - run: python tools/campaign_source_picker_browser.py
       - run: python tools/campaign_currency_browser.py
+      - run: python tools/campaign_budget_browser.py
       - run: python tools/campaign_action_bar_browser.py
       - run: python tools/communication_view_browser.py
       - run: python tools/quality_browser.py

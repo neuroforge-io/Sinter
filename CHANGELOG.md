@@ -5,6 +5,20 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Keep quoted budget amounts separate from a reviewed application budget. Retain
+  original AUD values, references, unknown prices and historical costs; explain
+  unknown or mixed GST bases in the live view, decision brief and audit pack.
+  Raw quote subtotals no longer establish application-ceiling decisions. Basis
+  review and arithmetic observations remain separate from currency and eligibility.
+  Isolate quote arithmetic from an embedding Python caller's decimal settings,
+  preserving exact cents and the caller's settings at the admitted bounds.
+
+- Make costs easier to scan with compact rows and an action that opens the next
+  missing price or reference. Invalidate current application-answer reviews when
+  active costs are added, edited or removed; retain historical reviews and exact
+  saved quote values. Reviewed application-amount entry remains an explicit open
+  extension, documented in the application-budget design.
+
 - Request supported browser presentation in current qualification launchers,
   preserving historical frozen-package arguments and the native app default.
   Rehearse fictional recovery with actual source process restarts in existing

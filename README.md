@@ -59,6 +59,14 @@ silently replay a request. Funding campaigns keep opportunities, quotes and next
 actions in a revisioned local record. Readable drafts can be edited and exported
 to Word while their original sources remain in the evidence pack.
 
+Current development shows compact quoted-cost rows and opens the next missing
+price or reference. Quoted subtotals retain original amounts, unknowns and GST
+wording; they do not establish an application amount or funding-ceiling decision.
+Changes to active costs require reviewing current application answers again.
+[Budget meanings and recovery](docs/CAMPAIGN_BUDGETS.md) explains this boundary;
+reviewed application-amount entry remains an
+[open extension](docs/APPLICATION_BUDGET_V2_DESIGN.md).
+
 New connections discover the current supported NeuroForge model. Saved explicit
 choices are preserved. Answers start at 64 tokens; automatic/dense requests are
 capped to the advertised profile: native ERAIS 128, dense 512, hybrid up to 2,048.

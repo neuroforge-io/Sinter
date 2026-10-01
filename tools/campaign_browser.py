@@ -223,7 +223,7 @@ class CampaignChecks(DeliverableChecks):
         items = page.get_by_role('article', name='Budget item', exact=True)
         expect(items.first.get_by_label('Unit cost (AUD)', exact=True)).to_have_value('')
         items.first.get_by_label('Unit cost (AUD)', exact=True).fill('2.55')
-        expect(page.locator('.campaign-budget-total')).to_have_text('Known cost estimate: A$42.15')
+        expect(page.locator('.campaign-budget-total')).to_have_text('Recorded quoted subtotal (AUD): A$42.15')
         self.save(page)
         self.screenshot(page, 'budget-editable', full_page=True)
         page.get_by_role('tab', name='Next actions', exact=True).click()

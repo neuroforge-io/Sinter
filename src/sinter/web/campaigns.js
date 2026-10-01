@@ -25,6 +25,9 @@ import {campaignBackupControls, resetCampaignBackupControls} from './campaign-ba
 import {CEILING_CURRENCY_OPTIONS, campaignCeilingCurrency,
   campaignFundingAmount, campaignCurrencyComparisonNote} from './campaign-currency.js';
 
+import {campaignBudgetRowState, campaignQuotedBudget, QUOTED_BUDGET_NOTE}
+  from './campaign-budget.js';
+
 const blank = () => ({schema: 'sinter-campaign/v1', title: '', organisation: '', objective: '',
   signatory: '', sender_role: '', contact_details: '',
   opportunities: [], requirements: [], answers: [], budget: [], actions: [], sources: [],
@@ -161,6 +164,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   practiceGuide.hidden = practice !== GARDEN_PRACTICE;
   let tab = campaignTabs.some(([id]) => id === seed.tab) ? seed.tab : 'overview', busy = false;
   let expandedActionRows = null;
+  let budgetOpenState = new WeakMap();
+  let pendingBudgetFocus = null;
   let sourceQuery = typeof seed.sourceQuery === 'string' ? seed.sourceQuery : '';
   let assetQuery = typeof seed.assetQuery === 'string' ? seed.assetQuery : '';
   let communicationQuery = typeof seed.communicationQuery === 'string' ? seed.communicationQuery : '';
@@ -288,8 +293,11 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     return {input: entry.input, wrap: h('div', {class: 'campaign-source-picker'},
       entry.wrap, status, clear, matchStatus, matches)};
   }
-  function remove(rows, item, label) {
-    return button(label, () => { rows.splice(rows.indexOf(item), 1); changed(); renderEditor(); }, 'quiet');
+  function remove(rows, item, label, onRemove = null) {
+    return button(label, () => {
+      if (onRemove) onRemove();
+      rows.splice(rows.indexOf(item), 1); changed(); renderEditor();
+    }, 'quiet');
   }
   function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; newButton.disabled = value; editor.inert = value; transfers.inert = value; }
   function apply(next, id = null, rev = null, preferActionable = false) {
@@ -306,6 +314,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     resetCampaignBackupControls(backupControls);
     expandedActionRows = null;
     communicationOpenState = new WeakMap();
+    budgetOpenState = new WeakMap();
+    pendingBudgetFocus = null;
     const retainedSelection = resumeCurrentCampaign && previousOpportunityName
       ? document.opportunities.findIndex(row => row.name === previousOpportunityName) : -1;
     selected = retainedSelection >= 0 ? retainedSelection : preferActionable
@@ -354,6 +364,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     try {
       const saved = await request('/api/campaigns/save', {data: {document, id: savedId, revision}});
       const openCommunications = document.communications.map(row => communicationOpenState.get(row));
+      const openBudgetRows = document.budget.map(row => budgetOpenState.get(row));
       document = saved.document; savedId = saved.id; revision = saved.revision; dirty = false;
       communicationOpenState = new WeakMap();
       // The save response retains the submitted canonical order, including hidden rows.
@@ -363,6 +374,10 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         }
       });
       expandedActionRows = null;
+      budgetOpenState = new WeakMap();
+      document.budget.forEach((row, index) => {
+        if (openBudgetRows[index] !== undefined) budgetOpenState.set(row, openBudgetRows[index]);
+      });
       renderEditor(); renderSummary();
       rememberCampaign();
       status.textContent = 'Saved on this computer';
@@ -612,6 +627,11 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         target.focus({preventScroll: true});
         target.scrollIntoView({block: 'center'});
       }
+    }
+    if (pendingBudgetFocus) {
+      const {index, field: fieldName} = pendingBudgetFocus;
+      pendingBudgetFocus = null;
+      editor.querySelector(`[data-budget-index="${index}"] [data-campaign-field="${fieldName}"]`)?.focus();
     }
     if (pendingActionFocus) {
       const {index, field: fieldName} = pendingActionFocus;
@@ -973,46 +993,95 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   function renderBudget(panel) {
     const total = h('p', {class: 'campaign-budget-total', role: 'status'});
+    const progress = h('p', {class: 'fine campaign-budget-progress', 'aria-live': 'polite'});
     const actionable = new Set(document.opportunities
-      .filter(row => isOpportunityActionable(row.status))
-      .map(row => row.name));
-    function updateTotal() {
-      let cents = 0n, unknown = 0, priced = 0;
-      const currentRows = document.budget.filter(row => !row.opportunity || actionable.has(row.opportunity));
-      for (const row of currentRows) {
-        const matched = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(row.unit_cost ?? ''));
-        if (!matched || !/^\d+$/.test(String(row.quantity)) || Number(row.quantity) < 1) { unknown++; continue; }
-        priced++;
-        cents += (BigInt(matched[1]) * 100n + BigInt((matched[2] || '').padEnd(2, '0'))) * BigInt(row.quantity);
-      }
-      total.textContent = !currentRows.length ? 'No costs recorded for active opportunities. The current project total is unknown.' : !priced
-        ? `No costs priced yet · ${unknown} item${unknown === 1 ? '' : 's'} awaiting prices`
-        : `Known cost estimate: A$${(cents / 100n).toLocaleString('en-AU')}.${String(cents % 100n).padStart(2, '0')}${unknown ? ' · ' + unknown + ' uncosted item' + (unknown === 1 ? '' : 's') + ' — total incomplete' : ''}`;
-    }
-    panel.append(h('h3', {}, 'Current project costs'), h('p', {class: 'muted'}, 'Use AUD and keep the GST basis in the quote reference. Blank costs remain unknown. Estimates without a supplier quote still need checking.'), total,
-      button('Add budget item', () => { document.budget.push({item: '', opportunity: '', quantity: 1, unit_cost: null, quote_reference: ''}); changed(); renderEditor(); }, 'quiet'));
-    for (const route of document.opportunities.filter(row => actionable.has(row.name))) {
-      const note = campaignCurrencyComparisonNote(route);
-      if (note) panel.append(h('p', {class: 'fine campaign-currency-comparison'},
-        route.name + ': ' + note));
-    }
-    function renderBudgetRow(row) {
-      const item = input('Budget item', 'text', row, 'item', '', {maxLength: 1000});
-      const scope = choice('Funding opportunity', scopeChoices(), row, 'opportunity', () => renderEditor());
-      function revised() { for (const answer of document.answers) answer.status = 'draft'; updateTotal(); }
-      const quantity = input('Quantity', 'number', row, 'quantity', '', {min: 1, max: 100000, step: 1}, element => { row.quantity = element.value ? Number(element.value) : null; revised(); });
-      const price = input('Unit cost (AUD)', 'number', row, 'unit_cost', 'Leave blank while waiting for a price.', {min: 0, step: '.01'}, element => { row.unit_cost = element.value || null; revised(); });
-      const quote = input('Quote or estimate reference', 'textarea', row, 'quote_reference', 'Supplier, quote date, GST basis and where to find the quote. Leave blank if no quote is available.', {rows: 2, maxLength: 2000});
-      panel.append(h('article', {class: 'campaign-row', 'aria-label': 'Budget item'}, h('div', {class: 'form-grid'}, item.wrap, scope.wrap), h('div', {class: 'form-grid'}, quantity.wrap, price.wrap), quote.wrap,
-        remove(document.budget, row, 'Remove budget item')));
-    }
+      .filter(row => isOpportunityActionable(row.status)).map(row => row.name));
     const currentRows = document.budget.filter(row => !row.opportunity || actionable.has(row.opportunity));
     const historicalRows = document.budget.filter(row => row.opportunity && !actionable.has(row.opportunity));
+    const nextCost = button('Open the next cost to check', () => {
+      const next = campaignQuotedBudget(currentRows);
+      const row = currentRows[next.nextIndex];
+      if (!row) return;
+      budgetOpenState.set(row, true);
+      const state = campaignBudgetRowState(row);
+      pendingBudgetFocus = {index: document.budget.indexOf(row),
+        field: state.quantity === null ? 'quantity' : state.unitCents === null ? 'unit_cost' : 'quote_reference'};
+      renderEditor();
+    }, 'quiet');
+    function invalidateBudgetAnswers() {
+      for (const answer of document.answers) {
+        if (actionable.has(answer.opportunity)) answer.status = 'draft';
+      }
+    }
+    function updateTotal() {
+      const state = campaignQuotedBudget(currentRows);
+      total.textContent = state.label;
+      progress.textContent = `${state.priced} of ${currentRows.length} recorded costs priced · ${state.missingReferences} reference${state.missingReferences === 1 ? '' : 's'} missing. A recorded reference still needs review.`;
+      nextCost.hidden = state.nextIndex < 0;
+    }
+    panel.append(h('h3', {}, 'Current project costs'),
+      h('p', {class: 'muted'}, 'Keep each quoted or estimated amount beside its original reference. Open a cost to check or edit it. Blank prices stay unknown.'),
+      total, h('p', {class: 'fine campaign-budget-basis-note'},
+        'Quoted amounts may have different or unknown GST bases. No GST conversion was made. Sinter has not qualified an application budget.'),
+      h('details', {class: 'campaign-budget-basis-details'},
+        h('summary', {}, 'About these amounts'), h('p', {class: 'fine'}, QUOTED_BUDGET_NOTE)), progress,
+      h('div', {class: 'button-row'}, nextCost, button('Add budget item', () => {
+        const row = {item: '', opportunity: '', quantity: 1, unit_cost: null, quote_reference: ''};
+        document.budget.push(row); budgetOpenState.set(row, true);
+        invalidateBudgetAnswers();
+        pendingBudgetFocus = {index: document.budget.length - 1, field: 'item'};
+        changed(); renderEditor();
+      }, 'quiet')));
+    for (const route of document.opportunities.filter(row => actionable.has(row.name))) {
+      const note = campaignCurrencyComparisonNote(route);
+      if (note) panel.append(h('p', {class: 'fine campaign-currency-comparison'}, route.name + ': ' + note));
+    }
+    const nextRow = currentRows[campaignQuotedBudget(currentRows).nextIndex];
+    function renderBudgetRow(row, historical = false) {
+      const rowIndex = document.budget.indexOf(row);
+      const title = h('strong', {class: 'campaign-budget-row-title'});
+      const amount = h('span', {class: 'campaign-budget-row-amount'});
+      const metadata = h('small', {class: 'campaign-budget-row-meta'});
+      function refreshRow() {
+        const state = campaignBudgetRowState(row);
+        title.textContent = state.title;
+        amount.textContent = state.amount;
+        metadata.textContent = `${row.opportunity || 'Whole campaign'} · ${state.reference}${historical ? ' · Historical, excluded from current subtotal' : ''}`;
+        amount.dataset.priced = String(state.priced);
+      }
+      function revised() {
+        if (!historical || !row.opportunity || actionable.has(row.opportunity)) invalidateBudgetAnswers();
+        refreshRow(); updateTotal();
+      }
+      const item = input('Budget item', 'text', row, 'item', '', {maxLength: 1000}, revised);
+      const scope = choice('Funding opportunity', scopeChoices(), row, 'opportunity', () => {
+        budgetOpenState.set(row, true);
+        pendingBudgetFocus = {index: rowIndex, field: 'opportunity'};
+        revised(); renderEditor();
+      });
+      const quantity = input('Quantity', 'number', row, 'quantity', '', {min: 1, max: 100000, step: 1}, element => {
+        row.quantity = element.value ? Number(element.value) : null; revised();
+      });
+      const price = input('Unit cost (AUD)', 'number', row, 'unit_cost', 'Record the price as supplied. Leave blank while waiting for a price.', {min: 0, step: '.01'}, element => {
+        row.unit_cost = element.value || null; revised();
+      });
+      const quote = input('Quote or estimate reference', 'textarea', row, 'quote_reference',
+        'Supplier, quote date, stated GST basis and where to find the original. This reference is not verified automatically.', {rows: 3, maxLength: 2000}, revised);
+      const details = h('details', {}, h('summary', {}, title, amount, metadata),
+        h('div', {class: 'campaign-budget-row-editor'}, h('div', {class: 'form-grid'}, item.wrap, scope.wrap),
+          h('div', {class: 'form-grid'}, quantity.wrap, price.wrap), quote.wrap,
+          remove(document.budget, row, 'Remove budget item', historical ? null : invalidateBudgetAnswers)));
+      details.open = budgetOpenState.get(row) ?? (!historical && row === nextRow);
+      details.addEventListener('toggle', () => budgetOpenState.set(row, details.open));
+      refreshRow();
+      panel.append(h('article', {class: 'campaign-row campaign-budget-row',
+        'aria-label': 'Budget item', 'data-budget-index': rowIndex}, details));
+    }
     for (const row of currentRows) renderBudgetRow(row);
     if (historicalRows.length) {
       panel.append(h('h4', {}, 'Historical costs · inactive routes'),
         notice('These items belong to closed, submitted, paused or not-pursued routes. They do not contribute to the current project total.', 'warning'));
-      for (const row of historicalRows) renderBudgetRow(row);
+      for (const row of historicalRows) renderBudgetRow(row, true);
     }
     updateTotal();
   }
