@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -100,6 +101,12 @@ def test_copied_container_helpers_need_no_repository_or_optional_dependencies(tm
         ("installed_recovery_browser.py", "helper.py"),
     ):
         (tmp_path / destination).write_bytes((root / "tools" / source).read_bytes())
+    # Windows Python 3.10 needs its system directory to initialize OS entropy.
+    # Retain these platform paths, never the caller's credentials or app settings.
+    environment = {"PATH": os.defpath}
+    environment.update(
+        {key: os.environ[key] for key in ("SystemRoot", "WINDIR") if key in os.environ}
+    )
     result = subprocess.run(
         [
             sys.executable, "-I", "-S", "-B", "-c",
@@ -112,7 +119,7 @@ def test_copied_container_helpers_need_no_repository_or_optional_dependencies(tm
             str(tmp_path),
         ],
         cwd=tmp_path,
-        env={"PATH": "/usr/bin:/bin"},
+        env=environment,
         capture_output=True,
         text=True,
         timeout=10,
