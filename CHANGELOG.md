@@ -5,6 +5,11 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Request supported browser presentation in current qualification launchers,
+  preserving historical frozen-package arguments and the native app default.
+  Rehearse fictional recovery with actual source process restarts in existing
+  Chromium CI; retain source evidence separately from installed RC3 gates.
+
 - Advertise the shared CLI commands in the packaged executable's launch help,
   using the existing command parser. Build-test the actual frozen CLI with a
   fictional source update, retained evidence/gaps, historical report, export,

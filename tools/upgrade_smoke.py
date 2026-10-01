@@ -25,6 +25,7 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from tools.installed_workflow_browser import browser_launch_command  # noqa: E402
 from tools.qualified_priors import (  # noqa: E402
     PRIOR_COMMIT,
     QUALIFIED_PRIORS,
@@ -504,7 +505,10 @@ def run_native(
     api = None
     with (output / f"{label}-process.log").open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
-            [str(binary)], env=environment, stdout=log, stderr=log
+            browser_launch_command([str(binary)], actual, legacy=legacy),
+            env=environment,
+            stdout=log,
+            stderr=log,
         )
         try:
             deadline = time.monotonic() + 20

@@ -60,6 +60,26 @@ SAVED_CAMPAIGN = (
 )
 
 
+def browser_launch_command(
+    executable: list[str], version: str, *, legacy: bool = False
+) -> list[str]:
+    """Select the supported presentation; retain historical browser-default argv.
+
+    RC3 switched bare desktop launch to a native window. Qualification captures a
+    browser URL deliberately, while older frozen packages lack the mode option.
+    This standalone helper also travels with the offline container transport.
+    It selects presentation only and does not admit a release for qualification.
+    """
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:rc(\d+))?(?:\.dev\d+)?", version)
+    if not match:
+        raise ValueError("Use the verified desktop version for browser launch.")
+    release = tuple(int(match[index]) for index in (1, 2, 3))
+    native_default = release > (0, 5, 4) or (
+        release == (0, 5, 4) and (match[4] is None or int(match[4]) >= 3)
+    )
+    return [*executable, *(["--mode", "browser"] if native_default and not legacy else [])]
+
+
 def digest(path: Path) -> str:
     """Hash an exact retained file without printing its contents."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -364,7 +384,7 @@ def container_main() -> None:
                     "BROWSER": "/usr/bin/python3 /proof/capture.py %s",
                 }
                 process = subprocess.Popen(
-                    [str(BINARY)],
+                    browser_launch_command([str(BINARY)], info["version"]),
                     env=env,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
