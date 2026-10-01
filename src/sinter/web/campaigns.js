@@ -20,6 +20,7 @@ import {campaignCapacity, CAMPAIGN_TEXT_LIMIT, CAMPAIGN_BYTE_LIMIT}
 import {campaignSourceOptions, matchingCampaignSources}
   from './campaign-source-options.js';
 import {selectRequirementSource} from './campaign-requirement-source.js';
+import {selectWindowSource} from './campaign-window-source.js';
 import {campaignBackupControls} from './campaign-backup.js';
 import {CEILING_CURRENCY_OPTIONS, campaignCeilingCurrency,
   campaignFundingAmount, campaignCurrencyComparisonNote} from './campaign-currency.js';
@@ -748,18 +749,21 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const windowChecked = input('Window wording checked on', 'date', item,
       'window_checked_at', 'Use the date you checked the official programme page. '
       + 'Recheck within 90 days and before an application.', {}, updateOpportunityView);
+    const windowSourceChange = h('p', {class: 'notice warning', role: 'status',
+      'aria-label': 'Application-window source change', hidden: true});
     const windowSource = campaignSourcePicker('Registered source for the application window',
       item.window_source_id, source => {
-        const nextId = source?.id || '';
-        if (item.window_source_id !== nextId
-            || item.window_source_url !== (source?.url || '')) {
-          item.window_source_id = nextId;
-          item.window_source_url = source?.url || '';
-          item.window_source_quote = '';
-          item.window_checked_at = '';
+        const selection = selectWindowSource(item, source);
+        Object.assign(item, selection.opportunity);
+        if (selection.changedSource) {
           windowQuote.input.value = '';
           windowChecked.input.value = '';
         }
+        windowSourceChange.hidden = !selection.changedSource;
+        windowSourceChange.textContent = selection.changedSource
+          ? (source ? 'Application-window source changed.' : 'Application-window source cleared.')
+            + ' Previous wording and its check date were cleared. Re-read the official source, then record both. The closing date remains user-entered.'
+          : '';
         updateOpportunityView();
       });
     const decision = input('Decision timing', 'text', item, 'decision_window', 'For example, a decision several months after applications close.', {maxLength: 1000}, updateOpportunityView);
@@ -801,7 +805,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const fit = input('Project fit and timing', 'textarea', item, 'fit', 'Which project option could this support? Record any exclusions or conditions before committing costs.', {rows: 3, maxLength: 6000}, updateOpportunityView);
     const opportunityEditor = h('details', {class: 'campaign-opportunity-editor', open: !item.funder && !item.fit},
       h('summary', {}, 'Edit opportunity details'), h('div', {class: 'form-grid'}, name.wrap, funder.wrap, routeType.wrap), url.wrap,
-      windowSourceInfo, windowSource.wrap,
+      windowSourceInfo,
+      h('p', {class: 'fine'}, 'Choose the official source before adding its exact window wording and check date. Changing or clearing the source resets both.'),
+      windowSource.wrap, windowSourceChange,
       h('div', {class: 'form-grid'}, applicationMode.wrap, applicant.wrap),
       applicantConfirmation.wrap,
       h('div', {class: 'form-grid'}, windowKind.wrap, deadline.wrap, windowChecked.wrap, decision.wrap, ceiling.wrap, ceilingCurrency.wrap, state.wrap), windowQuote.wrap, fit.wrap);

@@ -5,6 +5,10 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Explain when changing or clearing an application-window source resets its
+  quoted wording and check date. Keep the entered deadline and other work,
+  preserve an unchanged binding, and prompt a deliberate source recheck.
+
 - Add an explicit Linux RC3 qualification policy, with pinned upgrades from
   v0.5.3, RC1 and RC2. Require the existing installed workflow plus actual held
   action, cold reopening, calendar exclusion and complete stopped-server backup
