@@ -1,4 +1,4 @@
-"""Review/stage the original RC3 artifact; never publish or change its identity."""
+"""Audit the retained D9 artifact; never stage, publish or qualify current E."""
 
 from __future__ import annotations
 
@@ -17,16 +17,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 from tools.candidate_qualification import (  # noqa: E402
-    UNQUALIFIED,
-    _canonical_roles,
     _native_payload,
     _source,
     digest,
-    independent_review_checks,
     prior_roles,
     verify_rc3_terminal_notices,
 )
-from tools.candidate_release import prepare, verify_plan  # noqa: E402
 from tools.qualified_priors import QUALIFIED_PRIORS  # noqa: E402
 from tools.qualify_linux_preview import run as run_owned  # noqa: E402
 from tools.release_manifest import assemble  # noqa: E402
@@ -36,6 +32,13 @@ COMMIT = "d9b36a6853bab0d715dc91e726f984a8ab16a747"
 ARTIFACT_SHA = "ef70ac114f3de900431f2115b93116d5d8b692b80cc07312fb8a873a58192661"
 MAX_FILE = 64 * 1024 * 1024
 MAX_TOTAL = 256 * 1024 * 1024
+STAGING_REFUSED_EXIT = 3
+
+
+class HistoricalStagingRefused(ValueError):
+    """The retained audit completed; publication staging is unsupported."""
+
+
 CLEAN_SCRIPT = r"""#!/bin/sh
 set -eu
 test "$(id -u)" = 0
@@ -398,10 +401,7 @@ def publisher_negative(candidate: Path) -> dict:
 def finalize(artifact: Path, output: Path) -> None:
     admit_archive(artifact)
     output.mkdir()
-    raw, folder, review, proof = (
-        output / name
-        for name in ("raw", "canonical", "independent-review", "clean-proof")
-    )
+    raw, folder, proof = (output / name for name in ("raw", "canonical", "clean-proof"))
     with zipfile.ZipFile(artifact) as archive:
         archive.extractall(raw)
     native = canonical(raw, folder)
@@ -410,131 +410,40 @@ def finalize(artifact: Path, output: Path) -> None:
     started = time.monotonic()
     clean_install(folder, proof, native, binary)
     clean_seconds = round(time.monotonic() - started, 3)
-    # The original candidate contains exactly one architecture receipt. Upgrade
-    # receipts in the canonical folder must not contaminate this negative test.
-    write(folder / "full-publisher-gate.json", publisher_negative(raw / "candidate"))
-    os_release = (proof / "os-release.txt").read_text()
-    baseline = {
-        key: native[key] for key in ("system", "machine", "pointer_bits", "python")
-    }
-    baseline.update(
-        libc=["glibc", "2.35"],
-        os_release=os_release,
-        network="disabled container; loopback only",
-        host_installation=False,
-    )
-    write(folder / "qualification-runtime.json", baseline)
-    manifest = {
-        "schema": "sinter-preview-qualification/v1",
-        "version": VERSION,
-        "source_commit": COMMIT,
-        "prior_source_commit": QUALIFIED_PRIORS["0.5.3"].source_commit,
-        "prior_native_installer_sha256": QUALIFIED_PRIORS["0.5.3"].installer_sha256,
-        "prerelease": True,
-        "all_platform_release_qualified": False,
-        "normal_package_upgrade_order_verified": True,
-        "installed_runtime_and_copied_upgrade_passed": True,
-        "published_native_installer_replacement_passed": True,
-        "actual_debian_archive_notice_bytes_verified": True,
-        "linux_shared_library_notices_verified": True,
-        "qualified_targets": [
-            {
-                "system": "linux",
-                "arch": "x64",
-                "execution": "native",
-                "installed_test": True,
-                "copied_prior_release_upgrade_test": True,
-                "published_native_installer_replacement_test": True,
-                "shared_library_notices_verified": True,
-            }
-        ],
-        "unqualified_targets": UNQUALIFIED,
-        "runtime_baseline": baseline,
-        "publisher_signed": False,
-        "notarised": False,
-    }
-    for old, new in [
-        ("0.5.3", "0.5.4~rc1"),
-        ("0.5.4~rc1", "0.5.4~rc2"),
-        ("0.5.4~rc2", "0.5.4~rc3"),
-        ("0.5.4~rc3", "0.5.4"),
-    ]:
-        command(["dpkg", "--compare-versions", old, "lt", new])
-    manifest["artifacts"] = [
-        {
-            "path": p.relative_to(folder).as_posix(),
-            "sha256": digest(p),
-            "bytes": p.stat().st_size,
-        }
-        for p in sorted(folder.rglob("*"))
-        if p.is_file()
-    ]
-    write(folder / "candidate-qualification.json", manifest)
-    (folder / "SHA256SUMS.txt").write_text(
-        "".join(
-            f"{digest(p)}  {p.relative_to(folder).as_posix()}\n"
-            for p in sorted(folder.rglob("*"))
-            if p.is_file() and p.name != "SHA256SUMS.txt"
-        )
-    )
-    _canonical_roles(folder, VERSION, native)
-    review.mkdir()
-    for filename in (
-        "clean-ubuntu-installed-test.json",
-        "clean-ubuntu-installed-test.log",
-    ):
-        shutil.copyfile(proof / filename, review / filename)
-    write(
-        review / "qualification-context.json",
-        {
-            "qualification_policy_commit": command(["git", "rev-parse", "HEAD"]),
-            "version": VERSION,
-            "source_commit": COMMIT,
-            "installer_sha256": native["installer_sha256"],
-            "container": "ubuntu:22.04",
-            "network": "disabled",
-            "host_installation": False,
-            "product_edits": False,
-            "preinstalled_python": False,
-            "preinstalled_account_packages": False,
-            "clean_container": json.loads((proof / "container.json").read_bytes()),
-        },
-    )
-    checks = independent_review_checks(VERSION)
-    independent = {
-        "qualification_policy_commit": command(["git", "rev-parse", "HEAD"]),
-        "schema": "sinter-independent-final-artifact-review/v1",
-        "version": VERSION,
-        "source_commit": COMMIT,
-        "checks": dict.fromkeys(checks, True),
-        "installer_sha256": digest(folder / native["installer"]),
-        "native_archive_sha256": digest(folder / f"Sinter-{VERSION}-linux-x64.tar.gz"),
-        "source_archive_sha256": digest(folder / f"sinter-{VERSION}-source.zip"),
-        "portable_sha256": digest(folder / f"sinter-{VERSION}.pyz"),
-    }
-    write(review / "final-artifact-review.json", independent)
-    plan = prepare(folder, review, output / "stage", VERSION, COMMIT)
-    verified = verify_plan(plan)
+    # The fixed artifact is historical workflow/v1. Current RC3 publication
+    # notes describe E's workflow/v2 and Word recovery, so this retained audit
+    # must never manufacture a current candidate or independent-review receipt.
     write(
         output / "final-qualification.json",
         {
-            "schema": "sinter-rc3-final-qualification/v1",
+            "schema": "sinter-rc3-retained-artifact-audit/v1",
             "source_commit": COMMIT,
+            "qualification_policy_commit": command(["git", "rev-parse", "HEAD"]),
+            "qualification_tool_sha256": digest(Path(__file__)),
             "original_artifact_sha256": ARTIFACT_SHA,
             "binary_sha256": binary,
-            "independent_clean_install": True,
+            "clean_install_selftest_and_remove": True,
             "clean_seconds": clean_seconds,
-            "canonical_candidate_gate": True,
-            "prepare_and_verify": True,
+            "python_account_free_preflight": True,
+            "x11_xcb_free_preflight": False,
+            "historical_only": True,
+            "current_release_qualification": False,
+            "canonical_candidate_gate": False,
+            "independent_final_artifact_review_produced": False,
+            "prepare_and_verify": False,
+            "publication_supported": False,
             "all_platform_release_qualified": False,
             "publication_executed": False,
-            "manifest_sha256": digest(plan),
-            "verification": verified["verification"],
+            "status": "historical_audit_complete_staging_refused",
         },
+    )
+    raise HistoricalStagingRefused(
+        "Historical D9 audit completed; staging refused. "
+        "Published E requires its separate exact qualification."
     )
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -546,9 +455,13 @@ def main(argv: list[str] | None = None) -> None:
     previous = signal.signal(signal.SIGTERM, interrupted)
     try:
         finalize(args.artifact, args.output)
+    except HistoricalStagingRefused as error:
+        print(str(error), file=sys.stderr)
+        return STAGING_REFUSED_EXIT
     finally:
         signal.signal(signal.SIGTERM, previous)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
