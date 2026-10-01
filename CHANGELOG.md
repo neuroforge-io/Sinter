@@ -1,9 +1,11 @@
 # Changelog
 
-## 0.5.4rc3.dev0 - unreleased development
+## 0.5.4rc3 - sealed candidate, not published
 
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
+The candidate version is sealed for building and installed qualification; this
+heading is not a qualification receipt or approval to publish.
 
 - Retain open and closed cost rows while navigating within the current browser
   campaign editor. Explicit campaign replacement starts fresh view choices;

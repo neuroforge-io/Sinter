@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import traceback
 import time
 import uuid
 import zipfile
@@ -89,6 +90,7 @@ def lifecycle(root: Path, executable: list[str], identity: dict) -> None:
                     env["PYTHONPATH"] = str(ROOT / "src")
                 process = subprocess.Popen(
                     executable,
+                    **(transport.qualification_application_user(root) if INTERNAL else {}),
                     env=env,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -859,6 +861,7 @@ def qualify(args: argparse.Namespace, inputs: dict) -> dict:
                     "--network=none",
                     "--name",
                     name,
+                    *transport.qualification_container_labels(),
                     "--env",
                     f"SINTER_TEST_UID={os.getuid()}",
                     "--env",
@@ -1052,9 +1055,15 @@ def main(argv=None) -> None:
         KeyError,
         subprocess.SubprocessError,
         BrowserError,
-    ):
+    ) as error:
+        frames = traceback.extract_tb(error.__traceback__)
+        origin = (
+            f" at {Path(frames[-1].filename).name}:{frames[-1].lineno}"
+            if frames else ""
+        )
         raise SystemExit(
-            "Recovery proof failed; no completed installed qualification was produced."
+            f"Recovery proof failed ({type(error).__name__}{origin}); "
+            "no completed installed qualification was produced."
         ) from None
     print(
         "PASS: "

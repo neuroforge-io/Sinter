@@ -1,7 +1,21 @@
 # RC3 qualification requirements
 
-Status: development tooling. This document is not an installer qualification or
-a publication receipt. Published v0.5.3, v0.5.4rc1 and v0.5.4rc2 remain unchanged.
+Status: sealed version for candidate building and installed qualification. This
+document is not an installer qualification or a publication receipt. Published
+v0.5.3, v0.5.4rc1 and v0.5.4rc2 remain unchanged. Keep the exact build commit in
+each receipt; source-tree equality with another commit does not change that
+build identity. Hosted review builds do not publish this scoped prerelease.
+
+The dedicated same-repository qualification branch additionally consumes its
+same-run Linux x64 artifact in hosted CI. It prepares a small tooling image,
+then runs the existing three pinned copied/installed upgrade producers and both
+installed browser producers with application-test networking disabled. The
+`sinter-linux-installed-gates/v1` receipt records partial progress and cleanup;
+independent Python-free installation and the final canonical candidate gate
+remain explicitly false there, even when those installed workflow gates pass.
+Image preparation and public checksum-pinned prior downloads happen before the
+offline application tests. This job cannot stage a release, create a tag or
+publish, and does not establish managed cloud-browser access or real AI quality.
 
 The prospective candidate is Linux x64 on Ubuntu 22.04/glibc 2.35 only. Other
 platforms need their own installed evidence. Packages remain unsigned and not

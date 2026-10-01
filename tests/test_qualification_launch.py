@@ -83,6 +83,48 @@ def test_source_launch_retains_interpreter_and_module():
     assert prefix == ["fictional-python", "-m", "sinter.desktop"]
 
 
+def test_optional_container_owner_is_validated_without_changing_default(monkeypatch):
+    monkeypatch.delenv("SINTER_QUALIFICATION_OWNER", raising=False)
+    assert workflow.qualification_container_labels() == []
+    monkeypatch.setenv("SINTER_QUALIFICATION_OWNER", "a" * 32)
+    assert workflow.qualification_container_labels() == [
+        "--label", "sinter.qualification.owner=" + "a" * 32
+    ]
+    monkeypatch.setenv("SINTER_QUALIFICATION_OWNER", "untrusted --privileged")
+    with pytest.raises(ValueError, match="ownership"):
+        workflow.qualification_container_labels()
+
+
+def test_installed_application_uses_host_owner_without_widening_workspace_modes(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("SINTER_TEST_UID", "1234")
+    monkeypatch.setenv("SINTER_TEST_GID", "5678")
+    observed = []
+    monkeypatch.setattr(
+        workflow.os, "chown", lambda path, uid, gid: observed.append((path, uid, gid)),
+        raising=False,
+    )
+    assert workflow.qualification_application_user(tmp_path) == {
+        "user": 1234, "group": 5678, "extra_groups": []
+    }
+    assert observed == [(tmp_path / "home", 1234, 5678), (tmp_path / "data", 1234, 5678)]
+    if os.name == "posix":
+        assert all(((tmp_path / name).stat().st_mode & 0o777) == 0o700
+                   for name in ("home", "data"))
+
+
+@pytest.mark.parametrize("uid,gid", [("", "1234"), ("1234", ""), ("-1", "1234")])
+def test_invalid_installed_app_owner_fails_before_directory_changes(
+    tmp_path, monkeypatch, uid, gid
+):
+    monkeypatch.setenv("SINTER_TEST_UID", uid)
+    monkeypatch.setenv("SINTER_TEST_GID", gid)
+    with pytest.raises(ValueError, match="ownership"):
+        workflow.qualification_application_user(tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
 @pytest.mark.parametrize("version", ["0.4.9", "0.5.3", "0.5.4rc1", "0.5.4rc2"])
 def test_older_browser_default_candidates_do_not_receive_new_flags(version):
     assert workflow.browser_launch_command(["Sinter"], version) == ["Sinter"]

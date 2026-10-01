@@ -80,6 +80,29 @@ def browser_launch_command(
     return [*executable, *(["--mode", "browser"] if native_default and not legacy else [])]
 
 
+def qualification_container_labels() -> list[str]:
+    """Allow a supervising runner to clean only its explicitly owned containers."""
+    owner = os.environ.get("SINTER_QUALIFICATION_OWNER", "")
+    if not owner:
+        return []
+    if not re.fullmatch(r"[0-9a-f]{32}", owner):
+        raise ValueError("Qualification ownership must be an exact task UUID.")
+    return ["--label", f"sinter.qualification.owner={owner}"]
+
+
+def qualification_application_user(root: Path) -> dict:
+    """Keep owner-only saved bytes readable to the host supervising its test app."""
+    values = [os.environ.get(key, "") for key in ("SINTER_TEST_UID", "SINTER_TEST_GID")]
+    if any(not re.fullmatch(r"\d+", value) for value in values):
+        raise ValueError("Provide exact numeric host ownership for the test app.")
+    uid, gid = map(int, values)
+    for name in ("home", "data"):
+        directory = root / name
+        directory.mkdir(mode=0o700, exist_ok=True)
+        os.chown(directory, uid, gid)
+    return {"user": uid, "group": gid, "extra_groups": []}
+
+
 def digest(path: Path) -> str:
     """Hash an exact retained file without printing its contents."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -385,6 +408,7 @@ def container_main() -> None:
                 }
                 process = subprocess.Popen(
                     browser_launch_command([str(BINARY)], info["version"]),
+                    **qualification_application_user(root),
                     env=env,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -1009,6 +1033,7 @@ def qualify(args: argparse.Namespace, fixture: dict) -> dict:
                 "--network=none",
                 "--name",
                 name,
+                *qualification_container_labels(),
                 "--env",
                 f"SINTER_TEST_UID={os.getuid()}",
                 "--env",
