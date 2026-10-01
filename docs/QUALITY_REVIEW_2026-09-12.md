@@ -861,3 +861,30 @@ passes 383 focused checks and 14 actual-response probes; independent review
 passes 232 focused checks. These accept the source correction only. A new
 explicit source build and fresh installed workflow, recovery, cold-install and
 native-display evidence are required; the failed candidate cannot inherit them.
+
+### 1 October: actual Linux rc3 publication and retained limitations
+
+The fresh `246b91e0ee432cb1f6f6fcd17425f55cd7a4cabe` Linux x64 preview is
+published as `v0.5.4rc3`. Its exact eight public files, hashes, installed Word v2
+and recovery journeys, all three actual prior replacements, bare offline install
+and independently inspected mapped native launches are recorded in the
+[publication receipt](releases/PREVIEW_0.5.4rc3_PUBLICATION_RECEIPT.md). Public
+downloads match the sealed stage byte for byte and pass the scoped plan verifier.
+The original failed catalogue gate remains historical; it was not relabelled.
+
+Linux Python 3.10/3.13 each pass 2,965 tests with eight skipped, and Chromium
+workflows pass, but the aggregate exact-source Quality run fails. Windows test
+fixtures have encoding/POSIX scope assumptions; macOS 3.13 reports a genuine
+concurrent local Word-save failure. No established macOS root cause or proof of
+Linux unreachability exists. These failures stay retained and block additional
+platform claims; the existing scoped policy admits only the tested Linux preview.
+The release page separately discloses them and the native/browser presentation
+scope. The immutable source ZIP retains prepublication documentation; current
+main guides are updated after publication, without rewriting the frozen assets.
+
+A fresh independent customer critique of the actual fictional installed screenshots
+and Word/recovery artifacts rates UX 6.7, functionality 7.6 and aesthetics 7.0. It
+identifies absent question-to-source/Word navigation and costly manual recovery.
+This is a bounded offline workflow score, not a whole-product, native editing,
+customer-device, live ChatGPT or hosted-model quality rating. Further improvement
+continues; no 10/10 or completion of the broader quality goal is claimed.

@@ -1,0 +1,83 @@
+{
+  "schema": "sinter-scoped-publication-receipt/v1",
+  "source_commit": "246b91e0ee432cb1f6f6fcd17425f55cd7a4cabe",
+  "version": "0.5.4rc3",
+  "tag": "v0.5.4rc3",
+  "release_id": 400836050,
+  "published_at": "2026-10-01T09:56:33Z",
+  "url": "https://github.com/neuroforge-io/Sinter/releases/tag/v0.5.4rc3",
+  "prerelease": true,
+  "draft": false,
+  "latest_option_requested": false,
+  "lightweight_tag_exact": true,
+  "stage_manifest_sha256": "af207c071e383a60be3c4188ac594056853bf1d88e1c3f2b4079752bc7b19501",
+  "public_body_sha256": "36a0bf29d4e9a156b62ef8a776a21c401451df36ad701ee2c24c462506ac54d7",
+  "public_attachment_count": 8,
+  "public_downloads_all_byte_equal": true,
+  "github_digests_all_exact": true,
+  "assets": [
+    {
+      "path": "RELEASE-NOTES.md",
+      "bytes": 3297,
+      "sha256": "f1fc9ebde1bcccb287cd6cea2243f11fff5b51697c78b6c12bfe959e14fc553e",
+      "asset_id": 602939649,
+      "url": "https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc3/RELEASE-NOTES.md"
+    },
+    {
+      "path": "SHA256SUMS.txt",
+      "bytes": 655,
+      "sha256": "dc7221487c31fdf015c650cdb35797c049e77d6fc3b179728b1b90fd650c1892",
+      "asset_id": 602939651,
+      "url": "https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc3/SHA256SUMS.txt"
+    },
+    {
+      "path": "Sinter-0.5.4rc3-linux-x64.deb",
+      "bytes": 17042180,
+      "sha256": "bb7133d70d3abfc3a0f825d57968d75629e00dc21af8d33030870e68c8c99dae",
+      "asset_id": 602939652,
+      "url": "https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc3/Sinter-0.5.4rc3-linux-x64.deb"
+    },
+    {
+      "path": "Sinter-0.5.4rc3-linux-x64.tar.gz",
+      "bytes": 19914351,
+      "sha256": "d9e45bd5ba9dcc58cb0c1d9a60b2da63bac9b9ccb4e0afb820ba94214501e28c",
+      "asset_id": 602939650,
+      "url": "https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc3/Sinter-0.5.4rc3-linux-x64.tar.gz"
+    },
+    {
+      "path": "candidate-release-manifest.json",
+      "bytes": 1829,
+      "sha256": "af207c071e383a60be3c4188ac594056853bf1d88e1c3f2b4079752bc7b19501",
+      "asset_id": 602939653,
+      "url": "https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc3/candidate-release-manifest.json"
+    },
+    {
+      "path": "sinter-0.5.4rc3-qualification.zip",
+      "bytes": 40031719,
+      "sha256": "a33cd4de1bd26b45d000b0587ef640f1eb78aa7079452b46293f03fbf441cfde",
+      "asset_id": 602939707,
+      "url": "https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc3/sinter-0.5.4rc3-qualification.zip"
+    },
+    {
+      "path": "sinter-0.5.4rc3-source.zip",
+      "bytes": 1297784,
+      "sha256": "6d2a4ec4c6342d1243507169d877d2d266230469b01dbc00cbe031c53328f22a",
+      "asset_id": 602939710,
+      "url": "https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc3/sinter-0.5.4rc3-source.zip"
+    },
+    {
+      "path": "sinter-0.5.4rc3.pyz",
+      "bytes": 397213,
+      "sha256": "7fe07773a9ced41bbb33bb1a2c9261e73df350f4289f575840ef2d24881b2efe",
+      "asset_id": 602939716,
+      "url": "https://github.com/neuroforge-io/Sinter/releases/download/v0.5.4rc3/sinter-0.5.4rc3.pyz"
+    }
+  ],
+  "global_ci_green": false,
+  "qualified_targets": [
+    "linux-x64"
+  ],
+  "other8targets_qualified": false,
+  "customer_device_qualified": false,
+  "model_quality_qualified": false
+}

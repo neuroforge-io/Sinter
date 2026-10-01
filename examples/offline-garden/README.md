@@ -21,16 +21,20 @@ The two files serve different purposes:
 
 ## Open the example
 
-On `0.5.4rc2` candidate source, open **Overview** or **Getting started**
-and choose **Open garden handover** or **Open garden campaign**. Each opens a
+In the published `0.5.4rc3` Linux browser workbench, open **Overview** or
+**Getting started** and choose **Open garden handover** or **Open garden campaign**.
+After Debian installation, open that workbench with
+`/opt/neuroforge/sinter/Sinter app --mode browser`; the application-menu entry
+opens the smaller native source workspace. Each example opens a
 new unsaved copy of this bundled data; the on-page guide links to its paired
 editor. Switching between them resumes your session edits. Existing saved work
 is unchanged, and replacing different unsaved inputs requires an explicit choice.
 Preparing a casebook report saves the project inputs; edited document text needs
-its separate **Save to this computer** action. This direct entry is subsequent
-development and is not part of the frozen 0.5.4rc1 installers.
+its separate **Save to this computer** action. Direct example entry is also
+available in rc2; it is not part of the frozen 0.5.4rc1 installers.
 
-For the frozen preview, or to practise restoring backups, use the file path below.
+To practise restoring backups, use the file path below. These steps use the
+browser workbench; older installers retain their own interface and capabilities.
 
 Start Sinter and open **Community casebooks** (`#casebooks`). Expand **Backups
 and project removal**, choose **Restore a casebook backup**, and select
@@ -59,9 +63,10 @@ storage and downloaded backups are unencrypted.
 5. Change **Recipient or audience**. The previous report disappears because it
    reflects earlier inputs. Prepare the source-only report again, then use its
    copy or download controls.
-6. Choose **Save project**, close the browser tab, reopen Sinter and open the
-   project from the saved shelf. Check that the recipient, originals and handover
-   format remain.
+6. Choose **Save project**, use **Quit Sinter**, then reopen the browser workbench
+   and open the project from the saved shelf. Check that the recipient, originals
+   and handover format remain. Closing only the browser tab leaves the server
+   running.
 7. Choose **Export project backup**. Restore that file through **Restore a
    casebook backup**. It opens as a new unsaved project. Save it as a separate
    copy; the previous saved project remains.

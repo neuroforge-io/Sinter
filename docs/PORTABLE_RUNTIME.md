@@ -2,10 +2,13 @@
 
 [Back to Sinter](../README.md)
 
-This guide describes unreleased development. Published rc2 downloads keep their
-original browser interface and frozen source. Source, Python package and zipapp
-distribution require Python 3.10+. Frozen native packages include Python; their
-receipts state whether Tcl/Tk and account verification are bundled.
+This guide describes the 0.5.4rc3 runtime. The qualified Linux x64 preview opens a
+native source workspace by default; the full browser workbench is an explicit
+launch mode. Other platform downloads retain their previously published runtime
+and qualification scope. Source, Python package and zipapp distribution require
+Python 3.10+. Frozen native packages include Python; their receipts state whether
+Tcl/Tk and account verification are bundled. See the [installation guide](INSTALLATION.md)
+for exact release assets and limits.
 
 ## Open the application
 
