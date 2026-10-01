@@ -1576,3 +1576,37 @@ It permits no archive commands or live historical-port checks, keeps the existin
 Its twenty controls are design requirements, not implemented passes. Canonical
 RC4 admission and actual matching installed execution remain pending. The physical
 user app remains intentionally closed and Sinter model requests remain zero.
+
+### Corrected native handoff source adoption, 2 October
+
+Independent review
+`b4d478043230cc988faf7d44f2d47186a0bd584c1449da5200ba99ba98acbe6b`
+accepts the corrected four-new-path native handoff proposal against the exact
+`77ce8d7e6b2710fd2256795966abd3c032f11be8` baseline. All 441 baseline files
+and 3,345 original function bodies are conserved. The original refusal remains
+unchanged. Root verifies all 5,678 author, historical and independent reference
+occurrences, retains their complete bytes, and declares the two later main
+documentation changes separately before applying the exact reviewed patch.
+
+The independent focused replay has 747 passes and four existing explicit GUI
+skips. All 22 original malformed literal/full-fixture witnesses now refuse through
+their intended identity, type, nested-schema or phase checks; complete positive
+fixtures pass. Seven inert native-driver cases preserve the first exception and
+attempt destruction, including withdrawal and construction failures. Forty
+additional controls pass, including allowed later PID reuse and collisions across
+different process namespaces. A real source HTTP quit/cancel/interrupted-request
+control preserves disk state and closes its owned listener and thread. These
+separate controls are not added to the focused test total.
+
+Root's current-main composition passes 364 focused tests with no skips in 9.00
+seconds. This includes all 184 new-module cases, the four supplied-session seam
+cases and the shared entry/archive/container contracts. Formatting and static
+checks pass. Source adoption does not admit an installed native/browser journey,
+a final package, an archived historical qualifier or a new release. The physical
+user app remains intentionally closed; no Sinter provider/model call is initiated.
+
+The corrected recovery proposal remains held after its independent 260-pass,
+ten-lifetime source replay: five malformed removal-stdout records still pass its
+consumer. The narrow complete-stream repair and replacement's ordered-wording
+and publication-error repair require fresh independent review. Historical failures
+and all corresponding source receipts remain unchanged.

@@ -9,8 +9,14 @@ qualification and does not change any published RC3 asset or historical receipt.
   session. Keep the existing UI journey, omitted defaults and historical receipt
   contracts intact. Independent source checks and all six hosted Python/platform
   jobs pass; complete supplier cleanup and actual installed execution remain
-  separate requirements. Adversarial review continues to refuse the three
-  unadopted installer-tool proposals pending their bounded repairs.
+  separate requirements. Recovery and replacement tooling continue through
+  independent review before source adoption.
+
+- Add a separate native/browser handoff qualifier with complete request and
+  diagnostic records. Preserve the first failure during cleanup, reject aliases
+  between concurrently running processes, and bind the actual held-session
+  response and interrupted-request identity. Independent source review passes;
+  installed native/browser execution and final release qualification remain pending.
 
 - Rehearse scoped casebook recovery alongside the existing campaign journey.
   Preserve exact originals before opening a reader, test selected/empty/all
