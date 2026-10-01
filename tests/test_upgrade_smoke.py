@@ -206,7 +206,11 @@ def test_failed_source_admission_does_not_create_or_replace_workspace(
             source, output, prior=prior, prior_source_archive=archive
         )
     assert not output.exists()
-    assert (source / "src" / "prior.py").read_text().startswith("# Fictional")
+    assert (
+        (source / "src" / "prior.py")
+        .read_text(encoding="utf-8")
+        .startswith("# Fictional")
+    )
 
 
 def test_oversized_prior_archive_is_refused_before_hashing_or_reading(
@@ -310,7 +314,7 @@ def test_existing_receipt_or_source_nested_output_is_preserved(monkeypatch, tmp_
             upgrade.prepare_fixture(
                 source, destination, prior=prior, prior_source_archive=archive
             )
-    assert receipt.read_text() == "Retained historical fixture"
+    assert receipt.read_text(encoding="utf-8") == "Retained historical fixture"
     assert not (source / "output").exists()
 
 
@@ -456,7 +460,7 @@ def test_seed_rich_prior_semantics_without_publishing_fixture_evidence(
         capture_output=True,
         timeout=20,
     )
-    expected = json.loads(output.read_text())
+    expected = json.loads(output.read_text(encoding="utf-8"))
     document = expected["campaign"]["document"]
     assert expected["prior_version"] == version
     assert len(document["sources"]) == 1 and len(document["actions"]) == 2
@@ -526,7 +530,7 @@ def test_rich_rc2_preservation_check_uses_actual_local_routes(tmp_path, monkeypa
         capture_output=True,
         timeout=20,
     )
-    expected = json.loads(output.read_text())
+    expected = json.loads(output.read_text(encoding="utf-8"))
     monkeypatch.setattr(
         client,
         "chat",
@@ -542,8 +546,7 @@ def test_rich_rc2_preservation_check_uses_actual_local_routes(tmp_path, monkeypa
         checks = upgrade.check_preserved(api, expected)
         assert (
             "rich prior source snapshots, stale marked review "
-            "and unknown/unassigned owners retained"
-            in checks
+            "and unknown/unassigned owners retained" in checks
         )
         assert app.campaigns.get(expected["campaign"]["id"]) == expected["campaign"]
         assert app.store.report(expected["report_id"]) == expected["report"]

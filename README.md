@@ -34,6 +34,10 @@ copied fictional workspaces, preferences and explicit model selections.
 Current development reports `0.5.4rc3.dev0`. Its communications search/order and
 unmet-check guidance changes are source-only and are not qualified installers.
 
+Unreleased development also adds a native source workspace and shared CLI/Python
+operations. See [one portable runtime](docs/PORTABLE_RUNTIME.md) for launch modes,
+fictional workflows and current scope. Published downloads remain unchanged.
+
 The earlier v0.5.3 and [v0.5.4rc1](docs/PREVIEW_0.5.4rc1.md) previews remain
 unchanged; their installers have different source and capabilities.
 See [preview scope and evidence](docs/PREVIEW_0.5.4rc2.md) before choosing an asset.

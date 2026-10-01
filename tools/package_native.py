@@ -3,6 +3,8 @@
 No publisher signing is claimed. ARMv7 emulation and x86 compatibility runs
 are labelled explicitly. Account verification is bundled on supported crypto
 targets; incompatible targets use --without-accounts. Speech and RKC are absent.
+Tcl/Tk is bundled by default; --without-native-window declares a CLI/browser-only
+compatibility build. Resource self-tests do not qualify an interactive display.
 """
 
 from __future__ import annotations
@@ -30,7 +32,14 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 from sinter import __version__  # noqa: E402
 from tools._support import require_module  # noqa: E402
-from tools.native_licences import collect_linux_libraries, library_records  # noqa: E402
+from tools.native_licences import (  # noqa: E402
+    collect_linux_libraries,
+    common_references,
+    copy_notice,
+    digest,
+    library_records,
+    package_owner,
+)
 
 AUTH_PACKAGES = ("PyJWT", "cryptography", "cffi", "pycparser") + (
     ("typing_extensions",) if sys.version_info < (3, 11) else ()
@@ -48,6 +57,8 @@ RUNTIME_FIELDS = (
     "checks",
     "account_auth_bundled",
     "account_auth_dependencies",
+    "native_window_bundled",
+    "native_display_tested",
 )
 
 
@@ -120,7 +131,202 @@ def icon(folder: Path) -> tuple[Path, Path]:
     return ico, icns
 
 
-def collect_licences(notices, *, accounts=True, runtime=None):
+def native_window_build_info(info=None):
+    """Require matching, collectible Tcl/Tk without opening a display."""
+    problem = (
+        "A matching Python tkinter/_tkinter and bundled Tcl/Tk runtime are required. "
+        "Use an interpreter with Tcl/Tk, or explicitly choose --without-native-window "
+        "for a CLI/browser-only package."
+    )
+    try:
+        import _tkinter
+
+        if info is None:
+            from PyInstaller.utils.hooks.tcl_tk import tcltk_info
+
+            info = tcltk_info
+    except ImportError as exc:
+        raise RuntimeError(problem) from exc
+    if not info.available or info.is_macos_system_framework:
+        raise RuntimeError(problem)
+    if (
+        tuple(map(int, _tkinter.TCL_VERSION.split("."))) != info.tcl_version
+        or tuple(map(int, _tkinter.TK_VERSION.split("."))) != info.tk_version
+    ):
+        raise RuntimeError("Tcl/Tk versions do not match _tkinter. " + problem)
+    required = (
+        info.tkinter_extension_file,
+        info.tcl_shared_library,
+        info.tk_shared_library,
+    )
+    if any(not path or not Path(path).is_file() for path in required):
+        raise RuntimeError(
+            "Tcl/Tk extension or shared libraries are missing. " + problem
+        )
+    for path, entry in ((info.tcl_data_dir, "init.tcl"), (info.tk_data_dir, "tk.tcl")):
+        if not path or not Path(path).joinpath(entry).is_file():
+            raise RuntimeError("Tcl/Tk script resources are missing. " + problem)
+    if not info.data_files:
+        raise RuntimeError("Tcl/Tk script collection is empty. " + problem)
+    return info
+
+
+def windows_toolkit_notice(info, name: str, directory: Path) -> Path | None:
+    """Recognize CPython's original combined notice, bound to this interpreter.
+
+    PCbuild/regen.targets concatenates tcllicense.terms and tklicense.terms
+    into LICENSE.txt; Windows installers do not retain those separate files.
+    Preserve that entire original file, never reconstruct a notice from markers.
+    """
+    prefix = Path(sys.base_prefix).resolve()
+    origins = (
+        directory,
+        Path(info.tkinter_extension_file),
+        Path(info.tcl_shared_library),
+        Path(info.tk_shared_library),
+    )
+    if any(not path.resolve().is_relative_to(prefix) for path in origins):
+        return None
+    notice = prefix / "LICENSE.txt"
+    if not notice.is_file():
+        return None
+    text = " ".join(notice.read_text(encoding="utf-8").split())
+    # These distinct upstream Tcl/Tk notices have the same grant/disclaimers,
+    # but different copyright holders and restricted-rights clause numbers.
+    holder = (
+        "Corporation and other parties."
+        if name == "Tcl"
+        else "Corporation, Apple Inc. and other parties."
+    )
+    clause = "252.227-7014" if name == "Tcl" else "252.227-7013"
+    markers = (
+        "This software is copyrighted by the Regents of the University of "
+        "California, Sun Microsystems, Inc., Scriptics Corporation, ActiveState "
+        + holder,
+        "The following terms apply to all files associated with the software "
+        "unless explicitly disclaimed in individual files.",
+        "The authors hereby grant permission to use, copy, modify, distribute, "
+        "and license this software and its documentation for any purpose, provided",
+        "this notice is included verbatim in any distributions.",
+        "Modifications to this software may be copyrighted by their authors",
+        "IN NO EVENT SHALL THE AUTHORS OR DISTRIBUTORS BE LIABLE TO ANY PARTY",
+        "THE AUTHORS AND DISTRIBUTORS SPECIFICALLY DISCLAIM ANY WARRANTIES,",
+        'IS PROVIDED ON AN "AS IS" BASIS,',
+        "GOVERNMENT USE: If you are acquiring this software on behalf of the",
+        clause + " (b) (3) of DFARs.",
+        "terms specified in this license.",
+    )
+    # All markers must belong to one complete notice, not separate unrelated
+    # sections or a passing mention of Tcl/Tk in Python's own licence.
+    for section in text.split("This software is copyrighted by ")[1:]:
+        section = "This software is copyrighted by " + section
+        position = 0
+        for marker in markers:
+            position = section.find(marker, position)
+            if position < 0:
+                break
+            position += len(marker)
+        else:
+            return notice
+    return None
+
+
+def collect_toolkit_licences(
+    info,
+    notices,
+    runtime,
+    *,
+    documentation=Path("/usr/share/doc"),
+    common=Path("/usr/share/common-licenses"),
+):
+    """Bind every collected script to its build origin and original notices."""
+    data_root = (
+        runtime / "Contents" / "Resources"
+        if sys.platform == "darwin"
+        else runtime / "_internal"
+    )
+    rows = []
+    for name, directory, entry, version in (
+        ("Tcl", info.tcl_data_dir, "init.tcl", info.tcl_version),
+        ("Tk", info.tk_data_dir, "tk.tcl", info.tk_version),
+    ):
+        directory = Path(directory)
+        if sys.platform.startswith("linux"):
+            owner, _ = package_owner(directory / entry)
+            copyright = documentation / owner / "copyright"
+            if not copyright.is_file():
+                raise RuntimeError(f"{name} original runtime licence is missing")
+            sources = [copyright]
+            sources.extend(
+                common / reference
+                for reference in common_references(
+                    copyright.read_text(encoding="utf-8")
+                )
+            )
+        else:
+            candidates = [directory, directory.parent, directory.parent.parent]
+            sources = [
+                path
+                for parent in candidates
+                for filename in (name.lower() + "license.terms", "license.terms")
+                if (path := parent / filename).is_file()
+            ][:1]
+            if not sources and sys.platform == "win32":
+                combined = windows_toolkit_notice(info, name, directory)
+                if combined is not None:
+                    sources = [combined]
+        if not sources:
+            raise RuntimeError(
+                f"{name} original runtime licence could not be collected"
+            )
+        licences = [
+            copy_notice(source, notices / "toolkit" / name / source.name, notices)
+            for source in sources
+        ]
+        scripts = []
+        seen = set()
+        for target, origin, kind in info.data_files:
+            if not target or not Path(target).parts:
+                raise RuntimeError("Bundled toolkit script path is invalid")
+            toolkit = "Tk" if Path(target).parts[0] == "_tk_data" else "Tcl"
+            if toolkit != name:
+                continue
+            origin, bundled = Path(origin), data_root / target
+            if (
+                kind != "DATA"
+                or Path(target).is_absolute()
+                or ".." in Path(target).parts
+                or target in seen
+                or not origin.is_file()
+                or not bundled.is_file()
+                or digest(origin) != digest(bundled)
+            ):
+                raise RuntimeError(
+                    f"{name} bundled script origin is not proven: {target}"
+                )
+            seen.add(target)
+            scripts.append(
+                {
+                    "path": bundled.relative_to(runtime).as_posix(),
+                    "sha256": digest(bundled),
+                    "origin": str(origin),
+                }
+            )
+        if not scripts:
+            raise RuntimeError(f"{name} bundled scripts are missing")
+        rows.append(
+            {
+                "name": name,
+                "version": ".".join(map(str, version)),
+                "purpose": "bundled_native_toolkit",
+                "licences": licences,
+                "scripts": scripts,
+            }
+        )
+    return rows
+
+
+def collect_licences(notices, *, accounts=True, runtime=None, toolkit=None):
     notices.mkdir(parents=True, exist_ok=True)
     for name in ("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"):
         shutil.copy2(ROOT / name, notices / name)
@@ -170,6 +376,10 @@ def collect_licences(notices, *, accounts=True, runtime=None):
     if runtime is not None and sys.platform.startswith("linux"):
         native = collect_linux_libraries(runtime, notices)
         inventory.extend(native)
+    if toolkit is not None:
+        if runtime is None:
+            raise RuntimeError("Toolkit notice collection requires a frozen runtime")
+        inventory.extend(collect_toolkit_licences(toolkit, notices, runtime))
     (notices / "bundled-dependencies.json").write_text(
         json.dumps(
             {
@@ -177,6 +387,7 @@ def collect_licences(notices, *, accounts=True, runtime=None):
                 "packages": inventory,
                 "account_auth_bundled": accounts,
                 "linux_shared_library_notices_verified": bool(native),
+                "native_toolkit_notices_verified": toolkit is not None,
             },
             indent=2,
         ),
@@ -239,7 +450,13 @@ def verify_account_receipt(receipt, enabled=True):
             )
 
 
-def freezer_arguments(account_auth=True):
+def native_window_bundle_arguments(enabled=True):
+    """Use standard PyInstaller Tk hooks; compatibility builds omit both modules."""
+    flag = "--hidden-import" if enabled else "--exclude-module"
+    return [value for name in ("tkinter", "_tkinter") for value in (flag, name)]
+
+
+def freezer_arguments(account_auth=True, native_window=True):
     """Share the exact runtime collection with isolated frozen-build validation."""
     return [
         sys.executable,
@@ -248,6 +465,7 @@ def freezer_arguments(account_auth=True):
         "--noconfirm",
         "--clean",
         "--onedir",
+        "--console",
         "--name",
         "Sinter",
         "--paths",
@@ -260,8 +478,7 @@ def freezer_arguments(account_auth=True):
         "certifi",
         "--add-data",
         str(ROOT / "src" / "sinter" / "web") + os.pathsep + "sinter/web",
-        "--exclude-module",
-        "tkinter",
+        *native_window_bundle_arguments(native_window),
         "--exclude-module",
         "faster_whisper",
         "--exclude-module",
@@ -274,7 +491,52 @@ def freezer_arguments(account_auth=True):
     ]
 
 
-def record_installed_receipt(receipt, installed, account_auth=True):
+def verify_native_window_receipt(receipt, enabled=True):
+    """A display-free package check proves resources, never GUI qualification."""
+    if receipt.get("native_window_bundled") is not enabled:
+        raise RuntimeError(
+            "Installed native-window capability does not match its build."
+        )
+    if receipt.get("native_display_tested") is not False:
+        raise RuntimeError(
+            "Headless self-test must not claim native display qualification."
+        )
+
+
+def freeze_runtime(arguments, build, ico, icns):
+    """Keep one console-capable executable, including inside the macOS app."""
+    entry = ROOT / "packaging" / "desktop_entry.py"
+    if sys.platform == "win32":
+        run(*arguments, "--icon", ico, entry)
+    elif sys.platform == "darwin":
+        # PyInstaller's --windowed creates a .app but removes standard I/O.
+        # Its documented BUNDLE spec target also accepts a console COLLECT.
+        options = [
+            arg for arg in arguments[3:] if arg not in {"--clean", "--noconfirm"}
+        ]
+        run(
+            sys.executable,
+            "-m",
+            "PyInstaller.utils.cliutils.makespec",
+            *options,
+            "--specpath",
+            build,
+            entry,
+        )
+        spec = build / "Sinter.spec"
+        with spec.open("a", encoding="utf-8") as stream:
+            stream.write(
+                "\napp = BUNDLE(coll, name='Sinter.app', "
+                f"icon={str(icns)!r}, bundle_identifier='io.neuroforge.sinter', "
+                f"version={__version__!r}, "
+                "info_plist={'LSBackgroundOnly': False})\n"
+            )
+        run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", spec)
+    else:
+        run(*arguments, entry)
+
+
+def record_installed_receipt(receipt, installed, account_auth=True, native_window=None):
     """Keep auditable installed evidence and bind it to the frozen build."""
     identity = ("schema", "version", "system", "machine", "pointer_bits", "python")
     if (
@@ -284,6 +546,8 @@ def record_installed_receipt(receipt, installed, account_auth=True):
     ):
         raise RuntimeError("Installed runtime does not match the tested frozen build.")
     verify_account_receipt(installed, account_auth)
+    if native_window is not None:
+        verify_native_window_receipt(installed, native_window)
     receipt["frozen_test"] = {
         field: receipt[field] for field in RUNTIME_FIELDS if field in receipt
     }
@@ -316,12 +580,24 @@ def main(argv: list[str] | None = None) -> None:
             "API-key connections and local tools remain available."
         ),
     )
+    parser.add_argument(
+        "--without-native-window",
+        action="store_true",
+        help="Build an explicit CLI/browser-only compatibility package without Tcl/Tk.",
+    )
     args = parser.parse_args(argv)
     for module, label in [("PyInstaller", "PyInstaller"), ("certifi", "certifi")]:
         require_module(
             parser, module, label, "python -m pip install pyinstaller==6.22.2 certifi"
         )
     account_auth = not args.without_accounts
+    native_window = not args.without_native_window
+    toolkit = None
+    if native_window:
+        try:
+            toolkit = native_window_build_info()
+        except RuntimeError as exc:
+            parser.error(str(exc))
     if account_auth:
         for module, label in [
             ("jwt", "PyJWT"),
@@ -347,18 +623,8 @@ def main(argv: list[str] | None = None) -> None:
     build.mkdir(exist_ok=True)
     release.mkdir(exist_ok=True)
     ico, icns = icon(build)
-    cmd = freezer_arguments(account_auth)
-    if sys.platform == "win32":
-        cmd += ["--windowed", "--icon", str(ico)]
-    elif sys.platform == "darwin":
-        cmd += [
-            "--windowed",
-            "--icon",
-            str(icns),
-            "--osx-bundle-identifier",
-            "io.neuroforge.sinter",
-        ]
-    run(*cmd, ROOT / "packaging" / "desktop_entry.py")
+    cmd = freezer_arguments(account_auth, native_window)
+    freeze_runtime(cmd, build, ico, icns)
     app = ROOT / "dist" / "Sinter"
     if sys.platform == "darwin":
         app = ROOT / "dist" / "Sinter.app"
@@ -371,7 +637,9 @@ def main(argv: list[str] | None = None) -> None:
             app / ("Sinter.exe" if sys.platform == "win32" else "Sinter"),
             app / "licenses",
         )
-    dependencies = collect_licences(notices, accounts=account_auth, runtime=app)
+    dependencies = collect_licences(
+        notices, accounts=account_auth, runtime=app, toolkit=toolkit
+    )
     if sys.platform == "darwin":
         run("codesign", "--force", "--deep", "--sign", "-", app)
     prefix = f"Sinter-{__version__}-{platform.system().lower()}-{args.arch}"
@@ -385,6 +653,7 @@ def main(argv: list[str] | None = None) -> None:
     receipt = json.loads(receipt_path.read_text())
     assert receipt["passed"] and receipt["frozen"] and receipt["pointer_bits"] == bits
     verify_account_receipt(receipt, account_auth)
+    verify_native_window_receipt(receipt, native_window)
     receipt.update(
         {
             "execution": args.execution,
@@ -392,6 +661,9 @@ def main(argv: list[str] | None = None) -> None:
             "signed_by_publisher": False,
             "pyinstaller": importlib.metadata.version("pyinstaller"),
             "speech_bundled": False,
+            "native_window_requested": native_window,
+            "native_toolkit_notices_verified": toolkit is not None,
+            "console_capable": True,
             "source_commit": os.environ.get("GITHUB_SHA", "local"),
             "bundled_dependencies": dependencies,
             "linux_shared_library_notices_verified": (
@@ -438,7 +710,7 @@ def main(argv: list[str] | None = None) -> None:
             installed_receipt = Path(temp) / "installed.json"
             run(target / "Sinter.exe", "--self-test", installed_receipt, timeout=60)
             installed = json.loads(installed_receipt.read_text())
-            record_installed_receipt(receipt, installed, account_auth)
+            record_installed_receipt(receipt, installed, account_auth, native_window)
             run(
                 target / "unins000.exe",
                 "/VERYSILENT",
@@ -493,7 +765,7 @@ def main(argv: list[str] | None = None) -> None:
                 timeout=60,
             )
             installed = json.loads(installed_receipt.read_text())
-            record_installed_receipt(receipt, installed, account_auth)
+            record_installed_receipt(receipt, installed, account_auth, native_window)
         receipt["installer_test"] = "installed .pkg and ran installed application"
     else:
         debarch = {"x64": "amd64", "arm64": "arm64", "x86": "i386", "armv7": "armhf"}[
@@ -548,7 +820,7 @@ def main(argv: list[str] | None = None) -> None:
                 timeout=60,
             )
             installed = json.loads(installed_receipt.read_text())
-            record_installed_receipt(receipt, installed, account_auth)
+            record_installed_receipt(receipt, installed, account_auth, native_window)
         run(*sudo, "dpkg", "-r", "sinter")
         receipt["installer_test"] = (
             "installed .deb, ran installed HTTP/examples, removed package"

@@ -576,6 +576,9 @@ def export_docx(payload: object) -> WordDocument:
             # Fixed metadata makes identical input produce identical bytes and
             # prevents the host user/path/time from leaking into the document.
             entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            # ZipInfo otherwise chooses its creator platform from the host.
+            # Keep the original Unix metadata on every target for identical ZIPs.
+            entry.create_system = 3
             entry.compress_type = zipfile.ZIP_DEFLATED
             archive.writestr(entry, _xml(node))
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", title)[:80].rstrip(". ")
