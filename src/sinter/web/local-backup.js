@@ -1,5 +1,12 @@
 import {h, button, field, notice} from './ui.js';
 
+const backupResets = new WeakMap();
+
+/** Call when replacing the working copy, before any old clipboard promise settles. */
+export function resetLocalBackupControls(controls) {
+  backupResets.get(controls)?.();
+}
+
 /** Preserve the working copy, without applying server admission or normalization. */
 export function localBackupText(document, noun) {
   const text = JSON.stringify(document, null, 2);
@@ -63,8 +70,17 @@ export function localBackupControls(currentDocument, {noun, label,
       copying = false; copy.disabled = false;
     }
   }, 'quiet');
-  return h('section', {class: 'local-clipboard-backup', 'aria-label': `Copy ${noun} backup`},
+  const controls = h('section', {class: 'local-clipboard-backup', 'aria-label': `Copy ${noun} backup`},
     h('div', {class: 'button-row'}, copy, refresh),
     h('p', {class: 'fine'}, description),
     feedback, manual);
+  backupResets.set(controls, () => {
+    const hadCapture = !manual.hidden || copying;
+    generation++;
+    recovery.input.value = ''; manual.hidden = true;
+    feedback.replaceChildren(...(hadCapture ? [notice(
+      `${label} changed. Earlier backup text cleared. Refresh or copy to capture current inputs. Clipboard may still contain an earlier snapshot. This does not save the ${noun} or create a file.`,
+      'warning')] : []));
+  });
+  return controls;
 }

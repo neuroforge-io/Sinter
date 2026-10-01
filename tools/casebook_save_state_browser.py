@@ -29,6 +29,8 @@ def main(argv: list[str] | None = None) -> None:
     artifacts = Path(tempfile.mkdtemp(prefix="sinter-casebook-save-state-proof-"))
     paths = (
         "src/sinter/web/casebooks.js",
+        "src/sinter/web/confirm-action.js",
+        "src/sinter/web/workspace.css",
         "src/sinter/web/casebook-drafts.js",
         "src/sinter/casebooks.py",
         "tools/casebook_save_state_browser.py",
@@ -52,7 +54,17 @@ def main(argv: list[str] | None = None) -> None:
         page = context.new_page()
         page.set_default_timeout(8000)
         page.on("pageerror", lambda error: errors.append(str(error)))
-        page.on("dialog", lambda dialog: dialog.accept())
+        page.on(
+            "dialog",
+            lambda dialog: (
+                dialog.accept()
+                if dialog.type == "beforeunload"
+                else (
+                    errors.append("Unexpected native decision: " + dialog.type),
+                    dialog.dismiss(),
+                )
+            ),
+        )
         return context, page
 
     def save(page, revision):
@@ -208,6 +220,13 @@ def main(argv: list[str] | None = None) -> None:
                                 page.get_by_role(
                                     "button", name="Clear pending source", exact=True
                                 ).click()
+                                page.get_by_role(
+                                    "dialog",
+                                    name="Clear this pending source?",
+                                    exact=True,
+                                ).get_by_role(
+                                    "button", name="Clear pending source", exact=True
+                                ).click()
                                 expect(state).to_have_text(
                                     "Project inputs saved at revision 1."
                                 )
@@ -223,7 +242,9 @@ def main(argv: list[str] | None = None) -> None:
                                 )
                                 expect(state).to_contain_text("Based on revision 1.")
                                 expect(
-                                    page.locator(".casebook-editor details.source").filter(
+                                    page.locator(
+                                        ".casebook-editor details.source"
+                                    ).filter(
                                         has=page.get_by_role(
                                             "button",
                                             name="Remove source",
@@ -377,6 +398,13 @@ def main(argv: list[str] | None = None) -> None:
                                         "buffer": backup,
                                     }
                                 )
+                                page.get_by_role(
+                                    "dialog",
+                                    name="Replace this unsaved editor?",
+                                    exact=True,
+                                ).get_by_role(
+                                    "button", name="Replace editor", exact=True
+                                ).click()
                                 expect(state).to_contain_text(
                                     "Unsaved project changes."
                                 )

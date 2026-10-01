@@ -199,6 +199,10 @@ def run_flow(page, server, base, label, artifacts, expect):
     assert page.locator("#casebook-output").inner_text() == prepared_text
     assert server.app.casebooks.get(saved["id"]) == saved
     page.get_by_role("button", name="Clear pending source", exact=True).click()
+    clear = page.get_by_role("dialog", name="Clear this pending source?", exact=True)
+    expect(clear).to_be_visible()
+    clear.get_by_role("button", name="Clear pending source", exact=True).click()
+    expect(clear).to_have_count(0)
     expect(page.get_by_label("Project save state", exact=True)).to_have_text(
         "Project inputs saved at revision 2."
     )
@@ -338,6 +342,12 @@ def run_flow(page, server, base, label, artifacts, expect):
             "buffer": backup_bytes,
         }
     )
+    replace = page.get_by_role(
+        "dialog", name="Replace this unsaved editor?", exact=True
+    )
+    expect(replace).to_be_visible()
+    replace.get_by_role("button", name="Replace editor", exact=True).click()
+    expect(replace).to_have_count(0)
     expect(
         page.get_by_text("Backup opened as a new unsaved project.", exact=True)
     ).to_be_visible()
@@ -392,7 +402,7 @@ def main(argv=None):
     hashes = {
         path: hashlib.sha256((ROOT / path).read_bytes()).hexdigest() for path in PATHS
     }
-    checks, errors, external = [], [], []
+    checks, errors, external, native_dialogs = [], [], [], []
     resources = {"browser_closed": False, "server_closed": False}
     with (
         tempfile.TemporaryDirectory(
@@ -430,7 +440,12 @@ def main(argv=None):
                         page = context.new_page()
                         page.set_default_timeout(10000)
                         page.on("pageerror", lambda error: errors.append(str(error)))
-                        page.on("dialog", lambda dialog: dialog.accept())
+                        page.on(
+                            "dialog",
+                            lambda dialog: (
+                                native_dialogs.append(dialog.type), dialog.dismiss()
+                            ),
+                        )
                         try:
                             checks.append(
                                 run_flow(page, server, base, label, artifacts, expect)
@@ -472,6 +487,7 @@ def main(argv=None):
         "checks": checks,
         "errors": errors,
         "external": external,
+        "native_dialog_events": native_dialogs,
         "hosted_model_calls": 0,
         "real_workspace_mutations": 0,
         "resources": resources,
@@ -479,6 +495,7 @@ def main(argv=None):
         and unchanged
         and not errors
         and not external
+        and not native_dialogs
         and all(resources.values()),
     }
     target = artifacts / "filter-receipt.json"

@@ -54,6 +54,12 @@
 .run-scope{font-size:.8rem;color:var(--muted);margin:0;max-width:34em}
 .tool-finder{background:var(--surface);color:var(--text);border:1px solid var(--edge);border-radius:20px;padding:24px;width:min(640px,calc(100vw - 32px));max-height:85dvh;box-shadow:0 24px 90px #0007}
 .tool-finder::backdrop{background:#060b16a8;backdrop-filter:blur(5px)}
+.action-confirmation{background:var(--surface);color:var(--text);border:1px solid var(--edge);border-radius:18px;padding:24px;width:min(520px,calc(100vw - 32px));max-height:85dvh;overflow:auto;box-shadow:0 24px 90px #0007;overflow-wrap:anywhere}
+.action-confirmation::backdrop{background:#060b16a8}
+.action-confirmation h2{font-size:1.3rem;margin:0 0 14px}
+.action-confirmation p{margin:0 0 22px;line-height:1.65}
+.action-confirmation .button-row{justify-content:flex-end;flex-wrap:wrap}
+.action-confirmation .button:hover:not(:disabled){transform:none}
 .finder-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
 .finder-heading h2{font-size:1.3rem;margin:0}
 .tool-finder input{width:100%;padding:14px 16px;border:1px solid var(--edge);border-radius:10px;background:var(--bg);color:var(--text);font:inherit}

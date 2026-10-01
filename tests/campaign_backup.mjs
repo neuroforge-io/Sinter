@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {campaignBackupText, campaignBackupControls} from '../src/sinter/web/campaign-backup.js';
+import {campaignBackupText, campaignBackupControls, resetCampaignBackupControls} from '../src/sinter/web/campaign-backup.js';
 
 function fixture() {
   return {schema: 'sinter-campaign/v1', title: 'Fictional 🌱 e\u0301 working copy',
@@ -50,7 +50,8 @@ function environment(t, writeText) {
     return {root, copy: nodes.find(node => node.tag === 'button' && env.text(node) === 'Copy backup text'),
       refresh: nodes.find(node => node.tag === 'button' && env.text(node) === 'Refresh backup text'),
       select: nodes.find(node => node.tag === 'button' && env.text(node) === 'Select backup text'),
-      textarea: nodes.find(node => node.tag === 'textarea')};
+      textarea: nodes.find(node => node.tag === 'textarea'),
+      manual: nodes.find(node => node.children.some(child => child.tag === 'button' && env.text(child) === 'Select backup text'))};
   };
   return env;
 }
@@ -173,5 +174,56 @@ for (const completion of ['resolve', 'reject']) {
     assert.equal(env.text(controls.root), failedMessage);
     assert.equal(env.focused, focused);
     assert.equal(controls.copy.disabled, false);
+  });
+}
+
+
+test('replacing a campaign clears captured JSON and feedback without reading or copying the new work', t => {
+  const writes = [], env = environment(t, text => { writes.push(text); });
+  let current = fixture(), reads = 0;
+  const original = structuredClone(current);
+  const controls = env.control(() => { reads++; return current; });
+  resetCampaignBackupControls(controls.root);
+  assert.equal(reads, 0); assert.equal(env.text(controls.root).includes('Earlier backup'), false);
+  controls.refresh.handlers.click();
+  assert.equal(reads, 1); assert.deepEqual(JSON.parse(controls.textarea.value), original);
+  current = {...fixture(), title: 'A different unsaved campaign'};
+  resetCampaignBackupControls(controls.root);
+  assert.equal(reads, 1); assert.deepEqual(writes, []);
+  assert.equal(controls.textarea.value, ''); assert.equal(controls.manual.hidden, true);
+  assert.match(env.text(controls.root), /Earlier backup text cleared/);
+  assert.doesNotMatch(env.text(controls.root), /refreshed from your current inputs/);
+  assert.match(env.text(controls.root), /Clipboard may still contain an earlier snapshot/);
+  controls.refresh.handlers.click();
+  assert.deepEqual(JSON.parse(controls.textarea.value), current);
+  assert.equal(controls.manual.hidden, false); assert.equal(reads, 2);
+  assert.deepEqual(original, fixture()); assert.deepEqual(writes, []);
+});
+
+for (const completion of ['resolve', 'reject']) {
+  test(`replacement supersedes a stalled clipboard ${completion} without replay or focus theft`, async t => {
+    let resolve, reject, reads = 0;
+    const writes = [], env = environment(t, text => {
+      writes.push(text); return new Promise((done, fail) => { resolve = done; reject = fail; });
+    });
+    let current = fixture();
+    const original = structuredClone(current);
+    const controls = env.control(() => { reads++; return current; });
+    const pending = controls.copy.handlers.click();
+    current = {...fixture(), title: 'New working copy 🐝'};
+    controls.refresh.focus();
+    resetCampaignBackupControls(controls.root);
+    const resetMessage = env.text(controls.root), focused = env.focused;
+    assert.equal(controls.textarea.value, ''); assert.equal(controls.manual.hidden, true);
+    assert.equal(controls.copy.disabled, true); assert.equal(reads, 1);
+    assert.deepEqual(JSON.parse(writes[0]), original);
+    if (completion === 'resolve') resolve(); else reject(new Error('Old denied capture'));
+    await pending;
+    assert.equal(env.text(controls.root), resetMessage);
+    assert.equal(env.focused, focused); assert.equal(controls.copy.disabled, false);
+    assert.equal(writes.length, 1); assert.equal(reads, 1);
+    controls.refresh.handlers.click();
+    assert.deepEqual(JSON.parse(controls.textarea.value), current);
+    assert.equal(writes.length, 1); assert.equal(reads, 2);
   });
 }

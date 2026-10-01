@@ -11,6 +11,8 @@ import {HANDOVER_EVIDENCE_OPTIONS, handoverEvidenceMode,
 import {casebookSchema, explicitScopeClear, questionScopeIssue, questionScopeControls,
   casebookDraftContext, questionLines} from './casebook-scope.js';
 import {sourceFilterStates} from './casebook-source-filter.js';
+import {confirmAction} from './confirm-action.js';
+import {isReportDraftUnsaved} from './report-drafts.js';
 
 // Only this scope-aware caller opts in. A cached older page using the current
 // shared request helper must still be refused before it receives scoped work.
@@ -107,9 +109,26 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     sourcePanel.open = true; contents.input.focus();
     throw new Error(PENDING_SOURCE_MESSAGE);
   }
-  function canReplace() {
-    return !(bookDirty || hasPendingSource(pendingSource()))
-      || confirm('Replace the unsaved editor? Save your project and add or clear the pending source first if you need to keep it.');
+  async function canReplace() {
+    return !(bookDirty || hasPendingSource(pendingSource())
+      || (preparedReport && isReportDraftUnsaved(preparedReport)))
+      || await confirmAction({title: 'Replace this unsaved editor?',
+        description: 'Replace editor discards unsaved project changes and unadded sources. Cancel to add any source you need and save the project. Unsaved report edits stay in My workspace for this session; apply and save them before closing Sinter. Saved records are kept.',
+        confirmLabel: 'Replace editor'});
+  }
+  async function localDecision(trigger, decide, action) {
+    if (busy) return;
+    const outputWasInert = output.inert;
+    output.inert = true;
+    lock(true);
+    try { if (await decide()) await action(); }
+    catch (error) { status.replaceChildren(notice(error.message, 'error')); }
+    finally {
+      lock(false);
+      output.inert = outputWasInert;
+      const target = trigger?.isConnected && !trigger.disabled ? trigger : title.input;
+      target.focus({preventScroll: true});
+    }
   }
   function changed({dirty = true} = {}) {
     preparedReport = null; bookDirty = dirty; rememberCurrent();
@@ -155,12 +174,11 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     if (!result.casebooks.length) catalogue.append(h('p', {class: 'muted'}, 'Your saved projects will appear here. Start with an example or add your own notes.'));
     for (const row of result.casebooks) catalogue.append(h('article', {class: 'casebook-tile'},
       h('strong', {}, row.title), h('small', {class: 'muted'}, `Revision ${row.revision} / ${dateTime(row.updated_at)}`),
-      button('Open project', async () => {
-        if (busy) return;
-        if (!canReplace()) return;
-        try { const result = await casebookRequest('/api/casebooks/' + row.id); load(result.document, result.id, result.revision); status.replaceChildren(notice('Opened locally. Originals remain available below.')); }
-        catch (error) { status.replaceChildren(notice(error.message, 'error')); }
-      }, 'quiet')));
+      button('Open project', event => localDecision(event.currentTarget, canReplace, async () => {
+        const result = await casebookRequest('/api/casebooks/' + row.id);
+        load(result.document, result.id, result.revision);
+        status.replaceChildren(notice('Opened locally. Originals remain available below.'));
+      }), 'quiet')));
   }
   async function save() {
     admitPending();
@@ -243,23 +261,23 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   });
   backup.input.addEventListener('change', async () => {
     if (busy) return;
-    lock(true);
+    const file = backup.input.files[0]; if (!file) return;
     try {
-      const file = backup.input.files[0]; if (!file) return;
       if (file.size > 10000000) throw new Error('This backup is too large.');
-      if (!canReplace()) return;
-      const original = JSON.parse(await file.text());
-      const result = await casebookRequest('/api/casebooks/validate', {data: {document: original}});
-      load({...result.document, ...(explicitScopeClear(original) ? {question_scopes: []} : {})});
-      status.replaceChildren(notice('Backup opened as a new unsaved project.'));
+      await localDecision(backup.input, canReplace, async () => {
+        const original = JSON.parse(await file.text());
+        const result = await casebookRequest('/api/casebooks/validate', {data: {document: original}});
+        load({...result.document, ...(explicitScopeClear(original) ? {question_scopes: []} : {})});
+        status.replaceChildren(notice('Backup opened as a new unsaved project.'));
+      });
     } catch (error) { status.replaceChildren(notice(error.message, 'error')); }
-    finally { backup.input.value = ''; lock(false); }
+    finally { backup.input.value = ''; }
   });
   editor.append(h('legend', {}, 'Bring the fragments together'), title.wrap, questions.wrap, scopePanel,
-    h('div', {class: 'casebook-actions'}, button('Try a fictional community example', () => {
-      if (!canReplace()) return;
+    h('div', {class: 'casebook-actions'}, button('Try a fictional community example', event => localDecision(event.currentTarget, canReplace, () => {
       load(example()); status.replaceChildren(notice('Fictional example. No real venue, person or decision is represented.'));
-    }), button('New project', () => { if (canReplace()) load({title: '', questions: '', documents: []}); }, 'quiet')),
+    })), button('New project', event => localDecision(event.currentTarget, canReplace,
+      () => load({title: '', questions: '', documents: []})), 'quiet')),
     sourcePanel,
     totals, saveState, sources, format.wrap, handoverEvidence.wrap, recipient.wrap, sender.panel,
     h('div', {class: 'casebook-actions'}, button('Prepare source-only report', () => perform('build'), 'primary'),
@@ -267,10 +285,16 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
       button('Export project backup', () => { try { admitPending(); download('sinter-casebook.json', JSON.stringify(value(), null, 2), 'application/json'); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } })),
     h('details', {class: 'card'}, h('summary', {}, 'Backups and project removal'), backup.wrap,
       casebookBackupControls(() => { admitPending(); return value(); }),
-      button('Remove saved project', async () => {
-        if (!savedId || !confirm('Remove this saved project? Export a backup first. The current editor is kept.')) return;
-        try { await casebookRequest('/api/casebooks/delete', {data: {id: savedId, revision}}); savedId = null; revision = null; changed(); await refresh(); }
-        catch(error) { status.replaceChildren(notice(error.message, 'error')); }
+      button('Remove saved project', event => {
+        if (!savedId || busy) return;
+        const id = savedId, rev = revision;
+        return localDecision(event.currentTarget, () => confirmAction({title: 'Remove this saved project?',
+          description: 'Export a backup first if you need one. The current editor is kept; the saved project will be removed only when you choose Remove saved project.',
+          confirmLabel: 'Remove saved project'}), async () => {
+          await casebookRequest('/api/casebooks/delete', {data: {id, revision: rev}});
+          savedId = null; revision = null; changed(); await refresh();
+          status.replaceChildren(notice('Saved project removed. The current editor is kept as unsaved work.'));
+        });
       }, 'quiet')));
   sourcePanel.append(h('summary', {}, 'Add notes and references'), name.wrap, contents.wrap,
       h('div', {class: 'form-grid'}, sourceDate.wrap, sourceURL.wrap),
@@ -279,7 +303,10 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
         if (docs.length >= 300 || docs.reduce((n, row) => n + row.content.length, contents.input.value.length) > 2000000) { status.replaceChildren(notice('The collection limit is reached. Start a separate casebook.', 'error')); return; }
         docs.push({title: name.input.value, content: contents.input.value, date: sourceDate.input.value, url: sourceURL.input.value});
         clearPending(); changed(); drawSources();
-      }), button('Clear pending source', () => { if (!hasPendingSource(pendingSource()) || confirm('Clear this pending source? It has not been added or saved.')) clearPending(); }, 'quiet'), pendingNotice, upload.wrap);
+      }), button('Clear pending source', event => localDecision(event.currentTarget,
+        () => !hasPendingSource(pendingSource()) || confirmAction({title: 'Clear this pending source?',
+          description: 'This source has not been added or saved. Cancel keeps its title, original text, date and link in the editor.',
+          confirmLabel: 'Clear pending source'}), clearPending), 'quiet'), pendingNotice, upload.wrap);
   updateSaveState(); drawSources(); await refresh();
   if (preparedReport) drawReport(preparedReport);
   return h('div', {class: 'stack casebooks-page'}, h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'LESS CHASING. MORE CONTEXT.'),

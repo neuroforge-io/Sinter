@@ -32,6 +32,8 @@ PATHS = (
     "src/sinter/web/api.js",
     "src/sinter/web/desktop.css",
     "src/sinter/web/casebooks.js",
+    "src/sinter/web/confirm-action.js",
+    "src/sinter/web/workspace.css",
     "src/sinter/web/casebook-scope.js",
     "src/sinter/web/casebook-source-filter.js",
     "src/sinter/web/casebook-backup.js",
@@ -477,7 +479,19 @@ def main(argv=None):
                             page.on(
                                 "pageerror", lambda error: errors.append(str(error))
                             )
-                            page.on("dialog", lambda dialog: dialog.accept())
+                            page.on(
+                                "dialog",
+                                lambda dialog: (
+                                    dialog.accept()
+                                    if dialog.type == "beforeunload"
+                                    else (
+                                        errors.append(
+                                            "Unexpected native decision: " + dialog.type
+                                        ),
+                                        dialog.dismiss(),
+                                    )
+                                ),
+                            )
                             try:
                                 title = "Fictional scoped eligibility " + label
                                 page.goto(base + "/#casebooks")
@@ -1038,6 +1052,13 @@ def main(argv=None):
                                         "buffer": backup_bytes,
                                     }
                                 )
+                                page.get_by_role(
+                                    "dialog",
+                                    name="Replace this unsaved editor?",
+                                    exact=True,
+                                ).get_by_role(
+                                    "button", name="Replace editor", exact=True
+                                ).click()
                                 expect(
                                     page.get_by_text(
                                         "Backup opened as a new unsaved project.",

@@ -509,7 +509,7 @@ fixtures and live Sinter behavior were not changed by that proposal.
 ### Qualified combined source and actual operator recovery
 
 Commit `5f7f9e2a7f9535c83ee683df68512f669b6c7df9` passed **2,596 Python
-checks, with seven explicit skips**, 24 focused JavaScript checks, fatal lint and
+checks, with seven explicit skips**, 24 focused JavaScript test files, fatal lint and
 the public-boundary check. All 348 files in the tested copy matched the committed
 Git archive, including the existing checkout line-ending policy. Independent
 cached-interface, capability, deliberate-clear, Unicode, keyboard, cancellation
@@ -545,3 +545,50 @@ backup, but two first-inspection layout stalls measured 712 and 820 ms. These
 negative timings remain open performance evidence. The bounded assessment is
 still **7.5 for experience, 8 for functionality and 7 for appearance**; it does
 not establish a product-wide score or a 10/10 experience.
+
+### Source-picker checkpoint and separately reviewed recovery work
+
+Commit `203a7dac77490a4215461db21394dae756ca3eb1` passed **2,617 Python
+checks with eight explicit skips** and **243 individual JavaScript checks**.
+All 352 tested files matched the committed archive. The earlier count of 24
+JavaScript checks described test files, not individual test cases; the label
+above is corrected without replacing that earlier source receipt.
+
+Actual campaign replacement exposed a separate stale-capture defect: a new
+campaign could retain an earlier campaign's visible backup text and refreshed
+status. The private repair resets the capture when the working copy is replaced
+and invalidates pending clipboard outcomes. It never clears the user's clipboard
+or captures the new document automatically. Invalid imports retain the previous
+editor and capture. An independent replay also found a pre-existing race: New
+remained enabled during an Open request, and the older response then replaced
+the blank campaign. Saved originals were unchanged. The narrow second repair
+disables New during Save, Open and import, independently guards its callback,
+and restores the control on success or failure without cancelling or replaying
+requests. The original failure and repaired desktop/phone journeys remain
+separate evidence. A capture is still a snapshot when editing within
+the same campaign; refresh or copy deliberately to capture newer inputs.
+
+The local casebook confirmation was revised after two adversarial holds. One
+earlier version left report editing active during an approved request; another
+explained session report recovery but omitted the explicit loss of unsaved
+project and unadded source inputs. The final private version locks both regions,
+starts on Cancel, states the discarded inputs and retains report-session recovery.
+Its author and independent critic each exercised desktop and phone decisions,
+request failure, focus return and report-only edits. These are source-level
+checks; they do not erase the earlier in-app-browser trap or qualify an installer.
+
+A separately reviewed question/evidence view exposes a report's own search
+choices and exact original quotes without a current-project lookup or request.
+Blank historical question wording and inconsistent references remain explicit
+gaps. Original report text, pending document edits and Word exports are retained.
+A bounded local CPU probe with one 200,000-code-point original, 20 questions and
+three passages per question observed 138.5–141.8 ms before reusing each original's
+character index within one inspection, and 2.1–6.8 ms afterward. Seven samples
+per variant are a local processing observation, not browser latency, an installed
+benchmark or a performance guarantee. Later inspections validate their own
+originals again; the cross-inspection stale-source regression must pass.
+
+The combined source, its deliberate merges and its regression results receive
+a separate frozen receipt before commit. Optional hosted generation, additional
+platforms and RC3 installed-release qualification remain outside these repairs.
+No whole-product 10/10 claim is made.

@@ -114,7 +114,10 @@ def main(argv: list[str] | None = None) -> None:
                 expect(page.get_by_role('region', name='Your draft report')).to_be_visible()
                 page.get_by_role('link', name='Community casebooks', exact=True).click()
                 page.get_by_role('button', name='Open project', exact=True).wait_for()
-                page.on('dialog', lambda dialog: dialog.accept())
+                page.on('dialog', lambda dialog: dialog.accept()
+                    if dialog.type == 'beforeunload' else (
+                        errors.append('Unexpected native decision: ' + dialog.type),
+                        dialog.dismiss()))
                 page.get_by_role('button', name='Open project', exact=True).first.click()
                 assert page.get_by_label('Project name', exact=True).input_value() == 'Fictional P&C community evening'
                 expect(page.get_by_label('Prepare a', exact=True)).to_have_value('handover')
@@ -123,7 +126,10 @@ def main(argv: list[str] | None = None) -> None:
                 # rather than the previous page's in-memory draft seed.
                 reopened = browser.new_page(viewport={'width': 1440, 'height': 1000})
                 reopened.on('pageerror', lambda error: errors.append(str(error)))
-                reopened.on('dialog', lambda dialog: dialog.accept())
+                reopened.on('dialog', lambda dialog: dialog.accept()
+                    if dialog.type == 'beforeunload' else (
+                        errors.append('Unexpected native decision: ' + dialog.type),
+                        dialog.dismiss()))
                 reopened.route('**/*', lambda route: route.continue_() if route.request.url.startswith(base) else route.abort())
                 try:
                     reopened.goto(base + '/#casebooks')
@@ -151,6 +157,9 @@ def main(argv: list[str] | None = None) -> None:
                     conflict_backup = Path(conflict_download.value.path()).read_bytes()
                     assert json.loads(conflict_backup)['recipient'] == 'Fictional unsaved conflict edits'
                     page.get_by_role('button', name='Open project', exact=True).first.click()
+                    page.get_by_role(
+                        'dialog', name='Replace this unsaved editor?', exact=True
+                    ).get_by_role('button', name='Replace editor', exact=True).click()
                     expect(page.get_by_label('What do you need to find out?', exact=True)).to_have_value(
                         re.compile('Who will check the current venue reply\\?'))
                     expect(page.get_by_label('Recipient or audience', exact=True)).to_have_value('Fictional handover team')

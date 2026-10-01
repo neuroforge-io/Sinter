@@ -55,6 +55,23 @@ installers and have not received installed-platform qualification.
   originals intact; retain the view during editor navigation without putting
   display filters into backups, saved evidence or API context.
 
+- Review each source-only casebook question beside its recorded source choices
+  and exact historical passages. Show inconsistent or missing evidence explicitly;
+  open retained originals by stable identity without substituting later project
+  edits. Reuse Unicode character indexing within an inspection while validating
+  changed originals afresh on every later inspection.
+
+- Use keyboard-accessible local confirmations for replacing or removing a
+  casebook and clearing pending source text. Start on Cancel, preserve exact
+  work when cancelled, lock project and report editing while a decision or
+  approved request is pending, and restore focus after success or failure.
+  Warn about discarded project inputs and retain report edits for session recovery.
+
+- Clear captured campaign backup text when the current campaign is replaced,
+  including reopening the same saved campaign. Suppress late clipboard results
+  from the earlier capture; require a new explicit refresh or copy. Disable New
+  during pending campaign transitions so a late response cannot undo it.
+
 - Explain when changing or clearing an application-window source resets its
   quoted wording and check date. Keep the entered deadline and other work,
   preserve an unchanged binding, and prompt a deliberate source recheck.

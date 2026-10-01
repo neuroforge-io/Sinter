@@ -62,6 +62,18 @@ Filtering does not change or save evidence choices. Views survive navigation
 within the current editor session, but reset for changed questions, another
 project, full shutdown or backup restore. Originals and saved choices remain.
 
+## Review questions against retained evidence
+
+In a complete source-only report, open **Evidence** and inspect **Questions and
+evidence**. Each question keeps its exact recorded wording and its all, selected
+or empty source choice. Expand a passage to read the exact retained quote, then
+use **Open original source** to inspect its surrounding text. This stays local.
+
+These are historical report inputs. Later project edits do not replace them.
+Missing or inconsistent references remain unavailable; related wording still
+requires review and is not an answer. Model drafts and incomplete recovery
+reports keep their existing evidence view without acquiring this interpretation.
+
 ## Choose what a source-only handover carries
 
 The default **Compact notes** handover quotes up to four selected passages. Its
@@ -96,6 +108,13 @@ needs the full admitted collection.
 **Save project** writes to the local Sinter workspace. A revision check prevents a
 second tab overwriting newer edits. On a conflict, export your editor first, then
 reopen the saved version and reconcile them. Originals and questions remain editable.
+
+When a replacement would close unsaved project inputs, pending source text or
+report edits, the local confirmation starts on **Cancel**. Cancel keeps the exact
+editor and returns focus. **Replace editor** discards unsaved project changes
+and sources not yet added; add and save those first if you need them. Unsaved
+report edits remain in **My workspace** for this session, but must be applied and
+saved before closing Sinter. Existing saved records stay separate.
 
 **Export project backup** creates a JSON casebook containing all admitted originals.
 Restoring a backup opens a new unsaved editor rather than replacing an existing

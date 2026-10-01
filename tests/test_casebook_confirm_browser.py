@@ -1,6 +1,4 @@
-"""Local clipboard proof has actionable setup guards before side effects."""
-
-from __future__ import annotations
+"""The optional UI proof handles help/dependency errors before side effects."""
 
 import os
 import subprocess
@@ -9,21 +7,19 @@ from pathlib import Path
 
 import pytest
 
+ROOT = Path(__file__).resolve().parents[1]
 
-@pytest.mark.parametrize(
-    "tool", ["campaign_backup_browser.py", "campaign_backup_replacement_browser.py"]
-)
+
 @pytest.mark.parametrize("arguments,code", [(["--help"], 0), ([], 2)])
-def test_setup_without_browser_dependencies(tool, arguments, code, tmp_path):
+def test_setup_without_optional_browser_dependencies(arguments, code, tmp_path):
     environment = dict(os.environ)
     environment.pop("SINTER_CHROMIUM", None)
-    root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
         [
             sys.executable,
             "-I",
             "-S",
-            str(root / "tools" / tool),
+            str(ROOT / "tools" / "casebook_confirm_browser.py"),
             *arguments,
         ],
         cwd=tmp_path,
@@ -34,8 +30,9 @@ def test_setup_without_browser_dependencies(tool, arguments, code, tmp_path):
     )
     assert result.returncode == code
     assert "Traceback" not in result.stderr
-    if code == 0:
-        assert "usage:" in result.stdout and "--chromium" in result.stdout
-    else:
-        assert "Playwright is required" in result.stderr
+    assert (
+        ("usage:" in result.stdout)
+        if code == 0
+        else ("Playwright is required" in result.stderr)
+    )
     assert not list(tmp_path.iterdir())

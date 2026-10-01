@@ -21,7 +21,7 @@ import {campaignSourceOptions, matchingCampaignSources}
   from './campaign-source-options.js';
 import {selectRequirementSource} from './campaign-requirement-source.js';
 import {selectWindowSource} from './campaign-window-source.js';
-import {campaignBackupControls} from './campaign-backup.js';
+import {campaignBackupControls, resetCampaignBackupControls} from './campaign-backup.js';
 import {CEILING_CURRENCY_OPTIONS, campaignCeilingCurrency,
   campaignFundingAmount, campaignCurrencyComparisonNote} from './campaign-currency.js';
 
@@ -178,8 +178,10 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   const decisionCard = h('section', {class: 'campaign-decision-card', 'aria-label': 'Campaign decision and next move'});
   const savedList = h('div', {class: 'campaign-saved-list'});
   let knownCampaigns = [];
+  const backupControls = campaignBackupControls(() => document);
   const saveButton = button('Save campaign', () => save(), 'primary');
   const prepareButton = button('Prepare campaign brief', () => prepare(), 'quiet');
+  const newButton = button('Start a new campaign', newCampaign, 'quiet');
 
   function rememberCampaign() {
     remember('campaigns', {document: structuredClone(document), id: savedId, revision,
@@ -289,7 +291,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   function remove(rows, item, label) {
     return button(label, () => { rows.splice(rows.indexOf(item), 1); changed(); renderEditor(); }, 'quiet');
   }
-  function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; editor.inert = value; transfers.inert = value; }
+  function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; newButton.disabled = value; editor.inert = value; transfers.inert = value; }
   function apply(next, id = null, rev = null, preferActionable = false) {
     const resumeCurrentCampaign = Boolean(id && id === savedId);
     const previousTab = tab;
@@ -301,6 +303,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       route: communicationRoute, order: communicationOrder};
     practice = null; practiceGuide.hidden = true;
     document = compatibleCampaign(next); savedId = id; revision = rev; dirty = false;
+    resetCampaignBackupControls(backupControls);
     expandedActionRows = null;
     communicationOpenState = new WeakMap();
     const retainedSelection = resumeCurrentCampaign && previousOpportunityName
@@ -1843,11 +1846,11 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     updateSourceFilter();
   }
 
-  function newCampaign() { if (canReplace()) { apply(blank()); feedback.replaceChildren(); } }
+  function newCampaign() { if (!busy && canReplace()) { apply(blank()); feedback.replaceChildren(); } }
   const savedPanel = h('section', {class: 'campaign-saved-panel', 'aria-label': 'Saved campaigns'},
     h('div', {class: 'campaign-section-heading'}, h('div', {}, h('h3', {}, 'Your campaigns'),
       h('p', {class: 'muted'}, 'Your latest saved campaign opens automatically. You can switch campaigns here at any time.')),
-      button('Start a new campaign', newCampaign, 'quiet')), savedList);
+      newButton), savedList);
   const transfers = h('details', {class: 'campaign-transfers'}, h('summary', {}, 'Import or back up a campaign'), imported.wrap,
     h('div', {class: 'button-row'}, button('Export campaign backup', exportBackup, 'quiet'),
       button('Delete saved campaign', async () => {
@@ -1855,7 +1858,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         if (!window.confirm('Delete this saved campaign? Export a backup first if you need a copy.')) return;
         try { await request('/api/campaigns/delete', {data: {id: savedId, revision}}); apply(blank()); await refreshShelf(); }
         catch (problem) { error(problem.message); }
-      }, 'danger')), campaignBackupControls(() => document));
+      }, 'danger')), backupControls);
   root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'CAMPAIGNS'), h('h2', {}, 'Keep the whole application together.'),
     h('p', {}, 'Compare opportunities, map products and IP questions to funding routes, prepare answers and turn missing details into next actions. Saved locally, with your sources beside the work.')),
     h('div', {class: 'campaign-save-bar non-print', role: 'region', 'aria-label': 'Campaign save and preview'},
