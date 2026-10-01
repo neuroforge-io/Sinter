@@ -75,7 +75,8 @@ def test_absence_claim_or_hidden_path_cannot_replace_independent_proof(
 
 
 @pytest.mark.parametrize(
-    "path", ["../escape", "/escape", "a\\b", "a:b", "C:/escape", "//server/share"]
+    "path",
+    ["../escape", "/escape", "a\\b", "a:b", "C:/escape", "//server/share", "a\x00b"],
 )
 def test_archive_rejects_unsafe_paths_even_after_digest_admission(
     tmp_path, monkeypatch, path
@@ -91,6 +92,30 @@ def test_archive_rejects_unsafe_paths_even_after_digest_admission(
         final, "ARTIFACT_SHA", hashlib.sha256(target.read_bytes()).hexdigest()
     )
     with pytest.raises(ValueError):
+        final.admit_archive(target)
+
+
+def test_archive_rejects_raw_separator_even_after_host_reader_normalisation(
+    tmp_path, monkeypatch
+):
+    target = tmp_path / "toy.zip"
+    with zipfile.ZipFile(target, "w") as bundle:
+        bundle.writestr("a/b", b"fictional")
+    monkeypatch.setattr(
+        final, "ARTIFACT_SHA", hashlib.sha256(target.read_bytes()).hexdigest()
+    )
+    actual_reader = zipfile.ZipFile
+
+    class NormalisedReader(actual_reader):
+        def infolist(self):
+            rows = super().infolist()
+            # The Windows reader exposes filename=a/b but retains a\\b in
+            # orig_filename. Reproduce that actual boundary on every test host.
+            rows[0].orig_filename = "a\\b"
+            return rows
+
+    monkeypatch.setattr(final.zipfile, "ZipFile", NormalisedReader)
+    with pytest.raises(ValueError, match="Unsafe"):
         final.admit_archive(target)
 
 

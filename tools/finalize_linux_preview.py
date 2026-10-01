@@ -128,22 +128,27 @@ def admit_archive(path: Path) -> None:
     with zipfile.ZipFile(path) as archive:
         seen, total = set(), 0
         for row in archive.infolist():
-            archive_path = PurePosixPath(row.filename)
+            # ZipInfo normalises the host separator while reading on Windows.
+            # Admission must inspect the original stored name before that rewrite
+            # (and before the constructor truncates a NUL-containing filename).
+            name = row.orig_filename
+            archive_path = PurePosixPath(name)
             parts = archive_path.parts
             total += row.file_size
             if (
-                row.filename in seen
+                name in seen
                 or not parts
                 or archive_path.is_absolute()
                 or ".." in parts
-                or "\\" in row.filename
-                or ":" in row.filename
+                or "\\" in name
+                or ":" in name
+                or "\x00" in name
                 or row.file_size > MAX_FILE
                 or total > MAX_TOTAL
                 or (row.external_attr >> 16) & 0o170000 == 0o120000
             ):
                 raise ValueError("Unsafe or oversized original evidence archive.")
-            seen.add(row.filename)
+            seen.add(name)
 
 
 def validate_clean(proof: Path, native: dict, binary: str) -> dict:
