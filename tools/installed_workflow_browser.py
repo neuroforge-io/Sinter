@@ -46,14 +46,17 @@ if sys.argv[1:] != ["--container"]:
         COMMUNICATION,
         MAX_ARTIFACT_BYTES,
         MAX_TOTAL_BYTES,
+        NAVIGATION_CHECK,
         OPERATOR_NOTE,
         RECIPIENT,
+        RECIPIENT_PRESENTATION,
         RESOURCE_FLAGS,
         RESTORED_CAMPAIGN_TITLE,
         RESTORED_CASEBOOK_TITLE,
         WORD_CHANGED_NOTE,
         WORD_CHECKS,
         requires_word_copy,
+        source_presentation,
         workflow_artifact_paths,
         workflow_checks,
         workflow_schema,
@@ -627,6 +630,18 @@ def artifact_inventory(output: Path, source=None) -> list[dict]:
     return records
 
 
+def verify_recipient_download(path: Path, fixture: dict) -> bool:
+    """Execute the new closed Word gate only for its source-selected revision."""
+    if source_presentation(fixture["source"]) != RECIPIENT_PRESENTATION:
+        return False
+    from tools.installed_workflow_qualification import validate_word
+
+    validate_word(
+        path.read_bytes(), fixture["casebook"], presentation=RECIPIENT_PRESENTATION
+    )
+    return True
+
+
 def word_check(path: Path, source_ids: list[str]) -> None:
     """Check the actual downloaded safe OOXML and retained source identities."""
     with zipfile.ZipFile(path) as archive:
@@ -1102,6 +1117,9 @@ def browser_workflow(
                 output / ARTIFACTS["handover_word"],
                 [row["id"] for row in snapshots["saved_report"]["excerpts"]],
             )
+            recipient_navigation = verify_recipient_download(
+                output / ARTIFACTS["handover_word"], fixture
+            )
             checks.append(CHECKS[9])
             word_proof = None
             if requires_word_copy(fixture["source"]):
@@ -1230,6 +1248,8 @@ def browser_workflow(
                 retain_word_copies(runtime, output, word_proof)
                 write_json(output / "word-copy-recovery.json", word_proof)
                 checks.extend(WORD_CHECKS)
+            if recipient_navigation:
+                checks.append(NAVIGATION_CHECK)
             context.close()
         finally:
             browser.close()

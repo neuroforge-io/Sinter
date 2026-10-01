@@ -33,8 +33,10 @@ retain fictional work, preferences and explicit model selections. No model
 operation was requested by these checks.
 
 Current `main` is `0.5.4rc4.dev0`, a source development version with no new
-qualified installer. Its Word-copy lock and release-tool changes are separate
-from the published RC3 evidence.
+qualified installer. Its Word-copy lock, recipient handover navigation and
+release-tool changes are separate from the published RC3 evidence. Read the
+[Word handover source review](docs/WORD_HANDOVER_NAVIGATION_2026-10-01.md) for the
+tested scope and remaining installer gates.
 
 The app defaults to a smaller native **source workspace**. For funding campaigns,
 rich documents and account sign-in, open the full browser workbench with

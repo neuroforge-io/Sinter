@@ -119,6 +119,14 @@ Word. This is a layout hint, not verification of sources or citations. All words
 identities and character ranges remain present; edited or lookalike records may
 retain ordinary spacing. Check the actual exported pages before sharing them.
 
+Development after RC3 also links generated Word handover passage labels to
+included quotations and reference keys. These links help a recipient find the
+supplied wording; they do not establish that it answers a question or is true.
+Ambiguous or larger reference sets retain their wording without optional links.
+Compact handovers identify omitted passages and ask the recipient to obtain the
+originals or project backup from the sender. The published RC3 installer retains
+its earlier presentation; see the [source review](WORD_HANDOVER_NAVIGATION_2026-10-01.md).
+
 Data is stored without encryption in `~/.sinter/workspace.sqlite3` (or your `SINTER_DATA_DIR`). Back it up responsibly. Unsaved inputs are retained only during this browser session; reload or closing the app can lose them. Returning to Overview lets you continue an unsaved real project without erasing its inputs.
 
 In a casebook, **Project save state** beside the document count describes the

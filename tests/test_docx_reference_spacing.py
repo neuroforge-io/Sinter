@@ -39,13 +39,15 @@ ORDINARY = (
 def exported(markdown: str, *, baseline: bool = False) -> tuple[bytes, dict]:
     """The baseline keeps the prior export path with no reference layout hint."""
     payload = {"title": "Fictional source-only handover", "markdown": markdown}
-    if baseline:
-        with patch.object(
-            docx_export, "_reference_key_spacing", return_value=frozenset()
-        ):
+    # Isolate spacing from the separately tested optional navigation layer.
+    with patch.object(docx_export, "_passage_navigation", return_value=({}, {})):
+        if baseline:
+            with patch.object(
+                docx_export, "_reference_key_spacing", return_value=frozenset()
+            ):
+                data = docx_export.export_docx(payload).content
+        else:
             data = docx_export.export_docx(payload).content
-    else:
-        data = docx_export.export_docx(payload).content
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         assert archive.testzip() is None
         return data, {name: archive.read(name) for name in archive.namelist()}
@@ -133,8 +135,8 @@ def test_complete_generated_keys_only_adjust_spacing_with_exact_words_and_offset
             assert (
                 "quoted in the selected evidence appendix."
                 if appendix
-                else "Evidence only — not reproduced in this document. "
-                "Read its exact wording in Evidence."
+                else "Selected passage not reproduced in this copy. "
+                "Ask the sender for its original wording and surrounding context."
             ) in text
 
 

@@ -125,7 +125,7 @@ def test_evidence_only_passages_have_a_complete_key_without_reproducing_text():
     prose, key = document.split("## Passage reference key", 1)
     assert "Related wording — review required: Passage 7." in prose
     assert "Showing 4 of 7 selected passages from 4 sources" in prose
-    assert key.count("Evidence only — not reproduced in this document") == 3
+    assert key.count("Selected passage not reproduced in this copy") == 3
     assert key.count("quoted above.") == 4
     for index, excerpt in enumerate(selected):
         assert document.count(excerpt.id) == 1
@@ -135,7 +135,7 @@ def test_evidence_only_passages_have_a_complete_key_without_reproducing_text():
         else:
             assert excerpt.quote in prose
     text, _ = word_text(document)
-    assert "Evidence only — not reproduced in this document" in text
+    assert "Selected passage not reproduced in this copy" in text
     assert selected[-1].id in text
 
 
@@ -212,9 +212,7 @@ def test_each_reference_key_record_is_one_quoted_paragraph_including_word_export
     report = casebooks.build(garden())
     _, key = report["document_markdown"].split("## Passage reference key", 1)
     records = [
-        block
-        for block in parse(key)
-        if isinstance(block, Paragraph) and block.quote
+        block for block in parse(key) if isinstance(block, Paragraph) and block.quote
     ]
     assert len(records) == len(report["document_references"])
     _, word = word_text(report["document_markdown"])
@@ -261,8 +259,11 @@ def test_evidence_only_scope_stays_with_its_identity_and_range_in_word():
     assert len(matching) == 1
     assert "Passage 5" in matching[0] and source.id in matching[0]
     assert "Unicode characters: 4–5;" in matching[0]
-    assert "Evidence only — not reproduced in this document." in matching[0]
-    assert "Read its exact wording in Evidence." in matching[0]
+    assert "Selected passage not reproduced in this copy." in matching[0]
+    assert (
+        "Ask the sender for its original wording and surrounding context."
+        in matching[0]
+    )
 
 
 def test_repeated_builds_and_json_roundtrip_keep_labels_and_canonical_metadata(

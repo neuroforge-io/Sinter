@@ -925,3 +925,22 @@ the native owner closes. Neither prototype is in this source checkpoint or the
 published preview. They require corrected integration and shutdown evidence
 before adoption. The user's intentional app closure was not treated as a crash;
 no physical app reopening or hosted generation was used in these checks.
+
+### 1 October: recipient Word navigation source acceptance
+
+The held Word prototype now has a separately reviewed integration revision.
+Root's latest-main composition passes 3,109 Python tests with nine explicit
+display/platform skips, 282 JavaScript tests, seven actual handover browser
+journeys and all 50 Word-copy recovery checks. The independent reviewer closes
+the unusual presentation-declaration and swapped-caption subgate witnesses;
+the original 40 failures and earlier HOLD remain immutable historical evidence.
+
+Generated handovers retain source identities, quotations and ranges while adding
+bounded Word navigation and honest recipient instructions for omitted originals.
+An explicit presentation identity and closed workflow/v3 keep historical report
+and installed/v1/v2 receipts distinct. This is source-only `0.5.4rc4.dev0`; new
+installed/upgrade, native-display and customer-device gates remain required.
+The [source review](WORD_HANDOVER_NAVIGATION_2026-10-01.md) records the exact
+evidence and separate real-case browser walkthrough, including remaining
+retrieval and save-discovery shortcomings. The native-to-browser shortcut is
+still held for shutdown repairs. No 10/10 or broader goal completion is claimed.

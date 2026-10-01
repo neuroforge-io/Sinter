@@ -18,6 +18,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "src")]
 from sinter import casebooks, client  # noqa: E402
 from sinter.server import make_server  # noqa: E402
 from tools._support import browser_arguments, launch_chromium  # noqa: E402
+from tools.historical_handover_fixture import historical_handover  # noqa: E402
 
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 FIXTURE = ROOT / "tests/fixtures/handover-appendix.json"
@@ -58,6 +59,8 @@ def main(argv: list[str] | None = None) -> None:
         "src/sinter/docx_export.py",
         "tests/fixtures/handover-appendix.json",
         "tools/handover_appendix_browser.py",
+        "tools/historical_handover_fixture.py",
+        "tests/fixtures/handover_pre_recipient_v1.json",
     )
     receipt = {
         "passed": False,
@@ -84,6 +87,7 @@ def main(argv: list[str] | None = None) -> None:
             assert text.count(excerpt["id"]) == 1
         assert "UNSELECTED ORIGINAL CONTEXT" not in text
         assert "Evidence only — not reproduced" not in text
+        assert "Selected passage not reproduced in this copy" not in text
         assert "not an exhaustive source review" in text
         assert "09:45 on 7 October; it is proposed, not confirmed" in text
         assert "current fictional scope is one small pilot" in text
@@ -97,6 +101,14 @@ def main(argv: list[str] | None = None) -> None:
         ) as remote:
             server = make_server(port=0, directory=data)
             saved = server.app.casebooks.save(original)
+            legacy_report = historical_handover("appendix_compact")["report"]
+            legacy_report["document_edits"] = {
+                "markdown": legacy_report["document_markdown"]
+                + "\n\nFictional historical user edit — keep this exact wording.",
+                "author": "user",
+            }
+            legacy_id = server.app.store.save_report(legacy_report)
+            legacy_original = server.app.store.report(legacy_id)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             base = f"http://127.0.0.1:{server.server_port}"
@@ -140,7 +152,7 @@ def main(argv: list[str] | None = None) -> None:
                         compact_word = download_word(page, report, "compact.docx")
                         assert (
                             word_text(compact_word).count(
-                                "Evidence only — not reproduced"
+                                "Selected passage not reproduced in this copy"
                             )
                             == 5
                         )
@@ -148,7 +160,11 @@ def main(argv: list[str] | None = None) -> None:
                             "button", name="Save to this computer", exact=True
                         ).click()
                         expect(report).to_contain_text("Saved in My workspace")
-                        historical_id = server.app.store.reports()[0]["id"]
+                        historical_id = next(
+                            row["id"]
+                            for row in server.app.store.reports()
+                            if row["id"] != legacy_id
+                        )
                         historical = server.app.store.report(historical_id)
                         checks.append(
                             "Existing compact default and saved report retained."
@@ -194,6 +210,7 @@ def main(argv: list[str] | None = None) -> None:
                             != (compact["casebook_fingerprint"])
                         )
                         assert server.app.store.report(historical_id) == historical
+                        assert server.app.store.report(legacy_id) == legacy_original
                         checks.append(
                             "Actual Word carries all nine exact selected excerpts, "
                             "supplied links/dates and late uncertain facts; "
@@ -229,6 +246,7 @@ def main(argv: list[str] | None = None) -> None:
                         thread.start()
                         base = f"http://127.0.0.1:{server.server_port}"
                         assert server.app.store.report(historical_id) == historical
+                        assert server.app.store.report(legacy_id) == legacy_original
                         reopened = context.new_page()
                         reopened.on(
                             "pageerror", lambda error: errors.append(str(error))
@@ -287,6 +305,7 @@ def main(argv: list[str] | None = None) -> None:
                         expect(replace).to_be_visible()
                         assert server.app.casebooks.get(saved["id"]) == before_restore
                         assert server.app.store.report(historical_id) == historical
+                        assert server.app.store.report(legacy_id) == legacy_original
                         replace.get_by_role(
                             "button", name="Replace editor", exact=True
                         ).click()
@@ -314,6 +333,7 @@ def main(argv: list[str] | None = None) -> None:
                         ).to_have_count(2)
                         assert server.app.casebooks.get(saved["id"]) == before_restore
                         assert server.app.store.report(historical_id) == historical
+                        assert server.app.store.report(legacy_id) == legacy_original
                         checks.append(
                             "Format changes retain the explicit choice; backup "
                             "restores to a separate record without rewriting "
@@ -340,6 +360,7 @@ def main(argv: list[str] | None = None) -> None:
                             )
                         ).to_contain_text("Showing 4 of 9")
                         assert server.app.store.report(historical_id) == historical
+                        assert server.app.store.report(legacy_id) == legacy_original
                         checks.append(
                             "Returning to compact requires a new preparation; "
                             "historical exports are unchanged."
