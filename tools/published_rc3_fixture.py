@@ -37,6 +37,19 @@ REPLACEMENT_PROFILE = "0.5.4rc4"
 TARGET = "linux-x64"
 
 
+def seed_environment(directory: Path) -> dict[str, str]:
+    """Exclude caller accounts while retaining Windows interpreter bootstrap."""
+    environment = {"PATH": os.defpath}
+    if os.name == "nt":
+        system_root = os.environ.get("SystemRoot") or os.environ.get("SYSTEMROOT")
+        if type(system_root) is not str or not system_root or "\x00" in system_root:
+            raise ValueError("Windows fixture Python requires a valid SystemRoot.")
+        # Python's Windows bootstrap needs SystemRoot; pathlib needs a home.
+        # Point the latter at fictional data, never the caller's account profile.
+        environment.update(SystemRoot=system_root, USERPROFILE=str(directory.resolve()))
+    return environment
+
+
 def select_fixture_profile(version, commit, replacement, target) -> PriorRelease:
     """Admit exact E fixture inputs, not a candidate or release qualification."""
     if any(type(value) is not str for value in (version, commit, replacement, target)):
@@ -132,7 +145,7 @@ def prepare_fixture(args) -> dict:
                 str(expected_path),
             ],
             # No inherited connection/model/key override enters the source fixture.
-            env={"PATH": os.defpath},
+            env=seed_environment(output),
             stdin=subprocess.DEVNULL,
             capture_output=True,
             timeout=40,

@@ -43,6 +43,13 @@ listener. It does not start the watch scheduler, access an account, open a
 browser or use the user's workspace. The worker is an implementation detail:
 running it alone is **not** immutable prior admission.
 
+The Windows source-compatibility test keeps only the interpreter's required
+`SystemRoot` and a `USERPROFILE` pointing to its fictional directory, alongside
+the fixed search path. It does not inherit the caller's home, model settings,
+keys or Python import overrides. POSIX worker environment remains unchanged.
+This bootstrap repair needs actual hosted Windows replay; it does not qualify
+a Windows installer or allow Windows into the Linux-only fixture profile.
+
 ## Preserved fictional work
 
 The original contains a normal v1 project, another project's retained v1 report

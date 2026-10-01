@@ -214,7 +214,7 @@ def test_seed_failure_retains_diagnostics_without_fixture_receipt(
 
     def failed(*args, **kwargs):
         assert kwargs["stdin"] is subprocess.DEVNULL
-        assert kwargs["env"] == {"PATH": fixture.os.defpath}
+        assert kwargs["env"] == fixture.seed_environment(output)
         assert kwargs["timeout"] == 40
         assert args[0][1:4] == ["-I", "-S", "-B"]
         if result == "timeout":
@@ -281,7 +281,7 @@ def test_fixture_seed_creates_rich_work_and_per_request_capability_proofs(tmp_pa
     ]
     result = subprocess.run(
         command,
-        env={"PATH": fixture.os.defpath},
+        env=fixture.seed_environment(tmp_path),
         stdin=subprocess.DEVNULL,
         capture_output=True,
         timeout=40,
@@ -462,3 +462,63 @@ def test_python_profile_call_requires_literal_builtin_strings(index):
     values[index] = Text(values[index])
     with pytest.raises(ValueError, match="exact published E"):
         fixture.select_fixture_profile(*values)
+
+
+@pytest.mark.parametrize("system_key", ["SystemRoot", "SYSTEMROOT"])
+def test_windows_seed_environment_has_bootstrap_and_fictional_home_only(
+    monkeypatch, tmp_path, system_key
+):
+    inherited = {
+        system_key: "C:\\Windows",
+        "USERPROFILE": "C:\\Users\\FictionalCaller",
+        "HOME": "C:\\Users\\FictionalCaller",
+        "NEUROFORGE_BASE_URL": "https://example.invalid/private",
+        "NEUROFORGE_API_KEY": "fictional-key-do-not-inherit",
+        "PYTHONPATH": "fictional-foreign-imports",
+    }
+    original = dict(inherited)
+    monkeypatch.setattr(
+        fixture,
+        "os",
+        SimpleNamespace(name="nt", defpath="fixed-path", environ=inherited),
+    )
+    assert fixture.seed_environment(tmp_path) == {
+        "PATH": "fixed-path",
+        "SystemRoot": "C:\\Windows",
+        "USERPROFILE": str(tmp_path.resolve()),
+    }
+    assert inherited == original
+
+
+@pytest.mark.parametrize("system_root", [None, "", "invalid\x00path", 17])
+def test_windows_seed_environment_refuses_missing_or_invalid_bootstrap(
+    monkeypatch, tmp_path, system_root
+):
+    monkeypatch.setattr(
+        fixture,
+        "os",
+        SimpleNamespace(
+            name="nt", defpath="fixed-path", environ={"SystemRoot": system_root}
+        ),
+    )
+    with pytest.raises(ValueError, match="valid SystemRoot"):
+        fixture.seed_environment(tmp_path)
+
+
+def test_posix_seed_environment_does_not_inherit_windows_or_provider_settings(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        fixture,
+        "os",
+        SimpleNamespace(
+            name="posix",
+            defpath="fixed-path",
+            environ={
+                "SystemRoot": "fictional-system",
+                "USERPROFILE": "fictional-profile",
+                "NEUROFORGE_BASE_URL": "https://example.invalid/private",
+            },
+        ),
+    )
+    assert fixture.seed_environment(tmp_path) == {"PATH": "fixed-path"}

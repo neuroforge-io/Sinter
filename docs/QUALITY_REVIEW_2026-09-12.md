@@ -1161,3 +1161,13 @@ The tool prepares data; it does not install or run either binary, replace a
 package, admit RC4 or demonstrate customer desktop behavior. No model calls,
 platform qualification or new quality rating follows. See the
 [fixture guide](PUBLISHED_RC3_FIXTURE.md) for inputs and the remaining gates.
+
+The first hosted `ba62150` replay exposes a new fixture-bootstrap failure on
+Windows: Python 3.10 cannot initialize hash randomization, and 3.13 cannot resolve
+its home directory. The parent supplied only a fixed search path. The narrow
+correction also supplies Windows `SystemRoot` and a fictional `USERPROFILE`,
+preserving the exclusion of caller accounts, credentials, model settings and
+import overrides. POSIX remains exact. All 45 focused tests pass locally,
+including seven bootstrap/refusal/contamination cases; actual hosted Windows
+replay is still required. Original failed XML remains retained. The Linux-only
+prior profile, published RC3 inputs and historical qualification stay unchanged.

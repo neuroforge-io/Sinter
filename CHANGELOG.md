@@ -5,6 +5,11 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Preserve Windows interpreter startup requirements in the fictional upgrade
+  test, with a fictional profile directory and no inherited model credentials.
+  POSIX behavior and Linux-only fixture admission remain unchanged. Hosted
+  Windows replay remains required; this does not qualify a Windows installer.
+
 - Add a separate, pinned fictional workspace fixture for testing a future upgrade
   from the published RC3 preview. Retain original source snapshots, report JSON,
   history, ownership states, SQLite records and explicit model preferences.
