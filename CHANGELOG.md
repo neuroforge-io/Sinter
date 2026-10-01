@@ -5,6 +5,9 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Label the local report action **Save to My workspace**, distinguishing it from
+  saving a separate Word file. Keep pending-edit protection, explicit saving and
+  earlier reports intact. Published RC3 still uses **Save to this computer**.
 - Link generated Word handover question labels to included quotations and their
   passage reference keys. Retain exact source identities, Unicode ranges and
   wording; ambiguous or oversized mappings keep their text without optional

@@ -183,7 +183,7 @@ class CurrencyChecks(CampaignChecks):
         assert legacy_report["readiness"]["budgets_over_ceiling"] == 0
         with page.expect_response("**/api/reports") as saved_report:
             region.get_by_role(
-                "button", name="Save to this computer", exact=True
+                "button", name="Save to My workspace", exact=True
             ).click()
         historical_id = saved_report.value.json()["id"]
         historical = self.app.store.report(historical_id)

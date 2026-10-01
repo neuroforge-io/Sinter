@@ -281,7 +281,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     sourcePanel,
     totals, saveState, sources, format.wrap, handoverEvidence.wrap, recipient.wrap, sender.panel,
     h('div', {class: 'casebook-actions'}, button('Prepare source-only report', () => perform('build'), 'primary'),
-      button('Save project', async () => { lock(true); try { await save(); const savedNotice = notice(`Saved revision ${revision}. This saves the project inputs; use Save to this computer on an edited report to keep that draft. Local storage is not encrypted.`, 'success'); savedNotice.dataset.casebookSaveSuccess = 'true'; status.replaceChildren(savedNotice); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } finally { lock(false); if (hasPendingSource(pendingSource())) contents.input.focus(); } }),
+      button('Save project', async () => { lock(true); try { await save(); const savedNotice = notice(`Saved revision ${revision}. This saves the project inputs; use Save to My workspace on an edited report to keep that draft. Local storage is not encrypted.`, 'success'); savedNotice.dataset.casebookSaveSuccess = 'true'; status.replaceChildren(savedNotice); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } finally { lock(false); if (hasPendingSource(pendingSource())) contents.input.focus(); } }),
       button('Export project backup', () => { try { admitPending(); download('sinter-casebook.json', JSON.stringify(value(), null, 2), 'application/json'); } catch(error) { status.replaceChildren(notice(error.message, 'error')); } })),
     h('details', {class: 'card'}, h('summary', {}, 'Backups and project removal'), backup.wrap,
       casebookBackupControls(() => { admitPending(); return value(); }),

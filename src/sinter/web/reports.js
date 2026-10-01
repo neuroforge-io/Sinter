@@ -16,7 +16,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   const message = h('div', {class: 'non-print', 'aria-live': 'polite'});
   const campaignLog = report.campaign_link ? campaignDraftLog(report, message,
     onCampaignUpdated, () => actions.canUseDocument('saving to the campaign log')) : null;
-  const save = button('Save to this computer', async () => {
+  const save = button('Save to My workspace', async () => {
     if (!actions.canUseDocument('saving')) return;
     save.disabled = true;
     try {

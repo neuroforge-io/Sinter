@@ -201,7 +201,7 @@ def main(argv: list[str] | None = None) -> None:
                                 "button", name="Apply edits", exact=True
                             ).click()
                             report.get_by_role(
-                                "button", name="Save to this computer", exact=True
+                                "button", name="Save to My workspace", exact=True
                             ).click()
                             expect(report).to_contain_text("Saved in My workspace")
                             saved = server.app.store.report(

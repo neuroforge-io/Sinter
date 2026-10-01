@@ -20,9 +20,13 @@ excerpts and incomplete status, and warns that later project changes are not
 part of the earlier preparation. None of these paths replays a model request.
 
 Session recovery is not crash recovery: unapplied or unsaved edits still require
-**Apply edits → Save to this computer** before closing the browser or app. The
+**Apply edits → Save to My workspace** before closing the browser or app. The
 exit warning makes this limit visible; saving project inputs does not save a
 document. Nothing is uploaded or sent automatically.
+
+**Save to My workspace** is the current development label. The published
+0.5.4rc3 preview calls this same report action **Save to this computer**.
+Saving a Word copy is a separate file operation.
 
 ## Actual operator evidence
 

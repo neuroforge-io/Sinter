@@ -84,7 +84,7 @@ def main(argv: list[str] | None = None) -> None:
                     assert pack['document_markdown'] and pack['markdown']
                     page.get_by_text('More options', exact=True).click()
                     if kind == 'brief':
-                        page.get_by_role('button', name='Save to this computer').click()
+                        page.get_by_role('button', name='Save to My workspace').click()
                         expect(report).to_contain_text('Saved in My workspace')
                     if kind == 'meeting':
                         page.get_by_text('Make a traceable transcript correction', exact=True).click()

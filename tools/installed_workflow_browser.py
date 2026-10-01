@@ -70,6 +70,18 @@ SAVED_CAMPAIGN = (
 )
 
 
+def report_save_label(source: dict[str, bytes]) -> str:
+    """Select the exact source-pinned control, including unchanged old previews."""
+    script = source.get("src/sinter/web/reports.js", b"")
+    declarations = {
+        label: script.count(("const save = button('" + label + "',").encode())
+        for label in ("Save to My workspace", "Save to this computer")
+    }
+    if sum(declarations.values()) != 1:
+        raise ValueError("The candidate report-save control is missing or ambiguous.")
+    return next(label for label, count in declarations.items() if count == 1)
+
+
 def browser_launch_command(
     executable: list[str], version: str, *, legacy: bool = False
 ) -> list[str]:
@@ -1011,7 +1023,7 @@ def browser_workflow(
             editor.fill(editor.input_value() + OPERATOR_NOTE)
             report.get_by_role("button", name="Apply edits", exact=True).click()
             report.get_by_role(
-                "button", name="Save to this computer", exact=True
+                "button", name=report_save_label(fixture["source"]), exact=True
             ).click()
             expect(
                 report.get_by_text(

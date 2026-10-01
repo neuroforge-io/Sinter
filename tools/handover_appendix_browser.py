@@ -157,7 +157,7 @@ def main(argv: list[str] | None = None) -> None:
                             == 5
                         )
                         report.get_by_role(
-                            "button", name="Save to this computer", exact=True
+                            "button", name="Save to My workspace", exact=True
                         ).click()
                         expect(report).to_contain_text("Saved in My workspace")
                         historical_id = next(

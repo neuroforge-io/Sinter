@@ -90,7 +90,12 @@ A custom template cannot turn an unverified generative output into a verified re
 
 ## Saving and sharing
 
-Save explicitly in **My workspace**, copy the readable draft, download Markdown or a portable HTML document, or export a Word file built only from the current draft text. The JSON evidence pack keeps the original model output, sources and any later edits. Browser printing also supports Save as PDF through your browser. Sinter does not upload saved reports to a cloud account, send official communications or approve records.
+Choose **Save to My workspace** to keep the report inside Sinter. The published
+0.5.4rc3 preview calls the same workspace action **Save to this computer**; its
+installed files have not changed. **Save Word copy on this computer** creates a
+separate Word file and does not save the report in My workspace.
+
+You can copy the readable draft, download Markdown or a portable HTML document, or export a Word file built only from the current draft text. The JSON evidence pack keeps the original model output, sources and any later edits. Browser printing also supports Save as PDF through your browser. Sinter does not upload saved reports to a cloud account, send official communications or approve records.
 
 A download notification means Sinter requested the browser transfer. Check your
 browser's downloads for the actual file. Clicking **Download Word** again with
@@ -102,8 +107,8 @@ this local export action.
 To keep an operator's front page separate from the supporting evidence, open
 **Edit draft**, place the cursor after the front-page wording and choose **Insert
 page break**. For a campaign, use **Edit decision brief**. The control retains
-selected text; it does not replace it. Choose **Apply edits**, then **Save to this
-computer**. Word and printed HTML begin the following content on a new page.
+selected text; it does not replace it. Choose **Apply edits**, then
+**Save to My workspace**. Word and printed HTML begin the following content on a new page.
 Review the exported layout: Sinter does not shorten or remove evidence to make a
 front page fit.
 
@@ -132,7 +137,7 @@ Data is stored without encryption in `~/.sinter/workspace.sqlite3` (or your `SIN
 In a casebook, **Project save state** beside the document count describes the
 project inputs. A pending source must be added or cleared before saving; it is
 not silently included in the saved project. Changes after a save are labelled
-unsaved. An edited report has its own **Save to this computer** action; saving
+unsaved. An edited report has its own **Save to My workspace** action; saving
 that draft does not update the original project inputs or its revision.
 
 ## Community tools and knowledge

@@ -12,7 +12,7 @@ export async function library({onEditProject} = {}) {
     const drafts = unsavedReportDrafts();
     pending.hidden = !drafts.length;
     pending.replaceChildren(h('h3', {}, 'Draft edits in this session'),
-      notice('These edits are kept while you move between pages. Open each draft, apply any pending text, then choose Save to this computer before closing Sinter.'),
+      notice('These edits are kept while you move between pages. Open each draft, apply any pending text, then choose Save to My workspace before closing Sinter.'),
       ...drafts.map(({report, editor}) => h('article', {}, h('strong', {}, report.document_title || report.title || 'Untitled draft'),
         h('p', {class: 'muted'}, editor ? 'Text is still waiting to be applied.' : 'Applied edits have not been saved.'),
         button('Open unsaved draft', () => { opened.replaceChildren(renderReport(report, {recovered: true,
@@ -29,7 +29,7 @@ export async function library({onEditProject} = {}) {
         catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
       }, 'danger')))));
     if (!reports.length) list.append(h('div', {class: 'empty'}, h('h3', {}, 'Your next good piece of work belongs here.'),
-      h('p', {}, 'Prepare a draft and choose Save to this computer. Nothing is saved automatically.')));
+      h('p', {}, 'Prepare a draft and choose Save to My workspace. Nothing is saved automatically.')));
   }
   root.append(h('header', {class: 'page-intro non-print'}, h('h2', {}, 'My workspace'),
     h('p', {}, 'Explicitly saved drafts, with their original evidence packs.')),

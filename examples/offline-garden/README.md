@@ -30,7 +30,10 @@ new unsaved copy of this bundled data; the on-page guide links to its paired
 editor. Switching between them resumes your session edits. Existing saved work
 is unchanged, and replacing different unsaved inputs requires an explicit choice.
 Preparing a casebook report saves the project inputs; edited document text needs
-its separate **Save to this computer** action. Direct example entry is also
+its separate **Save to My workspace** action in current development. The published
+0.5.4rc3 preview labels this **Save to this computer**; it saves the report inside
+Sinter, while **Save Word copy on this computer** creates a separate Word file.
+Direct example entry is also
 available in rc2; it is not part of the frozen 0.5.4rc1 installers.
 
 To practise restoring backups, use the file path below. These steps use the

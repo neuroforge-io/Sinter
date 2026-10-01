@@ -944,3 +944,26 @@ The [source review](WORD_HANDOVER_NAVIGATION_2026-10-01.md) records the exact
 evidence and separate real-case browser walkthrough, including remaining
 retrieval and save-discovery shortcomings. The native-to-browser shortcut is
 still held for shutdown repairs. No 10/10 or broader goal completion is claimed.
+
+### 1 October: clearer report save and strict practical-use assessment
+
+Current development labels the report action **Save to My workspace**; the
+separate Word-save action and published RC3's old label remain distinct. Root
+used the actual in-app browser on an isolated real-case copy: pending edits
+blocked saving, applied edits saved to a new report, both older reports and Word
+files remained exact, and Quit stopped the owned service cleanly. The temporary
+agent tab was closed; the user's closed app and tabs were untouched.
+
+The exact 399-file label proposal passes 196 qualification/presentation tests,
+282 JavaScript tests, nine actual recovery browser journeys and six independent
+historical/current/missing/mixed source-label probes. This supplements the
+preceding full-suite checkpoint; it is not relabelled as a new full-suite or
+installed pass. Report storage, applied snapshots and Word bytes are unchanged.
+
+Independent critique of the earlier observed `e0076d2` real-case flow rates UX
+**6.2**, functionality **6.5** and aesthetics **6.8**. Its retained shortcomings
+include governing evidence losing to sender notes, selected sources and table
+context being omitted, costly saved-output discovery and a manually written
+decision summary. It did not operate the newer Word navigation or save label,
+so it does not establish current whole-product scores. Those concrete gaps
+remain improvement work; no 10/10 is claimed.
