@@ -54,6 +54,14 @@ Within a question's choices, **Inspect this local source** opens the retained or
 without selecting it or changing the project. Use its stable reference to tell
 apart sources with the same title, date or link.
 
+**Filter sources** searches titles, supplied dates, links and stable references
+locally. It does not search the original body text or decide which sources are
+relevant. **Show only selected sources** narrows the view while keeping hidden
+choices selected; the counts show how many selections are outside the view.
+Filtering does not change or save evidence choices. Views survive navigation
+within the current editor session, but reset for changed questions, another
+project, full shutdown or backup restore. Originals and saved choices remain.
+
 ## Choose what a source-only handover carries
 
 The default **Compact notes** handover quotes up to four selected passages. Its

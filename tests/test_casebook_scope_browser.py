@@ -13,7 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize("arguments,code", [(["--help"], 0), ([], 2)])
-def test_scope_runner_optional_setup_precedes_side_effects(arguments, code, tmp_path):
+@pytest.mark.parametrize(
+    "runner", ["casebook_scope_browser.py", "casebook_source_filter_browser.py"]
+)
+def test_scope_runner_optional_setup_precedes_side_effects(
+    arguments, code, runner, tmp_path
+):
     environment = dict(os.environ)
     environment.pop("SINTER_CHROMIUM", None)
     result = subprocess.run(
@@ -21,7 +26,7 @@ def test_scope_runner_optional_setup_precedes_side_effects(arguments, code, tmp_
             sys.executable,
             "-I",
             "-S",
-            str(ROOT / "tools/casebook_scope_browser.py"),
+            str(ROOT / "tools" / runner),
             *arguments,
         ],
         env=environment,

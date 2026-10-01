@@ -1,9 +1,11 @@
 /** Explicit wording-search boundaries, anchored to current question positions. */
-import {h, selectField, check, button, notice} from './ui.js';
+import {h, field, selectField, check, button, notice} from './ui.js';
+import {sourceFilterView, sourceFilterStates} from './casebook-source-filter.js';
 
 const trim = text => text.replace(/^[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/gu, '');
 export const questionLines = text => text.split(/\r\n|[\n\v\f\r\x1c-\x1e\x85\u2028\u2029]/u).map(trim).filter(Boolean);
 const knownIds = documents => new Set(documents.filter(row => /^S[0-9a-f]{24}$/.test(row.id || '')).map(row => row.id));
+export const sourceCountLabel = count => `${count} source${count === 1 ? '' : 's'}`;
 export const casebookSchema = scopes => scopes.length ? 'sinter-casebook/v2' : 'sinter-casebook/v1';
 // A raw empty list records a deliberate clear; an absent field never means clear.
 export const explicitScopeClear = book => Boolean(book && Object.hasOwn(book, 'question_scopes')
@@ -54,9 +56,10 @@ export function casebookDraftContext(report) {
   return {questions, excerpts};
 }
 
-export function questionScopeControls({text, scopes, documents, onChange}) {
+export function questionScopeControls({text, scopes, documents, onChange, viewState = [], onViewChange}) {
   const questions = questionLines(text), known = knownIds(documents);
   let choices = structuredClone(scopes);
+  let views = sourceFilterStates(questions, viewState);
   // Keep the single grid track bounded when a desktop window becomes narrow.
   const root = h('div', {class: 'stack', style: 'grid-template-columns:minmax(0,1fr)'});
   const set = (index, value) => {
@@ -84,9 +87,9 @@ export function questionScopeControls({text, scopes, documents, onChange}) {
       const summary = h('summary');
       const count = h('p', {role: 'status', 'aria-label': `Question ${index + 1} source count`});
       const update = () => {
-        const caption = row ? `${row.source_ids.length} selected source${row.source_ids.length === 1 ? '' : 's'}` : `All ${documents.length} supplied sources`;
+        const caption = row ? `${row.source_ids.length} selected source${row.source_ids.length === 1 ? '' : 's'}` : `All ${documents.length} supplied source${documents.length === 1 ? '' : 's'}`;
         summary.textContent = `Question ${index + 1}: ${question} — ${caption}`;
-        count.textContent = row ? `${row.source_ids.length} sources chosen; ${row.source_ids.filter(id => known.has(id)).length} currently available. ${row.source_ids.length ? 'Related wording is not an answer.' : 'No source will be searched for this question.'}` : `All ${documents.length} supplied sources will be searched. Related wording is not an answer.`;
+        count.textContent = row ? `${sourceCountLabel(row.source_ids.length)} chosen; ${row.source_ids.filter(id => known.has(id)).length} currently available. ${row.source_ids.length ? 'Related wording is not an answer.' : 'No source will be searched for this question.'}` : `All ${documents.length} supplied source${documents.length === 1 ? '' : 's'} will be searched. Related wording is not an answer.`;
       };
       update();
       const mode = selectField(`Sources for question ${index + 1}`, [['all', 'All supplied sources'], ['selected', 'Choose sources']], row ? 'selected' : 'all');
@@ -102,6 +105,42 @@ export function questionScopeControls({text, scopes, documents, onChange}) {
         details.append(sourceChoices);
         details.addEventListener('toggle', () => {
           if (!details.open || sourceChoices.firstChild) return;
+          const previousView = views.find(view => view.question_index === index);
+          const filter = field(`Filter sources for question ${index + 1}`, 'search', previousView?.query || '',
+            'Search titles, supplied dates, links and stable source references. Original source text is not searched. Filtering is local and does not change your evidence choices.',
+            {placeholder: 'Title, date, link or reference'});
+          const selectedOnly = check(`Show only selected sources for question ${index + 1}`, previousView?.selected_only || false);
+          const visibleCount = h('p', {class: 'fine', role: 'status',
+            'aria-label': `Question ${index + 1} source filter results`});
+          const emptyView = h('p', {class: 'fine', hidden: true},
+            'No sources match this view. Clear the filter or turn off selected only. Filtering does not change your evidence choices.');
+          const wrappers = [];
+          const applyFilter = removedIndex => {
+            const restoreFocus = removedIndex !== undefined
+              && wrappers[removedIndex].contains(document.activeElement);
+            const view = sourceFilterView(documents, row.source_ids, {
+              query: filter.input.value, selectedOnly: selectedOnly.input.checked});
+            const visible = new Set(view.visibleIndices);
+            for (const [position, wrapper] of wrappers.entries()) wrapper.hidden = !visible.has(position);
+            visibleCount.textContent = `Showing ${view.visibleIndices.length} of ${sourceCountLabel(view.totalSources)}. ${view.selectedTotal} selected in total; ${view.selectedOutsideView} selected outside this view.`;
+            emptyView.hidden = view.visibleIndices.length !== 0;
+            if (restoreFocus && !visible.has(removedIndex)) {
+              const next = view.visibleIndices.find(position => position > removedIndex)
+                ?? view.visibleIndices.filter(position => position < removedIndex).at(-1);
+              const nextCheckbox = next === undefined ? null : wrappers[next].querySelector('input[type="checkbox"]');
+              (nextCheckbox && !nextCheckbox.disabled ? nextCheckbox : selectedOnly.input).focus({preventScroll: true});
+            }
+          };
+          const rememberView = () => {
+            views = views.filter(view => view.question_index !== index);
+            if (filter.input.value || selectedOnly.input.checked) views.push({question_index: index,
+              question, query: filter.input.value, selected_only: selectedOnly.input.checked});
+            views.sort((a, b) => a.question_index - b.question_index);
+            onViewChange?.(structuredClone(views)); applyFilter();
+          };
+          filter.input.addEventListener('input', rememberView);
+          selectedOnly.input.addEventListener('change', rememberView);
+          sourceChoices.append(filter.wrap, selectedOnly.wrap, visibleCount, emptyView);
           for (const [sourceIndex, source] of documents.entries()) {
             const choice = check(source.title, row.source_ids.includes(source.id));
             choice.input.setAttribute('aria-label', sourceChoiceLabel(index + 1, source, sourceIndex));
@@ -116,6 +155,7 @@ export function questionScopeControls({text, scopes, documents, onChange}) {
               const ids = new Set(row.source_ids);
               if (choice.input.checked) ids.add(source.id); else ids.delete(source.id);
               row = {...row, source_ids: [...ids]}; set(index, row); update();
+              applyFilter(sourceIndex);
             });
             const inspect = h('details', {class: 'source', style: 'content-visibility:visible'});
             const text = h('div');
@@ -124,8 +164,10 @@ export function questionScopeControls({text, scopes, documents, onChange}) {
             inspect.addEventListener('toggle', () => {
               if (inspect.open && !text.firstChild) text.append(h('pre', {}, source.content));
             });
-            sourceChoices.append(h('div', {'data-source-choice-id': source.id || ''}, choice.wrap, inspect));
+            const wrapper = h('div', {'data-source-choice-id': source.id || ''}, choice.wrap, inspect);
+            wrappers.push(wrapper); sourceChoices.append(wrapper);
           }
+          applyFilter();
         });
         if (stale) details.append(button(`Confirm source choices for question ${index + 1}`, () => {
           set(index, {...row, question, source_ids: row.source_ids.filter(id => known.has(id))});

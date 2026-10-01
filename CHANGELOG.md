@@ -45,6 +45,11 @@ installers and have not received installed-platform qualification.
   backup controls with campaigns and prevent stale clipboard completions from
   replacing a newer failed-refresh warning.
 
+- Filter a question's source picker by title, supplied date, link or stable
+  reference, and show only its selected sources. Keep hidden choices and exact
+  originals intact; retain the view during editor navigation without putting
+  display filters into backups, saved evidence or API context.
+
 - Explain when changing or clearing an application-window source resets its
   quoted wording and check date. Keep the entered deadline and other work,
   preserve an unchanged binding, and prompt a deliberate source recheck.

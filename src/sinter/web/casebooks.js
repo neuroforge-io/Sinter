@@ -9,7 +9,8 @@ import {gardenGuide, GARDEN_PRACTICE} from './garden-practice.js';
 import {HANDOVER_EVIDENCE_OPTIONS, handoverEvidenceMode,
   handoverExportNotice} from './casebook-handover.js';
 import {casebookSchema, explicitScopeClear, questionScopeIssue, questionScopeControls,
-  casebookDraftContext} from './casebook-scope.js';
+  casebookDraftContext, questionLines} from './casebook-scope.js';
+import {sourceFilterStates} from './casebook-source-filter.js';
 
 // Only this scope-aware caller opts in. A cached older page using the current
 // shared request helper must still be refused before it receives scoped work.
@@ -37,6 +38,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   let docs = [...(seed.book?.documents || [])], busy = false, activeJob = null;
   let questionScopes = structuredClone(seed.book?.question_scopes || []);
   let scopesExplicitlyCleared = explicitScopeClear(seed.book);
+  let scopeViews = sourceFilterStates(questionLines(seed.book?.questions || ''), seed.scopeViews);
   const title = field('Project name', 'text', seed.book?.title || '', 'For example: school garden proposal or volunteer handover.', {maxLength: 200});
   const questions = field('What do you need to find out?', 'textarea', seed.book?.questions || '', 'One question per line, up to 20. Missing answers stay visible.', {maxLength: 12000, rows: 5});
   const format = selectField('Prepare a', [['brief', 'Briefing note'], ['enquiry', 'Enquiry letter'], ['agenda', 'Agenda item'], ['handover', 'Volunteer handover']], seed.book?.document_type || 'brief');
@@ -92,7 +94,8 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   function rememberCurrent() {
     const pending = pendingSource();
     pendingNotice.textContent = pendingMessage(); updateSaveState(pending);
-    remember?.('casebooks', {book: value(), savedId, revision, dirty: bookDirty, pendingSource: pending, practice, report: preparedReport},
+    remember?.('casebooks', {book: value(), savedId, revision, dirty: bookDirty, pendingSource: pending, practice, report: preparedReport,
+      scopeViews: structuredClone(scopeViews)},
       {dirty: bookDirty || hasPendingSource(pending)});
   }
   function clearPending() {
@@ -125,13 +128,15 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   }
   function drawScopes() {
     scopeContents.replaceChildren(questionScopeControls({text: questions.input.value,
-      scopes: questionScopes, documents: docs,
+      scopes: questionScopes, documents: docs, viewState: scopeViews,
+      onViewChange: views => { scopeViews = views; rememberCurrent(); },
       onChange: scopes => {
         scopesExplicitlyCleared = scopes.length ? false
           : scopesExplicitlyCleared || questionScopes.length > 0;
         questionScopes = scopes; changed(); }}));
   }
   function load(book, id = null, rev = null) {
+    scopeViews = id && id === savedId ? sourceFilterStates(questionLines(book.questions || ''), scopeViews) : [];
     practice = null; practiceGuide.hidden = true;
     docs = book.documents; title.input.value = book.title; questions.input.value = book.questions || '';
     questionScopes = structuredClone(book.question_scopes || []);
@@ -207,7 +212,9 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     if (report.excerpts.length && !report.model_draft) output.append(preview);
   }
   title.input.addEventListener('input', changed);
-  questions.input.addEventListener('input', () => { changed(); drawScopes(); });
+  questions.input.addEventListener('input', () => {
+    scopeViews = sourceFilterStates(questionLines(questions.input.value), scopeViews);
+    changed(); drawScopes(); });
   recipient.input.addEventListener('input', changed);
   sender.panel.addEventListener('input', changed);
   format.input.addEventListener('change', () => { showHandoverEvidence(); changed(); });
