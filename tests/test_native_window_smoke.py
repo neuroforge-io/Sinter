@@ -90,7 +90,9 @@ def harness(tmp_path, monkeypatch):
 
                 self.pid = 2000 + len(commands)
                 directory = args[args.index("--directory") + 1]
-                request = json.loads(Path(args[args.index("--input") + 1]).read_text())
+                request = json.loads(
+                    Path(args[args.index("--input") + 1]).read_text(encoding="utf-8")
+                )
                 with Runtime(directory) as runtime:
                     result = runtime.call(args[2], request)
                 value = {
@@ -218,6 +220,22 @@ def test_repeat_launch_requires_mapped_window_and_clean_sigterm_in_one_workspace
         "casebooks.get",
         "runtime.status",
     ]
+
+
+def test_unicode_saved_work_is_preserved_with_a_windows_default_text_encoding(
+    harness, monkeypatch
+):
+    read_text = Path.read_text
+
+    def windows_read_text(path, encoding=None, errors=None):
+        return read_text(
+            path, encoding="cp1252" if encoding is None else encoding, errors=errors
+        )
+
+    monkeypatch.setattr(Path, "read_text", windows_read_text)
+    receipt = tool.smoke(harness.binary)
+    assert receipt["passed"] is True
+    assert all(row["saved_casebook_exact"] for row in receipt["launches"])
 
 
 def test_allowlisted_child_environment_does_not_inherit_provider_or_private_workspace(
