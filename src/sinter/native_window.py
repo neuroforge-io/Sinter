@@ -70,6 +70,7 @@ def readable_report_lines(markdown, *, report=None):
         isinstance(report, dict)
         and report.get("workflow") == "casebook"
         and not report.get("model_draft")
+        and isinstance(report.get("document_type"), str)
         and report.get("document_type") in FORMATS
         and isinstance(report.get("title"), str)
         and isinstance(report.get("document_markdown"), str)
@@ -102,11 +103,11 @@ def readable_report_lines(markdown, *, report=None):
     for index, line in enumerate(lines):
         if index == duplicate:
             continue
-        marker = re.fullmatch(r"\s*(`{3,}|~{3,})([^\s]*)\s*", line)
+        marker = re.fullmatch(r"[ \t]*(`{3,}|~{3,})([^\r\n]*)\r?\n?", line)
         if fence is not None:
             if (
                 marker and marker[1][0] == fence[0]
-                and len(marker[1]) >= fence[1] and not marker[2]
+                and len(marker[1]) >= fence[1] and not marker[2].strip()
             ):
                 fence = None
             yield line, "code"

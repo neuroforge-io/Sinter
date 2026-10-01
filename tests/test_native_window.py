@@ -131,6 +131,7 @@ def test_readable_report_source_escapes_are_decoded_once_without_reparsing():
         "````text\n```\n" + r"\[code\] \# \\path" + "\n````\n",
         "~~~text\n```\n" + r"\[code\] \# \\path" + "\n~~~\n",
         "  ```text\n```language\n" + r"\[code\] \# \\path" + "\n  ````\n",
+        "```python title=fictional\n" + r"\[code\] \# \\path" + "\n```  \n",
     ],
 )
 def test_readable_report_keeps_fenced_code_exact(code):
@@ -191,7 +192,9 @@ def test_readable_report_hides_only_generated_duplicate_and_preserves_exports(
     assert saved["document"]["questions"] == book["questions"]
 
 
-@pytest.mark.parametrize("mutation", ["workflow", "model", "marker", "document"])
+@pytest.mark.parametrize(
+    "mutation", ["workflow", "model", "marker", "document", "unknown_kind"]
+)
 def test_readable_report_preserves_headings_outside_known_generated_intro(
     controller, mutation
 ):
@@ -205,8 +208,10 @@ def test_readable_report_preserves_headings_outside_known_generated_intro(
         report["markdown"] = report["markdown"].replace(
             "DRAFT / HUMAN REVIEW REQUIRED", "Fictional custom introduction", 1
         )
-    else:
+    elif mutation == "document":
         report["document_markdown"] = "# A different embedded document\n"
+    else:
+        report["document_type"] = ["unsupported legacy label"]
     rows = list(native_window.readable_report_lines(report["markdown"], report=report))
     assert [text.strip() for text, style in rows if style == "heading"].count(
         report["title"]
