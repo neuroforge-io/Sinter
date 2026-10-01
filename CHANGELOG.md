@@ -39,6 +39,9 @@ heading is not a qualification receipt or approval to publish.
   recovery. Keep historical workflow receipts separate. Require the original
   Debian dependency notice bytes for retained terminal libraries; readline stays
   excluded. These source gates do not qualify an installer until they execute.
+  Validate the complete public CLI success envelope around that catalogue;
+  retain the first installer refusal rather than treating an inner-only fixture
+  as proof that the actual installed interface passed.
 
 - Retain open and closed cost rows while navigating within the current browser
   campaign editor. Explicit campaign replacement starts fresh view choices;
