@@ -197,6 +197,11 @@ def test_readonly_reusable_release_caller_can_validate_every_native_job():
     assert "github.event_name == 'pull_request'" in job
     assert "github.event.pull_request.head.repo.full_name == github.repository" in job
     assert "qualification/linux-rc3-caller-fix-20261001" in job
+    assert "historical D9 audit and staging refusal" in job
+    assert "linux-rc3-historical-d9-audit" in job
+    assert "final-qualification/clean-proof/" in job
+    assert "final-qualification/stage/" not in job
+    assert "final-qualification/independent-review/" not in job
 
 
 def test_single_linux_target_is_rejected_by_unchanged_full_publisher(tmp_path):
@@ -375,3 +380,133 @@ def test_rc3_terminal_dependency_requires_actual_installer_notice_bytes(
     else:
         with pytest.raises((RuntimeError, ValueError)):
             verify_rc3_terminal_notices(tmp_path, receipt)
+
+
+@pytest.mark.parametrize("through_cli", [False, True])
+def test_historical_d9_retains_clean_audit_but_refuses_publication_material(
+    tmp_path, monkeypatch, capsys, through_cli
+):
+    artifact = tmp_path / "historical.zip"
+    with zipfile.ZipFile(artifact, "w") as archive:
+        archive.writestr("original-receipt.txt", b"unchanged historical v1 proof")
+    original_artifact = artifact.read_bytes()
+    output = tmp_path / "audit"
+    native = {"source_commit": final.COMMIT, "installed_test": {"passed": True}}
+    clean_proof = b"actual clean proof fixture; no package executed"
+
+    def canonical(raw, folder):
+        folder.mkdir()
+        assert (raw / "original-receipt.txt").read_bytes() == (
+            b"unchanged historical v1 proof"
+        )
+        (folder / "original-receipt.txt").write_bytes(
+            (raw / "original-receipt.txt").read_bytes()
+        )
+        return native
+
+    def clean(candidate, proof, receipt, binary):
+        assert candidate == output / "canonical" and receipt == native
+        assert binary == BINARY
+        proof.mkdir()
+        (proof / "clean-ubuntu-installed-test.json").write_bytes(clean_proof)
+        (proof / "cleanup.json").write_text(
+            '{"container_removed":true,"image_removed":true}', encoding="utf-8"
+        )
+        return native["installed_test"]
+
+    def publication_path(*args, **kwargs):
+        raise AssertionError("Historical audit must not offer publication material")
+
+    def command(args, **kwargs):
+        assert args == ["git", "rev-parse", "HEAD"]
+        return "abaf9989ad0000f875707412cf4e888b592e230c"
+
+    monkeypatch.setattr(final, "admit_archive", lambda path: None)
+    monkeypatch.setattr(final, "canonical", canonical)
+    monkeypatch.setattr(final, "_source", lambda *args: {})
+    monkeypatch.setattr(final, "_native_payload", lambda *args: BINARY)
+    monkeypatch.setattr(final, "clean_install", clean)
+    monkeypatch.setattr(final, "publisher_negative", publication_path)
+    monkeypatch.setattr(final, "command", command)
+    previous = signal.getsignal(signal.SIGTERM)
+    if through_cli:
+        status = final.main(["--artifact", str(artifact), "--output", str(output)])
+        assert status == final.STAGING_REFUSED_EXIT == 3
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err == (
+            "Historical D9 audit completed; staging refused. "
+            "Published E requires its separate exact qualification.\n"
+        )
+        assert "Traceback" not in captured.err
+    else:
+        with pytest.raises(
+            final.HistoricalStagingRefused, match="Historical D9 audit completed"
+        ):
+            final.finalize(artifact, output)
+    assert signal.getsignal(signal.SIGTERM) is previous
+    receipt = json.loads((output / "final-qualification.json").read_text())
+    assert receipt["schema"] == "sinter-rc3-retained-artifact-audit/v1"
+    assert receipt["source_commit"] == final.COMMIT
+    assert receipt["original_artifact_sha256"] == final.ARTIFACT_SHA
+    assert receipt["binary_sha256"] == BINARY
+    assert receipt["qualification_policy_commit"] == (
+        "abaf9989ad0000f875707412cf4e888b592e230c"
+    )
+    assert receipt["qualification_tool_sha256"] == final.digest(
+        final.Path(final.__file__)
+    )
+    for name in (
+        "clean_install_selftest_and_remove",
+        "python_account_free_preflight",
+        "historical_only",
+    ):
+        assert receipt[name] is True
+    for name in (
+        "x11_xcb_free_preflight",
+        "current_release_qualification",
+        "canonical_candidate_gate",
+        "independent_final_artifact_review_produced",
+        "prepare_and_verify",
+        "publication_supported",
+        "all_platform_release_qualified",
+        "publication_executed",
+    ):
+        assert receipt[name] is False
+    assert receipt["status"] == "historical_audit_complete_staging_refused"
+    assert artifact.read_bytes() == original_artifact
+    assert (
+        (output / "raw/original-receipt.txt").read_bytes()
+        == (output / "canonical/original-receipt.txt").read_bytes()
+        == b"unchanged historical v1 proof"
+    )
+    assert (output / "clean-proof/clean-ubuntu-installed-test.json").read_bytes() == (
+        clean_proof
+    )
+    assert json.loads((output / "clean-proof/cleanup.json").read_text()) == {
+        "container_removed": True,
+        "image_removed": True,
+    }
+    assert not (output / "canonical/candidate-qualification.json").exists()
+    assert not (output / "canonical/SHA256SUMS.txt").exists()
+    assert not (output / "independent-review").exists()
+    assert not (output / "stage").exists()
+
+
+def test_cli_does_not_reclassify_unexpected_failures_as_staging_refusal(
+    tmp_path, monkeypatch, capsys
+):
+    original = ValueError("Original artifact admission failed")
+
+    def fail(*args):
+        raise original
+
+    monkeypatch.setattr(final, "finalize", fail)
+    previous = signal.getsignal(signal.SIGTERM)
+    with pytest.raises(ValueError, match="Original artifact admission failed") as error:
+        final.main(
+            ["--artifact", str(tmp_path / "original.zip"), "--output", str(tmp_path)]
+        )
+    assert error.value is original
+    assert signal.getsignal(signal.SIGTERM) is previous
+    assert capsys.readouterr().err == ""

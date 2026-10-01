@@ -32,6 +32,10 @@ Separate copied-workspace and actual package upgrades from v0.5.3, RC1 and RC2
 retain fictional work, preferences and explicit model selections. No model
 operation was requested by these checks.
 
+Current `main` is `0.5.4rc4.dev0`, a source development version with no new
+qualified installer. Its Word-copy lock and release-tool changes are separate
+from the published RC3 evidence.
+
 The app defaults to a smaller native **source workspace**. For funding campaigns,
 rich documents and account sign-in, open the full browser workbench with
 `/opt/neuroforge/sinter/Sinter app --mode browser` after installing the Debian

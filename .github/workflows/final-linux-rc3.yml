@@ -16,7 +16,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/native.yml
   final_rc3:
-    name: Linux x64 / independent clean install and sealed plan
+    name: Linux x64 / historical D9 audit and staging refusal
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -43,16 +43,14 @@ jobs:
         run: |
           gh api repos/neuroforge-io/Sinter/actions/artifacts/11144194440/zip > original-rc3.zip
           git fetch --no-tags https://github.com/neuroforge-io/Sinter.git d9b36a6853bab0d715dc91e726f984a8ab16a747
-      - name: Independently install without system Python and verify the sealed plan
+      - name: Audit historical D9 offline and refuse current release staging
         run: python -B tools/finalize_linux_preview.py --artifact original-rc3.zip --output final-qualification
-      - name: Retain exact staged assets and honest partial proof
+      - name: Retain historical audit and cleanup evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: linux-rc3-canonical-stage
+          name: linux-rc3-historical-d9-audit
           path: |
-            final-qualification/stage/
-            final-qualification/independent-review/
             final-qualification/clean-proof/
             final-qualification/final-qualification.json
           if-no-files-found: warn

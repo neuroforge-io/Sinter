@@ -1,10 +1,12 @@
 # RC3 qualification requirements
 
-Status: sealed version for candidate building and installed qualification. This
-document is not an installer qualification or a publication receipt. Published
-v0.5.3, v0.5.4rc1 and v0.5.4rc2 remain unchanged. Keep the exact build commit in
-each receipt; source-tree equality with another commit does not change that
-build identity. Hosted review builds do not publish this scoped prerelease.
+Status: requirements and historical tooling scope. Linux x64 v0.5.4rc3 was
+published from `246b91e0ee432cb1f6f6fcd17425f55cd7a4cabe`; see the
+[publication receipt](releases/PREVIEW_0.5.4rc3_PUBLICATION_RECEIPT.md) for its
+exact assets, evidence and limits. This requirements document does not itself
+qualify an installer. Earlier releases remain unchanged. Keep the exact build
+commit in each receipt; source-tree equality with another commit does not change
+that build identity. Hosted review builds do not publish this scoped prerelease.
 
 The existing hosted installed-gate job still targets its historical qualification
 branch; it does not automatically qualify current main. A fresh source-pinned run
@@ -17,15 +19,25 @@ explicitly false there, even when those workflow gates pass. Image preparation
 and checksum-pinned public prior downloads precede offline application tests.
 These gates cannot publish and do not establish customer-device or AI quality.
 
-The separate final qualification branch consumes the unchanged retained installed
-artifact, preserving its original build commit. Its clean Ubuntu image contains
-no system Python/account packages: inspect the actual root filesystem and package
-inventory before installation, install the exact Debian bytes with networking
-disabled, compare the complete frozen self-test JSON to the original installed
-receipt, then remove the package and owned container. Only after those checks may
-the existing canonical candidate `prepare`/`verify` produce a local stage.
-The audit tooling commit is recorded separately; it never changes the build pin
-or rewrites historical partial receipts. This CI job cannot publish a release.
+The retained D9 artifact (`d9b36a6853bab0d715dc91e726f984a8ab16a747`) is
+historical installed-workflow/v1 evidence. `tools/finalize_linux_preview.py`
+audits only its pinned archive; it does not qualify published E
+(`246b91e0ee432cb1f6f6fcd17425f55cd7a4cabe`) or current main. Its digest-pinned
+Ubuntu image contains no system Python/account packages, but explicitly installs
+`libx11-6`. That audit is not the bare no-X11/XCB install required below. The
+published E bare-image evidence remains separate and unchanged.
+
+The historical auditor checks the original package and source, inventories actual
+Python/account absence, runs the installed self-test offline and removes owned
+resources. It records the audit tooling identity separately and preserves original
+receipts. It then refuses publication staging: current RC3 notes promise E's
+workflow/v2 Word recovery, which D9 lacks. The retained audit marks the canonical
+candidate gate and staging unsupported and produces no independent final-review
+receipt or new release plan. After a completed audit, its CLI prints one concise
+staging-refusal message to stderr and exits with code `3`, preserving the audit
+receipt. Unexpected errors remain failures and are not caught as that refusal.
+This historical CI step cannot publish a release; exit `3` must not be reported
+as a sealed-plan pass.
 
 The retained-candidate job lives in `final-linux-rc3.yml`, a review-only workflow
 that cannot be called by the release workflow. Its existing artifact-read grant
@@ -51,7 +63,7 @@ requirements remain intact. The nine-target publisher must still reject Linux-on
 promotion. Use process-only `TZ=UTC` when reproducing the hosted Git source archive;
 Git ZIP timestamps depend on the archive process's timezone.
 
-The prospective candidate is Linux x64 on Ubuntu 22.04/glibc 2.35 only. Other
+The published RC3 candidate is Linux x64 on Ubuntu 22.04/glibc 2.35 only. Other
 platforms need their own installed evidence. Packages remain unsigned and not
 notarised; do not disable OS protections to install them.
 
