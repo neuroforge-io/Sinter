@@ -13,7 +13,7 @@ from contextlib import ExitStack
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -101,15 +101,20 @@ class CurrencyChecks(CampaignChecks):
 
         with (
             patch("sinter.campaigns.utc_now", return_value="2026-10-01T12:00:00+00:00"),
-            patch("sinter.campaigns.uuid.uuid4",
-                  side_effect=[UUID(hex="1" * 32), UUID(hex="f" * 32)]),
+            patch("sinter.campaigns.uuid") as campaign_uuid,
         ):
+            # Scope IDs to the store; Playwright also uses the stdlib uuid module.
+            campaign_uuid.uuid4.side_effect = [
+                UUID(hex="1" * 32), UUID(hex="f" * 32)
+            ]
+            campaign_uuid.uuid5 = uuid5
+            campaign_uuid.NAMESPACE_URL = NAMESPACE_URL
             self.import_fixture(page, fixture("Fictional older tied USD", "USD"))
             older = self.save_snapshot(page)
             self.import_fixture(page, fixture("Fictional latest tied other", "other"))
             latest = self.save_snapshot(page)
 
-        assert older["id"] != latest["id"], f"Import reused campaign ID: {latest['id']}"
+        assert [older["id"], latest["id"]] == ["1" * 32, "f" * 32]
         retained_older = self.app.campaigns.get(older["id"])
         assert retained_older == older, f"Older campaign changed: {retained_older!r}"
         page.reload()
