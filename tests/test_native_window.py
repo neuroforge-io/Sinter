@@ -602,6 +602,7 @@ def test_real_native_widgets_fictional_source_update_and_approved_mock_answer(
         window.use_excerpt()
         window.question_var.set("How many days may a fictional lantern be borrowed?")
         window.preview()
+        prepared = copy.deepcopy(window.controller.prepared)
         requests = []
 
         def fictional_answer(messages, max_tokens):
@@ -619,10 +620,36 @@ def test_real_native_widgets_fictional_source_update_and_approved_mock_answer(
         window.ask()
         wait()
         assert len(requests) == 1 and window.controller.result["complete"]
+        assert [vars(message) for message in requests[0][0]] == (
+            prepared["request"]["messages"]
+        )
+        packet = window.controller.result["sources"][0]
+        assert packet["sources"] == prepared["sources"]
+        assert packet["excerpts"] == prepared["excerpts"]
         assert "21 days. [e1]" in window.report_text.get("1.0", "end")
         assert not window.consent_var.get()
         assert not window.controller.consent
         window.controller.export_result(tmp_path / "fictional-answer.json")
+        exported = json.loads((tmp_path / "fictional-answer.json").read_text())
+        assert exported["sources"][0] == packet
+        project_id = window.controller.identifier
+        window.controller.export_project(tmp_path / "fictional-project.json")
+        window.close()
+        window = NativeWindow(tmp_path / "fictional-gui")
+        window.messages.showerror = lambda *_a, **_k: pytest.fail(
+            "unexpected GUI error"
+        )
+        window.messages.askyesno = lambda *_a, **_k: True
+        window.saved_tree.selection_set(project_id)
+        window.open_project()
+        assert window.controller.revision == 2
+        assert "21 days" in window.controller.document["documents"][0]["content"]
+        assert (
+            window.controller.runtime.call("reports.get", {"id": report_id}) == original
+        )
+        window.controller.import_project(tmp_path / "fictional-project.json")
+        assert window.controller.identifier is None
+        assert "21 days" in window.controller.document["documents"][0]["content"]
         assert (
             window.controller.runtime.call("runtime.status")[
                 "watch_scheduler_started_by_runtime"
@@ -631,3 +658,22 @@ def test_real_native_widgets_fictional_source_update_and_approved_mock_answer(
         )
     finally:
         window.close()
+
+
+@pytest.mark.skipif(
+    os.environ.get("SINTER_NATIVE_GUI_TEST") != "1",
+    reason="Real Tk interruption requires explicitly enabled desktop access.",
+)
+def test_real_native_sigterm_restores_handler_and_allows_repeat_launch(tmp_path):
+    previous = signal.getsignal(signal.SIGTERM)
+    workspace = tmp_path / "fictional-repeated-launch"
+    for _ in range(2):
+        window = NativeWindow(workspace)
+        window.root.after(30, lambda: signal.raise_signal(signal.SIGTERM))
+        try:
+            assert window.run() == 0
+            assert window.closed and window.controller.closed
+            assert window.controller.runtime.app.stop.is_set()
+            assert signal.getsignal(signal.SIGTERM) is previous
+        finally:
+            window.close()
