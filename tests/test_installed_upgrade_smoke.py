@@ -43,12 +43,12 @@ def arguments(tmp_path, version="0.5.4rc1"):
 
 def permit_disposable_fixture(monkeypatch):
     """Simulate the sandbox guard without ever invoking an installer."""
-    monkeypatch.setattr(upgrade.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(upgrade.os, "geteuid", lambda: 0, raising=False)
     original_is_file = Path.is_file
     monkeypatch.setattr(
         Path,
         "is_file",
-        lambda path: True if str(path) == "/.dockerenv" else original_is_file(path),
+        lambda path: True if path == Path("/.dockerenv") else original_is_file(path),
     )
     monkeypatch.setattr(upgrade, "installed_version", lambda: "")
 
@@ -227,5 +227,22 @@ def test_invalid_package_upgrade_order_cannot_create_a_receipt(monkeypatch, tmp_
         lambda command, **kwargs: subprocess.CompletedProcess(command, 1),
     )
     with pytest.raises(ValueError, match="upgrade order"):
+        upgrade.qualify(args)
+    assert not args.output.exists()
+
+
+def test_disposable_fixture_without_native_geteuid_preserves_checksum_gate(
+    monkeypatch, tmp_path
+):
+    """Windows may simulate the Linux guard without executing an installer."""
+    monkeypatch.delattr(upgrade.os, "geteuid", raising=False)
+    permit_disposable_fixture(monkeypatch)
+    args = arguments(tmp_path)
+    monkeypatch.setattr(
+        upgrade.subprocess,
+        "run",
+        lambda *a, **k: pytest.fail("Unqualified package reached dpkg"),
+    )
+    with pytest.raises(ValueError, match="published checksum"):
         upgrade.qualify(args)
     assert not args.output.exists()

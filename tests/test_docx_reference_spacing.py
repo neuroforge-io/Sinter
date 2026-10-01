@@ -155,9 +155,11 @@ def test_multiline_literal_source_titles_and_unicode_offsets_do_not_change():
     assert mapping.find("w:pPr/w:numPr", NS) is None
 
 
-def test_ordinary_document_is_exact_prior_package_bytes():
-    current, _ = exported(ORDINARY)
-    previous, _ = exported(ORDINARY, baseline=True)
+@pytest.mark.parametrize("host", ["linux", "win32"])
+def test_ordinary_document_is_exact_prior_package_bytes(host):
+    with patch.object(zipfile.sys, "platform", host):
+        current, _ = exported(ORDINARY)
+        previous, _ = exported(ORDINARY, baseline=True)
     assert current == previous
     # Captured from the prior exporter, including deterministic ZIP metadata.
     assert (

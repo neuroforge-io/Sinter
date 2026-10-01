@@ -43,7 +43,7 @@ SAVED = transport.SAVED_CAMPAIGN
 def workspace_hashes(root: Path) -> dict[str, str]:
     """Bind saved bytes, excluding the private transport and process state."""
     return {
-        str(path.relative_to(root)): transport.digest(path)
+        path.relative_to(root).as_posix(): transport.digest(path)
         for path in sorted(root.rglob("*"))
         if path.is_file()
     }
@@ -672,7 +672,7 @@ def validate_inputs(args: argparse.Namespace) -> dict:
                 "Source-fixture mode cannot accept installed proof inputs."
             )
         source = {
-            str(path.relative_to(ROOT)): path.read_bytes()
+            path.relative_to(ROOT).as_posix(): path.read_bytes()
             for path in (ROOT / "src/sinter/web").iterdir()
             if path.is_file()
         }
@@ -787,7 +787,7 @@ def qualify(args: argparse.Namespace, inputs: dict) -> dict:
     if args.source_fixture:
         receipt["qualification"] = False
         receipt["source_files_sha256"] = {
-            str(path.relative_to(ROOT)): transport.digest(path)
+            path.relative_to(ROOT).as_posix(): transport.digest(path)
             for path in sorted((ROOT / "src/sinter").rglob("*"))
             if path.is_file() and "__pycache__" not in path.parts
         }

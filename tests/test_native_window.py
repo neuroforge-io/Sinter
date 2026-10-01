@@ -19,6 +19,7 @@ from sinter.runtime import OperationError, Runtime
 @pytest.fixture(autouse=True)
 def no_provider_or_credentials(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     for name in (
         "NEUROFORGE_BASE_URL",
         "NEUROFORGE_MODEL",
@@ -160,13 +161,15 @@ def test_noop_save_does_not_create_an_extra_revision(controller):
     assert controller.revision == 1
 
 
+@pytest.mark.parametrize("ending", ["\n", "\r\n"])
 def test_selected_text_admission_uses_shared_limits_and_retains_exact_text(
-    controller, tmp_path
+    controller, tmp_path, ending
 ):
     source = tmp_path / "fictional-handbook.md"
-    source.write_text("Fictional lantern café loans last 14 days.\n", encoding="utf-8")
+    exact = "Fictional lantern café loans last 14 days." + ending
+    source.write_bytes(exact.encode("utf-8"))
     controller.import_text([source])
-    assert controller.document["documents"][0]["content"] == source.read_text()
+    assert controller.document["documents"][0]["content"] == exact
     assert source.resolve() in controller.source_paths
     assert controller.runtime.call("casebooks.list")["casebooks"] == []
 

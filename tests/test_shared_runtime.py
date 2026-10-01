@@ -594,7 +594,7 @@ def test_legacy_compact_cli_keeps_readable_source_packet(tmp_path, capsys):
         ),
     ) as provider:
         cli.main(args)
-    readable = destination.read_text()
+    readable = destination.read_text(encoding="utf-8")
     assert "UNVERIFIED MODEL DRAFT" in readable
     assert '"source_id"' in readable and "Fictional handbook.md" in readable
     assert project()["documents"][0]["content"] in readable

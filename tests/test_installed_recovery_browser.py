@@ -206,3 +206,68 @@ def test_workspace_hashes_detect_any_saved_data_change(tmp_path):
     before = recovery.workspace_hashes(tmp_path)
     path.write_text(json.dumps({"id": "a" * 32, "revision": 2}))
     assert recovery.workspace_hashes(tmp_path) != before
+
+
+class _WindowsRelativePath:
+    """Real test bytes with Windows path spelling on any executor."""
+
+    def __init__(self, path):
+        self.path = path
+
+    def __truediv__(self, part):
+        return type(self)(self.path / part)
+
+    def __str__(self):
+        return str(self.path)
+
+    def __lt__(self, other):
+        return self.path < other.path
+
+    def relative_to(self, root):
+        from pathlib import PureWindowsPath
+
+        return PureWindowsPath(*self.path.relative_to(root.path).parts)
+
+    def iterdir(self):
+        return (type(self)(path) for path in self.path.iterdir())
+
+    def rglob(self, pattern):
+        return (type(self)(path) for path in self.path.rglob(pattern))
+
+    def is_file(self):
+        return self.path.is_file()
+
+    def read_bytes(self):
+        return self.path.read_bytes()
+
+    def read_text(self):
+        return self.path.read_text(encoding="utf-8")
+
+
+def test_source_fixture_uses_portable_contract_keys_for_windows_paths(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(recovery, "ROOT", _WindowsRelativePath(recovery.ROOT))
+    monkeypatch.setattr(recovery.transport, "command", lambda *args: "a" * 40)
+    args = source_args(tmp_path)
+    inputs = recovery.validate_inputs(args)
+    assert CAMPAIGN_SOURCE in inputs["source"]
+    assert "\\" not in "".join(inputs["source"])
+    assert (
+        inputs["source"][CAMPAIGN_SOURCE]
+        == (recovery.ROOT / CAMPAIGN_SOURCE).read_bytes()
+    )
+    assert not args.output.exists()
+
+
+def test_workspace_hash_keys_are_portable_for_windows_relative_paths(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "folder" / "fictional.json"
+    source.parent.mkdir()
+    source.write_bytes(b'{"fictional":"unchanged"}')
+    monkeypatch.setattr(recovery.transport, "digest", lambda path: "a" * 64)
+    assert recovery.workspace_hashes(_WindowsRelativePath(tmp_path)) == {
+        "folder/fictional.json": "a" * 64
+    }
+    assert source.read_bytes() == b'{"fictional":"unchanged"}'

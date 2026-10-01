@@ -5,6 +5,18 @@
 These source changes follow the published 0.5.4rc2 preview. They are not in its
 installers and have not received installed-platform qualification.
 
+- Share application operations and persistence across the native Tcl/Tk source
+  workspace, discoverable CLI and Python runtime. Keep exact source preview,
+  explicit consent, citation packets, revision conflicts and guarded exports
+  consistent. Bundle matching Tcl/Tk resources by default; report toolkit,
+  display and storage failures and retain explicit browser/headless modes.
+  The native source workspace has a narrower scope than the full web workbench.
+  See [portable runtime use and boundaries](docs/PORTABLE_RUNTIME.md).
+
+- Preserve deterministic Word ZIP metadata and pinned JSON fixture bytes across
+  checkout platforms. Exercise actual native source workflows and frozen Linux
+  window launch, repeat launch and owned-process cleanup in hosted CI.
+
 - Explain when changing or clearing an application-window source resets its
   quoted wording and check date. Keep the entered deadline and other work,
   preserve an unchanged binding, and prompt a deliberate source recheck.
