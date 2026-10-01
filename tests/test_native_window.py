@@ -779,10 +779,21 @@ def test_real_native_first_run_setup_catalogue_save_preview_negation_and_restart
         assert window.report_text.tag_ranges("heading")
         window.excerpts_tree.selection_set("0")
         window.use_excerpt()
+        window.question_var.set("Is the ramp inspection confirmed?")
         with pytest.raises(OperationError, match="exact identifier"):
             window.preview()
         assert not catalogue_calls and not model_calls
         window.pages.select(window.setup_page)
+        window.root.geometry("850x650")
+        window.root.update()
+        window.setup_scroll.yview_moveto(1)
+        window.root.update()
+        for control in (window.models_button, window.connection_save_button):
+            assert control.winfo_ismapped()
+            assert control.winfo_rooty() >= window.setup_scroll.winfo_rooty()
+            assert control.winfo_rooty() + control.winfo_height() <= (
+                window.setup_scroll.winfo_rooty() + window.setup_scroll.winfo_height()
+            )
         assert window.connection_vars["model"].get() == "auto"
         window.connection_confirm_box.invoke()
         window.models_button.invoke()

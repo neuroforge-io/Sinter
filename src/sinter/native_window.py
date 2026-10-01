@@ -608,8 +608,8 @@ class NativeWindow:
         self.consent_box = ttk.Checkbutton(
             self.answer_page,
             variable=self.consent_var,
-            text="I approve sending exactly this preview to the displayed provider "
-            "and will review the draft.",
+            text="I approve this exact preview and displayed destination. "
+            "I will review the draft.",
             command=lambda: self._perform(self._approval_changed),
         )
         self.consent_box.pack(anchor="w", pady=6)
@@ -666,10 +666,14 @@ class NativeWindow:
                 scrollregion=self.setup_scroll.bbox("all")
             ),
         )
-        self.setup_scroll.bind(
-            "<Configure>",
-            lambda event: self.setup_scroll.itemconfigure(item, width=event.width),
-        )
+
+        def fit_setup(event):
+            self.setup_scroll.itemconfigure(item, width=event.width)
+            for widget in page.winfo_children():
+                if isinstance(widget, ttk.Label):
+                    widget.configure(wraplength=max(240, event.width - 24))
+
+        self.setup_scroll.bind("<Configure>", fit_setup)
         ttk.Label(
             page,
             text="Choose the optional assistant connection",
