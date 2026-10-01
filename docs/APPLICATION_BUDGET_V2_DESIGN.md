@@ -4,13 +4,13 @@ Status: open implementation proposal, not implemented or qualified. Source asses
 
 This handoff preserves the full objective: a usable budget workflow that retains exact quoted AUD amounts and their basis, records separately reviewed application amounts and evidence, and admits only a supported numerical comparison. The quoted-summary checkpoint is an immediate truthfulness improvement. It is not completion of that objective or of the full product.
 
-## Current contract and demonstrated problem
+## Assessed baseline before the quoted-summary foundation
 
-`src/sinter/campaigns.py:413` accepts exactly five budget-row keys: `item`, `opportunity`, `quantity`, `unit_cost`, `quote_reference`. Admission uses canonical decimal strings with two places, and null remains unknown. Quote references preserve supplied wording. `_budget_total` mechanically sums quoted unit costs times quantity. `_budget_summary` currently compares that raw sum against an entered AUD cash ceiling, including a known subtotal while another line is unknown.
+`src/sinter/campaigns.py:413` accepts exactly five budget-row keys: `item`, `opportunity`, `quantity`, `unit_cost`, `quote_reference`. Admission uses canonical decimal strings with two places, and null remains unknown. Quote references preserve supplied wording. `_budget_total` mechanically sums quoted unit costs times quantity. `_budget_summary` at that baseline compared the raw sum against an entered AUD ceiling under the legacy v1 gate, including a known subtotal while another line is unknown.
 
-The fictional witness is 110.00 explicitly including GST and 100.00 explicitly excluding GST, against an AUD 200.00 ceiling. The raw subtotal is 210.00. That is arithmetic on unlike recorded amounts, not a reviewed application amount. Adding an unknown production line makes the total incomplete but does not remove the current over-ceiling conclusion. A nonblank reference does not establish a supplier quote, amount basis or application-ready amount. Free text must not be parsed into an asserted basis.
+The fictional witness is 110.00 explicitly including GST and 100.00 explicitly excluding GST, against an AUD 200.00 ceiling. The raw subtotal is 210.00. That is arithmetic on unlike recorded amounts, not a reviewed application amount. Adding an unknown production line makes the total incomplete but did not remove the baseline over-ceiling conclusion. A nonblank reference does not establish a supplier quote, amount basis or application-ready amount. Free text must not be parsed into an asserted basis.
 
-The live UI calls the sum a known cost estimate. The full pack calls a fully priced sum current entered cost and can say it exceeds the funding ceiling. The decision brief and its Word export carry the subtotal while intentionally omitting quote references. Therefore the brief itself needs a basis caveat; keeping it only in the audit pack is insufficient.
+The baseline UI called the sum a known cost estimate. The full pack called a fully priced sum current entered cost and could say it exceeded the funding ceiling. The baseline decision brief and its Word export carried the subtotal while intentionally omitting quote references. Therefore the brief itself needs a basis caveat; keeping it only in the audit pack is insufficient.
 
 ## Immediate quoted-summary foundation
 
@@ -19,7 +19,7 @@ Use a small pure quoted-budget module. Retain the existing row schema, amounts, 
 - Label sums `Recorded quoted subtotal (AUD)` and state that amounts may use different GST bases, are recorded as quoted, and have not been converted or qualified as application amounts.
 - Existing `known_total`, `total`, `complete`, `unknown_costs` and `unquoted_costs` describe quoted input coverage only. A complete raw quote total is not a complete application budget.
 - Set application `over_ceiling` to null/unsupported for every unreviewed v1 amount-basis comparison. It must not feed an application/readiness conclusion or `budgets_over_ceiling`.
-- An optional `quoted_subtotal_over_ceiling` is only an arithmetic observation about the known recorded subtotal and entered nominal ceiling. Apply the existing AUD/cash denomination gate. Always accompany it with the independent amount-basis caveat. False does not establish under-cap status, especially with unknown lines. Neither true nor false establishes tax treatment or eligibility.
+- An optional `quoted_subtotal_over_ceiling` is only an arithmetic observation about the known recorded subtotal and entered nominal ceiling. Apply the existing legacy v1 AUD gate, which excludes `non_cash_support` without positively qualifying other route types. Always accompany it with the independent amount-basis caveat. False does not establish under-cap status, especially with unknown lines. Neither true nor false establishes tax treatment or eligibility.
 - Keep `amount_basis_note` separate from currency `comparison_note` and currency review metrics. It must remain visible when the currency note is empty.
 - Keep historical rows outside current totals and current review counts. Preserve historical rows and references in backups and audit output.
 - Show consistent caveats in the live total, decision brief/Word, full pack and reopened policy view of a saved report. Preserve disk originals and user edits.

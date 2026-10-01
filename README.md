@@ -62,7 +62,9 @@ to Word while their original sources remain in the evidence pack.
 Current development shows compact quoted-cost rows and opens the next missing
 price or reference. Quoted subtotals retain original amounts, unknowns and GST
 wording; they do not establish an application amount or funding-ceiling decision.
-Changes to active costs require reviewing current application answers again.
+The campaign workbench marks current application answers for review when active
+costs change. Direct CLI/Python saves retain entered review statuses; review them
+explicitly after changing costs.
 [Budget meanings and recovery](docs/CAMPAIGN_BUDGETS.md) explains this boundary;
 reviewed application-amount entry remains an
 [open extension](docs/APPLICATION_BUDGET_V2_DESIGN.md).

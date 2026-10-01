@@ -69,7 +69,7 @@ def ceiling_comparison_note(row: dict) -> str:
 
 
 def can_compare_ceiling(row: dict) -> bool:
-    """Only an entered AUD cash ceiling can be compared with AUD project costs."""
+    """Apply the legacy v1 AUD arithmetic gate, without qualifying route type."""
     return (
         row.get("route_type") != "non_cash_support"
         and row.get("ceiling") is not None
