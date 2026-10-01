@@ -212,13 +212,13 @@ def test_scoped_actual_cli_readers_use_explicit_utf8_and_isolated_home(
     worker.after_stop(SimpleNamespace(data=data, source=producer.ROOT, control=control))
     assert len(observations) == 4
     assert all(result.returncode == 0 for result in observations)
+    line_end = b"\r\n" if sys.platform == "win32" else b"\n"
     assert [result.stderr for result in observations] == [
         b"",
         b"",
-        b"Ready for review\n",
-        ("Saved: " + str(control.with_suffix(".cli-export.json")) + "\n").encode(
-            "utf-8"
-        ),
+        b"Ready for review" + line_end,
+        ("Saved: " + str(control.with_suffix(".cli-export.json"))).encode("utf-8")
+        + line_end,
     ]
     envelopes = [json.loads(result.stdout.decode("utf-8")) for result in observations]
     assert all("🐝" in json.dumps(row, ensure_ascii=False) for row in envelopes[:3])

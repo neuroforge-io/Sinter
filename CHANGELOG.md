@@ -34,6 +34,10 @@ qualification and does not change any published RC3 asset or historical receipt.
   Independent source review and a fresh ten-lifetime offline rehearsal pass.
   Repaired Windows replay and installed qualification remain pending.
 
+- Match the actual host's exact line endings in the isolated CLI reader test.
+  Windows progress retains its original carriage returns; no application output,
+  source evidence or installed Linux diagnostic policy is normalized or changed.
+
 - Save source-recovery evidence with explicit UTF-8 and stable newlines, keeping
   complete literal Unicode originals and atomic replacement. Reproduce the Windows
   default-encoding failure without changing historical writers or stored work.

@@ -1451,3 +1451,23 @@ and its external manifest, not a later commit or installed binary. Fresh repaire
 hosted replay, the three installed adapters and closed canonical release admission
 remain separate gates. The physical user app stays closed and Sinter model calls
 remain zero.
+
+### Exact Windows CLI progress bytes, 2 October
+
+Actual follow-up run `36923097221` at
+`ad2d364eeac04eaf64f8074286894fde52a7881d` has 3,686 cases per Python job.
+The six original API-digest-verified ZIP/XMLs and complete Windows job logs are
+retained. Both Linux jobs pass with nine explicit resource skips, and both macOS
+jobs pass with 328 skips. Each Windows job has exactly one failure and 391 skips:
+the new progress-byte assertion expects LF while the four successful real Windows
+CLI readers emit the actual CRLF lines. The Unicode export path, isolated child
+bootstrap and existing source-reader behavior are preserved.
+
+The one-test repair derives the exact expected line ending from the host platform.
+It still compares complete UTF-8 progress bytes and accepts no additional output;
+it does not strip, normalize or broaden installed Linux stderr policy. Independent
+review `21be4443f637f6b4e2a8a04493c64b9ab9181db332aba7543df9b3c9ee6249d0`
+checks all original collection references and passes the affected 56 Linux cases
+without skips. Root's affected suite also passes 56 cases in 4.03 seconds. Fresh
+repaired Windows execution remains pending. No product source, user workspace,
+installed receipt or published asset changes; the physical app remains closed.
