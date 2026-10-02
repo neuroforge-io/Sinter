@@ -7,6 +7,11 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Complete the source-specific quit decision in the installed workflow after
+  intentionally editing an unsaved report. Modern on-page confirmation and
+  historical browser confirmation keep separate handling; approval still needs
+  an observed normal app exit and closed listener. Earlier failed runs stay failed.
+
 - Match installed browser startup diagnostics to the actual admitted local URL
   and listener. Preserve the exact quit notice, complete streams and original
   failure. Clean known owned browser caches after an explicitly observed failed

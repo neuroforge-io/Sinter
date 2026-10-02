@@ -2096,3 +2096,33 @@ boundary checks. These are source checks only. A new exact-source hosted run,
 new build, independent review and complete installed/recovery/upgrade journeys
 are still required before RC4 publication. No provider call, real campaign edit
 or higher product rating follows from this correction.
+
+
+### 2 October: final quit decision in the following installed attempt
+
+The following exact `af5c40ad1902ad36dea3750063484721af40afc9` candidate
+built successfully. Its installed browser attempt retained 13 named checks
+through reopening, backup restoration and preservation of originals. Five
+screenshots, both backups and the handover/Word-copy files are retained. The
+first app quit normally; the final stopped-state observation timed out. The
+complete attempt failed in 50.23 seconds and remains failed. No final Word-copy,
+second-normal-exit or release qualification is inferred from those partial files.
+
+Source inspection found that the Word-copy exercise intentionally applies changed
+report wording without saving that report. The product keeps that unsaved draft
+across navigation and asks for an on-page **Quit Sinter?** decision. The old test
+clicked only the toolbar and handled browser-native dialogs. An unanswered
+on-page decision is the supported causal inference; no post-click DOM snapshot
+or quit-request trace was retained. The later invalid-controller-transition
+failure followed the host's timeout cleanup. The second app's normal exit is
+unproven. This disposable test failure is separate from the user's normal close.
+
+The correction selects the exact source confirmation profile and explicitly
+answers only the matching modern dialog before checking the unchanged actual
+exit/listener requirements. Older preview dialog handling remains intact;
+unknown or mixed controls refuse. Twelve focused regressions cover profile
+selection, consent ordering, missing decisions and non-normal exit observations.
+The four relevant Python modules pass 362 tests. These are source regressions;
+successor hosted, installed, recovery, upgrade and release gates remain pending.
+The physical workspace and actual campaign data stay closed and untouched, with
+no provider calls or change to the product ratings.

@@ -586,3 +586,140 @@ def test_word_observations_track_rows_and_ignore_unrelated_sidecars(
     assert (
         flow.workspace_observations(runtime, {"model": "fictional-explicit"}) != before
     )
+
+
+@pytest.mark.parametrize(
+    "script, expected",
+    [
+        (
+            b"import {confirmAction} from './confirm-action.js';\n"
+            b"title: 'Quit Sinter?'",
+            True,
+        ),
+        (b"if (!confirm('Quit Sinter? Save first.')) return;", False),
+    ],
+)
+def test_quit_decision_uses_exact_source_presentation(script, expected):
+    assert (
+        flow.document_quit_confirmation({"src/sinter/web/app.js": script}) is expected
+    )
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        b"",
+        b"title: 'Quit Sinter?'",
+        b"import {confirmAction} from './confirm-action.js';",
+        b"!confirm('Quit Sinter?') !confirm('Quit Sinter?')",
+        b"import {confirmAction} from './confirm-action.js';\n"
+        b"title: 'Quit Sinter?' !confirm('Quit Sinter?')",
+    ],
+)
+def test_unknown_or_ambiguous_quit_decision_has_no_fallback(script):
+    with pytest.raises(ValueError, match="missing or ambiguous"):
+        flow.document_quit_confirmation({"src/sinter/web/app.js": script})
+
+
+@pytest.fixture
+def quit_controls(monkeypatch):
+    import types
+
+    events = []
+    state = {"visible": True, "confirmed": False, "exit_code": 0, "port_closed": True}
+    first = RuntimeError("The specific quit decision is unavailable")
+
+    class Button:
+        def __init__(self, label, scope):
+            self.label, self.scope = label, scope
+
+        def click(self):
+            events.append(("click", self.scope, self.label))
+            if self.scope == "decision":
+                state["confirmed"] = True
+
+    class Decision:
+        def get_by_role(self, role, *, name, exact):
+            assert role == "button" and exact
+            assert name in {"Keep working", "Quit Sinter"}
+            return Button(name, "decision")
+
+        def get_by_text(self, text, *, exact):
+            assert exact
+            assert text == (
+                "Save or export your work first. Quitting stops this local app. "
+                "Unsaved browser work is not saved automatically."
+            )
+            return self
+
+    class Page:
+        def get_by_role(self, role, *, name, exact):
+            assert exact
+            events.append(("lookup", role, name))
+            if role == "dialog":
+                assert name == "Quit Sinter?"
+                return Decision()
+            assert role == "button" and name == "Quit Sinter"
+            return Button(name, "toolbar")
+
+    class Expectation:
+        def to_be_visible(self):
+            if not state["visible"]:
+                raise first
+
+    api = types.ModuleType("playwright.sync_api")
+    api.expect = lambda control: Expectation()
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", api)
+
+    def stopped(runtime, phase, run):
+        events.append(("observe", phase, run))
+        if run == 2:
+            assert state["confirmed"], "No exit observation before explicit consent"
+        return {"exit_code": state["exit_code"], "port_closed": state["port_closed"]}
+
+    monkeypatch.setattr(flow, "wait_state", stopped)
+    return Page(), events, state, first
+
+
+def test_clean_quit_needs_no_decision(quit_controls, tmp_path):
+    page, events, _, _ = quit_controls
+    flow.quit_installed_browser(page, tmp_path, 1)
+    assert events == [
+        ("lookup", "button", "Quit Sinter"),
+        ("click", "toolbar", "Quit Sinter"),
+        ("observe", "stopped", 1),
+    ]
+
+
+def test_unsaved_report_requires_scoped_quit_consent_before_exit(
+    quit_controls, tmp_path
+):
+    page, events, state, _ = quit_controls
+    flow.quit_installed_browser(page, tmp_path, 2, confirm_unsaved=True)
+    assert state["confirmed"]
+    assert events[-2:] == [
+        ("click", "decision", "Quit Sinter"),
+        ("observe", "stopped", 2),
+    ]
+    assert ("lookup", "dialog", "Quit Sinter?") in events
+
+
+def test_missing_quit_decision_preserves_failure_and_never_observes_exit(
+    quit_controls, tmp_path
+):
+    page, events, state, first = quit_controls
+    state["visible"] = False
+    with pytest.raises(RuntimeError) as failed:
+        flow.quit_installed_browser(page, tmp_path, 2, confirm_unsaved=True)
+    assert failed.value is first and not state["confirmed"]
+    assert all(event[0] != "observe" for event in events)
+
+
+@pytest.mark.parametrize("field,value", [("exit_code", 1), ("port_closed", False)])
+def test_consent_does_not_substitute_for_observed_normal_exit(
+    quit_controls, tmp_path, field, value
+):
+    page, _, state, _ = quit_controls
+    state[field] = value
+    with pytest.raises(AssertionError):
+        flow.quit_installed_browser(page, tmp_path, 2, confirm_unsaved=True)

@@ -32,6 +32,15 @@ additional Word copies. The returned evidence records the actual catalogue count
 from the fixed trusted source parser. It does not claim that every catalogue operation was
 individually executed. Historical evidence remains historical.
 
+The Word-copy exercise deliberately leaves changed report wording unsaved in
+Sinter while preserving the original saved report. Saving a Word copy is a
+separate local file operation. Before the final quit, the browser operator must
+answer the current source's exact **Quit Sinter?** on-page decision, including
+its warning and **Keep working** alternative. Historical previews retain their
+browser-native decision handler. Missing or ambiguous source controls refuse;
+there is no generic on-page-dialog acceptance. Consent alone cannot qualify a
+quit: the original controller must observe exit 0 and the closed listener.
+
 ## Producer and original-tree review
 
 Run from the final committed source using a new, short private home directory:

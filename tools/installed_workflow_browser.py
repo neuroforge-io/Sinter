@@ -572,6 +572,48 @@ def wait_state(runtime: Path, phase: str, run: int, timeout: int = 30) -> dict:
     raise ValueError("The installed lifecycle test exceeded its time bound.")
 
 
+def document_quit_confirmation(source: dict[str, bytes]) -> bool:
+    """Select the observed source's document or historical native quit decision."""
+    script = source.get("src/sinter/web/app.js", b"")
+    document = (
+        script.count(b"import {confirmAction} from './confirm-action.js';") == 1
+        and script.count(b"title: 'Quit Sinter?'") == 1
+    )
+    native = script.count(b"!confirm('Quit Sinter?") == 1
+    if document and not native:
+        return True
+    if native and b"confirmAction" not in script:
+        return False
+    raise ValueError(
+        "The candidate quit-confirmation controls are missing or ambiguous."
+    )
+
+
+def quit_installed_browser(
+    page, runtime: Path, run: int, *, confirm_unsaved: bool = False
+) -> None:
+    """Answer this specific local decision before observing the actual app exit."""
+    from playwright.sync_api import expect
+
+    page.get_by_role("button", name="Quit Sinter", exact=True).click()
+    if confirm_unsaved:
+        decision = page.get_by_role("dialog", name="Quit Sinter?", exact=True)
+        expect(decision).to_be_visible()
+        expect(
+            decision.get_by_text(
+                "Save or export your work first. Quitting stops this local app. "
+                "Unsaved browser work is not saved automatically.",
+                exact=True,
+            )
+        ).to_be_visible()
+        expect(
+            decision.get_by_role("button", name="Keep working", exact=True)
+        ).to_be_visible()
+        decision.get_by_role("button", name="Quit Sinter", exact=True).click()
+    state = wait_state(runtime, "stopped", run)
+    assert state["exit_code"] == 0 and state["port_closed"] is True
+
+
 def validate_inputs(args: argparse.Namespace) -> tuple[dict, dict]:
     """Bind all installation inputs before creating any output/container."""
     if args.output.exists() or args.output.is_symlink():
@@ -1037,11 +1079,6 @@ def browser_workflow(
                         == original["content"]
                     )
 
-            def quit_app(run: int) -> None:
-                page.get_by_role("button", name="Quit Sinter", exact=True).click()
-                state = wait_state(runtime, "stopped", run)
-                assert state["exit_code"] == 0 and state["port_closed"] is True
-
             page.goto(origin + "/#home")
             identity = page.evaluate(
                 "() => fetch('/api/session').then(r => r.json())"
@@ -1133,7 +1170,7 @@ def browser_workflow(
                 snapshots["saved_campaign"]["document"], fixture["campaign"]
             )
             checks.append(CHECKS[5])
-            quit_app(1)
+            quit_installed_browser(page, runtime, 1)
             checks.append(CHECKS[6])
             write_json(runtime / "control.json", {"action": "restart"})
             restarted = wait_state(runtime, "running", 2)
@@ -1304,7 +1341,13 @@ def browser_workflow(
                     == original_campaign["document"][key]
                 )
             checks.append(CHECKS[12])
-            quit_app(2)
+            quit_installed_browser(
+                page,
+                runtime,
+                2,
+                confirm_unsaved=word_proof is not None
+                and document_quit_confirmation(fixture["source"]),
+            )
             checks.append(CHECKS[13])
             if word_proof is not None:
                 retain_word_copies(runtime, output, word_proof)
