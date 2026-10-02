@@ -11,7 +11,7 @@ import sys
 import tarfile
 import threading
 import time
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -1000,8 +1000,26 @@ class InertCloseError(RuntimeError):
 
 
 @pytest.fixture
-def inert_browser(monkeypatch):
-    import playwright.sync_api as api
+def inert_playwright_api(monkeypatch):
+    """Inject only the inert API; core source controls need no browser package."""
+    api = ModuleType("playwright.sync_api")
+
+    def unconfigured(*args, **kwargs):
+        raise AssertionError("Unconfigured inert browser API cannot run browser work")
+
+    api.sync_playwright = unconfigured
+    api.expect = unconfigured
+    package = ModuleType("playwright")
+    package.__path__ = []
+    package.sync_api = api
+    monkeypatch.setitem(sys.modules, "playwright", package)
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", api)
+    return api
+
+
+@pytest.fixture
+def inert_browser(monkeypatch, inert_playwright_api):
+    api = inert_playwright_api
 
     from tools import _support
 
@@ -1426,9 +1444,9 @@ def test_special_profile_artifact_refuses_without_reading_fifo(tmp_path):
 
 @pytest.mark.parametrize("cleanup_fails", [False, True])
 def test_driver_entry_failure_keeps_primary_and_attempts_manager_cleanup(
-    monkeypatch, cleanup_fails
+    monkeypatch, inert_playwright_api, cleanup_fails
 ):
-    import playwright.sync_api as api
+    api = inert_playwright_api
 
     calls = []
 

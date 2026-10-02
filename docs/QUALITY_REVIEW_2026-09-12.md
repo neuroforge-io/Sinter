@@ -1732,3 +1732,26 @@ Actual Windows replay, matching final installed execution, complete raw gate
 admission and independent final artifact review remain pending. The user app is
 still closed and no Sinter model request is made. No candidate is published or
 graded 10/10 by these source checks.
+
+### Optional browser dependency in recovery source controls, 2 October
+
+Independent review
+`fba6e47b00578cd668ecebfef69eb2b0a375ec5f75056005111e43f13b5eb801`
+accepts one test-only patch against `c334ba8d137566844ae2c6b3535873ce10989978`.
+Ten inert controls previously failed or errored when Playwright was absent; all
+ten now pass with the real package explicitly blocked. The injected API refuses
+unconfigured browser work, restores original module objects after each control,
+and leaves the production dependency guard and existing assertion bodies intact.
+Root's 142 unique focused source checks pass without skips in 2.23 seconds; the
+separate ten-case blocked-package replay is not added to that unique total.
+Static and formatting checks pass. Root retains 2,056 author/reviewer byte/hash
+references. An initial root invocation named a nonexistent shared test module,
+collected zero tests and refused; the corrected selection changes no assertion.
+
+Actual hosted run `36943835921` against the preceding `c334ba8` source still
+fails its six Python jobs. The native test group has no failures on Windows:
+195 cases pass and two exact unavailable POSIX-resource controls skip per job.
+Other recovery/replacement portability failures remain recorded, including an
+unexplained Windows idle-relay cleanup refusal. This new test-only adoption does
+not erase those failures or qualify an installer. The user app remains closed;
+no model request or release publication occurs.

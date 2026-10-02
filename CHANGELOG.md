@@ -5,6 +5,11 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Make ten inert recovery-tool tests independent of the optional Playwright
+  package. Keep browser execution guarded and every existing assertion active.
+  Independent and root source checks pass; full hosted and installed qualification
+  remain separate gates.
+
 - Allow installed-workflow qualification to use an explicitly owned browser
   session. Keep the existing UI journey, omitted defaults and historical receipt
   contracts intact. Independent source checks and all six hosted Python/platform
