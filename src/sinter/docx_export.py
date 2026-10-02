@@ -35,6 +35,24 @@ _REFERENCE_SCOPES = {
     "Selected passage not reproduced in this copy. "
     "Ask the sender for its original wording and surrounding context.",
 }
+_HANDOVER_SUMMARY_HEADING = "At a glance"
+_HANDOVER_SUMMARY_INTRO = (
+    "Statuses and next steps below are user-entered for review. Next steps are "
+    "proposals, not accepted commitments. A retained quotation establishes "
+    "supplied wording, not independent verification."
+)
+_HANDOVER_SUMMARY_STALE = (
+    "**Review status: stale.** Review this saved record again before current use. "
+    "Original evidence and historical wording remain unchanged; "
+    "no current source was substituted."
+)
+_HANDOVER_SUMMARY_HEADERS = (
+    "Item",
+    "Recorded status — user-entered",
+    "Next step — proposed",
+    "Evidence",
+)
+_HANDOVER_SUMMARY_WIDTHS = (1560, 4200, 2280, 1320)
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 REL = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -139,6 +157,64 @@ def _source_note_keep_next(blocks: tuple[Block, ...]) -> frozenset[int]:
             # Stop at the note: the following passage/key cannot be chained.
             keep.update(range(index, end))
     return frozenset(keep)
+
+
+def _handover_summary_table_widths(
+    markdown: str, blocks: tuple[Block, ...]
+) -> dict[int, tuple[int, ...]]:
+    """Scope presentation to one exact generated opening, never infer answers."""
+    headings = [
+        index
+        for index, block in enumerate(blocks)
+        if isinstance(block, Paragraph)
+        and block.heading == 2
+        and not (block.quote or block.code or block.list_id)
+        and block.spans == (Span(_HANDOVER_SUMMARY_HEADING),)
+    ]
+    normalized = markdown.replace("\r\n", "\n").replace("\r", "\n")
+    raw = list(re.finditer(r"(?m)^## At a glance$", normalized))
+    if len(headings) != 1 or len(raw) != 1:
+        return {}
+    index = headings[0]
+    prefix = parse(normalized[: raw[0].end()])
+    if len(prefix) != index + 1 or prefix[-1] != blocks[index]:
+        return {}
+    position = index + 1
+    if position >= len(blocks) or blocks[position] != Paragraph(
+        (Span(_HANDOVER_SUMMARY_INTRO),)
+    ):
+        return {}
+    remaining = normalized[raw[0].end() :].lstrip("\n")
+    intro = _HANDOVER_SUMMARY_INTRO + "\n\n"
+    if not remaining.startswith(intro):
+        return {}
+    remaining = remaining[len(intro) :]
+    position += 1
+    stale = _HANDOVER_SUMMARY_STALE + "\n\n"
+    if remaining.startswith(stale):
+        if position >= len(blocks) or parse(_HANDOVER_SUMMARY_STALE) != (
+            blocks[position],
+        ):
+            return {}
+        position += 1
+        remaining = remaining[len(stale) :]
+    if position >= len(blocks) or not isinstance(blocks[position], Table):
+        return {}
+    table = blocks[position]
+    raw_table = remaining.split("\n\n", 1)[0]
+    if (
+        len(table.alignments) != 4
+        or len(table.rows) < 2
+        or table.rows[0]
+        != tuple((Span(header),) for header in _HANDOVER_SUMMARY_HEADERS)
+        or not all(
+            line.startswith("|") and line.endswith("|")
+            for line in raw_table.splitlines()
+        )
+        or parse(raw_table) != (table,)
+    ):
+        return {}
+    return {position: _HANDOVER_SUMMARY_WIDTHS}
 
 
 def _reference_key_spacing(markdown: str, blocks: tuple[Block, ...]) -> frozenset[int]:
@@ -540,10 +616,14 @@ class _Package:
         if bookmark:
             _element(node, "bookmarkEnd", id=identifier)
 
-    def table(self, table: Table) -> None:
+    def table(self, table: Table, column_widths: tuple[int, ...] | None = None) -> None:
         node = _element(self.body, "tbl")
         properties = _element(node, "tblPr")
-        _element(properties, "tblW", w=0, type="auto")
+        if column_widths is None:
+            _element(properties, "tblW", w=0, type="auto")
+        else:
+            _element(properties, "tblW", w=sum(column_widths), type="dxa")
+            _element(properties, "tblLayout", type="fixed")
         borders = _element(properties, "tblBorders")
         for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
             _element(borders, edge, val="single", sz=4, color="D1D5DB")
@@ -552,8 +632,9 @@ class _Package:
             _element(margins, edge, w=100, type="dxa")
         grid = _element(node, "tblGrid")
         width = 9360 // len(table.alignments)
-        for _ in table.alignments:
-            _element(grid, "gridCol", w=width)
+        widths = column_widths or (width,) * len(table.alignments)
+        for column_width in widths:
+            _element(grid, "gridCol", w=column_width)
         for index, row in enumerate(table.rows):
             row_node = _element(node, "tr")
             row_properties = _element(row_node, "trPr")
@@ -563,7 +644,7 @@ class _Package:
             for at, spans in enumerate(row):
                 cell = _element(row_node, "tc")
                 cell_properties = _element(cell, "tcPr")
-                _element(cell_properties, "tcW", w=width, type="dxa")
+                _element(cell_properties, "tcW", w=widths[at], type="dxa")
                 if index == 0:
                     _element(cell_properties, "shd", fill="F1F3F5", val="clear")
                     spans = tuple(
@@ -644,6 +725,7 @@ def export_docx(payload: object) -> WordDocument:
     markdown = _text(payload["markdown"], "Document text", MAX_MARKDOWN)
     package = _Package()
     blocks = parse(markdown)
+    summary_widths = _handover_summary_table_widths(markdown, blocks)
     keep_next = _source_note_keep_next(blocks)
     compact_references = _reference_key_spacing(markdown, blocks)
     bookmarks, internal_links = _passage_navigation(
@@ -653,7 +735,7 @@ def export_docx(payload: object) -> WordDocument:
         if isinstance(block, PageBreak):
             package.page_break()
         elif isinstance(block, Table):
-            package.table(block)
+            package.table(block, summary_widths.get(index))
         else:
             package.paragraph(
                 package.body,

@@ -7,6 +7,16 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Give the reviewed handover opening useful Word column widths while preserving
+  complete user wording, evidence, citations and the original source tables.
+  The five-item fictional opening now fits its first rendered page. Longer
+  summaries remain multipage; evidence-appendix pagination still needs polish.
+
+- Decode the handover test's Node output explicitly as strict UTF-8, preserving
+  Unicode passage labels and Word navigation on platforms with a legacy default
+  encoding. Check the actual saved snapshot and newer unsaved wording in browser
+  recovery. Keep the original hosted failures; fresh qualification is required.
+
 - Add a reviewed opening summary to source-only volunteer handovers. Enter status
   and proposed next steps, select literal retained evidence, and explicitly
   approve replacement before saving. Keep unknown owners, missing evidence,

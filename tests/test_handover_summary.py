@@ -27,6 +27,8 @@ def node(*arguments):
         cwd=ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="strict",
         timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -46,6 +48,15 @@ def test_local_save_close_reopen_restore_keeps_summary_and_exact_evidence(
     sample, tmp_path
 ):
     original, report = sample["original"], sample["applied"]
+    oracle = json.loads(
+        (ROOT / "tests/fixtures/handover_pre_recipient_v1.json").read_text(
+            encoding="utf-8"
+        )
+    )["fixtures"]["installed_garden"]["report"]
+    assert original == oracle
+    assert {key: value for key, value in report.items() if key != "document_edits"} == (
+        oracle
+    )
     store = Store(tmp_path / "fictional-workspace")
     identifier = store.save_report(report)
     reopened = Store(tmp_path / "fictional-workspace").report(identifier)
@@ -70,6 +81,12 @@ def test_local_save_close_reopen_restore_keeps_summary_and_exact_evidence(
 
 def test_word_contains_useful_opening_before_questions_and_original_navigation(sample):
     report = sample["applied"]
+    markdown = report["document_edits"]["markdown"]
+    for reference in report["document_references"]:
+        assert f"**{reference['label']}** — Original source:" in markdown
+        assert (
+            f"Unicode characters: {reference['start']}–{reference['end']};" in markdown
+        )
     document = export_docx(
         {
             "title": report["document_title"],
@@ -100,6 +117,9 @@ def test_word_contains_useful_opening_before_questions_and_original_navigation(s
     tables = list(body.iter(f"{{{W}}}tbl"))
     assert len(tables) == 2  # reviewed summary plus the original quoted action table
     assert len(list(tables[0].iter(f"{{{W}}}tr"))) == 7
+    for reference in report["document_references"]:
+        assert reference["label"] + " — Original source:" in text
+        assert f"Unicode characters: {reference['start']}–{reference['end']};" in text
     assert len(list(body.iter(f"{{{W}}}bookmarkStart"))) == 8
     assert len(list(body.iter(f"{{{W}}}hyperlink"))) >= 22
 
@@ -125,3 +145,23 @@ def test_stale_record_notice_survives_word_export_without_changing_original_fiel
     )
     assert text.index("Review status: stale") < text.index("Handover next steps")
     assert "Original evidence and historical wording remain unchanged" in text
+
+
+def test_node_unicode_channel_ignores_an_ansi_locale_default(monkeypatch):
+    # Simulate the Windows default decoder, while using an actual Node pipe.
+    # This does not inspect encoding kwargs or substitute emitted bytes.
+    monkeypatch.setattr(subprocess, "_text_encoding", lambda: "cp1252")
+    result = json.loads(
+        node(
+            "-e",
+            "process.stdout.write(JSON.stringify({text: "
+            "String.fromCodePoint(0x2014, 0x2013, 0xe9, 0x1f41d, 0x65, 0x301)}))",
+        )
+    )
+    assert result == {"text": "—–é🐝e\u0301"}
+
+
+@pytest.mark.parametrize("channel", ["stdout", "stderr"])
+def test_node_unicode_channel_refuses_invalid_utf8_without_replacement(channel):
+    with pytest.raises(UnicodeDecodeError):
+        node("-e", f"process.{channel}.write(Buffer.from([0xff]))")

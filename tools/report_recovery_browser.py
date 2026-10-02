@@ -301,7 +301,26 @@ def main(argv: list[str] | None = None) -> None:
                     )
                     apply_text("Newer version edited while saving.")
                     held[0].continue_()
-                    expect(report).to_contain_text("Your newer edits are still unsaved")
+                    expect(
+                        report.get_by_text(
+                            "The submitted document was saved in My workspace. "
+                            "Applied document edits have not been saved.",
+                            exact=True,
+                        )
+                    ).to_be_visible()
+                    document = report.get_by_role(
+                        "tabpanel", name="Document", exact=True
+                    )
+                    expect(document).to_contain_text(
+                        "Newer version edited while saving."
+                    )
+                    expect(document).not_to_contain_text("First version sent to save.")
+                    assert (
+                        server.app.store.report(server.app.store.reports()[0]["id"])[
+                            "document_edits"
+                        ]["markdown"]
+                        == "First version sent to save."
+                    )
                     assert page.evaluate(warn)
                     expect(
                         report.get_by_role(

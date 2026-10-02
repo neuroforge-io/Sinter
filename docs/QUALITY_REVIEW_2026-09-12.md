@@ -2327,3 +2327,53 @@ remain session-only until applied; they are saved as ordinary document text.
 These source and fictional interface observations do not qualify an installed
 package, a customer platform, an AI task or a whole-product 10/10 rating. The
 failed earlier installed workflow remains failed; fresh qualification is required.
+
+### 3 October: Unicode recovery and scoped Word layout
+
+Exact source `dcf9085277b3efa4d98320124b76547a42c3ae5c` hosted Quality
+run `37038957852`, attempt 1, ended with eight successful jobs, three failed
+jobs and one skipped job. Chromium expected an earlier unsaved-edit sentence;
+both Windows versions found zero Word bookmarks where eight were required.
+The packaging job was skipped. The original complete logs and artifacts remain
+retained; neither that source nor its installed release is qualified.
+
+The browser correction requires the current exact save notice, the visible newer
+wording, absence of the older submitted text in the editor and the actual older
+snapshot in local storage. Its nine private offline browser journeys pass with
+no external requests. The dirty-exit and further-save controls remain active.
+Independent source review accepts this stronger check without replaying CI.
+
+The handover test bridge now decodes actual Node stdout and stderr as strict
+UTF-8. The same raw fixture decoded as UTF-8 retains eight bookmarks and 22
+links; a legacy Windows encoding loses both while earlier ASCII and table
+checks still pass. This supports an encoding diagnosis; the original Windows
+locale was not measured. Seven source cases pass, including real Unicode pipe
+output and refusal of invalid bytes. The original navigation requirements and
+complete fixture fields remain unchanged. The initial author assertion error
+and the literal old helper's expected failure remain separate records. Fresh
+Windows CI is required before a platform claim.
+
+Word export applies fixed column widths only to the exact generated, top-level
+reviewed opening. Changed, quoted, nested or ambiguous shapes retain the generic
+layout. Sixty-seven source cases pass. Exact comparison preserves all wording,
+Unicode spans, fonts, source identities, bookmarks, links, package parts and the
+original quoted action table; only the first table's layout properties change.
+Independent source review accepts that narrow presentation change.
+
+The original five-item browser-created payload reproduces its earlier Word copy.
+Its new headless LibreOffice render puts all five complete rows on page one;
+the whole document still has five pages. Root and an independent reader inspected
+every rendered page. Passage 3's source caption is separated from its table, and
+the final reference remains alone on page five. These remain formatting work.
+Root opened the exact read-only copy in a separate native LibreOffice profile,
+observed its five-page status and first-page table, and quit normally with exit 0.
+Native keyboard page navigation was refused by the desktop portal and was not
+replayed. This is source-document evidence, not installed Sinter, Microsoft Word,
+customer-platform, whole-product quality or release qualification. The user's
+normally closed Sinter and real saved workspace remain untouched.
+
+The root-composed source passes all 74 affected Python cases without failures,
+errors or skips. Required correctness lint, touched-file formatting, public
+boundary checks and Python 3.10 grammar for all 286 Python paths pass. The
+deterministic local self-audit records no network requests. These checks do
+not substitute for the fresh exact-source hosted and installed gates.
