@@ -16,6 +16,12 @@ qualification and does not change any published RC3 asset or historical receipt.
   native diagnostic-publication limitations and actual installed gates remain
   explicit repair and qualification work.
 
+- Keep recovery parser checks portable without pretending their synthetic rows
+  are installed process observations. Retain separate actual POSIX-child checks,
+  close recovery-helper SQLite connections explicitly, decode UTF-8 fixtures
+  explicitly and own short Unix-socket test paths. Preserve the unresolved Windows
+  idle-relay assertion and deadline; capture actual shutdown diagnostics for it.
+
 - Allow installed-workflow qualification to use an explicitly owned browser
   session. Keep the existing UI journey, omitted defaults and historical receipt
   contracts intact. Independent source checks and all six hosted Python/platform

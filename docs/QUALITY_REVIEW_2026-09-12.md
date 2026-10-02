@@ -1793,3 +1793,40 @@ or deadlines are altered to conceal either refusal. Static, formatting and Pytho
 3.10 grammar checks pass. Actual final installed execution, bounded public inventory,
 release authorization and publication remain pending. The physical user app stays
 closed and no Sinter provider call is made.
+
+### Recovery/replacement platform source repair, 2 October
+
+Independent review
+`d2a63301fefba1769b9073eb84fa768ea0dc1f5aacbd110f7a5874eefd7f6c16`
+accepts three paths over exact `c334ba8` plus the separately reviewed optional
+Playwright fixture patch. All 453 unowned base files and canonical Git modes are
+conserved. Exact original and declared `ad4b3da` patch replays match; the later
+ten-path host-observation adoption is explicitly separate. The original failed
+platform runs, incomplete log captures and reviewer setup refusals remain retained.
+
+Portable malformed-stream/parser controls use explicitly synthetic command rows;
+three separate actual POSIX-child cases preserve complete real streams and
+ownership checks. UTF-8 fixture reading is explicit, short owned Unix-socket
+directories replace long pytest paths, and recovery helper reads/writes close
+their real SQLite connections while preserving transaction behaviour. The
+independent reviewer reproduces 26 missing-killpg, one encoding, three long-path
+and four connection-closure failures against old source; their corrected controls
+pass. Under mapped unavailable OS resources, 141 portable recovery controls stay
+active and exactly three POSIX children plus one Unix relay skip. This is mapped
+source evidence, not an actual Windows/macOS pass.
+
+The unchanged Windows idle-TCP cleanup still requires `(0, 0)` within the unchanged
+deadline. Transparent test instrumentation calls the original socket shutdown,
+retains its actual return/error identity, re-raises unchanged exceptions and records
+surviving owned stacks/socket state. It does not repair, skip or hide the actual
+`(1, 1)` failure. The independent review passes 509 unique repository controls and
+five separate wrapper/deadline/real-SQLite controls. Both 403-case normal and
+blocked-Playwright replays pass without skips; those repeats are not added to the
+unique total. Root retains 45,641 author/reviewer regular byte/hash references and
+keeps special-node inventories lstat-only.
+
+Root's declared current-main composition passes 1,159 unique source checks without
+skips in 27.15 seconds; static, formatting and Python 3.10 grammar checks pass.
+Fresh actual hosted platform diagnosis remains required. No installed gate,
+release readiness, model quality or product-performance claim follows from these
+source timings. The user app remains closed and no Sinter provider call is made.

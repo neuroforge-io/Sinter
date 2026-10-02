@@ -6,11 +6,14 @@ import base64
 import copy
 import io
 import json
+import platform
 import socket
 import stat
 import sys
+import tempfile
 import threading
 import time
+import traceback
 from pathlib import Path, PurePosixPath
 from types import ModuleType, SimpleNamespace
 
@@ -590,7 +593,83 @@ def test_bridge_refuses_inner_resource_or_primary_failure(
         contract.validate_bridge(bridge, process, expected, "prior", workspace, folder)
 
 
-def test_actual_host_relay_closes_idle_preconnect_workers_and_listener(tmp_path):
+@pytest.fixture
+def short_relay_root():
+    """Only an owned short marker root; no physical application or GUI."""
+    with tempfile.TemporaryDirectory(prefix="s4-", dir=Path.home()) as directory:
+        yield Path(directory)
+
+
+def relay_cleanup_diagnostics(relay, server):
+    """Bounded source-test diagnostics; no substituted cleanup or pass evidence."""
+    with relay.owned_lock:
+        workers, channels = list(relay.owned_workers), list(relay.owned_sockets)
+    frames = sys._current_frames()
+    details = []
+    for channel in channels:
+        row = {"fileno": channel.fileno(), "timeout": channel.gettimeout()}
+        for key, observe in (
+            ("local", channel.getsockname),
+            ("peer", channel.getpeername),
+        ):
+            try:
+                row[key] = observe()
+            except OSError as exc:
+                row[key] = {
+                    "error": type(exc).__name__,
+                    "errno": exc.errno,
+                    "winerror": getattr(exc, "winerror", None),
+                }
+        details.append(row)
+    return {
+        "schema": "sinter-source-idle-tcp-diagnostic/v1",
+        "python": sys.version,
+        "platform": platform.platform(),
+        "server_alive": server.is_alive(),
+        "relay_idle": relay.idle(),
+        "relay_errors": relay.errors,
+        "close_failures": list(relay.close_failures),
+        "workers": [
+            {
+                "name": worker.name,
+                "alive": worker.is_alive(),
+                "ident": worker.ident,
+                "stack": traceback.format_stack(frames[worker.ident], limit=12)
+                if worker.ident in frames
+                else [],
+            }
+            for worker in workers
+        ],
+        "sockets": details,
+    }
+
+
+def test_actual_host_relay_closes_idle_preconnect_workers_and_listener(
+    tmp_path, monkeypatch
+):
+    # Observe the exact method used by cleanup, including OSError normally caught
+    # by the unchanged production transport. Never substitute a shutdown result.
+    actual_shutdown = socket.socket.shutdown
+    shutdown_attempts = []
+
+    def observe_shutdown(channel, how):
+        row = {"fileno": channel.fileno(), "how": how}
+        shutdown_attempts.append(row)
+        try:
+            result = actual_shutdown(channel, how)
+        except BaseException as exc:
+            row.update(
+                error_type=type(exc).__name__,
+                error=str(exc),
+                errno=getattr(exc, "errno", None),
+                winerror=getattr(exc, "winerror", None),
+            )
+            raise
+        else:
+            row["result"] = result
+            return result
+
+    monkeypatch.setattr(socket.socket, "shutdown", observe_shutdown)
     relay = probe.HostRelay(tmp_path)
     server = threading.Thread(target=relay.serve_forever)
     server.start()
@@ -603,7 +682,15 @@ def test_actual_host_relay_closes_idle_preconnect_workers_and_listener(tmp_path)
         port = relay.server_address[1]
         relay.shutdown()
         server.join(timeout=1)
-        assert relay.close_owned() == (0, 0)
+        remaining = relay.close_owned()
+        assert remaining == (0, 0), json.dumps(
+            {
+                "remaining": remaining,
+                "diagnostics": relay_cleanup_diagnostics(relay, server),
+                "shutdown_attempts": shutdown_attempts,
+            },
+            sort_keys=True,
+        )
         assert not server.is_alive() and relay.idle()
         assert probe.closed_port(port) != 0
     finally:
@@ -612,6 +699,38 @@ def test_actual_host_relay_closes_idle_preconnect_workers_and_listener(tmp_path)
             relay.shutdown()
             server.join(timeout=1)
         relay.close_owned()
+
+
+def test_idle_tcp_refusal_keeps_actual_worker_and_socket_diagnostics(
+    tmp_path, monkeypatch
+):
+    actual_close = probe.HostRelay.close_owned
+    calls = []
+
+    def report_surviving_worker(relay):
+        calls.append(relay)
+        if len(calls) == 1:
+            # Explicit fault injection, not a claim that Linux reproduces Windows.
+            return 1, 1
+        return actual_close(relay)
+
+    monkeypatch.setattr(probe.HostRelay, "close_owned", report_surviving_worker)
+    with pytest.raises(AssertionError) as refused:
+        test_actual_host_relay_closes_idle_preconnect_workers_and_listener(
+            tmp_path, monkeypatch
+        )
+    details, _ = json.JSONDecoder().raw_decode(str(refused.value))
+    assert details["remaining"] == [1, 1]
+    actual = details["diagnostics"]
+    assert actual["schema"] == "sinter-source-idle-tcp-diagnostic/v1"
+    assert actual["server_alive"] is False and actual["relay_idle"] is False
+    assert len(actual["workers"]) == len(actual["sockets"]) == 1
+    assert actual["workers"][0]["alive"] is True
+    assert any("recv" in line for line in actual["workers"][0]["stack"])
+    assert actual["sockets"][0]["fileno"] >= 0
+    assert actual["sockets"][0]["timeout"] == 20
+    assert len(calls) == 2 and calls[0] is calls[1]
+    assert calls[0].idle() and not calls[0].owned_workers and not calls[0].owned_sockets
 
 
 def test_host_collector_replayed_response_refuses_before_browser(tmp_path, monkeypatch):
@@ -1449,9 +1568,9 @@ def test_known_warning_does_not_discharge_actual_status_or_path_absence(
 
 @pytest.mark.parametrize("cleanup", ["shutdown", "owned-close"])
 def test_inner_host_failure_keeps_first_error_and_publishes_bridge(
-    tmp_path, monkeypatch, cleanup
+    tmp_path, short_relay_root, monkeypatch, cleanup
 ):
-    runtime, output = tmp_path / "bridge", tmp_path / "run"
+    runtime, output = short_relay_root / "bridge", tmp_path / "run"
     runtime.mkdir()
     output.mkdir()
     calls = []

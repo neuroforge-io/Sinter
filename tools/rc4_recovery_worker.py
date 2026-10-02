@@ -8,6 +8,7 @@ import json
 import socket
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -24,7 +25,9 @@ def snapshot(directory):
     result["preferences"] = json.loads(preferences)
     for name in ("workspace.sqlite3", "campaigns.sqlite3"):
         path = directory / name
-        with sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True) as db:
+        with closing(
+            sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
+        ) as db:
             db.execute("PRAGMA query_only=ON")
             tables = {}
             for table, sql in db.execute(
@@ -125,7 +128,7 @@ def seed(directory):
     store.change_watch(watch_id, False)
     CampaignStore(directory)
     for index, name in enumerate(("workspace.sqlite3", "campaigns.sqlite3"), 1):
-        with sqlite3.connect(directory / name) as db:
+        with closing(sqlite3.connect(directory / name)) as db, db:
             db.execute("PRAGMA application_id=" + str(12340 + index))
     return {
         "casebook": book,
