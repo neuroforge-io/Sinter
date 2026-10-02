@@ -1687,3 +1687,48 @@ does not demonstrate a request-startup defect. A separate QA-only portability
 repair is under review. Canonical RC4 admission, the finite historical consumer,
 matching final package and every actual installed gate remain pending. The
 physical user app stays intentionally closed and no hosted model call is initiated.
+
+### Native QA portability and evidence transport adoption, 2 October
+
+Independent native-QA review
+`8baaf608ea1d0a3a2221a8379c1dc422a6f6b7b0b3386d4a876e8aac185f674d`
+accepts the exact one-test-file patch: 760 source checks pass, with four unchanged
+GUI opt-in skips. Four controlled original platform failures are reproduced before
+correction; 16 additional independent controls pass. Both actual source HTTP
+journeys retain their request and cleanup assertions. Their final check requires
+the owned descriptor closed, server thread stopped and exact address reacquired;
+a timed-out connection does not prove closure. Windows uses exclusive binding
+before bind; mapped API-order controls do not establish an actual Windows pass.
+Production port probes, product deadlines, source modules and receipt schemas
+stay unchanged. Only the unavailable POSIX process-group resource skips on
+Windows; three portable malformed-child controls remain active. Original hosted
+failures and reviewer setup faults remain retained.
+
+Independent catalog review
+`79da87a926af6880102094af9b867803d340f72a003a7f0d492c0a0089b1714c`
+accepts three new paths as transport only. Its 165 unique source checks comprise
+89 owned and 76 unchanged shared controls, without skips; 12 additional
+independent controls pass separately. Two-root relocation, independently approved
+authority, opaque original labels, 11,001 scoped roles sharing one approved blob,
+intercepted read-only operations and descriptor failure cleanup are verified.
+Transport sets semantic, historical and installed qualification to false. It
+does not complete the earlier 20-control design or prove the final release
+inventory fits the unchanged 64 MiB member and 256 MiB bundle limits. Unsupported
+physical reader capabilities refuse; portable schema controls remain active.
+
+Root verifies and retains 3,318 native-QA and 3,192 catalog byte/hash references.
+It declares the 13 later paths between their exact `0bfac7e` base and main
+`427baeeb9a60b45f5eeaac9a1f12fda0883ee697`, then adopts only the four reviewed
+paths. Their literal bytes match the reviewed manifests. Combined source checks
+pass 466 unique tests without skips in 12.32 seconds; static, formatting, Python
+3.10 grammar and public-boundary checks pass. This measures test execution, not
+product performance. An initial root invocation selected a nonexistent archive
+test filename and collected zero cases; its complete refusal stays retained.
+The corrected invocation changes no assertion, deadline or source. A root
+metadata lookup also initially assumed the wrong manifest shape; the corrected
+lookup verifies the original unchanged bytes.
+
+Actual Windows replay, matching final installed execution, complete raw gate
+admission and independent final artifact review remain pending. The user app is
+still closed and no Sinter model request is made. No candidate is published or
+graded 10/10 by these source checks.

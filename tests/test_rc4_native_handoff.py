@@ -9,10 +9,11 @@ from __future__ import annotations
 import copy
 import json
 import os
+import socket
 import subprocess
 import sys
 import threading
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import SimpleNamespace
 
 import pytest
@@ -65,6 +66,24 @@ def interrupted_fixture(port):
         "request": producer.original(request),
         "response": producer.original(response),
     }
+
+
+def assert_source_listener_closed(server, thread):
+    """QA ownership check; a timed-out connection never proves port closure."""
+    assert not thread.is_alive()
+    assert server.socket.fileno() == -1
+    with socket.socket(server.address_family, socket.SOCK_STREAM) as probe:
+        if sys.platform == "win32":
+            # Winsock's exclusive second bind rejects even a live REUSEADDR
+            # owner: https://learn.microsoft.com/en-us/windows/win32/winsock/so-exclusiveaddruse
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        else:
+            # POSIX allows this completed source journey's TIME_WAIT sockets,
+            # while a still-listening owner at the same address remains a conflict.
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        probe.bind(server.server_address)
+        probe.listen(1)
+        assert probe.getsockname() == server.server_address
 
 
 @pytest.fixture
@@ -986,8 +1005,134 @@ def test_actual_source_interrupted_http_refusal_keeps_fictional_originals(
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
-    assert not thread.is_alive()
-    assert producer.port_closed(server.server_port)
+    assert_source_listener_closed(server, thread)
+
+
+@pytest.fixture
+def owned_source_listener():
+    from sinter.server import LocalServer
+
+    server = LocalServer(("127.0.0.1", 0), None)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server, thread
+    finally:
+        if thread.is_alive():
+            server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+        assert not thread.is_alive()
+
+
+def test_source_listener_closure_reacquires_owned_closed_address(owned_source_listener):
+    server, thread = owned_source_listener
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=2)
+    assert_source_listener_closed(server, thread)
+
+
+def test_source_listener_closure_refuses_actual_still_active_owner(
+    owned_source_listener,
+):
+    server, thread = owned_source_listener
+    with pytest.raises(AssertionError):
+        assert_source_listener_closed(server, thread)
+    assert thread.is_alive() and server.socket.fileno() >= 0
+
+
+@pytest.mark.parametrize("connection_timeout", [False, True])
+def test_source_listener_closure_refuses_conflicting_live_listener_even_with_timeout(
+    owned_source_listener, monkeypatch, connection_timeout
+):
+    server, thread = owned_source_listener
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=2)
+    attempts = []
+
+    def timed_out(*args, **kwargs):
+        attempts.append((args, kwargs))
+        raise TimeoutError("A live listener's connection probe timed out.")
+
+    if connection_timeout:
+        monkeypatch.setattr(socket, "create_connection", timed_out)
+    with socket.socket(server.address_family, socket.SOCK_STREAM) as conflict:
+        conflict.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        conflict.bind(server.server_address)
+        conflict.listen(1)
+        with pytest.raises(OSError):
+            assert_source_listener_closed(server, thread)
+    assert attempts == []
+
+
+@pytest.mark.parametrize("conflict", [False, True])
+def test_source_listener_windows_exclusive_option_precedes_bind(monkeypatch, conflict):
+    """Mapped Winsock API order; actual Windows execution remains a CI gate."""
+    observed = []
+    exclusive = 12345
+
+    class Probe:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            observed.append(("close",))
+
+        def setsockopt(self, *args):
+            observed.append(("option", *args))
+
+        def bind(self, address):
+            observed.append(("bind", address))
+            if conflict:
+                raise OSError("Exclusive address is still owned.")
+
+        def listen(self, backlog):
+            observed.append(("listen", backlog))
+
+        def getsockname(self):
+            return ("127.0.0.1", 32123)
+
+    server = SimpleNamespace(
+        socket=SimpleNamespace(fileno=lambda: -1),
+        address_family=socket.AF_INET,
+        server_address=("127.0.0.1", 32123),
+    )
+    thread = SimpleNamespace(is_alive=lambda: False)
+    with monkeypatch.context() as patch:
+        patch.setattr(sys, "platform", "win32")
+        patch.setattr(socket, "SO_EXCLUSIVEADDRUSE", exclusive, raising=False)
+        patch.setattr(socket, "socket", lambda *_: Probe())
+        if conflict:
+            with pytest.raises(OSError, match="still owned"):
+                assert_source_listener_closed(server, thread)
+        else:
+            assert_source_listener_closed(server, thread)
+    assert observed[:2] == [
+        ("option", socket.SOL_SOCKET, exclusive, 1),
+        ("bind", server.server_address),
+    ]
+    assert observed[-1] == ("close",)
+    assert ("listen", 1) in observed if not conflict else ("listen", 1) not in observed
+
+
+@pytest.mark.parametrize("journey", ["interrupted", "held"])
+def test_real_source_journeys_do_not_use_timeout_as_closure_evidence(
+    synthetic, tmp_path, monkeypatch, journey
+):
+    """Actual source bodies unchanged; the old Linux-only postcheck is injected."""
+
+    def old_postcheck(_port):
+        raise TimeoutError("Closed-loopback connect can time out on Windows.")
+
+    monkeypatch.setattr(producer, "port_closed", old_postcheck)
+    run = (
+        test_actual_source_interrupted_http_refusal_keeps_fictional_originals
+        if journey == "interrupted"
+        else test_actual_source_held_api_body_matches_after_native_no_without_gui
+    )
+    run(synthetic, tmp_path)
 
 
 def test_browser_body_failure_survives_every_secondary_close_and_retains_proof(
@@ -1138,7 +1283,8 @@ def synthetic_outer():
         "cleanup_commands": [],
         "commands": rows,
         "docker_client": {
-            "path": "/fixed/docker",
+            # This is a host binary identity, unlike Linux container paths.
+            "path": os.path.abspath("fixed-docker"),
             "sha256": "a" * 64,
             "sha256_after": "a" * 64,
             "version": version,
@@ -1153,6 +1299,25 @@ def synthetic_outer():
 def test_complete_synthetic_outer_binds_fixed_lifecycle_to_every_actual_child():
     bundle, clients, pins = synthetic_outer()
     assert contract.validate_outer(bundle, clients, pins)["container_id"] == "2" * 64
+
+
+def test_synthetic_outer_docker_identity_is_host_absolute():
+    bundle, _, _ = synthetic_outer()
+    assert Path(bundle["docker_client"]["path"]).is_absolute()
+
+
+def test_synthetic_outer_keeps_host_windows_identity_separate_from_linux_namespace(
+    monkeypatch,
+):
+    """Mapped Windows path semantics; no Windows process or Docker execution."""
+    with monkeypatch.context() as patch:
+        patch.setattr(os.path, "abspath", lambda _: "C:\\fixed\\docker.exe")
+        patch.setattr(contract, "Path", PureWindowsPath)
+        bundle, clients, pins = synthetic_outer()
+        assert bundle["docker_client"]["path"] == "C:\\fixed\\docker.exe"
+        assert (
+            contract.validate_outer(bundle, clients, pins)["container_id"] == "2" * 64
+        )
 
 
 @pytest.mark.parametrize(
@@ -1627,6 +1792,10 @@ def test_driver_all_post_allocation_work_preserves_first_failure_and_destroy_tra
         assert caught is None and result["status"] == "success"
 
 
+@pytest.mark.skipif(
+    not callable(getattr(os, "killpg", None)),
+    reason="Actual qualification collector requires POSIX process-group ownership.",
+)
 def test_fixed_command_shape_accepts_actual_reaped_ordinary_child_only(tmp_path):
     """Real child/byte shape, never a claim that dpkg or the GUI was invoked."""
     rows = []
@@ -1636,10 +1805,16 @@ def test_fixed_command_shape_accepts_actual_reaped_ordinary_child_only(tmp_path)
         env={"PATH": os.defpath, "HOME": str(tmp_path)},
     )
     contract.command_fields(rows[-1])
-    for mutation in ({"diagnostic": "hidden"}, {"sigterm_sent": 0}, {"passed": 1}):
-        value = {**rows[-1], **mutation}
-        with pytest.raises(ValueError):
-            contract.command_fields(value)
+
+
+@pytest.mark.parametrize(
+    "mutation", [{"diagnostic": "hidden"}, {"sigterm_sent": 0}, {"passed": 1}]
+)
+def test_fixed_command_shape_portably_refuses_malformed_child_metadata(mutation):
+    row = {**child(["fixed-child"]), "sigterm_sent": False}
+    contract.command_fields(row)
+    with pytest.raises(ValueError):
+        contract.command_fields({**row, **mutation})
 
 
 def test_actual_source_held_api_body_matches_after_native_no_without_gui(
@@ -1703,4 +1878,4 @@ def test_actual_source_held_api_body_matches_after_native_no_without_gui(
                 time.sleep(0.005)
             assert workbench.closed
             assert not workbench.thread.is_alive()
-        assert producer.port_closed(workbench.server.server_port)
+        assert_source_listener_closed(workbench.server, workbench.thread)

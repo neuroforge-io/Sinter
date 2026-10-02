@@ -32,6 +32,18 @@ qualification and does not change any published RC3 asset or historical receipt.
   Independent source review and combined regressions pass; previous source browser
   evidence remains historical and actual installed execution remains required.
 
+- Correct platform assumptions in the new native qualification tests. Check the
+  owned listener and exclusive address reuse, keep host paths separate from Linux
+  container paths, and skip only the unavailable POSIX process-group resource.
+  Real source HTTP journeys and portable malformed-record checks remain active.
+  Independent source review passes; the original four Windows failures remain
+  recorded and a fresh Windows run is still required.
+
+- Add bounded, read-only evidence transport with independently pinned authority,
+  exact role inventories and unchanged original path labels. Reject unknown files,
+  links, special entries and conflicting byte identities. Independent source review
+  passes; transport does not establish semantic, historical or installed admission.
+
 - Rehearse scoped casebook recovery alongside the existing campaign journey.
   Preserve exact originals before opening a reader, test selected/empty/all
   source choices, retain partial human drafts, conflicting edits and separate
