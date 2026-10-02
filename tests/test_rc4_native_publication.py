@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import builtins
 import copy
+import errno
 import hashlib
 import io
 import json
@@ -723,15 +724,60 @@ def test_native_cli_nonzero_retains_original_complete_bytes_even_if_stderr_fails
         assert retained["sha256"] == hashlib.sha256(content).hexdigest()
 
 
-def envelope_failure(tmp_path, *, filesystem_byte=False):
-    """Real owned write refusals; byte filenames execute where POSIX supports them."""
+def envelope_owned_directory(tmp_path, *, filesystem_byte=False):
+    """Use a real byte name when the filesystem admits it, or a Unicode name.
+
+    POSIX does not imply arbitrary filename bytes: APFS rejects invalid UTF-8
+    with EILSEQ. Only that refusal selects the Unicode fixture; permission,
+    capacity and other failures still propagate unchanged.
+    """
     if filesystem_byte and os.name == "posix":
         parent = tmp_path / "e\u0301-🐝"
         parent.mkdir()
         path = Path(os.fsdecode(os.fsencode(parent) + b"/owned-\xff"))
-    else:
-        path = tmp_path / "owned-e\u0301-🐝"
+        try:
+            path.mkdir()
+        except OSError as error:
+            if error.errno != errno.EILSEQ:
+                raise
+        else:
+            return path
+    path = tmp_path / "owned-e\u0301-🐝"
     path.mkdir()
+    return path
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX byte-name admission control")
+@pytest.mark.parametrize("code", [errno.EILSEQ, errno.EACCES, errno.ENOSPC])
+def test_envelope_byte_name_admission_only_handles_illegal_encoding(
+    tmp_path, monkeypatch, code
+):
+    mkdir = Path.mkdir
+    refusal = OSError(code, "fictional byte-name admission refused")
+    attempts = []
+
+    def admitted_directory(path, *args, **kwargs):
+        if path.name == "owned-\udcff":
+            attempts.append(path)
+            raise refusal
+        return mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", admitted_directory)
+    if code == errno.EILSEQ:
+        error, first, path = envelope_failure(tmp_path, filesystem_byte=True)
+        assert path == tmp_path / "owned-e\u0301-🐝" and path.is_dir()
+        assert error.primary_exception is first and error.unpublished_bytes
+    else:
+        with pytest.raises(OSError) as failed:
+            envelope_owned_directory(tmp_path, filesystem_byte=True)
+        assert failed.value is refusal
+        assert not (tmp_path / "owned-e\u0301-🐝").exists()
+    assert len(attempts) == 1 and os.fsencode(attempts[0]).endswith(b"owned-\xff")
+
+
+def envelope_failure(tmp_path, *, filesystem_byte=False):
+    """Real owned write refusals, with surrogate diagnostics on every platform."""
+    path = envelope_owned_directory(tmp_path, filesystem_byte=filesystem_byte)
     fallback = tmp_path / "fallback-directory"
     fallback.mkdir()
     cleanup = ["surrogate filename e\u0301 🐝 marker \udcff"] if filesystem_byte else []
@@ -831,8 +877,10 @@ def test_envelope_owned_byte_filename_and_stderr_refusals(tmp_path, monkeypatch,
         os.fsencode(key) for key in originals
     }
     assert b"\\udcff" in payload and "🐝".encode() in payload
-    if os.name == "posix":
+    if path.name == "owned-\udcff":
         assert os.fsencode(path).endswith(b"owned-\xff")
+    else:
+        assert path.name == "owned-e\u0301-🐝"
     if fault == "none":
         assert record == error.as_record()
     else:
