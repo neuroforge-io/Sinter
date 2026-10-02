@@ -5,6 +5,28 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Add optional funding records and shared UI, CLI and Python totals for available
+  ceilings, targets, submitted requests, awards, receipts and closed outcomes.
+  Keep currencies, cash/credits, unknowns and duplicate rounds separate; retain
+  legacy documents. Search and paginate up to 200 opportunities without clipping
+  saved records or whole-campaign totals.
+
+- Add read-only native funding inspection, full campaign source notes and dated
+  saved report labels through the existing runtime. Campaign editing remains in
+  the full workbench. Fictional browser and source Tk journeys pass; this does not
+  establish general assistant quality or new customer-platform qualification.
+
+- Separate cash, credits and investment/EOI submission counts, with recorded
+  history and entered closure states labelled explicitly. Describe availability
+  as possible recorded eligible ceilings. Make the native source list eight rows
+  tall with a visible scrollbar and retain the selected source by ID on refresh.
+
+- Make RC4 relay client reads cooperatively cancellable when socket shutdown
+  does not wake an idle Windows worker. Preserve the existing raw parser, read
+  deadline, real worker/socket counters and partial-request failures. Compare
+  source fixture paths as native paths rather than slash spellings. Hosted
+  regression and aggregate verification are required before finalization.
+
 - Make ten inert recovery-tool tests independent of the optional Playwright
   package. Keep browser execution guarded and every existing assertion active.
   Independent and root source checks pass; full hosted and installed qualification

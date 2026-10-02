@@ -7,6 +7,7 @@ import json
 import os
 import signal
 import time
+from datetime import date
 from types import SimpleNamespace
 
 import pytest
@@ -1107,5 +1108,300 @@ def test_real_native_readable_report_save_restart_and_exact_exports(
         assert window.controller.runtime.call(
             "casebooks.get", {"id": project_id}
         ) == original_project
+    finally:
+        window.close()
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("2026-09-30T12:34:56Z", "2026-09-30"),
+        ("2026-10-01T00:30:00+10:00", "2026-09-30"),
+        ("2026-09-30", "2026-09-30"),
+        (0, "1970-01-01"),
+        (None, "date not recorded"),
+        (True, "date not recorded"),
+        ("unconfirmed", "date not recorded"),
+        (float("inf"), "date not recorded"),
+    ],
+)
+def test_native_report_dates_use_recorded_metadata_without_a_current_date(value, expected):
+    assert native_window.report_date(value) == expected
+
+
+def test_native_report_scope_distinguishes_campaign_snapshots_and_model_outputs():
+    report = {
+        "workflow": "campaign", "created_at": "2026-09-30T12:34:56Z",
+        "campaign": {"sources": [{"id": "a" * 32, "title": "Fictional terms"}]},
+        "funding_summary": {"as_of": "2026-10-02"},
+    }
+    original = copy.deepcopy(report)
+    notice = native_window.report_scope_notice(report)
+    assert "saved snapshot dated 2026-09-30" in notice
+    assert "Source-backed, user-entered" in notice
+    assert "not independently verified" in notice
+    assert "Derived funding checks as of 2026-10-02" in notice
+    assert "model output" not in notice and report == original
+    assert "needs refresh" in native_window.report_scope_notice(
+        {**report, "review_status": "needs_refresh"}
+    )
+    assert "no source register" in native_window.report_scope_notice(
+        {**report, "campaign": {}}
+    )
+    source = {"workflow": "casebook", "created_at": report["created_at"]}
+    assert "Source-only selected evidence" in native_window.report_scope_notice(source, current=True)
+    assert "Saved source-only report" in native_window.report_scope_notice(source)
+    assert "Saved model output" in native_window.report_scope_notice({**source, "model_draft": True})
+    assert "Current model output" in native_window.report_scope_notice({"results": ["fictional"]}, current=True)
+    assert "Saved model output" in native_window.report_scope_notice({"workflow": "assistant"})
+    assert "origin is not classified" in native_window.report_scope_notice({"markdown": "unknown"})
+
+
+def test_native_campaign_source_metadata_keeps_literal_full_notes_and_dates():
+    source = {
+        "id": "a" * 32, "title": "Fictional <terms> [source]",
+        "url": "https://example.invalid/fictional-terms?round=2027",
+        "checked_at": "2026-09-30",
+        "notes": "Fictional 🌱 e\u0301 notes\n<keep literally> \\source\n" + "N" * 4000,
+    }
+    document = {"sources": [source]}
+    before = copy.deepcopy(document)
+    rows = native_window.campaign_source_records(document)
+    assert rows == [source]
+    detail = native_window.campaign_source_details(rows[0])
+    for key in ("id", "title", "url", "checked_at", "notes"):
+        assert source[key] in detail
+    assert "does not refresh earlier claim snapshots" in detail
+    assert document == before
+    assert native_window.campaign_source_records(None) == []
+    assert native_window.campaign_source_records({"sources": [None, {"notes": 12}]}) == [
+        {"id": "", "title": "", "url": "", "checked_at": "", "notes": ""}
+    ]
+
+
+@pytest.mark.parametrize(
+    "url", ["", "file:///fictional", "javascript:alert(1)", "https://user:secret@example.invalid/"]
+)
+def test_native_campaign_copy_refuses_unsupported_urls_without_touching_clipboard(url):
+    pane = native_window.CampaignSourcesPane.__new__(native_window.CampaignSourcesPane)
+    pane.rows = [{"url": url}]
+    pane.tree = SimpleNamespace(selection=lambda: ("0",))
+    pane.owner = SimpleNamespace(root=None)
+    with pytest.raises(ValueError, match="HTTP or HTTPS URL"):
+        pane.copy_url()
+
+
+def test_native_saved_report_date_labels_preserve_catalogue_identifiers():
+    class Tree:
+        def __init__(self):
+            self.rows = {}
+
+        def get_children(self):
+            return tuple(self.rows)
+
+        def delete(self, *identifiers):
+            for identifier in identifiers:
+                del self.rows[identifier]
+
+        def insert(self, _parent, _where, *, iid, text):
+            self.rows[iid] = text
+
+    responses = {
+        "casebooks.list": {"casebooks": [{"id": "project", "title": "Fictional project"}]},
+        "reports.list": {"reports": [{"id": "report", "title": "Fictional report", "created_at": 0}]},
+        "runtime.status": {},
+    }
+    view = SimpleNamespace(
+        controller=SimpleNamespace(runtime=SimpleNamespace(call=lambda op: responses[op])),
+        saved_tree=Tree(), reports_tree=Tree(), status_text=None,
+        _put=lambda *_args, **_kwargs: None,
+    )
+    NativeWindow._refresh(view)
+    assert view.saved_tree.rows == {"project": "Fictional project"}
+    assert view.reports_tree.rows == {"report": "Saved 1970-01-01 · Fictional report"}
+
+
+def fictional_native_campaign():
+    today = date.today().isoformat()
+    url = "https://example.invalid/fictional-maple-round"
+    return {
+        "schema": "sinter-campaign/v1", "title": "Fictional Maple funding",
+        "sources": [{
+            "id": "a" * 32, "title": "Fictional Maple terms",
+            "url": url, "checked_at": today,
+            "notes": "Fictional original source notes 🌱\nNo actual submission occurred.",
+        }],
+        "opportunities": [{
+            "name": "Fictional Maple round", "status": "submitted",
+            "route_type": "cash_grant", "funding_tracking": {
+                "round_key": "example.invalid/maple/2027/fictional-association",
+                "benefit_type": "cash", "application_status": "submitted",
+                "requested": {
+                    "amount": "1200.25", "currency": "AUD", "source_id": "a" * 32,
+                    "source_url": url, "checked_at": today,
+                    "source_quote": "Wholly fictional request amount: 1200.25 units.",
+                    "notes": "Synthetic receipt only; not a real application.",
+                },
+            },
+        }],
+    }
+
+
+def test_native_funding_controller_borrows_shared_runtime_without_changing_source_state(tmp_path):
+    from sinter.native_window import NativeFundingController
+
+    with Runtime(tmp_path / "fictional-funding") as runtime:
+        source = NativeController(runtime)
+        source.edit_document(fictional_book())
+        source.prepared, source.consent = {"fictional": "approved preview"}, True
+        state = copy.deepcopy((source.document, source.generation, source.dirty,
+                               source.prepared, source.consent, source.result))
+        saved = runtime.call("campaigns.save", {"document": fictional_native_campaign()})
+        view = NativeFundingController(runtime)
+        assert view.runtime is source.runtime
+        assert [row["id"] for row in view.list()] == [saved["id"]]
+        reopened, summary = view.open(saved["id"])
+        assert reopened == runtime.call("campaigns.get", {"id": saved["id"]})
+        assert summary == runtime.call("campaigns.funding_summary", {"document": saved["document"]})
+        assert (source.document, source.generation, source.dirty,
+                source.prepared, source.consent, source.result) == state
+        view.close()
+        assert runtime.call("campaigns.get", {"id": saved["id"]}) == saved
+        assert not runtime.app.stop.is_set()
+        with pytest.raises(ValueError, match="funding view is closed"):
+            view.open(saved["id"])
+
+
+def test_native_funding_controller_calls_only_shared_read_operations():
+    saved = {"id": "a" * 32, "revision": 1, "document": {"title": "Fictional campaign"}}
+    summary = {"markdown": "Fictional returned summary", "counts": {"opportunities": 0}}
+    calls = []
+
+    def call(operation, payload=None):
+        calls.append((operation, copy.deepcopy(payload)))
+        return {
+            "campaigns.list": {"campaigns": [{"id": saved["id"], "title": "Fictional campaign"}]},
+            "campaigns.get": saved,
+            "campaigns.funding_summary": summary,
+        }[operation]
+
+    runtime = SimpleNamespace(call=call)
+    view = native_window.NativeFundingController(runtime)
+    view.list()
+    result = view.open(saved["id"])
+    assert calls == [
+        ("campaigns.list", None),
+        ("campaigns.get", {"id": saved["id"]}),
+        ("campaigns.funding_summary", {"document": saved["document"]}),
+    ]
+    assert result == (saved, summary)
+    result[0]["document"]["title"] = "Fictional view edit"
+    assert saved["document"]["title"] == "Fictional campaign"
+    view.close()
+
+
+@pytest.mark.skipif(
+    os.environ.get("SINTER_NATIVE_GUI_TEST") != "1",
+    reason="Real Tk campaign journey requires explicitly enabled desktop access.",
+)
+def test_real_native_campaign_report_sources_totals_refresh_and_parent_cleanup(tmp_path, monkeypatch):
+    window = NativeWindow(tmp_path / "fictional-native-campaign")
+    monkeypatch.setattr(window.messages, "showerror", lambda *_a, **_k: pytest.fail("unexpected GUI error"))
+    monkeypatch.setattr(window.messages, "askyesno", lambda *_a, **_k: True)
+    try:
+        window.example()
+        runtime = window.controller.runtime
+        document = fictional_native_campaign()
+        document["sources"].extend({
+            "id": f"{index:032x}", "title": f"Fictional source {index + 1}",
+            "url": f"https://example.invalid/fictional-source-{index + 1}",
+            "checked_at": date.today().isoformat(),
+            "notes": f"Wholly fictional source {index + 1} notes 🌱\n"
+                     "<keep literally> [source] \\notes\nNothing was submitted.",
+        } for index in range(1, 56))
+        saved = runtime.call("campaigns.save", {"document": document})
+        report = runtime.call("campaigns.prepare", {"document": saved["document"]})
+        report["created_at"] = "2026-09-30T12:34:56Z"
+        report_id = runtime.call("reports.save", {"report": report})["id"]
+        window._refresh()
+        assert window.reports_tree.item(report_id, "text").startswith("Saved ")
+        window.reports_tree.selection_set(report_id)
+        window.open_report()
+        window.root.update()
+        assert "snapshot dated 2026-09-30" in window.report_notice.get()
+        assert "model output" not in window.report_notice.get()
+        assert window.campaign_sources.rows == native_window.campaign_source_records(saved["document"])
+        assert len(window.campaign_sources.rows) == 56
+        assert int(window.campaign_sources.tree.cget("height")) == 8
+        notes = saved["document"]["sources"][0]["notes"]
+        assert notes in window.campaign_sources.details.get("1.0", "end")
+        assert window.report_tabs.tab(window.campaign_sources_page, "state") == "normal"
+        window.report_tabs.select(window.campaign_sources_page)
+        window.campaign_sources.tree.selection_set("55")
+        window.campaign_sources.tree.see("55")
+        window.campaign_sources.select()
+        window.root.update()
+        assert window.campaign_sources.scrollbar.winfo_ismapped()
+        assert window.campaign_sources.tree.bbox("55")
+        assert saved["document"]["sources"][-1]["notes"] in (
+            window.campaign_sources.details.get("1.0", "end")
+        )
+        state = copy.deepcopy((window.controller.document, window.controller.generation,
+                               window.controller.dirty, window.controller.result))
+        window.open_funding_campaigns()
+        child = window._funding_window
+        assert child.controller.runtime is runtime
+        child.tree.selection_set(saved["id"])
+        child.open_selected()
+        window.root.update()
+        assert "Recorded funding totals" in child.summary_text.get("1.0", "end")
+        assert child.controller.summary == runtime.call("campaigns.funding_summary", {"document": saved["document"]})
+        child.tabs.select(child.sources_page)
+        window.root.update()
+        assert child.sources.scrollbar.winfo_ismapped()
+        assert int(child.sources.tree.cget("height")) == 8
+        assert len(child.sources.tree.get_children()) == 56
+        child.sources.scrollbar.tk.call(
+            child.sources.scrollbar.cget("command"), "moveto", 1
+        )
+        child.sources.tree.selection_set("55")
+        child.sources.tree.see("55")
+        child.sources.select()
+        window.root.update()
+        assert child.sources.tree.bbox("55")
+        assert child.sources.scrollbar.get() == pytest.approx(child.sources.tree.yview())
+        last_source = saved["document"]["sources"][-1]
+        assert last_source["notes"] in child.sources.details.get("1.0", "end")
+        child.sources.copy_url()
+        assert window.root.clipboard_get() == last_source["url"]
+        edited = copy.deepcopy(saved["document"])
+        edited["sources"][0]["notes"] = "Fictional revised source notes; historical report stays original."
+        edited["sources"][-1]["notes"] = "Fictional last-row revised notes; selection stays visible."
+        revised_last_source = edited["sources"][-1]
+        edited["sources"] = edited["sources"][1:] + edited["sources"][:1]
+        edited["opportunities"][0]["funding_tracking"]["requested"]["amount"] = "1400.00"
+        updated = runtime.call("campaigns.save", {**saved, "document": edited})
+        child.refresh()
+        window.root.update()
+        assert child.controller.saved == updated
+        selection = child.sources.tree.selection()
+        assert selection == ("54",)
+        assert child.sources.rows[int(selection[0])]["id"] == last_source["id"]
+        assert child.sources.tree.bbox(selection[0])
+        assert child.sources.scrollbar.winfo_ismapped()
+        assert revised_last_source["notes"] in child.sources.details.get("1.0", "end")
+        assert runtime.call("reports.get", {"id": report_id})["campaign"]["sources"][0]["notes"] == notes
+        assert last_source["notes"] in window.campaign_sources.details.get("1.0", "end")
+        assert (window.controller.document, window.controller.generation,
+                window.controller.dirty, window.controller.result) == state
+        child.close()
+        assert window._funding_window is None and runtime.call("runtime.status")
+        window.open_funding_campaigns()
+        reopened = window._funding_window
+        window.close()
+        assert reopened.closed
+        with pytest.raises(OperationError) as closed:
+            runtime.call("runtime.status")
+        assert closed.value.code == "runtime_closed"
     finally:
         window.close()

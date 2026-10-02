@@ -15,6 +15,7 @@ import signal
 import socket
 import stat
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import client
@@ -26,6 +27,327 @@ from .presentation import result_markdown
 
 TEXT_BYTES = 800_000
 PROJECT_BYTES = 10_000_000
+
+
+def report_date(value):
+    """Show recorded UTC dates without inventing missing metadata."""
+    try:
+        if isinstance(value, bool):
+            raise ValueError()
+        if isinstance(value, (int, float)):
+            stamp = datetime.fromtimestamp(value, timezone.utc)
+        elif isinstance(value, str):
+            stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if stamp.tzinfo is not None:
+                stamp = stamp.astimezone(timezone.utc)
+        else:
+            raise ValueError()
+        return stamp.date().isoformat()
+    except (ValueError, OverflowError, OSError):
+        return "date not recorded"
+
+
+def report_catalogue_title(row):
+    """Date labels are presentation only; the catalogue keeps the original ID."""
+    return f"Saved {report_date(row.get('created_at'))} · {row['title']}"
+
+
+def report_scope_notice(report, *, current=False):
+    """Distinguish campaign snapshots from selected source results and AI drafts."""
+    dated = report_date(report.get("created_at"))
+    if report.get("workflow") == "campaign":
+        if report.get("review_status") == "needs_refresh":
+            return (
+                f"Campaign report · {dated}. This snapshot needs refresh; "
+                "its source content is unavailable in this view."
+            )
+        evidence = (
+            "Source-backed, user-entered campaign records"
+            if campaign_source_records(report.get("campaign"))
+            else "User-entered campaign records; no source register recorded"
+        )
+        summary = report.get("funding_summary")
+        as_of = summary.get("as_of") if isinstance(summary, dict) else None
+        checks = (
+            f" Derived funding checks as of {report_date(as_of)}."
+            if as_of else " Displayed checks may be refreshed from this snapshot."
+        )
+        return (
+            f"Campaign report · saved snapshot dated {dated}. {evidence}; "
+            "not independently verified." + checks
+            + " This is not the live campaign editor."
+        )
+    model = bool(report.get("results") or report.get("model_draft")) or (
+        report.get("workflow") == "assistant"
+    )
+    if model:
+        return (
+            ("Current model output. " if current else f"Saved model output · {dated}. ")
+            + "Check the displayed source snapshot and every claim. "
+            "Model output is not factual verification."
+        )
+    if current:
+        return (
+            "Source-only selected evidence; "
+            "every related match needs human interpretation."
+        )
+    if report.get("workflow") == "casebook":
+        return (
+            f"Saved source-only report · {dated}. Inspect its retained "
+            "source snapshot; every related match needs human interpretation."
+        )
+    return (
+        f"Saved report · {dated}. Its origin is not classified here; "
+        "check the displayed provenance and every claim."
+    )
+
+
+def campaign_source_records(document):
+    """Project source metadata onto literal display fields without fetching."""
+    if (
+        not isinstance(document, dict)
+        or not isinstance(document.get("sources"), list)
+    ):
+        return []
+    return [
+        {
+            field: row.get(field, "") if isinstance(row.get(field, ""), str) else ""
+            for field in ("id", "title", "url", "checked_at", "notes")
+        }
+        for row in document["sources"] if isinstance(row, dict)
+    ]
+
+
+def campaign_source_details(row):
+    """Keep full URLs, notes and record dates accessible as selectable text."""
+    return (
+        f"Source: {row['title']}\nSource ID: {row['id']}\n"
+        f"URL: {row['url'] or 'Not recorded'}\n"
+        f"Source record checked: {row['checked_at'] or 'Not recorded'}\n\n"
+        "Notes (user-entered; source not opened or independently verified):\n"
+        + (row["notes"] or "No notes recorded.")
+        + "\n\nA source record date does not refresh earlier claim snapshots."
+    )
+
+
+class NativeFundingController:
+    """Read-only presentation state borrowing the existing runtime and workspace."""
+
+    def __init__(self, runtime):
+        self.runtime = runtime
+        self.closed = False
+        self.saved = None
+        self.summary = None
+
+    def _check(self):
+        if self.closed:
+            raise ValueError("This funding view is closed.")
+
+    def list(self):
+        self._check()
+        return self.runtime.call("campaigns.list")["campaigns"]
+
+    def open(self, identifier):
+        self._check()
+        saved = self.runtime.call("campaigns.get", {"id": identifier})
+        summary = self.runtime.call(
+            "campaigns.funding_summary", {"document": saved["document"]}
+        )
+        self.saved, self.summary = copy.deepcopy(saved), copy.deepcopy(summary)
+        return self.saved, self.summary
+
+    def close(self):
+        # The parent owns the application. Closing this view must not close it.
+        self.closed = True
+
+
+class CampaignSourcesPane:
+    """Selectable metadata shared by native campaign reports and funding views."""
+
+    def __init__(self, owner, parent):
+        self.owner = owner
+        self.rows = []
+        self.frame = owner.ttk.Frame(parent)
+        owner.ttk.Label(
+            self.frame, text="Campaign sources · user-entered, unverified"
+        ).pack(anchor="w")
+        source_list = owner.ttk.Frame(self.frame)
+        source_list.pack(fill="x", pady=4)
+        self.tree = owner.ttk.Treeview(
+            source_list, columns=("checked",), height=8, selectmode="browse"
+        )
+        self.tree.heading(
+            "#0", text="Source title — select to inspect URL and full notes"
+        )
+        self.tree.heading("checked", text="Recorded check date")
+        self.tree.column("checked", width=140, stretch=False)
+        self.scrollbar = owner.ttk.Scrollbar(
+            source_list, orient="vertical", command=self.tree.yview
+        )
+        self.tree.configure(yscrollcommand=self.scrollbar.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+        self.tree.bind("<<TreeviewSelect>>", lambda _event: self.select())
+        self.details = owner._text(self.frame, height=5, readonly=True)
+        self.copy_button = owner.ttk.Button(
+            self.frame, text="Copy source URL",
+            command=lambda: owner._perform(self.copy_url),
+        )
+        self.copy_button.pack(anchor="w", pady=4)
+        self.set_document(None)
+
+    def set_document(self, document):
+        selected = self.tree.selection()
+        selected_id = self.rows[int(selected[0])]["id"] if selected else None
+        self.rows = campaign_source_records(document)
+        self.tree.delete(*self.tree.get_children())
+        for index, row in enumerate(self.rows):
+            self.tree.insert(
+                "", "end", iid=str(index), text=row["title"],
+                values=(row["checked_at"] or "Not recorded",),
+            )
+        if self.rows:
+            target = str(next(
+                (index for index, row in enumerate(self.rows)
+                 if row["id"] == selected_id), 0
+            ))
+            self.tree.selection_set(target)
+            self.tree.see(target)
+            self.select()
+        else:
+            self.owner._put(
+                self.details,
+                "No campaign source records are present in this snapshot.",
+                readonly=True,
+            )
+            self.copy_button.state(["disabled"])
+
+    def select(self):
+        selected = self.tree.selection()
+        if not selected:
+            self.copy_button.state(["disabled"])
+            return
+        row = self.rows[int(selected[0])]
+        self.owner._put(self.details, campaign_source_details(row), readonly=True)
+        self.copy_button.state(
+            ["!disabled"] if client.safe_url(row["url"]) else ["disabled"]
+        )
+
+    def copy_url(self):
+        selected = self.tree.selection()
+        if not selected or not client.safe_url(self.rows[int(selected[0])]["url"]):
+            raise ValueError("Select a source with a recorded HTTP or HTTPS URL.")
+        self.owner.root.clipboard_clear()
+        self.owner.root.clipboard_append(self.rows[int(selected[0])]["url"])
+        self.owner.status_var.set("Source URL copied. Sinter did not open or verify it.")
+
+
+class NativeFundingWindow:
+    """Modeless campaign inspection without a listener or additional runtime."""
+
+    def __init__(self, owner):
+        self.owner = owner
+        self.controller = NativeFundingController(owner.controller.runtime)
+        self.closed = False
+        self.root = owner.tk.Toplevel(owner.root)
+        try:
+            self._build()
+            self.refresh()
+        except Exception:
+            self.close()
+            raise
+
+    def _build(self):
+        owner = self.owner
+        self.root.title("Sinter — funding campaigns (read-only)")
+        self.root.geometry("950x650")
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+        outer = owner.ttk.Frame(self.root, padding=12)
+        outer.pack(fill="both", expand=True)
+        owner.ttk.Label(
+            outer, text="Current saved campaign totals and sources · read-only. "
+            "Campaign editing remains in the full workbench. No provider request is made.",
+            wraplength=880,
+        ).pack(anchor="w")
+        controls = owner.ttk.Frame(outer)
+        controls.pack(fill="x", pady=6)
+        owner.ttk.Button(
+            controls, text="Refresh saved campaigns",
+            command=lambda: owner._perform(self.refresh),
+        ).pack(side="left", padx=(0, 6))
+        owner.ttk.Button(
+            controls, text="Close funding view", command=self.close,
+        ).pack(side="left")
+        body = owner.ttk.Panedwindow(outer, orient="horizontal")
+        body.pack(fill="both", expand=True)
+        sidebar = owner.ttk.Frame(body)
+        body.add(sidebar, weight=1)
+        self.tree = owner.ttk.Treeview(sidebar, show="tree", selectmode="browse")
+        self.tree.pack(fill="both", expand=True)
+        owner.ttk.Button(
+            sidebar, text="Inspect selected campaign",
+            command=lambda: owner._perform(self.open_selected),
+        ).pack(fill="x", pady=4)
+        view = owner.ttk.Frame(body, padding=8)
+        body.add(view, weight=3)
+        self.notice = owner.tk.StringVar(value="Select a saved campaign to inspect.")
+        owner.ttk.Label(view, textvariable=self.notice, wraplength=620).pack(anchor="w")
+        tabs = self.tabs = owner.ttk.Notebook(view)
+        tabs.pack(fill="both", expand=True, pady=6)
+        totals, sources = owner.ttk.Frame(tabs), owner.ttk.Frame(tabs)
+        self.sources_page = sources
+        tabs.add(totals, text="Recorded totals")
+        tabs.add(sources, text="Sources and notes")
+        self.summary_text = owner._text(totals, readonly=True)
+        self.sources = CampaignSourcesPane(owner, sources)
+        self.sources.frame.pack(fill="both", expand=True)
+
+    def refresh(self):
+        if self.closed:
+            return
+        selected = self.tree.selection()
+        rows = self.controller.list()
+        self.tree.delete(*self.tree.get_children())
+        for row in rows:
+            self.tree.insert("", "end", iid=row["id"], text=row["title"])
+        if selected and selected[0] in self.tree.get_children():
+            self.tree.selection_set(selected[0])
+            self.open_selected()
+        else:
+            self.notice.set(
+                "Select a saved campaign to inspect." if rows else
+                "No saved campaigns. Create or import one through the "
+                "shared CLI or full workbench."
+            )
+            self.owner._put(self.summary_text, "", readonly=True)
+            self.sources.set_document(None)
+            self.controller.saved = self.controller.summary = None
+
+    def open_selected(self):
+        if self.closed:
+            return
+        selected = self.tree.selection()
+        if not selected:
+            raise ValueError("Select a saved campaign first.")
+        saved, summary = self.controller.open(selected[0])
+        self.notice.set(
+            f"{saved['document']['title']} · saved revision {saved['revision']} · "
+            f"totals as of {summary['as_of']}. User-entered, not independently verified."
+        )
+        self.owner._put_readable(self.summary_text, summary["markdown"])
+        self.sources.set_document(saved["document"])
+
+    def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        self.controller.close()
+        try:
+            self.root.destroy()
+        except self.owner.tk.TclError:
+            pass
+        if getattr(self.owner, "_funding_window", None) is self:
+            self.owner._funding_window = None
 
 
 class NativeWindowError(RuntimeError):
@@ -447,6 +769,7 @@ class NativeWindow:
         self._setting_paint = False
         self._connection_key_edited = False
         self._browser_workbench = None
+        self._funding_window = None
         self._close_pending = False
         self._close_poll_id = None
         self._close_generation = None
@@ -518,7 +841,7 @@ class NativeWindow:
         self.browser_keep.state(["disabled"])
         ttk.Label(
             outer,
-            text="Campaigns, Word files and other tools open in your browser. "
+            text="Campaign editing, Word files and other tools open in your browser. "
             "Keep this window open; saved work is shared, unsaved inputs stay here.",
             wraplength=1000,
         ).pack(anchor="w", pady=(0, 6))
@@ -529,6 +852,7 @@ class NativeWindow:
         self._button(toolbar, "Restore project JSON…", self.import_project)
         self._button(toolbar, "Export project JSON…", self.export_project)
         self._button(toolbar, "Refresh saved work", self._refresh)
+        self._button(toolbar, "Funding campaigns", self.open_funding_campaigns)
         panes = ttk.Panedwindow(outer, orient="horizontal")
         panes.pack(fill="both", expand=True, pady=8)
         catalogue = ttk.Notebook(panes)
@@ -633,19 +957,24 @@ class NativeWindow:
         self.excerpts_tree.heading("#0", text="Exact excerpt ID")
         self.excerpts_tree.heading("source", text="Source title")
         self.excerpts_tree.pack(fill="x")
-        self._button(
+        self.use_excerpt_button = self._button(
             self.report_page,
             "Use selected excerpt for one question",
             self.use_excerpt,
             inline=False,
         )
-        report_tabs = ttk.Notebook(self.report_page)
+        report_tabs = self.report_tabs = ttk.Notebook(self.report_page)
         report_tabs.pack(fill="both", expand=True)
         readable, exact = ttk.Frame(report_tabs), ttk.Frame(report_tabs)
         report_tabs.add(readable, text="Readable report")
         report_tabs.add(exact, text="Exact JSON / provenance")
         self.report_text = self._text(readable, readonly=True)
         self.report_json = self._text(exact, readonly=True)
+        self.campaign_sources_page = ttk.Frame(report_tabs)
+        report_tabs.add(self.campaign_sources_page, text="Campaign sources and notes")
+        self.campaign_sources = CampaignSourcesPane(self, self.campaign_sources_page)
+        self.campaign_sources.frame.pack(fill="both", expand=True)
+        report_tabs.hide(self.campaign_sources_page)
         self._build_connection_widgets()
         ttk.Label(
             self.answer_page,
@@ -1031,6 +1360,20 @@ class NativeWindow:
         if readonly:
             widget.configure(state="disabled")
 
+    @staticmethod
+    def _put_readable(widget, markdown, *, report=None):
+        widget.configure(state="normal")
+        widget.delete("1.0", "end")
+        widget.tag_configure(
+            "heading", font=("TkDefaultFont", 13, "bold"), spacing1=10, spacing3=4
+        )
+        widget.tag_configure("quote", lmargin1=16, lmargin2=16, spacing3=6)
+        widget.tag_configure("code", font="TkFixedFont")
+        for line, style in readable_report_lines(markdown, report=report):
+            widget.insert("end", line, style)
+        widget.edit_modified(False)
+        widget.configure(state="disabled")
+
     def _perform(self, callback):
         if self.closed:
             return
@@ -1149,7 +1492,11 @@ class NativeWindow:
             rows = self.controller.runtime.call(operation)[key]
             tree.delete(*tree.get_children())
             for row in rows:
-                tree.insert("", "end", iid=row["id"], text=row["title"])
+                title = (
+                    report_catalogue_title(row)
+                    if operation == "reports.list" else row["title"]
+                )
+                tree.insert("", "end", iid=row["id"], text=title)
         state = self.controller.runtime.call("runtime.status")
         self._put(
             self.status_text,
@@ -1157,8 +1504,9 @@ class NativeWindow:
             "Sources, saved projects, source-only evidence/gaps, "
             "short approved source answers, and JSON/Markdown exports "
             "use the same Sinter runtime as the web UI and CLI.\n\n"
-            "The full browser workbench provides the remaining campaign, "
-            "recording and rich-document screens. This window does not run "
+            "Funding campaigns provides read-only recorded totals and sources "
+            "from this same workspace. The full browser workbench provides "
+            "campaign editing, recording and rich-document screens. This window does not run "
             "scheduled watches or sign into accounts. Assistant setup shares "
             "saved connection preferences and write-only session keys with "
             "the full workbench.\n\n"
@@ -1365,26 +1713,12 @@ class NativeWindow:
             return
         current = self.controller.result_generation == self.controller.generation
         self.report_notice.set(
-            "Source-only selected evidence; "
-            "every related match needs human interpretation."
-            if current and not self.controller.result.get("results")
-            else "Historical or model output. It is retained unchanged; "
-            "check the displayed source snapshot and every claim."
+            report_scope_notice(self.controller.result, current=current)
         )
 
     def _paint_result(self):
         value = self.controller.result
-        self.report_text.configure(state="normal")
-        self.report_text.delete("1.0", "end")
-        self.report_text.tag_configure(
-            "heading", font=("TkDefaultFont", 13, "bold"), spacing1=10, spacing3=4
-        )
-        self.report_text.tag_configure("quote", lmargin1=16, lmargin2=16, spacing3=6)
-        self.report_text.tag_configure("code", font="TkFixedFont")
-        for line, style in readable_report_lines(result_markdown(value), report=value):
-            self.report_text.insert("end", line, style)
-        self.report_text.edit_modified(False)
-        self.report_text.configure(state="disabled")
+        self._put_readable(self.report_text, result_markdown(value), report=value)
         self._put(
             self.report_json,
             json.dumps(value, ensure_ascii=False, indent=2),
@@ -1404,8 +1738,30 @@ class NativeWindow:
                 text=row["id"],
                 values=(sources.get(row["source_id"], row["source_id"]),),
             )
+        if value.get("workflow") == "campaign":
+            self.campaign_sources.set_document(value.get("campaign"))
+            self.report_tabs.add(
+                self.campaign_sources_page, text="Campaign sources and notes"
+            )
+            self.excerpts_tree.pack_forget()
+            self.use_excerpt_button.pack_forget()
+        else:
+            self.campaign_sources.set_document(None)
+            self.report_tabs.hide(self.campaign_sources_page)
+            self.excerpts_tree.pack(fill="x", before=self.report_tabs)
+            self.use_excerpt_button.pack(anchor="w", before=self.report_tabs)
         self._report_scope()
         self.pages.select(self.report_page)
+
+    def open_funding_campaigns(self):
+        if self.closed:
+            return
+        child = self._funding_window
+        if child is not None and not child.closed:
+            child.root.lift()
+            child.root.focus_set()
+            return
+        self._funding_window = NativeFundingWindow(self)
 
     def save_report(self):
         self.controller.save_report()
@@ -1749,6 +2105,9 @@ class NativeWindow:
                     self.root.after_cancel(identifier)
                 setattr(self, field, None)
         try:
+            funding = getattr(self, "_funding_window", None)
+            if funding is not None:
+                funding.close()
             self.controller.close()
         finally:
             if root_available:

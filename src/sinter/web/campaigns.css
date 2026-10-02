@@ -60,6 +60,82 @@
 .campaign-budget-basis-details > summary { width: fit-content; font-size: .86rem; color: var(--muted); cursor: pointer; }
 .campaign-budget-basis-details > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
 
+/* Record stages and currencies stay separate; no visual grand total is implied. */
+.campaign-funding-summary {
+  margin: 24px 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  min-width: 0;
+}
+.campaign-funding-summary[data-stale=true] { border-color: var(--accent); }
+.campaign-funding-summary[data-stale=true] > [role=status] {
+  color: var(--accent);
+  font-weight: 650;
+}
+.campaign-funding-summary .campaign-section-heading { margin-bottom: 12px; }
+.campaign-funding-summary h3 { margin: 0 0 6px; font-size: 1.2rem; }
+.campaign-funding-summary .fine { line-height: 1.5; }
+.campaign-funding-stages {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+.campaign-funding-stage {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  overflow-wrap: anywhere;
+}
+.campaign-funding-stage h4 { margin: 0 0 8px; font-size: 1rem; }
+.campaign-funding-count { margin: 4px 0 10px; font-size: .78rem; color: var(--muted); }
+.campaign-funding-count strong { color: var(--text); font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.campaign-funding-group { margin: 14px 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.campaign-funding-group > strong { font-size: .78rem; }
+.campaign-funding-group > p { margin: 5px 0; }
+.campaign-funding-subtotal { font-size: .9rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.campaign-funding-review { padding: 0; border: 0; }
+.campaign-funding-review > summary { cursor: pointer; font-size: .85rem; font-weight: 650; }
+.campaign-funding-review h4 { margin: 18px 0 8px; font-size: .9rem; }
+.campaign-funding-review li { font-size: .8rem; line-height: 1.6; overflow-wrap: anywhere; }
+.campaign-funding-record-counts { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; }
+.campaign-funding-record-counts > div { display: flex; gap: 8px; font-size: .78rem; }
+.campaign-funding-record-counts dt { color: var(--muted); }
+.campaign-funding-record-counts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.campaign-funding-tracking { margin: 20px 0 0; padding: 18px 0 0; border: 0; border-top: 1px solid var(--line); }
+.campaign-funding-tracking > summary { cursor: pointer; font-size: .85rem; font-weight: 650; }
+.campaign-funding-tracking[open] > summary { margin-bottom: 14px; }
+.campaign-funding-amount, .campaign-funding-claim { margin: 12px 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.campaign-funding-amount > summary, .campaign-funding-claim > summary { cursor: pointer; font-size: .82rem; font-weight: 600; }
+.campaign-funding-amount[open] > summary, .campaign-funding-claim[open] > summary { margin-bottom: 16px; }
+.campaign-funding-amount-evidence { margin: 16px 0 0; padding: 0; border: 0; }
+.campaign-funding-amount-evidence > summary { cursor: pointer; font-size: .8rem; }
+.campaign-funding-amount-evidence[open] > summary { margin-bottom: 14px; }
+.campaign-opportunity-list { min-width: 0; align-self: start; }
+.campaign-opportunity-list .field { margin-bottom: 12px; }
+.campaign-opportunity-list .campaign-filter-status { font-size: .76rem; line-height: 1.5; }
+.campaign-opportunity-list .fine { line-height: 1.5; overflow-wrap: anywhere; font-size: .76rem; }
+.campaign-opportunity-list > .button[hidden] { display: none; }
+.campaign-opportunity-pagination { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 14px 0 10px; }
+.campaign-opportunity-pagination > .button { min-width: 0; white-space: normal; min-height: 44px; padding: 8px; font-size: .77rem; }
+.campaign-funding-tracking summary:focus-visible, .campaign-funding-review > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 5px; border-radius: 3px; }
+@media (max-width: 940px) {
+  .campaign-funding-stages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  .campaign-opportunity-pagination { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+  .campaign-funding-summary { padding: 14px; }
+  .campaign-funding-stages { grid-template-columns: 1fr; }
+  .campaign-funding-summary .campaign-section-heading > .button { width: 100%; min-height: 44px; white-space: normal; }
+  .campaign-funding-amount, .campaign-funding-claim { padding: 12px; }
+}
+
 /* Keep the section choice available before the campaign's review dossier. */
 .campaign-section-navigation { position: sticky; top: var(--campaign-navigation-top, 0px); z-index: 5; min-width: 0; margin-bottom: 20px; padding: 4px 0; background: var(--bg); display: flow-root; }
 .campaign-section-navigation .campaign-tabs { margin: 0; }

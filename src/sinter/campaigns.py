@@ -11,11 +11,12 @@ import sqlite3
 import uuid
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Context, Decimal, InvalidOperation, localcontext
 from pathlib import Path
 from typing import Iterator
 
 from .campaign_budget import quoted_budget_summary
+from .campaign_funding import summarize as _funding_summary
 from .campaign_budget import quoted_budget_total as _budget_total
 from .campaign_capacity import text_characters
 from .campaign_currency import (
@@ -32,7 +33,7 @@ MAX_DOCUMENT_BYTES = 1_000_000
 MAX_TEXT_CHARACTERS = 200_000
 MAX_CAMPAIGNS = 50
 WINDOW_CHECK_MAX_AGE_DAYS = 90
-ROW_LIMITS = {"opportunities": 30, "requirements": 200, "answers": 100,
+ROW_LIMITS = {"opportunities": 200, "requirements": 200, "answers": 100,
               "budget": 200, "actions": 200, "sources": 100,
               "communications": 200, "assets": 60}
 OPPORTUNITY_STATUSES = frozenset({
@@ -173,7 +174,10 @@ def _money(value: object, label: str) -> str | None:
         amount = Decimal(raw)
         if not amount.is_finite() or not 0 <= amount <= Decimal("1000000000"):
             raise ValueError()
-        return format(amount.quantize(Decimal("0.01")), "f")
+        # Admission bounds one amount to 1e9 with two decimal places. Embedding
+        # clients' ambient precision/traps must not change valid input admission.
+        with localcontext(Context(prec=20)):
+            return format(amount.quantize(Decimal("0.01")), "f")
     except (ValueError, InvalidOperation) as exc:
         raise ValueError(f"{label} must be between 0 and 1,000,000,000.") from exc
 
@@ -255,6 +259,84 @@ def _action_is_current(row: dict, opportunities: list[dict]) -> bool:
             and row["submission_phase"] == "post_submission")
 
 
+
+FUNDING_CHOICES = {
+    "benefit_type": frozenset({"unknown", "cash", "credits"}),
+    "eligibility": frozenset({"unknown", "eligible", "ineligible"}),
+    "ceiling_scope": frozenset({"unknown", "individual", "program_pool"}),
+    "application_status": frozenset({"unknown", "not_applied", "preparing", "submitted"}),
+    "award_status": frozenset({"unknown", "not_awarded", "awarded"}),
+    "receipt_status": frozenset({"unknown", "not_received", "received"}),
+    "closure_reason": frozenset({"unknown", "round_closed", "declined", "withdrawn",
+                                  "ineligible", "not_pursued", "other"}),
+}
+FUNDING_AMOUNTS = ("target", "requested", "awarded", "received")
+
+
+def _validate_funding(data: object, sources: dict) -> dict:
+    """Bound explicitly entered funding events, never derive them from prose."""
+    data = _object(data, {"round_key", *FUNDING_CHOICES, *FUNDING_AMOUNTS,
+                          "eligibility_evidence", "ceiling_evidence"},
+                   "Funding tracking")
+    result = {"round_key": _text(data.get("round_key", ""),
+                                  "Funding round key", 200, strip=True)}
+    for key, choices in FUNDING_CHOICES.items():
+        result[key] = _status(data.get(key, "unknown"), choices,
+                              "funding " + key.replace("_", " "))
+    for key in ("eligibility_evidence", "ceiling_evidence"):
+        claim = _object(data.get(key, {}),
+                        {"source_id", "source_url", "source_quote", "checked_at", "evidence"},
+                        "Funding " + key.replace("_", " "))
+        source_id = _text(claim.get("source_id", ""), "Funding claim source ID", 32)
+        if source_id and source_id not in sources:
+            raise ValueError("A funding claim points to a campaign source that no longer exists.")
+        result[key] = {
+            "source_id": source_id,
+            "source_url": _url(claim.get("source_url", ""), "Funding claim source URL"),
+            "source_quote": _text(claim.get("source_quote", ""), "Funding claim wording", 2000),
+            "checked_at": _date(claim.get("checked_at", ""), "Funding claim checked date"),
+            "evidence": _text(claim.get("evidence", ""), "Funding claim evidence", 2000),
+        }
+    for stage in FUNDING_AMOUNTS:
+        record = _object(data.get(stage, {}),
+                         {"amount", "currency", "source_id", "source_url",
+                          "source_quote", "checked_at", "notes"},
+                         "Funding " + stage)
+        source_id = _text(record.get("source_id", ""),
+                          "Funding amount source ID", 32)
+        if source_id and source_id not in sources:
+            raise ValueError("A funding amount points to a campaign source that no longer exists.")
+        result[stage] = {
+            "amount": _money(record.get("amount"), "Funding " + stage + " amount"),
+            "currency": ceiling_currency({"ceiling_currency": record.get("currency", "unconfirmed")}),
+            "source_id": source_id,
+            "source_url": _url(record.get("source_url", ""), "Funding amount source URL"),
+            "source_quote": _text(record.get("source_quote", ""), "Funding amount source wording", 2000),
+            "checked_at": _date(record.get("checked_at", ""), "Funding amount checked date"),
+            "notes": _text(record.get("notes", ""), "Funding amount notes", 2000),
+        }
+    return result
+
+
+def funding_summary(data: object) -> dict:
+    """Recorded current-campaign totals; no provider, conversion or eligibility decision."""
+    campaign = validate(data)
+    today = date.today()
+    current_windows = {
+        row["name"]: _application_window_is_current(row, today, campaign["sources"])
+        for row in campaign["opportunities"]
+    }
+    current_claims = {
+        row["name"]: {
+            key: _supported(row.get("funding_tracking", {}).get(key, {
+                "evidence": "", "source_url": "", "source_quote": "", "checked_at": "",
+            }), today, campaign["sources"])
+            for key in ("eligibility_evidence", "ceiling_evidence")
+        }
+        for row in campaign["opportunities"]
+    }
+    return _funding_summary(campaign, today.isoformat(), current_windows, current_claims)
+
 def validate(data: object) -> dict:
     """Return a bounded, JSON-safe document, preserving incomplete work.
 
@@ -312,7 +394,7 @@ def validate(data: object) -> dict:
         "window_source_id", "window_source_url", "window_source_quote",
         "window_checked_at", "decision_window",
         "ceiling", "ceiling_currency", "fit", "status", "route_type", "application_mode", "applicant",
-        "applicant_confirmed",
+        "applicant_confirmed", "funding_tracking",
     }):
         name = _text(row.get("name", ""), "Opportunity name", 200, True,
                      strip=True)
@@ -375,6 +457,11 @@ def validate(data: object) -> dict:
         # is part of the saved input, never an FX hint.
         if currency != "AUD":
             result["opportunities"][-1]["ceiling_currency"] = currency
+        # An absent extension stays absent: old campaign/export identities and
+        # assessments must not acquire invented funding events or eligibility.
+        if "funding_tracking" in row:
+            result["opportunities"][-1]["funding_tracking"] = _validate_funding(
+                row["funding_tracking"], source_by_id)
     for row in _rows(data, "requirements", {
         "opportunity", "rule", "status", "evidence", "source_id", "source_url",
         "source_quote", "checked_at",
@@ -1793,11 +1880,18 @@ def prepare(data: object, focused_opportunity_name: object = "") -> dict:
     report_campaign = _report_campaign_view(campaign, reportable_answers)
     report_metrics = [metric for metric in metrics
                       if metric["index"] in reportable_answers]
+    funding = (funding_summary(campaign)
+               if any("funding_tracking" in row for row in campaign["opportunities"])
+               else None)
+    if funding is not None:
+        markdown += "\n\n" + funding["markdown"]
+        document_markdown += "\n\n" + funding["markdown"]
     return {"workflow": "campaign", "title": campaign["title"],
             "document_title": campaign["title"], "created_at": utc_now(),
             "review_status": "user_entered", "campaign": report_campaign,
             "readiness": readiness, "answer_metrics": report_metrics,
             "budget_summary": budget, "portfolio_summary": portfolio,
+            **({"funding_summary": funding} if funding is not None else {}),
             "document_markdown": document_markdown,
             "markdown": markdown}
 
@@ -1852,6 +1946,8 @@ def saved_report_view(report: object) -> object:
             "answer_metrics": safe_report["answer_metrics"],
             "budget_summary": safe_report["budget_summary"],
             "portfolio_summary": safe_report["portfolio_summary"],
+            **({"funding_summary": safe_report["funding_summary"]}
+               if "funding_summary" in safe_report else {}),
             "document_markdown": safe_report["document_markdown"],
             "markdown": safe_report["markdown"],
         }

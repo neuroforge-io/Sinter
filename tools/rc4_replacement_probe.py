@@ -7,6 +7,7 @@ import base64
 import http.client
 import json
 import os
+import select
 import shlex
 import signal
 import socket
@@ -23,6 +24,7 @@ sys.path.insert(0, str(ROOT))
 from tools.installed_workflow_browser import (  # noqa: E402
     InnerRelay,
     Relay,
+    RelayRequest,
     browser_launch_command,
 )
 from tools.rc4_replacement_contract import (  # noqa: E402
@@ -39,6 +41,44 @@ from tools.rc4_replacement_contract import (  # noqa: E402
 SCOPED = "sinter-casebook/v2"
 
 
+class ClosingRequest:
+    """Make client reads cancellable without changing raw framing or deadlines."""
+
+    def __init__(self, channel, closing):
+        self.channel, self.closing = channel, closing
+
+    def __getattr__(self, name):
+        return getattr(self.channel, name)
+
+    def recv(self, size, flags=0):
+        timeout = self.channel.gettimeout()
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while not self.closing.is_set():
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if remaining is not None and remaining <= 0:
+                raise TimeoutError("Relay client read timed out.")
+            ready, _, _ = select.select(
+                [self.channel], [], [],
+                0.1 if remaining is None else min(0.1, remaining),
+            )
+            if ready and not self.closing.is_set():
+                return self.channel.recv(size, flags)
+        # Empty preconnects close cleanly. The unchanged parser rejects a
+        # partial header/body as incomplete and keeps its actual error count.
+        return b""
+
+
+class ClosingRelayRequest(RelayRequest):
+    def handle(self):
+        channel = self.request
+        self.request = ClosingRequest(channel, self.server.closing)
+        try:
+            super().handle()
+        finally:
+            # setup/finish and owned-socket observations retain the real socket.
+            self.request = channel
+
+
 class TrackedRequests:
     """Add bounded actual worker/socket ownership to the unchanged raw transport."""
 
@@ -46,6 +86,7 @@ class TrackedRequests:
         self.owned_lock = threading.Lock()
         self.owned_workers, self.owned_sockets = set(), set()
         self.close_failures = []
+        self.closing = threading.Event()
         super().__init__(runtime)
 
     def process_request_thread(self, request, client_address):
@@ -66,6 +107,7 @@ class TrackedRequests:
         super().process_request(request, client_address)
 
     def close_owned(self):
+        self.closing.set()
         with self.owned_lock:
             sockets, workers = list(self.owned_sockets), list(self.owned_workers)
         for channel in sockets:
@@ -96,7 +138,9 @@ class TrackedRequests:
 
 
 class HostRelay(TrackedRequests, Relay):
-    pass
+    def __init__(self, runtime):
+        super().__init__(runtime)
+        self.RequestHandlerClass = ClosingRelayRequest
 
 
 class InstalledRelay(TrackedRequests, InnerRelay):

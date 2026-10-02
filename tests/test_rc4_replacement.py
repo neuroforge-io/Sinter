@@ -644,8 +644,9 @@ def relay_cleanup_diagnostics(relay, server):
     }
 
 
+@pytest.mark.parametrize("shutdown_interrupts", [True, False])
 def test_actual_host_relay_closes_idle_preconnect_workers_and_listener(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, shutdown_interrupts
 ):
     # Observe the exact method used by cleanup, including OSError normally caught
     # by the unchanged production transport. Never substitute a shutdown result.
@@ -655,6 +656,11 @@ def test_actual_host_relay_closes_idle_preconnect_workers_and_listener(
     def observe_shutdown(channel, how):
         row = {"fileno": channel.fileno(), "how": how}
         shutdown_attempts.append(row)
+        if not shutdown_interrupts:
+            # Reproduce successful shutdown that does not wake a pending read,
+            # as observed in actual Windows CI. Keep a real TCP worker/socket.
+            row["injected_no_wakeup"] = True
+            return None
         try:
             result = actual_shutdown(channel, how)
         except BaseException as exc:
@@ -682,6 +688,7 @@ def test_actual_host_relay_closes_idle_preconnect_workers_and_listener(
         port = relay.server_address[1]
         relay.shutdown()
         server.join(timeout=1)
+        close_started = time.monotonic()
         remaining = relay.close_owned()
         assert remaining == (0, 0), json.dumps(
             {
@@ -692,6 +699,10 @@ def test_actual_host_relay_closes_idle_preconnect_workers_and_listener(
             sort_keys=True,
         )
         assert not server.is_alive() and relay.idle()
+        assert time.monotonic() - close_started < 3
+        assert relay.errors == 0 and relay.close_failures == []
+        assert not relay.owned_workers and not relay.owned_sockets
+        assert relay.close_owned() == (0, 0) and relay.errors == 0
         assert probe.closed_port(port) != 0
     finally:
         client.close()
@@ -699,6 +710,74 @@ def test_actual_host_relay_closes_idle_preconnect_workers_and_listener(
             relay.shutdown()
             server.join(timeout=1)
         relay.close_owned()
+
+
+@pytest.mark.parametrize("partial", ["headers", "body"])
+def test_cancelling_real_partial_tcp_request_keeps_failure_and_closes_ownership(
+    tmp_path, monkeypatch, partial
+):
+    received = threading.Event()
+    actual_recv = probe.ClosingRequest.recv
+
+    def observe_recv(request, *args):
+        value = actual_recv(request, *args)
+        if value:
+            received.set()
+        return value
+
+    monkeypatch.setattr(probe.ClosingRequest, "recv", observe_recv)
+    # No inner service exists. Incomplete requests must never be forwarded.
+    (tmp_path / "state.json").write_text('{"port":12345}', encoding="utf-8")
+    relay = probe.HostRelay(tmp_path)
+    server = threading.Thread(target=relay.serve_forever)
+    server.start()
+    client = socket.create_connection(relay.server_address, timeout=1)
+    try:
+        port = relay.server_address[1]
+        packet = (
+            b"GET / HTTP/1.1\r\nHo"
+            if partial == "headers"
+            else (f"POST /api/chat HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
+                  "Content-Length: 4\r\n\r\nx").encode("ascii")
+        )
+        client.sendall(packet)
+        assert received.wait(timeout=2), "Real partial request was not consumed."
+        relay.shutdown()
+        server.join(timeout=1)
+        assert relay.close_owned() == (0, 0)
+        assert relay.errors == 1, "Cancelled partial framing must remain a failure."
+        assert not server.is_alive() and relay.idle()
+        assert not relay.owned_workers and not relay.owned_sockets
+        assert relay.close_failures == [] and probe.closed_port(port) != 0
+        assert relay.close_owned() == (0, 0) and relay.errors == 1
+    finally:
+        client.close()
+        if server.is_alive():
+            relay.shutdown()
+            server.join(timeout=1)
+        relay.close_owned()
+
+
+def test_closing_request_preserves_data_deadline_and_active_read_failures(monkeypatch):
+    seen = []
+    channel = SimpleNamespace(
+        gettimeout=lambda: 20,
+        recv=lambda size, flags: seen.append((size, flags)) or b"literal\x00bytes",
+    )
+    closing = threading.Event()
+    request = probe.ClosingRequest(channel, closing)
+    monkeypatch.setattr(probe.select, "select", lambda *args: ([channel], [], []))
+    assert request.recv(4096) == b"literal\x00bytes" and seen == [(4096, 0)]
+    channel.recv = lambda *_: (_ for _ in ()).throw(OSError("ACTUAL-READ-FAILURE"))
+    with pytest.raises(OSError, match="ACTUAL-READ-FAILURE"):
+        request.recv(4096)
+    clock = iter((0, 21))
+    monkeypatch.setattr(probe.time, "monotonic", lambda: next(clock))
+    with pytest.raises(TimeoutError, match="timed out"):
+        request.recv(4096)
+    closing.set()
+    channel.gettimeout = lambda: None
+    assert request.recv(4096) == b""
 
 
 def test_idle_tcp_refusal_keeps_actual_worker_and_socket_diagnostics(
@@ -717,7 +796,7 @@ def test_idle_tcp_refusal_keeps_actual_worker_and_socket_diagnostics(
     monkeypatch.setattr(probe.HostRelay, "close_owned", report_surviving_worker)
     with pytest.raises(AssertionError) as refused:
         test_actual_host_relay_closes_idle_preconnect_workers_and_listener(
-            tmp_path, monkeypatch
+            tmp_path, monkeypatch, True
         )
     details, _ = json.JSONDecoder().raw_decode(str(refused.value))
     assert details["remaining"] == [1, 1]

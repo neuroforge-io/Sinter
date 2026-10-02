@@ -274,6 +274,8 @@ class RouteDispatch:
                     body.get("document"), body.get("focused_opportunity", "")
                 )
             )
+        elif path == "/api/campaigns/funding-summary":
+            self._json(campaigns.funding_summary(body.get("document")))
         elif path == "/api/campaigns/save":
             self._json(
                 self.app.campaigns.save(
