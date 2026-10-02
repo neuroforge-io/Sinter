@@ -2154,3 +2154,46 @@ change application behavior or raise product ratings. The successful portable
 build for `c453414` remains mechanical evidence for that source, while its
 cancelled hosted run and unexecuted installed proposals stay held. A successor
 source requires its own hosted and original installed qualification.
+
+
+### 2 October: browser identity acquisition in the next installed attempt
+
+Exact source `959b9f65aabbb0a2f6f78b1731183b2a094e345b` passed all 12
+hosted Quality jobs in run `37008571529`, attempt 1. Its original Linux native
+build completed normally in 34.49 seconds. Independent mechanical review
+verified the installer, native archive, binary, notices and original receipt.
+Those observations establish packaging checks, not installed release acceptance.
+
+The single installed workflow attempt failed in 16.85 seconds with
+`Actual Chromium cmdline differs.` Its original browser row contains a complete
+empty command record; the expected fixed command contains 12 arguments and 375
+NUL-terminated bytes. The source reads `/proc/<pid>/cmdline` immediately after
+starting Chromium, before waiting for its private debugger. The same PID later
+appears in the browser process list, with a working debugger, normal exit 0,
+complete streams and no termination signal or forced cleanup. A transient
+startup observation is the supported inference; no later live command snapshot
+was retained, so the precise kernel cause is unproven.
+
+The UI producer retained all 22 named checks and 13 artifacts, including five
+screenshots, both backups and four Word files. Both installed app lifetimes
+quit through the interface with exit 0 and closed listeners. The complete owner
+still failed its strict browser-identity check and remains failed. These partial
+observations do not establish complete workflow, recovery, upgrade or release
+qualification. The four unexecuted gate plans remain held; nothing is replayed.
+
+The source correction moves one actual command read after validated private
+debugger readiness and before connecting to the browser. It requires the exact
+NUL-terminated command and a live process before and after reading. Empty or
+changed observations still refuse, with no retry or expected-record fallback.
+The final verifier, cleanup requirements and resource limits remain unchanged.
+Successor source, hosted and installed gates are still required. The user's
+normally closed app, real campaigns and provider allowance remain untouched.
+
+The changed module passes 137 source tests, including 23 new injected identity
+controls; those counts overlap. The literal earlier source fails the new ordering
+test. Readiness timeout and malformed endpoints, wrong or truncated command
+bytes, exit before or after the read, and read/cleanup faults are covered without
+running a real browser. Required correctness lint, touched-file formatting,
+Python 3.10 grammar for all 283 tracked Python files, the public-boundary check
+and deterministic offline self-audit pass. These source checks do not replace a
+new original installed run or qualify the held candidate.

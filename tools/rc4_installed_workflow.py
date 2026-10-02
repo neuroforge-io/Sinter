@@ -1082,9 +1082,6 @@ def captured_session_class():
                 start_new_session=True,
             )
             self.chrome_row["pid"] = self.chrome_process.pid
-            self.chrome_row["cmdline"] = contract.full_record(
-                contract.regular(Path(f"/proc/{self.chrome_process.pid}/cmdline"), 8192)
-            )
             active = home / "profile/DevToolsActivePort"
             deadline = time.monotonic() + 15
             while not active.exists():
@@ -1104,6 +1101,24 @@ def captured_session_class():
             contract.require(
                 0 < self.chrome_row["debug_port"] <= 65535,
                 "Debugger port outside range.",
+            )
+            contract.require(
+                self.chrome_process.poll() is None,
+                "Private Chromium exited before identity acquisition.",
+            )
+            cmdline = contract.regular(
+                Path(f"/proc/{self.chrome_process.pid}/cmdline"), 8192
+            )
+            self.chrome_row["cmdline"] = contract.full_record(cmdline)
+            contract.require(
+                cmdline
+                == b"\0".join(part.encode() for part in self.chrome_row["argv"])
+                + b"\0",
+                "Actual Chromium cmdline differs.",
+            )
+            contract.require(
+                self.chrome_process.poll() is None,
+                "Private Chromium exited after identity acquisition.",
             )
             self.chrome = driver.chromium.connect_over_cdp(
                 f"http://127.0.0.1:{lines[0]}"

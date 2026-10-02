@@ -605,6 +605,286 @@ def test_captured_driver_acquisition_fault_preserves_candidates_and_primary(
     assert len(session.observations()["cleanup_errors"]) == int(cleanup_fault)
 
 
+@pytest.fixture
+def inert_chrome_identity(tmp_path, monkeypatch):
+    """Only files are real; every browser/process/time operation is injected."""
+    sessions = []
+
+    def make():
+        root = tmp_path / str(len(sessions))
+        for folder in ("client", "t", "out/chrome"):
+            (root / folder).mkdir(parents=True)
+        session = producer.captured_session_class()(root, Path("/inert/chrome"))
+        sessions.append(session)
+        events = []
+        state = {
+            "endpoint": b"12345\n/devtools/browser/abc-123\n",
+            "ready_after": 1,
+            "sleeps": 0,
+            "elapsed": 0,
+            "endpoint_read": False,
+            "cmdline_read": False,
+            "cmdline": None,
+            "read_error": None,
+            "dead": None,
+        }
+        active = root / "client/browser-home/profile/DevToolsActivePort"
+
+        class Process:
+            pid = 87654
+
+            def poll(self):
+                events.append("poll")
+                if (
+                    state["dead"] == "waiting"
+                    or state["dead"] == "before"
+                    and state["endpoint_read"]
+                    or state["dead"] == "after"
+                    and state["cmdline_read"]
+                ):
+                    return 1
+                return None
+
+        def spawn(argv, **kwargs):
+            events.append("spawn")
+            state["spawn"] = {"argv": argv, **kwargs}
+            active.parent.mkdir()
+            return Process()
+
+        regular = contract.regular
+
+        def read(path, limit):
+            if Path(path) == Path(f"/proc/{Process.pid}/cmdline"):
+                assert limit == 8192
+                events.append("cmdline")
+                state["cmdline_read"] = True
+                if state["read_error"] is not None:
+                    raise state["read_error"]
+                expected = b"\0".join(
+                    part.encode() for part in session.chrome_row["argv"]
+                )
+                expected += b"\0"
+                if state["cmdline"] is not None:
+                    return state["cmdline"](expected, session.chrome_row["argv"])
+                # The former immediate read would observe an empty command here.
+                return expected if state["endpoint_read"] else b""
+            if Path(path) == active:
+                assert limit == 1024
+                events.append("endpoint")
+                state["endpoint_read"] = True
+            return regular(path, limit)
+
+        def sleep(seconds):
+            assert seconds == 0.025
+            events.append("sleep")
+            state["sleeps"] += 1
+            state["elapsed"] += seconds
+            if state["sleeps"] == state["ready_after"]:
+                active.write_bytes(state["endpoint"])
+
+        class CDP:
+            def send(self, operation):
+                events.append(operation)
+                assert operation == "SystemInfo.getProcessInfo"
+                return {"processInfo": [{"id": Process.pid}]}
+
+        class Browser:
+            def new_browser_cdp_session(self):
+                events.append("cdp-session")
+                return CDP()
+
+        def connect(url):
+            events.append("connect")
+            assert url == "http://127.0.0.1:12345"
+            return Browser()
+
+        monkeypatch.setattr(producer.subprocess, "Popen", spawn)
+        monkeypatch.setattr(producer.time, "monotonic", lambda: state["elapsed"])
+        monkeypatch.setattr(producer.time, "sleep", sleep)
+        monkeypatch.setattr(contract, "regular", read)
+        driver = SimpleNamespace(chromium=SimpleNamespace(connect_over_cdp=connect))
+        return SimpleNamespace(
+            session=session, state=state, events=events, driver=driver
+        )
+
+    yield make
+    for session in sessions:
+        for stream in session.chrome_streams.values():
+            stream.close()
+
+
+def test_chrome_identity_acquired_once_after_ready_before_connection(
+    inert_chrome_identity,
+):
+    proof = inert_chrome_identity()
+    proof.session.start_chrome(proof.driver)
+    assert proof.events == [
+        "spawn",
+        "poll",
+        "sleep",
+        "endpoint",
+        "poll",
+        "cmdline",
+        "poll",
+        "connect",
+        "cdp-session",
+        "SystemInfo.getProcessInfo",
+    ]
+    row = proof.session.chrome_row
+    assert contract.full(row["cmdline"], 8192) == (
+        b"\0".join(part.encode() for part in row["argv"]) + b"\0"
+    )
+    assert proof.session.browser_pids == {87654}
+    assert proof.state["spawn"] == {
+        "argv": row["argv"],
+        "env": {
+            "PATH": os.defpath,
+            "HOME": str(proof.session.root / "client/browser-home"),
+            "TMPDIR": str(proof.session.root / "t"),
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+        },
+        "stdin": producer.subprocess.DEVNULL,
+        "stdout": proof.session.chrome_streams["stdout"],
+        "stderr": proof.session.chrome_streams["stderr"],
+        "start_new_session": True,
+    }
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        b"",
+        b"12345\n",
+        b"12345\n/devtools/browser/abc\nextra\n",
+        b"not-a-port\n/devtools/browser/abc\n",
+        b"0\n/devtools/browser/abc\n",
+        b"65536\n/devtools/browser/abc\n",
+        b"12345\n/not-private/abc\n",
+        b"12345\n/devtools/browser/ABC\n",
+        b"\xff\n/devtools/browser/abc\n",
+    ],
+)
+def test_chrome_identity_refuses_malformed_readiness_before_read(
+    inert_chrome_identity, endpoint
+):
+    proof = inert_chrome_identity()
+    proof.state["endpoint"] = endpoint
+    with pytest.raises((ValueError, UnicodeDecodeError)):
+        proof.session.start_chrome(proof.driver)
+    assert "cmdline" not in proof.events and "connect" not in proof.events
+    assert "cmdline" not in proof.session.chrome_row
+
+
+def test_chrome_identity_missing_readiness_retains_existing_timeout(
+    inert_chrome_identity,
+):
+    proof = inert_chrome_identity()
+    proof.state["ready_after"] = None
+    with pytest.raises(ValueError, match="debugger failed to start"):
+        proof.session.start_chrome(proof.driver)
+    assert 15 <= proof.state["elapsed"] < 15.025
+    assert "endpoint" not in proof.events and "cmdline" not in proof.events
+    assert "connect" not in proof.events
+
+
+@pytest.mark.parametrize("stage", ["waiting", "before", "after"])
+def test_chrome_identity_dead_child_never_connects(inert_chrome_identity, stage):
+    proof = inert_chrome_identity()
+    proof.state["dead"] = stage
+    with pytest.raises(ValueError, match="failed to start|exited before|exited after"):
+        proof.session.start_chrome(proof.driver)
+    assert "connect" not in proof.events
+    assert proof.events.count("cmdline") == int(stage == "after")
+    assert ("cmdline" in proof.session.chrome_row) is (stage == "after")
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["empty", "missing", "unterminated", "extra", "changed", "reordered", "profile"],
+)
+def test_chrome_identity_refuses_and_retains_exact_wrong_bytes(
+    inert_chrome_identity, mutation
+):
+    proof = inert_chrome_identity()
+    observed = []
+
+    def wrong(expected, argv):
+        parts = [part.encode() for part in argv]
+        if mutation == "empty":
+            raw = b""
+        elif mutation == "missing":
+            raw = b"\0".join(parts[:-1]) + b"\0"
+        elif mutation == "unterminated":
+            raw = expected[:-1]
+        elif mutation == "extra":
+            raw = expected + b"--extra\0"
+        elif mutation == "changed":
+            raw = expected.replace(b"--headless=new", b"--headless=old")
+        elif mutation == "reordered":
+            parts[1], parts[2] = parts[2], parts[1]
+            raw = b"\0".join(parts) + b"\0"
+        else:
+            raw = expected.replace(b"--user-data-dir=", b"--user-data-dir=/other/")
+        observed.append(raw)
+        return raw
+
+    proof.state["cmdline"] = wrong
+    with pytest.raises(ValueError, match="Actual Chromium cmdline differs"):
+        proof.session.start_chrome(proof.driver)
+    assert contract.full(proof.session.chrome_row["cmdline"], 8192) == observed[0]
+    assert proof.events.count("cmdline") == 1 and "connect" not in proof.events
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_chrome_identity_read_fault_and_later_closes_keep_original_cause(
+    inert_chrome_identity, missing
+):
+    proof = inert_chrome_identity()
+    first = (
+        FileNotFoundError("SOURCE missing proc identity")
+        if missing
+        else OSError("SOURCE proc identity read refused")
+    )
+    later = OSError("SOURCE driver close refused")
+    proof.state["read_error"] = first
+    closes = []
+
+    def close_driver(*args):
+        closes.append("driver")
+        assert args[1] is first
+        raise later
+
+    proof.session.manager = SimpleNamespace(__exit__=close_driver)
+    with pytest.raises(type(first)) as raised:
+        try:
+            proof.session.start_chrome(proof.driver)
+        finally:
+            # Same accepted owner boundary used by browser_workflow after launch.
+            proof.session.__exit__(*sys.exc_info())
+            for name, stream in proof.session.chrome_streams.items():
+                proof.session.observe_close(name, stream.close)
+    assert raised.value is first
+    assert closes == ["driver"] and "connect" not in proof.events
+    assert (
+        proof.events.count("cmdline") == 1 and "cmdline" not in proof.session.chrome_row
+    )
+    retained = proof.session.observations()
+    assert [row["resource"] for row in retained["cleanup_attempts"]] == [
+        "driver",
+        "stdout",
+        "stderr",
+    ]
+    assert retained["cleanup_errors"] == [
+        {
+            "resource": "driver",
+            "type": "OSError",
+            "message": str(later),
+        }
+    ]
+    assert all(stream.closed for stream in proof.session.chrome_streams.values())
+
+
 def test_original_ui_contract_positives_and_no_invoked_operations_claim():
     from tools.installed_workflow_contract import (
         workflow_artifact_paths,
