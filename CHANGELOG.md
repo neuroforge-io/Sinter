@@ -43,11 +43,12 @@ qualification and does not change any published RC3 asset or historical receipt.
   as possible recorded eligible ceilings. Make the native source list eight rows
   tall with a visible scrollbar and retain the selected source by ID on refresh.
 
-- Make RC4 relay client reads cooperatively cancellable when socket shutdown
-  does not wake an idle Windows worker. Preserve the existing raw parser, read
-  deadline, real worker/socket counters and partial-request failures. Compare
-  source fixture paths as native paths rather than slash spellings. Hosted
-  regression and aggregate verification are required before finalization.
+- Keep both directions of owned qualification relay reads, writes and connection
+  waits responsive to cancellation. Preserve genuine connection refusals, original
+  operation timeouts, partial-request failures and uncertain partially sent bytes.
+  Restore socket settings without hiding the first fault. Independent source
+  checks pass; actual hosted and installed regressions remain required. Compare
+  source fixture paths as native paths rather than slash spellings.
 
 - Make ten inert recovery-tool tests independent of the optional Playwright
   package. Keep browser execution guarded and every existing assertion active.

@@ -227,6 +227,42 @@ def rewrite_headers(raw: bytes, outer: str, inner: str) -> bytes:
     return b"\r\n".join(rewritten) + b"\r\n\r\n"
 
 
+class RelayClosed(OSError):
+    """An owned qualification relay stopped an incomplete socket operation."""
+
+
+def receive_request(server, channel, size):
+    """Keep historical transport, with cooperative reads for tracked RC4 relays."""
+    receive_owned = getattr(server, "receive_owned", None)
+    return channel.recv(size) if receive_owned is None else receive_owned(channel, size)
+
+
+def send_data(server, channel, data):
+    """Preserve raw response/request bytes and legacy sendall behavior."""
+    send_owned = getattr(server, "send_owned", None)
+    return channel.sendall(data) if send_owned is None else send_owned(channel, data)
+
+
+def connect_channel(server, channel, address):
+    """Keep the fixed target and legacy connect operation for untracked relays."""
+    connect_owned = getattr(server, "connect_owned", None)
+    return (
+        channel.connect(address)
+        if connect_owned is None
+        else connect_owned(channel, address)
+    )
+
+
+def open_connection(server, address):
+    """Keep legacy connection construction or the tracked IPv4 loopback path."""
+    open_owned = getattr(server, "open_connection_owned", None)
+    return (
+        socket.create_connection(address, 20)
+        if open_owned is None
+        else open_owned(address)
+    )
+
+
 class Relay(socketserver.ThreadingTCPServer):
     """Loopback-only raw HTTP relay; responses are never parsed or rewritten."""
 
@@ -269,7 +305,7 @@ class RelayRequest(socketserver.BaseRequestHandler):
         try:
             received = bytearray()
             while b"\r\n\r\n" not in received:
-                chunk = self.request.recv(4096)
+                chunk = receive_request(self.server, self.request, 4096)
                 if not chunk:
                     if not received:
                         return
@@ -298,7 +334,9 @@ class RelayRequest(socketserver.BaseRequestHandler):
             match = re.search(rb"(?im)^content-length:\s*([0-9]+)\r?$", head)
             size = int(match[1]) if match else 0
             while len(body) < size:
-                chunk = self.request.recv(min(65_536, size - len(body)))
+                chunk = receive_request(
+                    self.server, self.request, min(65_536, size - len(body))
+                )
                 if not chunk:
                     raise ValueError("Relay request body was incomplete.")
                 body += chunk
@@ -306,15 +344,20 @@ class RelayRequest(socketserver.BaseRequestHandler):
                 raise ValueError("Relay request contains unexpected extra bytes.")
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as channel:
                 channel.settimeout(20)
-                channel.connect(str(self.server.runtime / "relay.sock"))
-                channel.sendall(headers + body)
+                connect_channel(
+                    self.server, channel, str(self.server.runtime / "relay.sock")
+                )
+                send_data(self.server, channel, headers + body)
                 channel.shutdown(socket.SHUT_WR)
                 total = 0
-                while chunk := channel.recv(65_536):
+                while chunk := receive_request(self.server, channel, 65_536):
                     total += len(chunk)
                     if total > 32_000_000:
                         raise ValueError("Relay response exceeded its bound.")
-                    self.request.sendall(chunk)
+                    send_data(self.server, self.request, chunk)
+        except RelayClosed:
+            # Stop the owned transport; incomplete framing keeps its parser error.
+            pass
         except (OSError, ValueError, KeyError, json.JSONDecodeError):
             self.server.errors += 1
             # Fail closed. Do not synthesize a successful product response.
@@ -339,17 +382,17 @@ class InnerRequest(socketserver.BaseRequestHandler):
         self.request.settimeout(20)
         try:
             request = bytearray()
-            while chunk := self.request.recv(65_536):
+            while chunk := receive_request(self.server, self.request, 65_536):
                 request.extend(chunk)
                 if len(request) > MAX_REQUEST + MAX_HEADER:
                     raise ValueError("Oversized inner relay request.")
             # The container has no network interface except loopback. Never
             # derive a target from the client's Host or any request payload.
-            with socket.create_connection(("127.0.0.1", self.server.port), 20) as app:
-                app.sendall(request)
+            with open_connection(self.server, ("127.0.0.1", self.server.port)) as app:
+                send_data(self.server, app, request)
                 app.shutdown(socket.SHUT_WR)
-                while chunk := app.recv(65_536):
-                    self.request.sendall(chunk)
+                while chunk := receive_request(self.server, app, 65_536):
+                    send_data(self.server, self.request, chunk)
         except (OSError, ValueError):
             pass
 

@@ -1927,3 +1927,41 @@ cancellation is unconfirmed. Development publish run 36959551002 skipped native
 build, qualification and publication; its success was a no-op. Those complete
 available raw records remain pinned separately. The physical Sinter app remains
 closed after the user's normal close, and no Sinter provider call is made in this pass.
+
+
+### Relay cancellation source convergence, 2 October
+
+The independent fourth correction acceptance `d2c15651...` retains every earlier
+failed proposal. Its actual default Unix-socket queue control reproduces the old
+false connection admission and retains the new genuine EAGAIN refusal, identical
+exception object, original timeout and complete descriptor cleanup. A successful
+retry is explicitly initiated only after the queue is released; no uncertain
+operation is automatically replayed. First read/connect/send failures keep later
+timeout-restoration and socket-close failures.
+
+Separate current-main acceptance `171844c4...` preserves the native diagnostic
+publisher, original tracked cleanup and direct legacy wrapper. The actual request
+handler supplies the cooperative reader, using one shared stop event and preserving
+receive flags. Idle connections close without errors; consumed partial headers
+and bodies retain their original failed framing status. Actual wrapped late data,
+EOF and client backpressure stop without presenting an uncertain partial write
+as completion. Exact focused source replay passes 291 checks plus 16 independent
+controls; the dependency-blocked 45-case replay overlaps those checks. Earlier
+1,015-case evidence belongs to final production code before a test-only consumed-
+header barrier; its original test bytes and source manifest remain retained.
+The initial four composition-fixture failures remain unadmitted historical
+records, not silently rewritten successes.
+
+An incoming main update changed only the diagnostic filesystem-admission test
+fixture. It uses a Unicode directory only after an actual EILSEQ refusal and
+retains other failures. All 51 affected native-publication source checks pass
+after integration. The production relay paths are unchanged by that update.
+These are source results only; the final installed and hosted regressions remain
+required. The physical app stays closed after the user's normal close and this
+work uses no Sinter hosted generation.
+
+After both accepted families and the incoming filesystem-test update are combined,
+1,456 unique relevant source cases pass without skips in 71.60 seconds. The
+changes preserve the original raw source failures; these timings do not establish
+product performance. Formatting, F/I lint, Python 3.10 grammar and the public
+boundary pass. Installed qualification and final asset publication remain pending.

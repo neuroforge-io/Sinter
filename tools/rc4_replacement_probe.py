@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import errno
 import http.client
 import json
 import os
@@ -17,6 +18,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path, PurePosixPath
+from typing import Callable, TypeVar
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 from tools.installed_workflow_browser import (  # noqa: E402
     InnerRelay,
     Relay,
+    RelayClosed,
     RelayRequest,
     browser_launch_command,
 )
@@ -39,18 +42,30 @@ from tools.rc4_replacement_contract import (  # noqa: E402
 )
 
 SCOPED = "sinter-casebook/v2"
+RelayResult = TypeVar("RelayResult")
 
 
 class ClosingRequest:
     """Make client reads cancellable without changing raw framing or deadlines."""
 
-    def __init__(self, channel, closing):
+    def __init__(self, channel, closing, reader=None):
         self.channel, self.closing = channel, closing
+        self.reader = reader
 
     def __getattr__(self, name):
         return getattr(self.channel, name)
 
     def recv(self, size, flags=0):
+        if self.reader is not None:
+            try:
+                return (
+                    self.reader(self.channel, size)
+                    if flags == 0
+                    else self.reader(self.channel, size, flags)
+                )
+            except RelayClosed:
+                # Keep the parser's original idle/partial framing distinction.
+                return b""
         timeout = self.channel.gettimeout()
         deadline = None if timeout is None else time.monotonic() + timeout
         while not self.closing.is_set():
@@ -73,7 +88,9 @@ class ClosingRequest:
 class ClosingRelayRequest(RelayRequest):
     def handle(self):
         channel = self.request
-        self.request = ClosingRequest(channel, self.server.closing)
+        self.request = ClosingRequest(
+            channel, self.server.closing, self.server.receive_owned
+        )
         try:
             super().handle()
         finally:
@@ -89,7 +106,154 @@ class TrackedRequests:
         self.owned_workers, self.owned_sockets = set(), set()
         self.close_failures = []
         self.closing = threading.Event()
+        self.requests_stopped = self.closing
         super().__init__(runtime)
+
+    def _check_open(self) -> None:
+        if self.requests_stopped.is_set():
+            raise RelayClosed("The owned relay has stopped its socket operations.")
+
+    @staticmethod
+    def _deadline(channel: socket.socket) -> float | None:
+        timeout = channel.gettimeout()
+        return None if timeout is None else time.monotonic() + timeout
+
+    def _ready(
+        self, channel: socket.socket, *, reading: bool, deadline: float | None
+    ) -> None:
+        """Wait cooperatively without shortening the original operation budget."""
+        while True:
+            self._check_open()
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if remaining is not None and remaining <= 0:
+                raise TimeoutError("The relay socket operation timed out.")
+            readers, writers, _ = select.select(
+                [channel] if reading else [],
+                [] if reading else [channel],
+                [],
+                0.1 if remaining is None else min(0.1, remaining),
+            )
+            self._check_open()
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError("The relay socket operation timed out.")
+            if readers or writers:
+                return
+
+    def _nonblocking(
+        self, channel: socket.socket, operation: Callable[[], RelayResult]
+    ) -> RelayResult:
+        """Keep first faults and restore timeouts before admitting any result."""
+        self._check_open()
+        original_timeout = channel.gettimeout()
+        try:
+            channel.setblocking(False)
+            result = operation()
+        except BaseException as primary:
+            try:
+                channel.settimeout(original_timeout)
+            except BaseException as later:
+                primary.relay_restoration_errors = (
+                    *getattr(primary, "relay_restoration_errors", ()),
+                    later,
+                )
+            raise
+        else:
+            channel.settimeout(original_timeout)
+            self._check_open()
+            return result
+
+    def receive_owned(self, channel: socket.socket, size: int, flags: int = 0) -> bytes:
+        """Reject late data and EOF; never enter a blocking read after readiness."""
+        if isinstance(channel, ClosingRequest):
+            return channel.recv(size, flags)
+        deadline = self._deadline(channel)
+        while True:
+            self._ready(channel, reading=True, deadline=deadline)
+            try:
+                return self._nonblocking(
+                    channel,
+                    lambda: (
+                        channel.recv(size) if flags == 0 else channel.recv(size, flags)
+                    ),
+                )
+            except BlockingIOError as stale:
+                if getattr(stale, "relay_restoration_errors", ()):
+                    raise
+
+    def send_owned(self, channel: socket.socket, data: bytes) -> None:
+        """Send literal bytes with one sendall budget and cooperative stop checks."""
+        deadline = self._deadline(channel)
+        remaining = memoryview(data)
+        self._check_open()
+        while remaining:
+            self._ready(channel, reading=False, deadline=deadline)
+            try:
+                size = self._nonblocking(channel, lambda: channel.send(remaining))
+            except BlockingIOError as stale:
+                if getattr(stale, "relay_restoration_errors", ()):
+                    raise
+                continue
+            if size == 0:
+                raise ConnectionError("The relay socket closed during a send.")
+            remaining = remaining[size:]
+
+    def connect_owned(
+        self, channel: socket.socket, address: str | tuple[str, int]
+    ) -> None:
+        """Connect only existing fixed relay targets, with the original timeout."""
+        self._check_open()
+        deadline = self._deadline(channel)
+        pending = {
+            errno.EINPROGRESS,
+            errno.EALREADY,
+            errno.EWOULDBLOCK,
+            errno.EINTR,
+            getattr(errno, "WSAEWOULDBLOCK", errno.EWOULDBLOCK),
+            getattr(errno, "WSAEINPROGRESS", errno.EINPROGRESS),
+            getattr(errno, "WSAEALREADY", errno.EALREADY),
+        }
+        try:
+            self._nonblocking(channel, lambda: channel.connect(address))
+        except OSError as first:
+            if getattr(first, "relay_restoration_errors", ()):
+                raise
+            # A full Unix-domain listen queue refuses the actual connect with
+            # EAGAIN. Writable plus SO_ERROR=0 does not mean it is connected.
+            if getattr(channel, "family", None) == getattr(socket, "AF_UNIX", None):
+                if first.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+                    raise
+            if first.errno not in pending:
+                raise
+        else:
+            return
+        while True:
+            self._ready(channel, reading=False, deadline=deadline)
+            result = self._nonblocking(
+                channel, lambda: channel.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            )
+            if result == 0:
+                self._nonblocking(channel, channel.getpeername)
+                return
+            if result not in pending:
+                raise OSError(result, os.strerror(result))
+
+    def open_connection_owned(self, address: tuple[str, int]) -> socket.socket:
+        """Create the inner relay's fixed IPv4 loopback connection only."""
+        self._check_open()
+        channel = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            channel.settimeout(20)
+            self.connect_owned(channel, address)
+        except BaseException as primary:
+            try:
+                channel.close()
+            except BaseException as later:
+                primary.relay_cleanup_errors = (
+                    *getattr(primary, "relay_cleanup_errors", ()),
+                    later,
+                )
+            raise
+        return channel
 
     def process_request_thread(self, request, client_address):
         worker = threading.current_thread()
