@@ -768,9 +768,29 @@ def source_operations(source: dict[str, bytes]) -> list[dict]:
         raise ValueError(
             "The candidate has no admitted operation catalogue."
         ) from error
-    if len(result) != 53 or len({entry["id"] for entry in result}) != 53:
+    if len(result) not in {53, 54} or len({entry["id"] for entry in result}) != len(result):
         raise ValueError(
-            "The current installed workflow requires exactly 53 operations."
+            "The installed workflow requires 53 legacy operations or the "
+            "recognized 54-operation funding extension, with unique IDs."
+        )
+    funding = next(
+        (entry for entry in result if entry["id"] == "campaigns.funding_summary"),
+        None,
+    )
+    if len(result) == 53 and funding is not None:
+        raise ValueError(
+            "The legacy 53-operation source contract cannot include the "
+            "funding extension in place of an existing operation."
+        )
+    if len(result) == 54 and (
+        funding is None
+        or (funding["method"], funding["route"], funding["effect"]) != (
+            "POST", "/api/campaigns/funding-summary", "local",
+        )
+    ):
+        raise ValueError(
+            "The 54-operation source contract requires the exact local "
+            "campaigns.funding_summary POST /api/campaigns/funding-summary operation."
         )
     save = next((entry for entry in result if entry["id"] == "documents.docx.save"), {})
     if (save.get("method"), save.get("route"), save.get("effect")) != (
@@ -811,7 +831,8 @@ def validate_operations_catalog(
     }
     if not _same_json(value, expected):
         raise ValueError(
-            "Installed capabilities differ from the exact 53-operation source contract."
+            "Installed capabilities differ from the exact "
+            f"{len(catalogue['operations'])}-operation source contract."
         )
 
 
