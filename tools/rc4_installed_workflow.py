@@ -1890,13 +1890,11 @@ def run(args):
         )
         attempts.call(
             "post-reap browser cache",
-            lambda: value["browser"].update(
-                cleanup=recovery.clean_browser_temp(
-                    root,
-                    host_command,
-                    value["browser"],
-                    expected_exit=expected_host_exit,
-                )
+            lambda: recovery.clean_browser_temp(
+                root,
+                host_command,
+                value["browser"],
+                expected_exit=expected_host_exit,
             ),
         )
         attempts.call(

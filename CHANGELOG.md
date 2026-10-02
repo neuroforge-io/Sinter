@@ -7,6 +7,11 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Align the installed-workflow producer and verifier with the shared browser
+  cleanup record. Require its exact temporary directory, typed cleanup result
+  and unchanged browser identity. Preserve the failed earlier qualification;
+  source tests pass, but a fresh installed run is still required.
+
 - Bind cancellation-test admission to the same actual socket observation. A
   full buffer may regain capacity between calls; a prior zero-byte observation
   cannot establish the next call's result. Keep cancellation and cleanup gates.

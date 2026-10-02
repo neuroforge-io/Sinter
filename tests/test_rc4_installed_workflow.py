@@ -12,6 +12,7 @@ import copy
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 import types
@@ -1902,4 +1903,184 @@ def test_failed_host_cleanup_uses_fixed_early_path_and_keeps_original_failure(
     assert retained["browser"]["temporary_empty_after"] is True
     assert retained["browser"]["temporary_cleanup"]["complete"] is True
     assert retained["browser"]["temporary_cleanup"]["outcomes"] == []
+    assert set(retained["browser"]) == {
+        "path",
+        "sha256",
+        "sha256_after",
+        "temporary_directory",
+        "temporary_empty_before",
+        "temporary_empty_after",
+        "temporary_cleanup",
+    }
     assert retained["cleanup_errors"] == [] and not any((tmp_path / "t").iterdir())
+
+
+@pytest.fixture
+def browser_boundary_case():
+    # Short owned paths exercise the existing 55-byte limit without a real browser.
+    parent = Path("/tmp") if os.name == "posix" else Path.cwd()
+    with tempfile.TemporaryDirectory(prefix="wb-", dir=parent) as directory:
+        root = Path(directory)
+        (root / "t").mkdir()
+        expected = {"path": "/fictional/owned-chromium", "sha256": "f" * 64}
+        browser = {
+            **expected,
+            "sha256_after": expected["sha256"],
+            "temporary_directory": str(root / "t"),
+            "temporary_empty_before": True,
+            "temporary_empty_after": True,
+            "temporary_cleanup": {
+                "attempted": True,
+                "inventory": {},
+                "outcomes": [],
+                "complete": True,
+                "failure": None,
+            },
+        }
+        yield root, expected, browser
+
+
+def test_browser_boundary_accepts_recorded_seven_fields(browser_boundary_case):
+    root, expected, browser = browser_boundary_case
+    original = copy.deepcopy(browser)
+    assert contract.validate_browser_boundary(browser, expected, root) is None
+    assert browser == original
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "legacy-six-fields",
+        "actual-failed-eight-fields",
+        "different-browser",
+        "different-source-hash",
+        "changed-browser-hash",
+        "different-temp-directory",
+        "relative-temp-directory",
+        "aliased-temp-directory",
+        "non-string-temp-directory",
+        "dirty-before-flag",
+        "dirty-after-flag",
+        "untyped-before-flag",
+        "untyped-after-flag",
+        "missing-cleanup",
+        "cleanup-not-attempted",
+        "cleanup-incomplete",
+        "cleanup-failed",
+        "extra-cleanup-field",
+        "missing-cache-removal",
+    ],
+)
+def test_browser_boundary_refuses_aliases_and_incomplete_records(
+    browser_boundary_case, mutation
+):
+    root, expected, browser = browser_boundary_case
+    if mutation == "legacy-six-fields":
+        browser["cleanup"] = browser.pop("temporary_cleanup")
+        del browser["temporary_directory"]
+    elif mutation == "actual-failed-eight-fields":
+        # This is the exact extra alias produced by the failed current owner.
+        browser["cleanup"] = None
+    elif mutation == "different-browser":
+        browser["path"] = "/fictional/other-chromium"
+    elif mutation == "different-source-hash":
+        browser["sha256"] = "e" * 64
+    elif mutation == "changed-browser-hash":
+        browser["sha256_after"] = "e" * 64
+    elif mutation == "different-temp-directory":
+        browser["temporary_directory"] = str(root / "other")
+    elif mutation == "relative-temp-directory":
+        browser["temporary_directory"] = "t"
+    elif mutation == "aliased-temp-directory":
+        browser["temporary_directory"] = str(root / "t/../t")
+    elif mutation == "non-string-temp-directory":
+        browser["temporary_directory"] = None
+    elif mutation == "dirty-before-flag":
+        browser["temporary_empty_before"] = False
+    elif mutation == "dirty-after-flag":
+        browser["temporary_empty_after"] = False
+    elif mutation == "untyped-before-flag":
+        browser["temporary_empty_before"] = 1
+    elif mutation == "untyped-after-flag":
+        browser["temporary_empty_after"] = 1
+    elif mutation == "missing-cleanup":
+        browser["temporary_cleanup"] = None
+    elif mutation == "cleanup-not-attempted":
+        browser["temporary_cleanup"]["attempted"] = False
+    elif mutation == "cleanup-incomplete":
+        browser["temporary_cleanup"]["complete"] = False
+    elif mutation == "cleanup-failed":
+        browser["temporary_cleanup"]["failure"] = "SOURCE cache removal refusal"
+    elif mutation == "extra-cleanup-field":
+        browser["temporary_cleanup"]["normalized"] = True
+    else:
+        from tools.rc4_installed_recovery import CACHE_DIRECTORY
+
+        cache = "com.google.Chrome.chrome_chrome_url_fetcher_.abcdef"
+        assert re.fullmatch(CACHE_DIRECTORY, cache)
+        browser["temporary_cleanup"]["inventory"] = {
+            cache: {"type": "directory", "bytes": 1}
+        }
+    original = copy.deepcopy(browser)
+    with pytest.raises(ValueError):
+        contract.validate_browser_boundary(browser, expected, root)
+    assert browser == original
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "absent",
+        pytest.param(
+            "linked",
+            marks=pytest.mark.skipif(
+                os.name != "posix",
+                reason="POSIX link control for the Linux browser temporary boundary",
+            ),
+        ),
+        "dirty",
+    ],
+)
+def test_browser_boundary_requires_actual_empty_fixed_temp(browser_boundary_case, kind):
+    root, expected, browser = browser_boundary_case
+    directory = root / "t"
+    if kind == "absent":
+        directory.rmdir()
+    elif kind == "linked":
+        directory.rmdir()
+        target = root / "other"
+        target.mkdir()
+        directory.symlink_to(target, target_is_directory=True)
+    else:
+        (directory / "unrecorded-cache").write_bytes(b"SOURCE untouched")
+    with pytest.raises(ValueError, match="browser/temp boundary"):
+        contract.validate_browser_boundary(browser, expected, root)
+    if kind == "dirty":
+        assert (directory / "unrecorded-cache").read_bytes() == b"SOURCE untouched"
+
+
+@pytest.mark.parametrize("encoded_bytes", [55, 56])
+def test_browser_boundary_exact_temp_byte_budget(browser_boundary_case, encoded_bytes):
+    base, expected, browser = browser_boundary_case
+    leaf_size = encoded_bytes - len(str(base).encode("utf-8")) - 3
+    assert leaf_size > 0
+    root = base / ("x" * leaf_size)
+    (root / "t").mkdir(parents=True)
+    browser["temporary_directory"] = str(root / "t")
+    assert len(browser["temporary_directory"].encode("utf-8")) == encoded_bytes
+    if encoded_bytes == 55:
+        contract.validate_browser_boundary(browser, expected, root)
+    else:
+        with pytest.raises(ValueError, match="browser/temp boundary"):
+            contract.validate_browser_boundary(browser, expected, root)
+
+
+def test_browser_boundary_unicode_path_uses_bytes(browser_boundary_case):
+    base, expected, browser = browser_boundary_case
+    root = base / ("é" * 20)
+    (root / "t").mkdir(parents=True)
+    browser["temporary_directory"] = str(root / "t")
+    assert len(browser["temporary_directory"]) <= 55
+    assert len(browser["temporary_directory"].encode("utf-8")) > 55
+    with pytest.raises(ValueError, match="browser/temp boundary"):
+        contract.validate_browser_boundary(browser, expected, root)

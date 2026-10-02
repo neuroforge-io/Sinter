@@ -557,6 +557,37 @@ def app_rows(value, inputs, notice, folder):
     return pids, ports
 
 
+def validate_browser_boundary(browser, expected_browser, root):
+    """Require the shared cleaner's exact recorded browser/temp boundary."""
+    directory = root / "t"
+    require(
+        type(browser) is dict
+        and set(browser)
+        == {
+            "path",
+            "sha256",
+            "sha256_after",
+            "temporary_directory",
+            "temporary_empty_before",
+            "temporary_empty_after",
+            "temporary_cleanup",
+        }
+        and browser["path"] == expected_browser["path"]
+        and browser["sha256"] == expected_browser["sha256"]
+        and browser["sha256_after"] == browser["sha256"]
+        and type(browser["temporary_directory"]) is str
+        and browser["temporary_directory"] == str(directory)
+        and len(browser["temporary_directory"].encode("utf-8")) <= 55
+        and browser["temporary_empty_before"] is True
+        and browser["temporary_empty_after"] is True
+        and directory.is_dir()
+        and not directory.is_symlink()
+        and not any(directory.iterdir()),
+        "Actual host browser/temp boundary changed.",
+    )
+    recovery.validate_browser_temp(browser["temporary_cleanup"])
+
+
 def host_resources(value, folder):
     require(
         type(value) is dict
@@ -1062,27 +1093,7 @@ def verify_original(args, *, pending=False):
         and outer["exec_command"]["pid"] not in host_pids,
         "Concurrent host controller client and collector alias.",
     )
-    browser = outer["browser"]
-    require(
-        type(browser) is dict
-        and set(browser)
-        == {
-            "path",
-            "sha256",
-            "sha256_after",
-            "temporary_empty_before",
-            "temporary_empty_after",
-            "cleanup",
-        }
-        and browser["path"] == inputs["browser"]["path"]
-        and browser["sha256"] == inputs["browser"]["sha256"]
-        and browser["sha256_after"] == browser["sha256"]
-        and browser["temporary_empty_before"] is True
-        and browser["temporary_empty_after"] is True
-        and not any((root / "t").iterdir()),
-        "Actual host browser/temp boundary changed.",
-    )
-    recovery.validate_browser_temp(browser["cleanup"])
+    validate_browser_boundary(outer["browser"], inputs["browser"], root)
     require(
         sha(regular(Path(host["driver"]["path"]), 512 * 1024 * 1024))
         == host["driver"]["sha256"],

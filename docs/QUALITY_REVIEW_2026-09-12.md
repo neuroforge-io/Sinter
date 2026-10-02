@@ -2240,3 +2240,36 @@ separate. These checks are source evidence, not a macOS or installed-app pass.
 Required correctness lint, touched-file formatting, Python 3.10 grammar for all
 283 tracked Python files, the public-boundary check and the deterministic
 offline self-audit pass. The audit records zero network requests.
+
+### 3 October: browser cleanup record integration
+
+Exact source `f4dc483187059051c6609d81d9abc72b50cedc74` hosted Quality
+run `37022178214`, attempt 1, completed all twelve jobs successfully. Its
+original portable and native builds completed, and their mechanical source,
+package and dependency checks passed. These observations do not qualify the
+complete installed workflow or admit publication.
+
+The one original installed workflow failed with `Actual host browser/temp
+boundary changed.` Its browser receipt reported 22 interface checks and both
+app lifetimes quit normally with closed listeners. The final generic interface
+verifier was not reached. The whole workflow remains failed; four later gate
+plans were not executed. The original record and partial outputs remain intact.
+
+The shared cleaner records `temporary_directory` and `temporary_cleanup` as
+side effects and returns no value. The workflow had added `cleanup: null` from
+that return while the verifier required a legacy six-field record. The source
+correction invokes the cleaner for its side effects and requires the exact
+seven-field boundary, fixed root/t path, existing 55-byte UTF-8 limit, an actual
+empty directory without a symlink, unchanged browser identity and the existing
+typed cleanup validator. Legacy and failed eight-field aliases still refuse.
+No lifecycle, first-failure, resource, deadline or cleanup requirement is removed.
+
+The affected module passes 163 unique source tests with no failures, errors or
+skips on Linux. The separate 27-case selection overlaps that count. An exact
+projection of the old branch fails the valid seven-field control as expected.
+Twenty-six new cases cover identity, aliases, typed flags, cleanup, actual
+directory state and Unicode/exact byte bounds. Independent source review
+accepts the narrow three-path correction; it does not replay or rehabilitate
+the failed installed result. Fresh exact-source hosted, build and original
+installed qualification remain required. The user's normally closed app and
+real saved workspace remain untouched.
