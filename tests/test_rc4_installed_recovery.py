@@ -6,11 +6,16 @@ import copy
 import hashlib
 import io
 import json
+import os
+import socket
+import socketserver
 import subprocess
 import sys
 import tarfile
+import tempfile
 import threading
 import time
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -19,15 +24,46 @@ from tools import rc4_installed_recovery as producer
 from tools import rc4_installed_recovery_contract as contract
 
 
-def removal_observation():
-    """An ordinary reaped child exercises ownership, never an installed package."""
-    from tools import installed_native_menu as menu
+def synthetic_command_row(argv, stdout=b"", stderr=b""):
+    """Typed source-unit metadata only; no actual child or installed admission."""
+    from tools.installed_native_menu import stream_record
 
-    rows = []
-    menu.command([sys.executable, "-I", "-S", "-B", "-c", "pass"], rows)
-    row = rows[-1]
-    row["argv"] = ["dpkg", "-r", "sinter"]
+    return {
+        "argv": list(map(str, argv)),
+        "pid": 4321,
+        "exit_code": 0,
+        "owned_group_remaining": False,
+        "forced_cleanup": False,
+        "streams_complete": True,
+        "passed": True,
+        "stdout": stream_record(io.BytesIO(stdout)),
+        "stderr": stream_record(io.BytesIO(stderr)),
+    }
+
+
+def removal_observation():
+    """Synthetic complete rows exercise portable parser predicates only."""
+    row = synthetic_command_row(["dpkg", "-r", "sinter"])
     return row, {"package_state": "absent", "remaining_paths": [], "passed": True}
+
+
+@pytest.fixture
+def short_relay_root():
+    """Own a short socket root independently of the long pytest basetemp."""
+    with tempfile.TemporaryDirectory(prefix="s4-", dir=Path.home()) as directory:
+        yield Path(directory)
+
+
+POSIX_CHILD = pytest.mark.skipif(
+    os.name != "posix" or not hasattr(os, "killpg"),
+    reason="Actual process-group child control requires POSIX os.killpg.",
+)
+UNIX_RELAY = pytest.mark.skipif(
+    os.name != "posix"
+    or not hasattr(socket, "AF_UNIX")
+    or not hasattr(socketserver, "ThreadingUnixStreamServer"),
+    reason="Actual Unix relay control requires POSIX Unix stream socketserver.",
+)
 
 
 @pytest.mark.parametrize(
@@ -55,28 +91,12 @@ def test_removal_requires_complete_actual_stdout(change):
 
 def test_removal_preserves_nonempty_progress_and_exact_known_warning():
     from tools import installed_native_entry_contract as native
-    from tools import installed_native_menu as menu
 
-    progress = b"Removing sinter (fictional ordinary child observation) ...\n"
-    rows = []
-    menu.command(
-        [
-            sys.executable,
-            "-I",
-            "-S",
-            "-B",
-            "-c",
-            "import os;os.write(1,"
-            + repr(progress)
-            + ");os.write(2,"
-            + repr(contract.REMOVAL_NOTICE)
-            + ")",
-        ],
-        rows,
+    progress = b"Removing sinter (synthetic source-unit stream) ...\n"
+    row = synthetic_command_row(
+        ["dpkg", "-r", "sinter"], progress, contract.REMOVAL_NOTICE
     )
-    # Only the record's argv is projected; this never executes dpkg or installs.
-    row = rows[-1]
-    row["argv"] = ["dpkg", "-r", "sinter"]
+    rows = [row]
     state = {"package_state": "absent", "remaining_paths": [], "passed": True}
     before = copy.deepcopy(row)
     contract.validate_package_removal(0, row, state, rows)
@@ -556,7 +576,10 @@ def test_raw_conservation_guard_precedes_any_reader_and_does_not_repair(tmp_path
         lifecycle.admission("run-1")
     assert contract.equal(snapshot(runtime / "data"), before)
     assert (
-        json.loads((output / "process/run-1.before-reader.json").read_text()) == before
+        json.loads(
+            (output / "process/run-1.before-reader.json").read_text(encoding="utf-8")
+        )
+        == before
     )
     assert before["databases"]["workspace.sqlite3"]["metadata"]["user_version"] == 0
 
@@ -740,23 +763,14 @@ def test_cli_cleanup_fault_retains_actual_nonutf8_diagnostics_and_first_admissio
     from tools import installed_native_menu as menu
 
     lifecycle, before = scoped_lifecycle(tmp_path)
-    actual = menu.command
     called = []
 
     def failed(argv, rows, **kw):
         called.append(list(map(str, argv)))
-        actual(
-            [
-                sys.executable,
-                "-I",
-                "-S",
-                "-B",
-                "-c",
-                "import os;os.write(2,b'\\xff owned CLI diagnostic\\n')",
-            ],
-            rows,
-            **kw,
-        )
+        raw = b"\xff owned CLI diagnostic\n"
+        rows.append(synthetic_command_row(argv, stderr=raw))
+        for name, path in kw["save_streams"].items():
+            path.write_bytes(raw if name == "stderr" else b"")
         rows[-1]["cleanup_error_type"] = "RuntimeError"
         raise RuntimeError("owned cleanup observation failed")
 
@@ -784,26 +798,17 @@ def test_cli_record_change_refuses_before_any_next_reader(tmp_path, monkeypatch)
     from tools.rc4_recovery_worker import snapshot
 
     lifecycle, before = scoped_lifecycle(tmp_path)
-    actual = menu.command
     called = []
 
     def changed(argv, rows, **kw):
         called.append(list(map(str, argv)))
-        result = actual(
-            [
-                sys.executable,
-                "-I",
-                "-S",
-                "-B",
-                "-c",
-                'print(\'{"ok":true,"version":"fictional-version"}\')',
-            ],
-            rows,
-            **kw,
-        )
+        raw = b'{"ok":true,"version":"fictional-version"}\n'
+        rows.append(synthetic_command_row(argv, stdout=raw))
+        for name, path in kw["save_streams"].items():
+            path.write_bytes(raw if name == "stdout" else b"")
         with sqlite3.connect(lifecycle.runtime / "data/workspace.sqlite3") as db:
             db.execute("PRAGMA application_id=987")
-        return result
+        return 0, raw
 
     monkeypatch.setattr(menu, "command", changed)
     with pytest.raises(ValueError, match="changed typed"):
@@ -831,28 +836,51 @@ def test_cli_record_change_refuses_before_any_next_reader(tmp_path, monkeypatch)
     ],
 )
 def test_exact_removal_notice_never_hides_other_actual_bytes(tmp_path, diagnostic):
-    from tools import installed_native_menu as menu
-
-    rows = []
-    menu.command(
-        [
-            sys.executable,
-            "-I",
-            "-S",
-            "-B",
-            "-c",
-            "import os;os.write(2," + repr(diagnostic) + ")",
-        ],
-        rows,
-    )
-    # Ordinary finite child bytes exercise the diagnostic predicate only, not dpkg.
-    rows[-1]["argv"] = ["dpkg", "-r", "sinter"]
+    rows = [synthetic_command_row(["dpkg", "-r", "sinter"], stderr=diagnostic)]
     state = {"package_state": "absent", "remaining_paths": [], "passed": True}
     if diagnostic in (b"", contract.REMOVAL_NOTICE):
         contract.validate_package_removal(0, rows[-1], state, rows)
     else:
         with pytest.raises(ValueError, match="Unexpected package"):
             contract.validate_package_removal(0, rows[-1], state, rows)
+
+
+@POSIX_CHILD
+@pytest.mark.parametrize(
+    "stdout,stderr",
+    [
+        (b"", b""),
+        (b"ordinary child progress\n", contract.REMOVAL_NOTICE),
+        (b"", b"\xff owned CLI diagnostic\n"),
+    ],
+)
+def test_actual_posix_child_keeps_complete_streams_and_process_ownership(
+    stdout, stderr
+):
+    """Real finite child; neither dpkg nor an installed application is executed."""
+    from tools import installed_native_entry_contract as native
+    from tools import installed_native_menu as menu
+
+    rows = []
+    code, raw = menu.command(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            "-c",
+            "import os;os.write(1,"
+            + repr(stdout)
+            + ");os.write(2,"
+            + repr(stderr)
+            + ")",
+        ],
+        rows,
+    )
+    native.stopped(rows[-1])
+    assert code == 0 and raw == stdout and rows[-1]["streams_complete"] is True
+    assert native.stream_bytes(rows[-1]["stdout"]) == stdout
+    assert native.stream_bytes(rows[-1]["stderr"]) == stderr
 
 
 @pytest.mark.parametrize(
@@ -889,8 +917,11 @@ def test_cleanup_id_admission_requires_full_successful_create(raw, exit_code, re
             contract.admitted_create(row, raw)
 
 
-def test_actual_unix_partial_request_worker_is_closed_before_ownership_pass(tmp_path):
-    import socket
+@UNIX_RELAY
+def test_actual_unix_partial_request_worker_is_closed_before_ownership_pass(
+    short_relay_root,
+):
+    tmp_path = short_relay_root
 
     relay = producer.owned_inner_relay(tmp_path)
     thread = threading.Thread(target=relay.serve_forever, daemon=True)
@@ -948,6 +979,60 @@ def test_headless_launch_file_identity_refuses_missing_or_changed_bytes(tmp_path
     assert original != producer.browser_identity(str(path))
     with pytest.raises(ValueError, match="Select an existing"):
         producer.browser_identity(None)
+
+
+@pytest.mark.parametrize("operation", ["read", "read-failure", "seed", "seed-failure"])
+def test_recovery_sqlite_connections_close_on_success_and_first_failure(
+    tmp_path, monkeypatch, operation
+):
+    import sqlite3
+
+    from tools import rc4_recovery_worker as worker
+
+    initial = worker.seed(tmp_path / "initial")
+    connections = []
+    actual_connect = sqlite3.connect
+
+    class TrackedConnection(sqlite3.Connection):
+        closed = False
+
+        def close(self):
+            try:
+                super().close()
+            finally:
+                self.closed = True
+
+        def execute(self, sql, *args, **kwargs):
+            if operation == "read-failure" and sql == "PRAGMA query_only=ON":
+                raise RuntimeError("first snapshot read failure")
+            if operation == "seed-failure" and sql == "PRAGMA application_id=12341":
+                raise RuntimeError("first seed metadata failure")
+            return super().execute(sql, *args, **kwargs)
+
+    def connect(*args, **kwargs):
+        result = actual_connect(*args, factory=TrackedConnection, **kwargs)
+        connections.append(result)
+        return result
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    try:
+        if operation.endswith("failure"):
+            with pytest.raises(RuntimeError, match="first .* failure"):
+                if operation.startswith("read"):
+                    worker.snapshot(tmp_path / "initial")
+                else:
+                    worker.seed(tmp_path / "new")
+        elif operation == "read":
+            assert contract.equal(
+                worker.snapshot(tmp_path / "initial"), initial["snapshot"]
+            )
+        else:
+            assert worker.seed(tmp_path / "new")["snapshot"]["databases"]
+        assert connections and all(db.closed for db in connections)
+    finally:
+        # Keep failing old controls owned; cleanup never hides the first assertion.
+        for db in connections:
+            db.close()
 
 
 def test_fixed_snapshot_preserves_typed_raw_rows_and_refuses_redirected_database(

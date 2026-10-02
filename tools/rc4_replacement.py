@@ -723,6 +723,28 @@ def created_identifier(row):
     return raw[:-1].decode("ascii")
 
 
+def retain_host_after(bundle, folder, chromium, browser_tmp, primary):
+    """Independently read all after identities and retain original failure bytes."""
+    after, errors, observation_error = contract.observe_host_identity(
+        chromium, browser_tmp
+    )
+    bundle["host"]["after"], bundle["host"]["after_errors"] = after, errors
+    if errors:
+        previous = bundle["cleanup_failure"]
+        bundle["cleanup_failure"] = (
+            (str(previous) + "; " if previous else "")
+            + "Host after observations failed: "
+            + contract.encoded(errors)
+        )
+    publication = probe.EvidencePublisher(
+        "OUTER-HOST",
+        primary if primary is not None else observation_error,
+        [contract.encoded(error) for error in errors],
+    )
+    publication.attempt(folder / "outer.json", bundle)
+    publication.finish(folder / "outer-host-failed.json")
+
+
 def outer(args):
     contract.require(
         os.name == "posix", "Actual Linux replacement needs its POSIX host owner."
@@ -749,7 +771,7 @@ def outer(args):
         "Choose a fresh short owned browser temporary directory.",
     )
     browser_tmp.mkdir(mode=0o700)
-    host = contract.host_identity(args.chromium, browser_tmp)
+    contract.host_identity(args.chromium, browser_tmp)
     contract.require(
         set(path.name for path in args.priors.iterdir()) == set(contract.PRIORS),
         "The replacement matrix needs exactly four prior trees.",
@@ -791,8 +813,15 @@ def outer(args):
         shared.private_mounts(pins, contract.MOUNTS)
         name = "sinter-native-entry-" + uuid.uuid4().hex[:12]
         rows, identifier, inspected_owned, start_attempted = [], None, False, False
+        host = {
+            "schema": "sinter-rc4-host-tools/v1",
+            "boundary": contract.host_tools.BOUNDARY,
+            "before": contract.host_identity(args.chromium, browser_tmp),
+            "after": None,
+            "after_errors": [],
+        }
         bundle = {
-            "schema": "sinter-rc4-replacement-owner/v1",
+            "schema": "sinter-rc4-replacement-owner/v2",
             "owner_sha256": args.outer_owner_sha256,
             "pins": pins,
             "commands": rows,
@@ -897,7 +926,10 @@ def outer(args):
                 if bundle["failure"] is None:
                     raise
             finally:
-                write(folder / "outer.json", bundle)
+                retain_host_after(
+                    bundle, folder, args.chromium, browser_tmp, sys.exc_info()[1]
+                )
+        contract.host_tools.validate_host_pair(host)
         shared.validate_lifecycle(rows, pins, contract.outer_argv, contract.MOUNTS)
         results[version] = {
             "outer": str(folder / "outer.json"),
@@ -937,6 +969,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         result = outer(args) if args.mode == "outer" else inner(args)
+    except probe.EvidenceFailure as exc:
+        # Full failed publication bytes remain available to the owning caller.
+        sys.stderr.write(contract.encoded(exc.as_record()) + "\n")
+        raise SystemExit(1) from exc
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         parser.exit(
             1,

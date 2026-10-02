@@ -1755,3 +1755,78 @@ Other recovery/replacement portability failures remain recorded, including an
 unexplained Windows idle-relay cleanup refusal. This new test-only adoption does
 not erase those failures or qualify an installer. The user app remains closed;
 no model request or release publication occurs.
+
+### Before/after host-tool observations, 2 October
+
+Independent root review
+`c054739c1a9c8d373cd6653e9a2d63e0d1190e71209c2a94fbbf8d3d3d229e14`
+accepts the bounded eight-path source change against frozen `427baeeb`. Its
+453-file base and 456-file proposal conserve 448 unowned original files and
+canonical Git modes. The exact patch replays; 805 canonical source checks pass
+without skips in 14.84 seconds. A declared composition with seven later main
+paths passes 1,049 unique source checks without skips in 71.15 seconds. These
+are overlapping source runs, not additive installed or performance evidence.
+
+The native browser and replacement outer records require new explicit schemas
+with independently read before/after fingerprints. Missing, changed or untyped
+after identities refuse; actual selected Docker, Chromium, Python and Playwright
+Node/CLI identities stay within the declared trusted host/library/daemon boundary.
+Host executable payloads are not copied, and the public 64 MiB member/256 MiB
+bundle limits remain unchanged. Source fingerprint reads have a separate bounded
+limit and confer no executable, library or daemon byte closure.
+
+Twelve separate independent controls pass. Two demonstrate remaining limitations,
+not successful qualification: native failed sidecar writes retain the first
+exception and later errors but carry no complete unpublished records; the unchanged
+final native owner-run diagnostic write can obscure the earlier failed context.
+Only replacement currently carries complete unpublished bytes through its explicit
+failure object. Both native boundaries remain repair work before a complete
+failure-conservation claim. The narrow acceptance does not mark them fixed.
+
+Root retains 10,304 author/reviewer byte/hash references. The author's sealed
+inventory remains unchanged. Initial reviewer comparisons incorrectly treated tar
+permission metadata as canonical Git modes; the corrected comparison uses
+`git ls-tree` and preserves the original refusal. Twenty generated compiled caches
+match their exact sources and remain in the two reviewer runtime views; those
+views are explicitly not closed release source trees. No source bytes, assertions
+or deadlines are altered to conceal either refusal. Static, formatting and Python
+3.10 grammar checks pass. Actual final installed execution, bounded public inventory,
+release authorization and publication remain pending. The physical user app stays
+closed and no Sinter provider call is made.
+
+### Recovery/replacement platform source repair, 2 October
+
+Independent review
+`d2a63301fefba1769b9073eb84fa768ea0dc1f5aacbd110f7a5874eefd7f6c16`
+accepts three paths over exact `c334ba8` plus the separately reviewed optional
+Playwright fixture patch. All 453 unowned base files and canonical Git modes are
+conserved. Exact original and declared `ad4b3da` patch replays match; the later
+ten-path host-observation adoption is explicitly separate. The original failed
+platform runs, incomplete log captures and reviewer setup refusals remain retained.
+
+Portable malformed-stream/parser controls use explicitly synthetic command rows;
+three separate actual POSIX-child cases preserve complete real streams and
+ownership checks. UTF-8 fixture reading is explicit, short owned Unix-socket
+directories replace long pytest paths, and recovery helper reads/writes close
+their real SQLite connections while preserving transaction behaviour. The
+independent reviewer reproduces 26 missing-killpg, one encoding, three long-path
+and four connection-closure failures against old source; their corrected controls
+pass. Under mapped unavailable OS resources, 141 portable recovery controls stay
+active and exactly three POSIX children plus one Unix relay skip. This is mapped
+source evidence, not an actual Windows/macOS pass.
+
+The unchanged Windows idle-TCP cleanup still requires `(0, 0)` within the unchanged
+deadline. Transparent test instrumentation calls the original socket shutdown,
+retains its actual return/error identity, re-raises unchanged exceptions and records
+surviving owned stacks/socket state. It does not repair, skip or hide the actual
+`(1, 1)` failure. The independent review passes 509 unique repository controls and
+five separate wrapper/deadline/real-SQLite controls. Both 403-case normal and
+blocked-Playwright replays pass without skips; those repeats are not added to the
+unique total. Root retains 45,641 author/reviewer regular byte/hash references and
+keeps special-node inventories lstat-only.
+
+Root's declared current-main composition passes 1,159 unique source checks without
+skips in 27.15 seconds; static, formatting and Python 3.10 grammar checks pass.
+Fresh actual hosted platform diagnosis remains required. No installed gate,
+release readiness, model quality or product-performance claim follows from these
+source timings. The user app remains closed and no Sinter provider call is made.

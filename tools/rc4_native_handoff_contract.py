@@ -1124,6 +1124,7 @@ def validate_browser(value, inner):
         sorted(value),
         sorted(
             {
+                "schema",
                 "origin",
                 "relay_port",
                 "page_errors",
@@ -1149,6 +1150,27 @@ def validate_browser(value, inner):
             }
         ),
         "Browser evidence fields differ.",
+    )
+    exact(
+        value["schema"],
+        "sinter-rc4-native-handoff-browser/v2",
+        "Unknown actual browser observation schema.",
+    )
+    chromium = value["chromium"]
+    old.require(
+        type(chromium) is dict
+        and set(chromium) == {"path", "sha256", "sha256_after", "version"}
+        and chromium["path"] == str(HOST_CHROMIUM)
+        and type(chromium["sha256"]) is str
+        and re.fullmatch(r"[0-9a-f]{64}", chromium["sha256"])
+        and type(chromium["version"]) is str
+        and bool(chromium["version"]),
+        "Actual selected Chromium identity is incomplete.",
+    )
+    exact(
+        chromium["sha256_after"],
+        chromium["sha256"],
+        "Actual Chromium changed during qualification.",
     )
     exact(
         value["origin"],
@@ -1277,7 +1299,7 @@ def validate_browser(value, inner):
     driver = value["driver_process"]
     old.require(
         type(driver) is dict
-        and set(driver) == {"pid", "path", "sha256"}
+        and set(driver) == {"pid", "path", "sha256", "sha256_after"}
         and type(driver["pid"]) is int
         and driver["pid"] > 0
         and driver["pid"] not in value["browser_pids"]
@@ -1286,6 +1308,11 @@ def validate_browser(value, inner):
         and type(driver["sha256"]) is str
         and re.fullmatch(r"[0-9a-f]{64}", driver["sha256"]),
         "Actual owned browser-driver identity is incomplete.",
+    )
+    exact(
+        driver["sha256_after"],
+        driver["sha256"],
+        "Actual Playwright Node changed during qualification.",
     )
 
 
