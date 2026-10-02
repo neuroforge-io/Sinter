@@ -928,6 +928,154 @@ def test_actual_pair_close_first_without_body_error_keeps_later(
     assert channel.fileno() == peer.fileno() == -1
 
 
+def _fill_with_same_zero_observation(
+    channel, observations, *, fill, active_context, **kwargs
+):
+    """Use the zero-byte invocation itself; a second fill can regain capacity."""
+    started, attempts = time.monotonic(), []
+    initial = dict(observations)
+    observations["already_full_setup_attempts"] = attempts
+    if not active_context:
+        kwargs = {key: kwargs[key] for key in ("send_syscall", "select_syscall")}
+    for _ in range(8):
+        assert time.monotonic() - started < 2
+        trial = dict(initial)
+        try:
+            fill(channel, trial, **kwargs)
+        finally:
+            # Keep the exact observation, including the original refusal before
+            # zero_extra_prefill is assigned. Never replay that instantaneous state.
+            attempts.append(trial)
+            observations.clear()
+            observations.update(trial)
+            observations["already_full_setup_attempts"] = attempts
+        if trial["prefill_bytes"] == 0:
+            assert active_context and trial["zero_extra_prefill"] is True
+            assert trial["prefill_unwritable"] is True
+            assert trial["prefill_would_block_type"] == "BlockingIOError"
+            return
+    pytest.fail("Bounded actual setup never demonstrated zero extra fill")
+
+
+@pytest.fixture
+def controlled_zero_prefill():
+    """Deterministic syscall seam; no socket or hosted-platform claim."""
+    state = {"plans": [0, 65536], "calls": 0, "errors": [], "modes": []}
+    prefix = b"known production prefix\x00\xff"
+    observations = {"sent_bytes": len(prefix), "peer_reads": 0, "peer_shutdowns": 0}
+
+    class Channel:
+        timeout = 0.0
+
+        def gettimeout(self):
+            return self.timeout
+
+        def setblocking(self, blocking):
+            assert blocking is False
+            self.timeout = 0.0
+
+        def settimeout(self, value):
+            self.timeout = value
+
+    channel = Channel()
+
+    def send(writer, data):
+        assert writer is channel
+        state["modes"].append(writer.gettimeout())
+        if state["remaining"] == 0:
+            raise BlockingIOError(errno.EAGAIN, "Controlled actual-send seam")
+        count = min(len(data), state["remaining"])
+        state["remaining"] -= count
+        return count
+
+    def select(readers, writers, errors, timeout):
+        assert readers == errors == [] and writers == [channel] and timeout == 0.05
+        assert state["remaining"] == 0
+        return [], [], []
+
+    def fill(writer, trial, **kwargs):
+        state["remaining"] = state["plans"][state["calls"]]
+        state["calls"] += 1
+        try:
+            return _fill_until_actual_backpressure(writer, trial, **kwargs)
+        except BaseException as error:
+            state["errors"].append(error)
+            raise
+
+    kwargs = {
+        "send_syscall": send,
+        "select_syscall": select,
+        "production_prefix": prefix,
+        "production_payload": prefix + b"remaining original payload",
+        "requests_stopped": threading.Event(),
+    }
+    return channel, observations, kwargs, fill, state
+
+
+@pytest.mark.parametrize("active_context", [False, True])
+@pytest.mark.parametrize("plans", [[0, 65536], [61440, 131072, 0, 65536]])
+def test_zero_prefill_never_replays_after_observed_capacity_can_return(
+    controlled_zero_prefill, active_context, plans
+):
+    channel, observations, kwargs, fill, state = controlled_zero_prefill
+    state["plans"] = plans
+    if active_context:
+        _fill_with_same_zero_observation(
+            channel, observations, fill=fill, active_context=True, **kwargs
+        )
+        assert state["errors"] == []
+        assert observations["zero_extra_prefill"] is True
+    else:
+        with pytest.raises(AssertionError) as refusal:
+            _fill_with_same_zero_observation(
+                channel, observations, fill=fill, active_context=False, **kwargs
+            )
+        assert state["errors"] == [refusal.value]
+        assert "zero_extra_prefill" not in observations
+    assert state["calls"] == plans.index(0) + 1
+    assert observations["prefill_bytes"] == 0
+    assert observations["prefill_unwritable"] is True
+    assert observations["prefill_would_block_type"] == "BlockingIOError"
+    assert observations["prefill_would_block_errno"] == errno.EAGAIN
+    assert observations["prefill_sha256"] == hashlib.sha256(b"").hexdigest()
+    assert len(observations["already_full_setup_attempts"]) == state["calls"]
+    assert observations["already_full_setup_attempts"][-1]["prefill_bytes"] == 0
+    assert channel.gettimeout() == 0.0 and set(state["modes"]) == {0.0}
+    assert not kwargs["requests_stopped"].is_set()
+
+
+def test_zero_prefill_retains_eight_attempt_limit(controlled_zero_prefill):
+    channel, observations, kwargs, fill, state = controlled_zero_prefill
+    state["plans"] = [1] * 8
+    with pytest.raises(pytest.fail.Exception, match="never demonstrated zero"):
+        _fill_with_same_zero_observation(
+            channel, observations, fill=fill, active_context=True, **kwargs
+        )
+    assert state["calls"] == 8
+    assert len(observations["already_full_setup_attempts"]) == 8
+    assert observations["prefill_bytes"] == 1
+    assert observations["zero_extra_prefill"] is False
+
+
+def test_zero_prefill_retains_two_second_budget(controlled_zero_prefill, monkeypatch):
+    channel, observations, kwargs, fill, state = controlled_zero_prefill
+    state.update(plans=[1], clock=0)
+    monkeypatch.setattr(time, "monotonic", lambda: state["clock"])
+
+    def spend_budget(*args, **supplied):
+        result = fill(*args, **supplied)
+        state["clock"] = 2
+        return result
+
+    with pytest.raises(AssertionError):
+        _fill_with_same_zero_observation(
+            channel, observations, fill=spend_budget, active_context=True, **kwargs
+        )
+    assert state["calls"] == 1
+    assert len(observations["already_full_setup_attempts"]) == 1
+    assert observations["prefill_bytes"] == 1
+
+
 @pytest.mark.parametrize("active_context", [False, True])
 def test_actual_zero_extra_prefill_requires_active_original_prefix(
     tmp_path, monkeypatch, record_property, active_context
@@ -937,38 +1085,13 @@ def test_actual_zero_extra_prefill_requires_active_original_prefix(
     captured = []
 
     def already_full(channel, observations, **kwargs):
-        # This bounded source setup does not fabricate a syscall result. The
-        # fresh helper must actually refuse zero extra bytes before the active
-        # context can admit that same kernel state. No peer read or shutdown.
-        started, attempts = time.monotonic(), []
-        observations["already_full_setup_attempts"] = attempts
-        for _ in range(8):
-            assert time.monotonic() - started < 2
-            trial = {}
-            try:
-                actual_fill(
-                    channel,
-                    trial,
-                    send_syscall=kwargs["send_syscall"],
-                    select_syscall=kwargs["select_syscall"],
-                )
-            except AssertionError:
-                assert trial["prefill_bytes"] == 0
-                assert trial["prefill_unwritable"] is True
-                assert trial["prefill_would_block_type"] == "BlockingIOError"
-                attempts.append(trial)
-                break
-            else:
-                attempts.append(trial)
-        else:
-            pytest.fail("Bounded actual setup never demonstrated zero extra fill")
-        if not active_context:
-            kwargs = {key: kwargs[key] for key in ("send_syscall", "select_syscall")}
-        actual_fill(channel, observations, **kwargs)
-        assert observations["prefill_bytes"] == 0
-        assert observations["zero_extra_prefill"] is True
-        assert observations["prefill_unwritable"] is True
-        assert observations["prefill_would_block_type"] == "BlockingIOError"
+        _fill_with_same_zero_observation(
+            channel,
+            observations,
+            fill=actual_fill,
+            active_context=active_context,
+            **kwargs,
+        )
 
     def retain_property(name, value):
         captured.append(json.loads(value))

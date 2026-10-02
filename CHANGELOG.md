@@ -7,6 +7,10 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Bind cancellation-test admission to the same actual socket observation. A
+  full buffer may regain capacity between calls; a prior zero-byte observation
+  cannot establish the next call's result. Keep cancellation and cleanup gates.
+
 - Observe the qualification browser's command after its private debugger is
   ready, before connecting to it. Require the exact live command; preserve the
   original failed attempt rather than substituting expected process evidence.

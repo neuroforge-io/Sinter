@@ -2197,3 +2197,46 @@ running a real browser. Required correctness lint, touched-file formatting,
 Python 3.10 grammar for all 283 tracked Python files, the public-boundary check
 and deterministic offline self-audit pass. These source checks do not replace a
 new original installed run or qualify the held candidate.
+
+
+### 3 October: same-observation socket admission
+
+Exact source `a7159a54424209a8e111e1dbe66731e65eaf8136` hosted Quality
+run `37016702815`, attempt 1, failed the macOS Python 3.13 cancellation fixture.
+Its original XML contains 5,099 cases: 4,752 passed, 346 skipped, one failed and
+zero errors. All 23 added browser-identity controls passed in that job. The
+failed source is byte-identical to `959b9f6`; the original log, artifact and
+recorded socket observations remain retained. This run does not admit a build.
+The terminal run has ten successful jobs, the failed macOS job and a skipped
+source/portable job. Windows Python 3.13 completed normally in 791.001 suite
+seconds, within the 20-minute limit. No rerun or cancellation was used.
+
+The failure occurred during fixture preparation, before a pending cancellation
+was established. The test observed an actual zero-byte blocked fill, discarded
+that call, then asserted that a separate fill would still accept zero bytes.
+The later call accepted 65,536 bytes. The original production prefix was 4,096
+bytes, the peer was neither read nor shut down, and cleanup completed. The
+observations establish the test's invalid cross-call assumption; they do not
+demonstrate a product cancellation failure. A socket's capacity can change
+between observations even without a userspace peer read.
+
+Two source reviewers agree on a narrow test correction: each bounded attempt
+uses the intended active or inactive context from the start. The invocation
+that actually observes zero additional bytes supplies the active admission or
+propagates its original inactive refusal. A previous observation cannot stand
+in for a later syscall. Real prefix, backpressure, cancellation, timeout and
+cleanup requirements remain unchanged. Focused regressions and the successor's
+hosted and original installed gates remain required before release acceptance.
+The user's normal app close remains separate from this disposable test failure.
+
+The changed cancellation module passes 54 tests, with zero skips and six
+inherited JUnit-property warnings. Its 14-case focused selection overlaps that
+total. Six new controls cover regained capacity and the existing attempt/time
+bounds; the literal earlier branch fails all four capacity-regain cases. The
+initial author run's one failure remains retained: an earlier acceptance flag
+leaked into the later negative observation. Each current trial now replaces
+that observation without synthesizing the flag; historical trials remain
+separate. These checks are source evidence, not a macOS or installed-app pass.
+Required correctness lint, touched-file formatting, Python 3.10 grammar for all
+283 tracked Python files, the public-boundary check and the deterministic
+offline self-audit pass. The audit records zero network requests.
