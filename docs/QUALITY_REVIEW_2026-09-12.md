@@ -1920,7 +1920,7 @@ installed qualification. The actual final RC4 build, installed workflow, prior
 preview upgrades, native/recovery checks, cold install and independent final asset
 review remain required. The current version stays `0.5.4rc4.dev0`.
 
-The hosted source run for `3ab6a2` (36959550809) ended cancelled. Only two of six
+The hosted source run for `3ab6a2` (36959550809, attempt 1) ended cancelled. Only two of six
 expected primary test artifacts were present, so their original Windows records
 are partial observations and establish no complete platform pass. The reason for
 cancellation is unconfirmed. Development publish run 36959551002 skipped native
@@ -1965,3 +1965,54 @@ After both accepted families and the incoming filesystem-test update are combine
 changes preserve the original raw source failures; these timings do not establish
 product performance. Formatting, F/I lint, Python 3.10 grammar and the public
 boundary pass. Installed qualification and final asset publication remain pending.
+
+
+### Hosted-source refusal and portable source correction, 2 October
+
+Exact `3132ad91c89680e98ab5c8ac739c23b696586f7a` Quality run 36964758587,
+attempt 1, ended FAILURE. All six Python jobs failed: five cases on each
+Linux/macOS version, 29 on Windows 3.10 and 49 on Windows 3.13. Chromium,
+RKC interoperability and all three speech jobs succeeded; verified-source was
+skipped. Original complete failed logs and ZIP/XML uploads are retained.
+
+Earlier `f73cf45b5f14e357f4a2aede4b554c56d495478e` run 36962603645,
+attempt 1, passed all 12 jobs. Each original Python phase reported 4,607
+unique cases with its platform skips; five native GUI source checks remain
+a separate phase. This is a prior source baseline. Earlier run 36959550809
+attempt 1 cancellation and its externally started attempt 2 failure remain
+distinct observations. No failed result is replaced by a later pass.
+
+The accepted workflow correction changes two source test files only: real
+private short ownership roots, native absolute fictional paths, explicit
+resource admission and deterministic reversible diagnostic refusal. Independent
+replay plus controls passed 199 unique cases and retained every original
+assertion. The accepted relay correction changes one source test file only;
+298 relevant cases plus six independent controls pass. It reproduces the
+original selector failure and observes actual unread TCP backpressure before
+checking cancellation or the unchanged 0.25-second operation deadline.
+
+The accepted manifest correction changes only the metadata reader and its
+source controls. It passes 299 relevant cases plus six independent controls,
+retaining real replacement/rewrite/descriptor failures and the first error.
+The official pinned CPython implementation supports the Windows timestamp
+mismatch inference; original runner stat field values remain unknown. Shared
+file identity and full channel-local snapshots remain bound to the original
+pinned-byte release authorization.
+
+These separate family replays overlap the joined source tests; they are not
+additive coverage. Two original Windows batch launcher timeouts still have no
+proven cause; their five-second limit is unchanged. A new exact-source hosted
+run and actual installed qualification are required. Sinter and the real
+workspace remain closed; this pass makes no hosted model calls.
+
+See [the source portability record](RC4_SOURCE_PORTABILITY.md). The original
+191-reference CI capture manifest is
+`c2436f643cee85df468337ce2e1a7accf02b6df7078036770704207e6a8a26f3`.
+Development publication remains a no-op. Published RC3 assets are immutable;
+there is no new admitted installer or higher product score from this source pass.
+
+The joined 16-file Linux source replay passed 1,583 unique cases, no failures,
+errors or skips, in 80.17 seconds. Three Pytest diagnostic-property/JUnit format
+warnings are retained in the complete raw output and XML. F/I, formatting,
+Python 3.10 grammar and the public-boundary check pass. No score is raised by
+this source result; exact-source hosted and installed checks remain required.

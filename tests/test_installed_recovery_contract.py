@@ -204,7 +204,7 @@ def test_complete_synthetic_rc3_admission_and_local_stage(recovered, tmp_path):
     )
     assert "not certified" in notes and "single trusted" in notes
     with pytest.raises(ValueError, match="notes policy"):
-        candidate.release_notes("0.5.4rc4", recovered[3])
+        candidate.release_notes("0.5.4rc5", recovered[3])
 
 
 @pytest.mark.parametrize(

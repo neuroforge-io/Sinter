@@ -11,13 +11,16 @@ import base64
 import copy
 import io
 import json
+import os
 import sys
+import tempfile
 import types
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from test_rc4_native_publication import envelope_owned_directory
 
 from tools import rc4_installed_workflow as producer
 from tools import rc4_installed_workflow_contract as contract
@@ -39,8 +42,11 @@ def input_fixture():
         "package_receipt_sha256": "e" * 64,
         "uid": 1000,
         "gid": 1000,
-        "repository": "/fictional/source",
-        "browser": {"path": "/fictional/chromium", "sha256": "f" * 64},
+        "repository": str(Path("fictional/source").resolve()),
+        "browser": {
+            "path": str(Path("fictional/chromium").resolve()),
+            "sha256": "f" * 64,
+        },
     }
 
 
@@ -165,6 +171,10 @@ def test_every_cleanup_attempt_runs_and_first_actual_exception_survives(primary)
     assert len(attempts.errors) == 2 and attempts.rows[-1]["succeeded"] is True
 
 
+@pytest.mark.skipif(
+    os.name != "posix" or not hasattr(os, "killpg"),
+    reason="Actual child process-group observation requires POSIX os.killpg.",
+)
 def test_real_ordinary_child_full_streams_are_conserved_after_reap(tmp_path):
     from tools import installed_native_menu as menu
 
@@ -243,6 +253,10 @@ def test_controller_thread_start_fault_still_closes_and_retains_all_resources(
 ):
     from tools import rc4_installed_recovery as recovery
 
+    # This SOURCE controller projects Linux metadata; it never starts an app.
+    monkeypatch.setattr(producer.os, "geteuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(producer.os, "getegid", lambda: 1000, raising=False)
+
     ordinary_read = contract.regular
     monkeypatch.setattr(
         contract,
@@ -288,6 +302,10 @@ def test_controller_metadata_read_fault_is_retained_without_start_or_masking(
     tmp_path, monkeypatch
 ):
     from tools import rc4_installed_recovery as recovery
+
+    # This SOURCE controller projects Linux metadata; it never starts an app.
+    monkeypatch.setattr(producer.os, "geteuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(producer.os, "getegid", lambda: 1000, raising=False)
 
     first, called = OSError("SOURCE controller cmdline read failed"), []
     relay = SimpleNamespace(
@@ -895,18 +913,28 @@ def test_root_producer_refuses_before_preparation_observation(tmp_path, monkeypa
     assert called == [] and not (tmp_path / "untouched").exists()
 
 
-def _source_prepare_fault(tmp_path, monkeypatch, first):
-    import tempfile
+@pytest.fixture
+def source_prepare_root():
+    # The actual Linux preparation guard uses POSIX ownership and a <=55-byte
+    # socket path. Keep the owned SOURCE fixture short independently of HOME,
+    # pytest's basetemp and runner UID; do not bypass that production guard.
+    if os.name != "posix" or not hasattr(os, "geteuid"):
+        pytest.skip("Actual preparation ownership control requires POSIX metadata.")
+    if os.geteuid() == 0:
+        pytest.skip("The installed preparation owner deliberately refuses UID 0.")
+    with tempfile.TemporaryDirectory(prefix="wf-", dir="/tmp") as directory:
+        parent = Path(directory)
+        assert parent.stat().st_uid == os.geteuid()
+        assert not parent.stat().st_mode & 0o022
+        assert len(os.fsencode(parent / "p/t")) <= 55
+        yield parent / "p"
 
+
+def _source_prepare_fault(tmp_path, monkeypatch, first, output):
     from tools import installed_native_menu as menu
     from tools import rc4_installed_recovery as recovery
 
     inputs = input_fixture()
-    short = Path(
-        tempfile.mkdtemp(
-            prefix="f-", dir=Path(producer.os.environ.get("HOME", str(Path.home())))
-        )
-    )
     args = SimpleNamespace(
         owner_sha256=inputs["owner_sha256"],
         source_commit=inputs["source_commit"],
@@ -914,10 +942,9 @@ def _source_prepare_fault(tmp_path, monkeypatch, first):
         installer=tmp_path / "candidate.deb",
         package_receipt=tmp_path / "receipt.json",
         chromium=tmp_path / "chromium",
-        output=short / "p",
+        output=output,
     )
     monkeypatch.setattr(producer.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(producer.os, "geteuid", lambda: 1000, raising=False)
     monkeypatch.setattr(recovery, "source_records", lambda *_: inputs["qa_files"])
     monkeypatch.setattr(recovery, "browser_identity", lambda *_: inputs["browser"])
     calls = []
@@ -969,10 +996,12 @@ def _failed_bytes(error, path, raw):
 
 @pytest.mark.parametrize("kind", [RuntimeError, KeyboardInterrupt])
 def test_prepare_successful_receipt_preserves_identical_body_error(
-    tmp_path, monkeypatch, kind
+    tmp_path, monkeypatch, kind, source_prepare_root
 ):
     first = kind("SOURCE first Git refusal")
-    args, calls, out, err = _source_prepare_fault(tmp_path, monkeypatch, first)
+    args, calls, out, err = _source_prepare_fault(
+        tmp_path, monkeypatch, first, source_prepare_root
+    )
     with pytest.raises(kind) as raised:
         producer.prepare(args)
     assert raised.value is first and len(calls) == 1
@@ -989,14 +1018,16 @@ def test_prepare_successful_receipt_preserves_identical_body_error(
 
 @pytest.mark.parametrize("fallback_fails", [False, True])
 def test_first_git_fault_and_every_later_publication_fault_retain_complete_bytes(
-    tmp_path, monkeypatch, fallback_fails
+    tmp_path, monkeypatch, fallback_fails, source_prepare_root
 ):
     first = RuntimeError("SOURCE first Git fault")
     receipt_fault, fallback_fault = (
         OSError("SOURCE receipt fault"),
         KeyboardInterrupt("SOURCE fallback close fault"),
     )
-    args, calls, out, err = _source_prepare_fault(tmp_path, monkeypatch, first)
+    args, calls, out, err = _source_prepare_fault(
+        tmp_path, monkeypatch, first, source_prepare_root
+    )
     attempted = []
     actual_writer = producer.write_json
 
@@ -1212,18 +1243,19 @@ def test_actual_surrogate_owned_path_refusal_is_reversible_in_full_cli_failure(
     import os
     import signal
 
-    if os.name != "posix":
-        # The deterministic surrogate codec assertion below remains cross-platform.
-        surrogate = "\udcff"
-    else:
-        surrogate = os.fsdecode(b"owned-\xff")
-    path = tmp_path / (surrogate if os.name == "posix" else "owned-source")
-    path.mkdir()
+    # Actual filename-byte admission differs from OS family (APFS rejects
+    # invalid UTF-8). The shared helper falls back only on genuine EILSEQ;
+    # permissions/capacity faults still propagate as the identical exception.
+    path = envelope_owned_directory(tmp_path, filesystem_byte=True)
+    byte_name_admitted = os.name == "posix" and os.fsencode(path.name) == b"owned-\xff"
+    # Own a second directory to refuse fallback on every filesystem. A normal
+    # Unicode fallback path would otherwise validly publish on Windows/macOS.
+    path.with_name(path.name + ".failed.json").mkdir()
     value = {
         "failure": {
             "message": "SOURCE refused "
             + str(path)
-            + ("" if os.name == "posix" else surrogate)
+            + ("" if byte_name_admitted else "\udcff")
         },
         "passed": False,
     }
@@ -1255,7 +1287,8 @@ def test_actual_surrogate_owned_path_refusal_is_reversible_in_full_cli_failure(
     carried = base64.b64decode(envelope["unpublished_bytes"][str(path)]["data_base64"])
     assert carried == producer.serialized_receipt(value)
     assert json.loads(carried)["failure"]["message"] == value["failure"]["message"]
-    if os.name == "posix":
+    assert "\udcff" in value["failure"]["message"]
+    if byte_name_admitted:
         assert (
             os.fsencode(
                 Path(

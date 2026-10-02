@@ -7,12 +7,110 @@ import socketserver
 import tempfile
 import threading
 import time
+from contextlib import contextmanager
 
 import pytest
 
 from tools import installed_workflow_browser as browser
 from tools import rc4_replacement_probe as probe
 from tools.installed_workflow_browser import RelayClosed, receive_request
+
+
+@contextmanager
+def _unread_tcp_pair():
+    """Bound both real kernel windows before handshake; never read the peer."""
+    with socket.socket() as listener, socket.socket() as peer:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        peer.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+        peer.settimeout(2)
+        peer.connect(listener.getsockname())
+        channel, _ = listener.accept()
+        with channel:
+            channel.settimeout(20)
+            channel.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+            observations = {
+                "sender_buffer": channel.getsockopt(
+                    socket.SOL_SOCKET, socket.SO_SNDBUF
+                ),
+                "unread_peer_buffer": peer.getsockopt(
+                    socket.SOL_SOCKET, socket.SO_RCVBUF
+                ),
+                "peer_reads": 0,
+                "peer_shutdowns": 0,
+            }
+            assert observations["sender_buffer"] > 0
+            assert observations["unread_peer_buffer"] > 0
+            yield channel, peer, observations
+
+
+def _observe_unread_peer(monkeypatch, peer, observations):
+    """Count and refuse any peer read/shutdown before the tested outcome."""
+    actual_recv = socket.socket.recv
+    actual_recv_into = socket.socket.recv_into
+    actual_shutdown = socket.socket.shutdown
+
+    def recv(channel, *args, **kwargs):
+        if channel is peer:
+            observations["peer_reads"] += 1
+            pytest.fail("Unread backpressure peer must not consume bytes")
+        return actual_recv(channel, *args, **kwargs)
+
+    def recv_into(channel, *args, **kwargs):
+        if channel is peer:
+            observations["peer_reads"] += 1
+            pytest.fail("Unread backpressure peer must not consume bytes")
+        return actual_recv_into(channel, *args, **kwargs)
+
+    def shutdown(channel, *args, **kwargs):
+        if channel is peer:
+            observations["peer_shutdowns"] += 1
+            pytest.fail("Unread backpressure peer must remain open")
+        return actual_shutdown(channel, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "recv", recv)
+    monkeypatch.setattr(socket.socket, "recv_into", recv_into)
+    monkeypatch.setattr(socket.socket, "shutdown", shutdown)
+
+
+def _require_pending_send(observations, payload_bytes):
+    # A completed send, even followed by an unwritable socket, is not a pending
+    # operation that can demonstrate cancellation of this payload.
+    assert 0 < observations["sent_bytes"] < payload_bytes
+    assert observations["unwritable"] is True
+    assert observations["peer_reads"] == observations["peer_shutdowns"] == 0
+
+
+def _fill_until_actual_backpressure(channel, observations):
+    """Retain a genuine would-block and unwritable result within finite bounds."""
+    original_timeout = channel.gettimeout()
+    deadline, sent = time.monotonic() + 2, 0
+    chunk = b"SOURCE pending fixture bytes\x00\xff" * 2048
+    modes = []
+    try:
+        channel.setblocking(False)
+        while time.monotonic() < deadline and sent < 32 * 1024 * 1024:
+            modes.append(channel.gettimeout())
+            try:
+                count = channel.send(chunk[: min(len(chunk), 32 * 1024 * 1024 - sent)])
+            except BlockingIOError as actual:
+                _, writable, _ = probe.select.select([], [channel], [], 0.05)
+                if not writable:
+                    observations.update(
+                        prefill_bytes=sent,
+                        would_block_type=type(actual).__name__,
+                        would_block_errno=actual.errno,
+                        unwritable=True,
+                        prefill_modes=sorted(set(modes)),
+                    )
+                    assert sent > 0 and observations["prefill_modes"] == [0.0]
+                    return
+            else:
+                assert count > 0
+                sent += count
+        pytest.fail("Bounded real unread socket did not demonstrate backpressure")
+    finally:
+        channel.settimeout(original_timeout)
 
 
 @pytest.mark.parametrize("scope", ["idle", "header", "body"])
@@ -49,7 +147,8 @@ def test_actual_request_stops_when_shutdown_does_not_wake_reader(
         if scope == "body":
             (tmp_path / "state.json").write_text(json.dumps({"port": 1}))
             partial = (
-                f"POST /api/state HTTP/1.1\r\nHost: 127.0.0.1:{relay.server_address[1]}\r\n"
+                "POST /api/state HTTP/1.1\r\n"
+                f"Host: 127.0.0.1:{relay.server_address[1]}\r\n"
                 "Content-Length: 100\r\n\r\nfirst-incomplete-body"
             ).encode()
         else:
@@ -159,7 +258,7 @@ def test_readiness_stop_gap_cannot_start_a_blocking_receive(tmp_path, monkeypatc
 
     def spurious_readability(readers, writers, errors, timeout=None):
         if len(readers) == 1:
-            channel = readers[0]
+            channel = next(iter(readers))
             with relay.owned_lock:
                 owned = channel in relay.owned_sockets
             if owned and channel not in selected:
@@ -374,48 +473,67 @@ def test_partial_send_preserves_bytes_one_budget_and_original_timeout(
 
 
 def test_actual_backpressured_send_stops_without_peer_read_or_shutdown(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, record_property
 ):
     relay = probe.HostRelay(tmp_path)
-    actual_send = socket.socket.send
-    first_send, outcomes, modes = threading.Event(), [], []
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        listener.listen()
-        with socket.create_connection(listener.getsockname()) as unread_peer:
-            channel, _ = listener.accept()
-            with channel:
-                channel.settimeout(20)
-                channel.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    actual_send, actual_select = socket.socket.send, probe.select.select
+    pending, release = threading.Event(), threading.Event()
+    outcomes, modes = [], []
+    payload = b"literal bytes\x00\xff" * 524_288
+    try:
+        with _unread_tcp_pair() as (channel, unread_peer, observations):
+            observations.update(sent_bytes=0, unwritable=False)
+            _observe_unread_peer(monkeypatch, unread_peer, observations)
 
-                def observe_send(writer, data, flags=0):
-                    assert writer is channel
-                    modes.append(writer.gettimeout())
-                    sent = actual_send(writer, data, flags)
-                    first_send.set()
-                    return sent
+            def observe_send(writer, data, flags=0):
+                assert writer is channel
+                modes.append(writer.gettimeout())
+                sent = actual_send(writer, data, flags)
+                observations["sent_bytes"] += sent
+                return sent
 
-                def sending():
-                    try:
-                        relay.send_owned(channel, b"literal bytes\x00\xff" * 524_288)
-                    except BaseException as error:
-                        outcomes.append(error)
+            def observe_pending(readers, writers, errors, timeout=None):
+                result = actual_select(readers, writers, errors, timeout)
+                if channel in writers and not result[1] and not pending.is_set():
+                    observations["unwritable"] = True
+                    _require_pending_send(observations, len(payload))
+                    pending.set()
+                    assert release.wait(2)
+                return result
 
-                monkeypatch.setattr(socket.socket, "send", observe_send)
-                worker = threading.Thread(target=sending)
-                worker.start()
+            def sending():
                 try:
-                    assert first_send.wait(2)
-                    relay.requests_stopped.set()
-                    worker.join(2)
-                    assert not worker.is_alive()
-                    assert len(outcomes) == 1 and isinstance(outcomes[0], RelayClosed)
-                    assert channel.gettimeout() == 20 and set(modes) == {0.0}
-                    assert unread_peer.fileno() >= 0
-                finally:
-                    relay.requests_stopped.set()
-                    worker.join(2)
-    relay.close_owned()
+                    relay.send_owned(channel, payload)
+                except BaseException as error:
+                    outcomes.append(error)
+
+            monkeypatch.setattr(socket.socket, "send", observe_send)
+            monkeypatch.setattr(probe.select, "select", observe_pending)
+            worker = threading.Thread(target=sending)
+            worker.start()
+            try:
+                assert pending.wait(2) and worker.is_alive()
+                _require_pending_send(observations, len(payload))
+                started = time.monotonic()
+                relay.requests_stopped.set()
+                release.set()
+                worker.join(2)
+                assert not worker.is_alive() and time.monotonic() - started < 2
+                assert len(outcomes) == 1 and isinstance(outcomes[0], RelayClosed)
+                assert channel.gettimeout() == 20 and set(modes) == {0.0}
+                assert unread_peer.fileno() >= 0
+                observations["cancel_exception"] = type(outcomes[0]).__name__
+                observations["cancel_elapsed"] = time.monotonic() - started
+            finally:
+                relay.requests_stopped.set()
+                release.set()
+                worker.join(2)
+                assert not worker.is_alive()
+        observations["pair_closed"] = channel.fileno() == unread_peer.fileno() == -1
+        assert observations["pair_closed"]
+    finally:
+        assert relay.close_owned() == (0, 0)
+    record_property("SOURCE_backpressure_cancel", json.dumps(observations))
 
 
 def test_actual_fixed_loopback_connect_and_send_conserve_bytes(tmp_path):
@@ -599,23 +717,28 @@ def test_legacy_untracked_connect_send_and_construction_contract(monkeypatch):
     ]
 
 
-def test_actual_backpressured_send_expires_original_operation_budget(tmp_path):
+def test_actual_backpressured_send_expires_original_operation_budget(
+    tmp_path, monkeypatch, record_property
+):
     relay = probe.HostRelay(tmp_path)
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        listener.listen()
-        with socket.create_connection(listener.getsockname()):
-            channel, _ = listener.accept()
-            with channel:
-                channel.settimeout(0.25)
-                channel.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
-                started = time.monotonic()
-                with pytest.raises(TimeoutError):
-                    relay.send_owned(channel, b"literal bytes\x00\xff" * 524_288)
-                assert 0.2 <= time.monotonic() - started < 2
-                assert channel.gettimeout() == 0.25
-                assert not relay.requests_stopped.is_set()
-    relay.close_owned()
+    try:
+        with _unread_tcp_pair() as (channel, unread_peer, observations):
+            _observe_unread_peer(monkeypatch, unread_peer, observations)
+            _fill_until_actual_backpressure(channel, observations)
+            channel.settimeout(0.25)
+            started = time.monotonic()
+            with pytest.raises(TimeoutError):
+                relay.send_owned(channel, b"literal bytes\x00\xff" * 524_288)
+            elapsed = time.monotonic() - started
+            assert 0.2 <= elapsed < 2
+            assert channel.gettimeout() == 0.25
+            assert not relay.requests_stopped.is_set() and unread_peer.fileno() >= 0
+            observations["operation_elapsed"] = elapsed
+        observations["pair_closed"] = channel.fileno() == unread_peer.fileno() == -1
+        assert observations["pair_closed"]
+    finally:
+        assert relay.close_owned() == (0, 0)
+    record_property("SOURCE_backpressure_timeout", json.dumps(observations))
 
 
 def test_actual_tracked_tcp_unix_tcp_preserves_raw_request_and_response():
@@ -874,3 +997,59 @@ def test_current_wrapper_preserves_actual_peek_flags_and_original_timeout(tmp_pa
                 assert wrapped.recv(1) == b""
                 assert peer.gettimeout() == 20
     assert relay.close_owned() == (0, 0)
+
+
+def test_windows_selector_set_call_shape_reaches_the_real_receive_seam(
+    tmp_path, monkeypatch
+):
+    import selectors
+
+    class WindowsShapeSelector(selectors.SelectSelector):
+        # This is the Windows stdlib SelectSelector call shape: its actual
+        # _readers/_writers sets reach the patched global select function.
+        def _select(self, readers, writers, _errors, timeout=None):
+            return probe.select.select(readers, writers, writers, timeout)
+
+    monkeypatch.setattr(socketserver, "_ServerSelector", WindowsShapeSelector)
+    test_readiness_stop_gap_cannot_start_a_blocking_receive(tmp_path, monkeypatch)
+
+
+@pytest.mark.parametrize("sent_bytes", [0, 7_864_320, 7_864_321])
+def test_completed_or_unstarted_send_is_not_backpressure_admission(sent_bytes):
+    observations = {
+        "sent_bytes": sent_bytes,
+        "unwritable": True,
+        "peer_reads": 0,
+        "peer_shutdowns": 0,
+    }
+    with pytest.raises(AssertionError):
+        _require_pending_send(observations, 7_864_320)
+
+
+@pytest.mark.parametrize("field", ["peer_reads", "peer_shutdowns"])
+def test_peer_consumption_or_shutdown_cannot_establish_pending_admission(field):
+    observations = {
+        "sent_bytes": 1,
+        "unwritable": True,
+        "peer_reads": 0,
+        "peer_shutdowns": 0,
+    }
+    observations[field] = 1
+    with pytest.raises(AssertionError):
+        _require_pending_send(observations, 2)
+
+
+def test_actual_whole_completed_send_is_not_pending_backpressure(record_property):
+    with _unread_tcp_pair() as (channel, unread_peer, observations):
+        content = b"SOURCE complete whole send\x00\xff"
+        observations["sent_bytes"] = channel.send(content)
+        _, writable, _ = probe.select.select([], [channel], [], 0)
+        observations["unwritable"] = not writable
+        assert observations["sent_bytes"] == len(content)
+        with pytest.raises(AssertionError):
+            _require_pending_send(observations, len(content))
+        assert unread_peer.fileno() >= 0
+    assert channel.fileno() == unread_peer.fileno() == -1
+    record_property(
+        "SOURCE_completed_send_refused_as_pending", json.dumps(observations)
+    )

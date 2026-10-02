@@ -5,6 +5,11 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Correct source qualification across runner ownership and filesystem semantics.
+  Require actual socket backpressure in cancellation tests, preserve Windows
+  path/descriptor metadata channels during manifest reads, and retain original
+  failures. Hosted and installed qualification remain required.
+
 - Add a separate RC4 candidate authorization route that checks the original
   installed evidence and exact source, package and binary identities. Public
   bundle inspection verifies integrity only. Preserve earlier preview rules;

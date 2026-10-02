@@ -60,10 +60,22 @@ def _manifest_for_dispatch(path: Path) -> dict:
                 row.st_size,
                 row.st_mtime_ns,
                 row.st_ctime_ns,
+                getattr(row, "st_birthtime_ns", None),
             )
 
+        def binding_identity(row):
+            if os.name != "nt":
+                return identity(row)
+            # Windows path stat keeps creation time in ctime, while CPython's
+            # descriptor stat can expose change time there. Bind shared fields
+            # and available birthtime; keep ctime in each channel's final check.
+            values = identity(row)
+            return values[:4] + values[5:]
+
         opened = os.fstat(descriptor)
-        if not stat.S_ISREG(opened.st_mode) or identity(before) != identity(opened):
+        if not stat.S_ISREG(opened.st_mode) or binding_identity(
+            before
+        ) != binding_identity(opened):
             raise ValueError("Candidate manifest changed before discovery.")
         chunks, size = [], 0
         while chunk := os.read(descriptor, min(1024 * 1024, MAX_FILE + 1 - size)):
@@ -73,7 +85,7 @@ def _manifest_for_dispatch(path: Path) -> dict:
             chunks.append(chunk)
         if (
             size != before.st_size
-            or identity(before) != identity(os.fstat(descriptor))
+            or identity(opened) != identity(os.fstat(descriptor))
             or identity(before) != identity(path.lstat())
         ):
             raise ValueError("Candidate manifest changed during discovery.")

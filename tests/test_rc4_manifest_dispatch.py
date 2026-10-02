@@ -526,3 +526,337 @@ def test_discovery_first_keyboard_interrupt_still_propagates(
     assert len(closed) == 1
     with pytest.raises(OSError):
         dispatch.os.fstat(closed[0])
+
+
+def windows_stat_channels(tmp_path, monkeypatch, path, *, legacy_creation=False):
+    """Map CPython's two Windows time channels over real local file syscalls.
+
+    This is portable source-unit metadata, not a claim of Windows execution.
+    CPython 3.13 path stat copies birthtime into ctime; descriptor stat can expose
+    ChangeTime. Older Windows Python lacks birthtime_ns and uses creation ctime.
+    All other fields and every open/read/close below come from the actual file.
+    """
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    actual_lstat, actual_fstat = Path.lstat, os.fstat
+    births, snapshots = {}, []
+
+    def view(row, channel):
+        key = row.st_dev, row.st_ino
+        birth = births.setdefault(key, row.st_ctime_ns - 100)
+        values = {
+            field: getattr(row, field)
+            for field in (
+                "st_mode",
+                "st_dev",
+                "st_ino",
+                "st_size",
+                "st_mtime_ns",
+                "st_ctime_ns",
+            )
+        }
+        if not legacy_creation:
+            values["st_birthtime_ns"] = birth
+        if channel == "path" or legacy_creation:
+            values["st_ctime_ns"] = birth
+        snapshots.append((channel, values.copy()))
+        return SimpleNamespace(**values)
+
+    def path_stat(selected, *args, **kwargs):
+        row = actual_lstat(selected, *args, **kwargs)
+        return view(row, "path") if selected == path else row
+
+    class WindowsOS:
+        name = "nt"
+
+        def __getattr__(self, name):
+            return getattr(os, name)
+
+        def fstat(self, descriptor):
+            return view(actual_fstat(descriptor), "descriptor")
+
+    proxy = WindowsOS()
+    monkeypatch.setattr(Path, "lstat", path_stat)
+    monkeypatch.setattr(dispatch, "os", proxy)
+    return proxy, snapshots
+
+
+def observed_manifest_io(monkeypatch, proxy):
+    opened, chunks, closed = [], [], []
+    actual_open, actual_read, actual_close = proxy.open, proxy.read, proxy.close
+
+    def opening(*args, **kwargs):
+        descriptor = actual_open(*args, **kwargs)
+        opened.append(descriptor)
+        return descriptor
+
+    def reading(descriptor, size):
+        value = actual_read(descriptor, size)
+        chunks.append(value)
+        return value
+
+    def closing(descriptor):
+        actual_close(descriptor)
+        closed.append(descriptor)
+
+    monkeypatch.setattr(proxy, "open", opening)
+    monkeypatch.setattr(proxy, "read", reading)
+    monkeypatch.setattr(proxy, "close", closing)
+    return opened, chunks, closed
+
+
+@pytest.mark.parametrize("legacy_creation", [False, True])
+def test_windows_metadata_channels_keep_real_read_and_descriptor_closure(
+    tmp_path, monkeypatch, legacy_creation
+):
+    value = profile()
+    value["source_only_unicode_control"] = "e\u0301 🐝"
+    path = document(tmp_path, value)
+    raw = path.read_bytes()
+    proxy, snapshots = windows_stat_channels(
+        tmp_path, monkeypatch, path, legacy_creation=legacy_creation
+    )
+    opened, chunks, closed = observed_manifest_io(monkeypatch, proxy)
+    assert dispatch._manifest_for_dispatch(path) == value
+    assert b"".join(chunks) == raw and chunks[-1] == b""
+    assert closed == opened and len(closed) == 1
+    assert path.read_bytes() == raw
+    before, descriptor = snapshots[:2]
+    assert before[0] == "path" and descriptor[0] == "descriptor"
+    if legacy_creation:
+        assert "st_birthtime_ns" not in before[1]
+        assert before[1]["st_ctime_ns"] == descriptor[1]["st_ctime_ns"]
+    else:
+        assert before[1]["st_ctime_ns"] != descriptor[1]["st_ctime_ns"]
+        assert before[1]["st_birthtime_ns"] == descriptor[1]["st_birthtime_ns"]
+    with pytest.raises(OSError):
+        os.fstat(closed[0])
+
+
+@pytest.mark.parametrize(
+    "field", ["st_dev", "st_ino", "st_size", "st_mtime_ns", "st_birthtime_ns"]
+)
+def test_windows_shared_identity_difference_refuses_before_real_read(
+    tmp_path, monkeypatch, field
+):
+    path = document(tmp_path, profile())
+    proxy, _snapshots = windows_stat_channels(tmp_path, monkeypatch, path)
+    actual_fstat = proxy.fstat
+    opened, chunks, closed = observed_manifest_io(monkeypatch, proxy)
+
+    def different(descriptor):
+        row = actual_fstat(descriptor)
+        setattr(row, field, getattr(row, field) + 1)
+        return row
+
+    monkeypatch.setattr(proxy, "fstat", different)
+    with pytest.raises(ValueError, match="changed before discovery"):
+        dispatch._manifest_for_dispatch(path)
+    assert chunks == [] and closed == opened and len(closed) == 1
+    with pytest.raises(OSError):
+        os.fstat(closed[0])
+
+
+@pytest.mark.parametrize("channel", ["path", "descriptor"])
+@pytest.mark.parametrize(
+    "field",
+    ["st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns", "st_birthtime_ns"],
+)
+def test_windows_channel_local_identity_changes_refuse_after_real_read(
+    tmp_path, monkeypatch, channel, field
+):
+    from pathlib import Path
+
+    path = document(tmp_path, profile())
+    raw = path.read_bytes()
+    proxy, _snapshots = windows_stat_channels(tmp_path, monkeypatch, path)
+    actual_lstat, actual_fstat = Path.lstat, proxy.fstat
+    calls = []
+    opened, chunks, closed = observed_manifest_io(monkeypatch, proxy)
+
+    def fstat(descriptor):
+        row = actual_fstat(descriptor)
+        if channel == "descriptor":
+            calls.append(descriptor)
+            if len(calls) == 2:
+                setattr(row, field, getattr(row, field) + 1)
+        return row
+
+    def lstat(selected, *args, **kwargs):
+        row = actual_lstat(selected, *args, **kwargs)
+        if channel == "path" and selected == path:
+            calls.append(selected)
+            if len(calls) == 2:
+                setattr(row, field, getattr(row, field) + 1)
+        return row
+
+    monkeypatch.setattr(proxy, "fstat", fstat)
+    monkeypatch.setattr(Path, "lstat", lstat)
+    with pytest.raises(ValueError, match="changed during discovery"):
+        dispatch._manifest_for_dispatch(path)
+    assert b"".join(chunks) == raw and chunks[-1] == b""
+    assert closed == opened and len(closed) == 1
+    with pytest.raises(OSError):
+        os.fstat(closed[0])
+
+
+def test_posix_cross_channel_ctime_difference_still_refuses(tmp_path, monkeypatch):
+    path = document(tmp_path, profile())
+    proxy, _snapshots = windows_stat_channels(tmp_path, monkeypatch, path)
+    # The same explicitly different metadata must never get Windows handling
+    # when the syscall interface identifies itself as POSIX.
+    proxy.name = "posix"
+    opened, chunks, closed = observed_manifest_io(monkeypatch, proxy)
+    with pytest.raises(ValueError, match="changed before discovery"):
+        dispatch._manifest_for_dispatch(path)
+    assert chunks == [] and closed == opened and len(closed) == 1
+    with pytest.raises(OSError):
+        os.fstat(closed[0])
+
+
+def test_windows_actual_same_size_rewrite_cannot_admit_discovery(tmp_path, monkeypatch):
+    import time
+
+    path = document(tmp_path, profile())
+    raw = path.read_bytes()
+    proxy, _snapshots = windows_stat_channels(tmp_path, monkeypatch, path)
+    opened, chunks, closed = observed_manifest_io(monkeypatch, proxy)
+    reading = proxy.read
+    initial_mtime = path.stat().st_mtime_ns
+
+    def rewrite(descriptor, size):
+        value = reading(descriptor, size)
+        if len(chunks) == 1:
+            time.sleep(0.01)  # Separate actual timestamp ticks, not a new deadline.
+            path.write_bytes(raw.replace(b'"latest":false', b'"latest":true '))
+            assert path.stat().st_size == len(raw)
+            assert path.stat().st_mtime_ns != initial_mtime
+        return value
+
+    monkeypatch.setattr(proxy, "read", rewrite)
+    with pytest.raises(ValueError, match="changed during discovery"):
+        dispatch._manifest_for_dispatch(path)
+    assert closed == opened and len(closed) == 1
+    assert path.read_bytes() != raw
+    with pytest.raises(OSError):
+        os.fstat(closed[0])
+
+
+def test_windows_actual_replacement_cannot_bind_old_path_snapshot(
+    tmp_path, monkeypatch
+):
+    path = document(tmp_path, profile())
+    raw = path.read_bytes()
+    replacement = tmp_path / "new-manifest.json"
+    replacement.write_bytes(raw)
+    initial = path.stat()
+    os.utime(replacement, ns=(initial.st_atime_ns, initial.st_mtime_ns))
+    proxy, _snapshots = windows_stat_channels(tmp_path, monkeypatch, path)
+    opened, chunks, closed = observed_manifest_io(monkeypatch, proxy)
+    opening = proxy.open
+
+    def replace_then_open(*args, **kwargs):
+        os.replace(replacement, path)
+        return opening(*args, **kwargs)
+
+    monkeypatch.setattr(proxy, "open", replace_then_open)
+    with pytest.raises(ValueError, match="changed before discovery"):
+        dispatch._manifest_for_dispatch(path)
+    assert chunks == [] and closed == opened and len(closed) == 1
+    assert path.read_bytes() == raw
+    with pytest.raises(OSError):
+        os.fstat(closed[0])
+
+
+def test_windows_metadata_channels_preserve_first_read_and_cleanup_errors(
+    tmp_path, monkeypatch
+):
+    path = document(tmp_path, profile())
+    proxy, _snapshots = windows_stat_channels(tmp_path, monkeypatch, path)
+    first = OSError("Actual original read refusal after Windows identity binding")
+    later = KeyboardInterrupt("Later actual descriptor close interruption")
+    actual_close, closed = proxy.close, []
+
+    def read(*_):
+        raise first
+
+    def close(descriptor):
+        actual_close(descriptor)
+        closed.append(descriptor)
+        raise later
+
+    monkeypatch.setattr(proxy, "read", read)
+    monkeypatch.setattr(proxy, "close", close)
+    with pytest.raises(OSError) as caught:
+        dispatch._manifest_for_dispatch(path)
+    assert caught.value is first
+    assert first.manifest_cleanup_error is later
+    assert first.manifest_cleanup_errors == (later,)
+    assert len(closed) == 1
+    with pytest.raises(OSError):
+        os.fstat(closed[0])
+
+
+def test_native_manifest_stat_channels_record_real_observations(
+    tmp_path, monkeypatch, record_testsuite_property
+):
+    import sys
+    from pathlib import Path
+
+    path = document(tmp_path, profile())
+    actual_lstat, actual_fstat = Path.lstat, os.fstat
+    snapshots = []
+
+    def observe(channel, row):
+        snapshots.append(
+            {
+                "channel": channel,
+                **{
+                    field: getattr(row, field, None)
+                    for field in (
+                        "st_mode",
+                        "st_dev",
+                        "st_ino",
+                        "st_size",
+                        "st_mtime_ns",
+                        "st_ctime_ns",
+                        "st_birthtime_ns",
+                    )
+                },
+            }
+        )
+        return row
+
+    def lstat(selected, *args, **kwargs):
+        row = actual_lstat(selected, *args, **kwargs)
+        return observe("path", row) if selected == path else row
+
+    def fstat(descriptor):
+        return observe("descriptor", actual_fstat(descriptor))
+
+    monkeypatch.setattr(Path, "lstat", lstat)
+    monkeypatch.setattr(dispatch.os, "fstat", fstat)
+    try:
+        assert dispatch._manifest_for_dispatch(path) == profile()
+        assert [row["channel"] for row in snapshots] == [
+            "path",
+            "descriptor",
+            "descriptor",
+            "path",
+        ]
+    finally:
+        # Preserve actual host tuples even when a future runtime refuses them;
+        # source metadata models cannot establish the values on that host.
+        record_testsuite_property(
+            "manifest-discovery-native-stat-channels",
+            json.dumps(
+                {
+                    "os_name": os.name,
+                    "platform": sys.platform,
+                    "python": sys.version,
+                    "snapshots": snapshots,
+                },
+                sort_keys=True,
+            ),
+        )
