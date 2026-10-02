@@ -38,7 +38,16 @@ from tools import installed_native_tk as tk_driver  # noqa: E402
 from tools import installed_workflow_browser as transport  # noqa: E402
 from tools import native_window_smoke as native  # noqa: E402
 from tools import rc4_native_handoff_contract as contract  # noqa: E402
+from tools import rc4_replacement_probe as evidence  # noqa: E402
 from tools.rc4_recovery_worker import snapshot  # noqa: E402
+
+
+def serialized_json(value):
+    return (
+        (json.dumps(value, ensure_ascii=True, allow_nan=False, indent=2) + "\n")
+        .replace("\n", os.linesep)
+        .encode("utf-8")
+    )
 
 
 def write_json(path, value):
@@ -49,6 +58,61 @@ def write_json(path, value):
         encoding="utf-8",
     )
     temporary.replace(path)
+
+
+def diagnostic_failures(error):
+    """Retain write/close context only from this source-fixed writer activation."""
+    failures, seen = [error], {id(error)}
+    code = getattr(write_json, "__code__", None)
+    trace, active, frames = error.__traceback__, False, set()
+    while trace is not None:
+        active |= trace.tb_frame.f_code is code
+        if active:
+            frames.add(trace.tb_frame)
+        trace = trace.tb_next
+    candidate = error.__context__
+    while candidate is not None and id(candidate) not in seen:
+        trace, owned = candidate.__traceback__, False
+        while trace is not None:
+            owned |= trace.tb_frame in frames
+            trace = trace.tb_next
+        if not owned:
+            break
+        failures.append(candidate)
+        seen.add(id(candidate))
+        candidate = candidate.__context__
+    return tuple(reversed(failures))
+
+
+def diagnostic_publisher(role, primary, cleanup):
+    return evidence.EvidencePublisher(
+        role,
+        primary,
+        [json.dumps(row, ensure_ascii=True, allow_nan=False) for row in cleanup],
+        writer=write_json,
+        serializer=serialized_json,
+        failure_schema="sinter-native-handoff-failed-evidence/v1",
+        unwrap_primary=True,
+        failure_observer=diagnostic_failures,
+    )
+
+
+def retain_diagnostic(publication, path, value):
+    first_new_error = len(publication.exceptions)
+    if not publication.attempt(path, value):
+        raise publication.exceptions[first_new_error]
+
+
+def finish_diagnostics(publication, fallback, primary, cleanup):
+    # Normal success and ordinary body failure retain their existing behaviour.
+    # Failed publication alone uses the shared typed byte-carrying failure.
+    publication.cleanup = publication.inherited_cleanup + [
+        json.dumps(row, ensure_ascii=True, allow_nan=False) for row in cleanup
+    ]
+    if publication.primary is None:
+        publication.primary = primary
+    if publication.errors:
+        publication.finish(fallback)
 
 
 def original(raw):
@@ -1249,14 +1313,27 @@ def browser(root, executable):
             )
         if cleanup.errors:
             proof["cleanup_errors"] = cleanup.errors
+        publication = diagnostic_publisher(
+            "NATIVE-BROWSER",
+            primary if primary is not None else cleanup.first_error,
+            cleanup.errors,
+        )
         clean(
             "retain-browser-proof",
-            lambda: write_json(root.parent.parent / "browser.json", proof),
+            lambda: retain_diagnostic(
+                publication, root.parent.parent / "browser.json", proof
+            ),
         )
         if old_tmp is None:
             os.environ.pop("TMPDIR", None)
         else:
             os.environ["TMPDIR"] = old_tmp
+    finish_diagnostics(
+        publication,
+        root.parent.parent / "browser-unpublished.json",
+        primary if primary is not None else cleanup.first_error,
+        cleanup.errors,
+    )
     if primary is not None:
         raise primary
     if cleanup.errors:
@@ -1457,12 +1534,15 @@ def observe_handoff_outer(
     except BaseException as error:
         primary = error
     finally:
+        publication = diagnostic_publisher("NATIVE-OUTER", primary, [])
         client["sha256_after"] = observations.call(
             "observe-docker-after", lambda: native.binary_digest(Path(client["path"]))
         )
         observations.call(
             "retain-client-commands",
-            lambda: write_json(root / "client-commands.json", client_rows),
+            lambda: retain_diagnostic(
+                publication, root / "client-commands.json", client_rows
+            ),
         )
         outer = {
             "schema": "sinter-owned-native-handoff-container/v1",
@@ -1481,8 +1561,19 @@ def observe_handoff_outer(
         if observations.errors:
             outer["observation_errors"] = observations.errors
         observations.call(
-            "retain-handoff-outer", lambda: write_json(root / "outer.json", outer)
+            "retain-handoff-outer",
+            lambda: retain_diagnostic(publication, root / "outer.json", outer),
         )
+    first = primary if primary is not None else observations.first_error
+    if first is not None:
+        first.host_observation_errors = observations.errors
+    try:
+        finish_diagnostics(
+            publication, root / "outer-unpublished.json", first, observations.errors
+        )
+    except evidence.EvidenceFailure as error:
+        error.host_observation_errors = observations.errors
+        raise
     if primary is not None:
         primary.host_observation_errors = observations.errors
         raise primary
@@ -1539,7 +1630,10 @@ def run(args):
         "passed": False,
         "boundary": "Actual installed run only when all proofs admit; DEV is not a release.",
     }
-    write_json(args.output / "owner-run.json", context)
+    initial = diagnostic_publisher("NATIVE-OWNER-INITIAL", None, [])
+    initial.attempt(args.output / "owner-run.json", context)
+    finish_diagnostics(initial, args.output / "owner-run-unpublished.json", None, [])
+    primary = None
     try:
         baseline_args = SimpleNamespace(
             **{**vars(args), "mode": "run-archive", "output": args.output / "baseline"}
@@ -1608,11 +1702,16 @@ def run(args):
         )
         context.update(passed=True, admission=admission)
     except BaseException as error:
+        primary = error
         context.update(error_type=type(error).__name__, error=str(error)[:4096])
         if hasattr(error, "host_observation_errors"):
             context["host_observation_errors"] = error.host_observation_errors
     finally:
-        write_json(args.output / "owner-run.json", context)
+        publication = diagnostic_publisher("NATIVE-OWNER-FINAL", primary, [])
+        publication.attempt(args.output / "owner-run.json", context)
+        finish_diagnostics(
+            publication, args.output / "owner-run-unpublished.json", primary, []
+        )
     return 0 if context["passed"] is True else 1
 
 
@@ -1654,6 +1753,9 @@ def main(argv=None):
     signal.signal(signal.SIGTERM, interrupted)
     try:
         return inside(args) if args.mode == "_inside" else run(args)
+    except evidence.EvidenceFailure as error:
+        evidence.emit_failure(error)
+        raise SystemExit(1) from error
     finally:
         signal.signal(signal.SIGTERM, previous)
 

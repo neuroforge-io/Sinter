@@ -58,7 +58,9 @@ class ClosingRequest:
             if remaining is not None and remaining <= 0:
                 raise TimeoutError("Relay client read timed out.")
             ready, _, _ = select.select(
-                [self.channel], [], [],
+                [self.channel],
+                [],
+                [],
                 0.1 if remaining is None else min(0.1, remaining),
             )
             if ready and not self.closing.is_set():
@@ -163,11 +165,12 @@ class EvidenceFailure(ValueError):
         self.publication_errors = tuple(publisher.errors)
         self.unpublished_bytes = dict(publisher.unpublished)
         self.published_paths = tuple(publisher.published)
+        self.schema = publisher.failure_schema
         super().__init__(publisher.message())
 
     def as_record(self):
         return {
-            "schema": "sinter-rc4-replacement-failed-evidence/v1",
+            "schema": self.schema,
             "first_failure": str(self.primary_exception)
             if self.primary_exception is not None
             else None,
@@ -188,22 +191,62 @@ class EvidenceFailure(ValueError):
 class EvidencePublisher:
     """Attempt each owned publication once; never acknowledge an unsuccessful write."""
 
-    def __init__(self, role, primary, cleanup):
+    def __init__(
+        self,
+        role,
+        primary,
+        cleanup,
+        *,
+        writer=None,
+        serializer=None,
+        failure_schema="sinter-rc4-replacement-failed-evidence/v1",
+        unwrap_primary=False,
+        failure_observer=None,
+    ):
         self.role, self.primary, self.cleanup = role, primary, cleanup
+        self.writer = write if writer is None else writer
+        self.serializer = (
+            (lambda value: (encoded(value) + "\n").encode("utf-8"))
+            if serializer is None
+            else serializer
+        )
+        self.failure_schema = failure_schema
+        self.failure_observer = failure_observer
+        self.unwrap_primary = unwrap_primary
+        self.inherited_cleanup = []
         self.errors, self.exceptions, self.published, self.unpublished = [], [], [], {}
         if isinstance(primary, EvidenceFailure):
             self.errors.extend(primary.publication_errors)
             self.unpublished.update(primary.unpublished_bytes)
+            if unwrap_primary:
+                self.published.extend(primary.published_paths)
+                self.inherited_cleanup.extend(primary.cleanup_errors)
+                self.cleanup = self.inherited_cleanup + list(cleanup)
+                while isinstance(self.primary, EvidenceFailure):
+                    wrapped = self.primary
+                    self.primary = (
+                        wrapped.primary_exception
+                        if wrapped.primary_exception is not None
+                        else wrapped.__cause__
+                    )
 
     def attempt(self, path, value):
-        raw = (encoded(value) + "\n").encode("utf-8")
+        raw = self.serializer(value)
         try:
-            write(path, value)
+            self.writer(path, value)
         except BaseException as exc:
-            self.errors.append(
-                {"path": str(path), "error_type": type(exc).__name__, "error": str(exc)}
+            failures = (
+                (exc,) if self.failure_observer is None else self.failure_observer(exc)
             )
-            self.exceptions.append(exc)
+            for failure in failures:
+                self.errors.append(
+                    {
+                        "path": str(path),
+                        "error_type": type(failure).__name__,
+                        "error": str(failure),
+                    }
+                )
+                self.exceptions.append(failure)
             self.unpublished[str(path)] = raw
             return False
         self.published.append(str(path))
@@ -223,10 +266,12 @@ class EvidencePublisher:
     def finish(self, fallback):
         if self.primary is None and not self.cleanup and not self.errors:
             return
+        if self.unwrap_primary and self.primary is None and self.exceptions:
+            self.primary = self.exceptions[0]
         self.attempt(
             fallback,
             {
-                "schema": "sinter-rc4-replacement-failed-evidence/v1",
+                "schema": self.failure_schema,
                 "role": self.role,
                 "first_failure": str(self.primary)
                 if self.primary is not None
@@ -250,6 +295,57 @@ class EvidencePublisher:
             else (self.exceptions[0] if self.exceptions else None)
         )
         raise EvidenceFailure(self) from cause
+
+
+def emit_failure(exc, stream=None):
+    """Emit full failed bytes, retaining stderr's own failed publication in memory."""
+    try:
+        # JSON escapes preserve filesystem surrogates; valid Unicode is unchanged.
+        raw = (encoded(exc.as_record()) + "\n").encode("utf-8", "backslashreplace")
+    except BaseException as rendering_error:
+        exc.publication_errors += (
+            {
+                "path": "<stderr-render>",
+                "error_type": type(rendering_error).__name__,
+                "error": str(rendering_error),
+            },
+        )
+        try:
+            raw = (
+                json.dumps(
+                    exc.as_record(),
+                    sort_keys=True,
+                    ensure_ascii=True,
+                    allow_nan=False,
+                    separators=(",", ":"),
+                )
+                + "\n"
+            ).encode("ascii")
+        except BaseException as fallback_error:
+            exc.publication_errors += (
+                {
+                    "path": "<stderr-render-fallback>",
+                    "error_type": type(fallback_error).__name__,
+                    "error": str(fallback_error),
+                },
+            )
+            return None
+    try:
+        target = sys.stderr.buffer if stream is None else stream
+        written = target.write(raw)
+        if written != len(raw):
+            raise OSError("Failed evidence stderr write was incomplete.")
+        target.flush()
+    except BaseException as publication_error:
+        exc.publication_errors += (
+            {
+                "path": "<stderr>",
+                "error_type": type(publication_error).__name__,
+                "error": str(publication_error),
+            },
+        )
+        exc.unpublished_bytes["<stderr>"] = raw
+    return raw
 
 
 def bridge_request(value, phase, expected_raw):
@@ -1204,19 +1300,7 @@ def main(argv=None):
         collect(args.runtime, args.chromium, args.phase, args.browser_tmp)
     except EvidenceFailure as exc:
         # The parent retains stderr when evidence files cannot be written.
-        raw = (encoded(exc.as_record()) + "\n").encode("utf-8")
-        try:
-            sys.stderr.buffer.write(raw)
-            sys.stderr.buffer.flush()
-        except BaseException as publication_error:
-            exc.publication_errors += (
-                {
-                    "path": "<stderr>",
-                    "error_type": type(publication_error).__name__,
-                    "error": str(publication_error),
-                },
-            )
-            exc.unpublished_bytes["<stderr>"] = raw
+        emit_failure(exc)
         raise SystemExit(1) from exc
     except (OSError, ValueError, KeyError, TypeError) as exc:
         parser.exit(1, "Owned replacement host collector failed: " + str(exc) + "\n")

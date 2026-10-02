@@ -5,6 +5,12 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Preserve complete native qualification diagnostics when their sidecar writes
+  fail. Keep the first exception and all unpublished bytes, including filesystem
+  names that cannot be decoded as Unicode. Preserve valid Unicode output and
+  source-fixed publication defaults. Independent source review and current-main
+  checks pass; actual installed and release qualification remain pending.
+
 - Add optional funding records and shared UI, CLI and Python totals for available
   ceilings, targets, submitted requests, awards, receipts and closed outcomes.
   Keep currencies, cash/credits, unknowns and duplicate rounds separate; retain

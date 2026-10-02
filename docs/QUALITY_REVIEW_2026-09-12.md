@@ -1856,3 +1856,36 @@ skips in 27.15 seconds; static, formatting and Python 3.10 grammar checks pass.
 Fresh actual hosted platform diagnosis remains required. No installed gate,
 release readiness, model quality or product-performance claim follows from these
 source timings. The user app remains closed and no Sinter provider call is made.
+
+
+### Native diagnostic-publication source repair, 2 October
+
+Independent source acceptance
+`8bf482fd8387a4c4c04a1c1c6e26bb577e83e9437c9bae8749a14a40faaaa1b0`
+verifies the original five-path proposal over exact `9569abf` and its separate
+three-path envelope correction. The full original source, raw failed records,
+filesystem byte identities and earlier HOLD verdict remain unchanged. This
+source repair supersedes the two native publication limitations recorded above;
+actual native installed execution remains a separate requirement.
+
+Native outer, client, initial/final owner-run and final browser records now use
+the existing bounded evidence publisher with source-fixed native writers,
+serializers and failure schema. Replacement defaults remain unchanged. A failed
+write carries the complete original unpublished bytes, count, digest and base64
+through its typed failure even when the fallback also refuses. The first
+exception and later write/close errors are retained. A real owned POSIX filename
+containing byte FF reproduced the old CLI UnicodeEncodeError; the correction
+exits 1 with the identical typed failure, full diagnostic bytes, valid UTF-8 JSON
+and lossless filesystem identity. Valid Unicode output stays byte-identical.
+Both renderer refusals retain typed original data and secondary errors without
+claiming successful stderr publication.
+
+The independent exact replay passes 600 unique source controls plus four new
+filesystem/SIGINT controls. Its 48-case focused run overlaps that total. Current
+main advanced to `d9a643c` during the authorised fast-forward pull; a separate
+composition preserves its cancellation classes and exact Windows Path assertion.
+That composition passes 605 source controls without skips in 12.83 seconds.
+None of these timings is product-performance, actual Windows, installed, upgrade,
+cold-install or release evidence. The known synthetic stale-frame/reused-exception
+edge remains an explicitly unsupported occurrence, not a proven native lifecycle
+failure. The physical app remains closed and no Sinter provider request is made.

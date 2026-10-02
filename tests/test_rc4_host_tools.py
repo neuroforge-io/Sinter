@@ -386,10 +386,33 @@ def test_native_actual_docker_after_and_retention_preserve_first_and_all_attempt
         records,
     )
     if body_failed or read_failed or writer_failed:
-        with pytest.raises((RuntimeError, OSError)) as result:
+        with pytest.raises((RuntimeError, OSError, probe.EvidenceFailure)) as result:
             handoff.observe_handoff_outer(*args)
         expected = first if body_failed else read_error if read_failed else write_error
-        assert result.value is expected
+        if writer_failed:
+            error = result.value
+            assert isinstance(error, probe.EvidenceFailure)
+            assert error.primary_exception is expected and error.__cause__ is expected
+            path = str(tmp_path / "client-commands.json")
+            raw = b"[]\r\n" if os.name == "nt" else b"[]\n"
+            assert error.unpublished_bytes == {path: raw}
+            row = error.as_record()["unpublished_bytes"][path]
+            assert row["bytes"] == len(raw)
+            assert row["sha256"] == hashlib.sha256(raw).hexdigest()
+            assert row["data_base64"] == ("W10NCg==" if os.name == "nt" else "W10K")
+            assert error.publication_errors == (
+                {"path": path, "error_type": "OSError", "error": str(write_error)},
+            )
+            assert error.published_paths == (
+                str(tmp_path / "outer.json"),
+                str(tmp_path / "outer-unpublished.json"),
+            )
+            fallback = json.loads((tmp_path / "outer-unpublished.json").read_bytes())
+            assert fallback["first_failure"] == str(expected)
+            assert fallback["unpublished_bytes"][path] == row
+            assert len(error.cleanup_errors) == int(read_failed) + 1
+        else:
+            assert result.value is expected
         assert len(result.value.host_observation_errors) == int(read_failed) + int(
             writer_failed
         )
@@ -400,7 +423,7 @@ def test_native_actual_docker_after_and_retention_preserve_first_and_all_attempt
         "actual-after-read",
         "client-commands.json",
         "outer.json",
-    ]
+    ] + (["outer-unpublished.json"] if writer_failed else [])
     raw = json.loads((tmp_path / "outer.json").read_bytes())
     assert raw["docker_client"]["sha256_after"] == (None if read_failed else "a" * 64)
 
