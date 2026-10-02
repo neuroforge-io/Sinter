@@ -358,7 +358,7 @@ def test_native_actual_docker_after_and_retention_preserve_first_and_all_attempt
 
     def digest(path):
         seen.append("actual-after-read")
-        assert str(path) == "/fixed/docker"
+        assert path == Path(client["path"])
         if read_failed:
             raise read_error
         return "a" * 64

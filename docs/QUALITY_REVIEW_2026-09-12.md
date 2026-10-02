@@ -1,5 +1,31 @@
 # Sinter user-testing closeout — 12 September 2026
 
+## 2 October RC4 source portability follow-up
+
+Actual main3fe344a and funding review7dd1272 each had the same seven Windows
+failures. Six arose from a host-tool fault fixture comparing Windows Path text
+with a POSIX slash string; native Path equality retains the actual path check
+and the existing first-error/complete-observation assertions.
+
+The seventh actual TCP test recorded two successful shutdown calls while its
+owned worker remained blocked in a20-second recv. The separate RC4 HostRelay
+now wraps client reads with a0.1-second cancellation poll while reusing the
+unchanged legacy RelayRequest parser and per-read timeout. Its close event
+precedes shutdown, and setup/finish retain the real socket. Counters still leave
+only in the actual worker finally block. No pinned legacy transport, installed
+Linux admission guard, framing rule or browser policy is changed.
+
+Regressions retain the real Windows/Linux idle connection and add a no-wakeup
+shutdown fault seam. They require bounded cleanup, zero idle errors, listener
+closure and repeat close. Real consumed partial header/body requests must still
+increment the error count and release ownership. Raw-byte/deadline/read-error
+and existing surviving-worker diagnostic controls remain. Queued bytes that
+were never consumed are cancelled rather than drained into a new request after
+stop. These source checks do not qualify installed Windows/macOS operation.
+
+The laptop resource guard withheld the focused test command; no child test ran.
+Execution evidence must come from the existing approved hosted CI before merge.
+
 The ten session findings were reproduced or traced to their implementation, fixed
 where appropriate, and tested with deterministic regressions and fictional live
 inputs. The endpoint-bound review identity in F7 remains an intentional protection.

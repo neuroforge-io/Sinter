@@ -16,6 +16,12 @@ qualification and does not change any published RC3 asset or historical receipt.
   the full workbench. Fictional browser and source Tk journeys pass; this does not
   establish general assistant quality or new customer-platform qualification.
 
+- Make RC4 relay client reads cooperatively cancellable when socket shutdown
+  does not wake an idle Windows worker. Preserve the existing raw parser, read
+  deadline, real worker/socket counters and partial-request failures. Compare
+  source fixture paths as native paths rather than slash spellings. Hosted
+  regression and aggregate verification are required before finalization.
+
 - Make ten inert recovery-tool tests independent of the optional Playwright
   package. Keep browser execution guarded and every existing assertion active.
   Independent and root source checks pass; full hosted and installed qualification
