@@ -69,12 +69,50 @@ def _require_identity(value: object, tag: str, commit: str) -> None:
         )
 
 
-def _candidate_identity(manifest: Path, repository: str, tag: str, commit: str) -> None:
+def _candidate_identity(
+    manifest: Path,
+    repository: str,
+    tag: str,
+    commit: str,
+    *,
+    original_context=None,
+    original_context_sha256=None,
+    trusted_pins=None,
+    trusted_pins_sha256=None,
+    manifest_sha256=None,
+) -> None:
     """Require rechecked qualified assets before accepting a scoped rc tag."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    if tag == "v0.5.4rc4":
+        sys.dont_write_bytecode = True
     from tools.candidate_release import verify_plan
 
-    plan = verify_plan(manifest)
+    if tag == "v0.5.4rc4":
+        from tools.rc4_candidate_release import load_original
+
+        if not all(
+            (
+                original_context,
+                original_context_sha256,
+                trusted_pins,
+                trusted_pins_sha256,
+                manifest_sha256,
+            )
+        ):
+            raise ValueError(
+                "RC4 tags require explicit original context, trusted pins and an independently pinned stage; public integrity inspection cannot authorize them."
+            )
+        context, pins = load_original(
+            original_context, original_context_sha256, trusted_pins, trusted_pins_sha256
+        )
+        plan = verify_plan(
+            manifest,
+            rc4_context=context,
+            rc4_pins=pins,
+            rc4_manifest_sha256=manifest_sha256,
+        )
+    else:
+        plan = verify_plan(manifest)
     if (plan["repository"], plan["tag"], plan["source_commit"]) != (
         repository,
         tag,
@@ -86,7 +124,16 @@ def _candidate_identity(manifest: Path, repository: str, tag: str, commit: str) 
 
 
 def ensure_release_tag(
-    repository: str, tag: str, commit: str, candidate_manifest: Path | None = None
+    repository: str,
+    tag: str,
+    commit: str,
+    candidate_manifest: Path | None = None,
+    *,
+    original_context=None,
+    original_context_sha256=None,
+    trusted_pins=None,
+    trusted_pins_sha256=None,
+    manifest_sha256=None,
 ) -> None:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("Use an explicit owner/repository.")
@@ -99,7 +146,20 @@ def ensure_release_tag(
             raise ValueError(
                 "An rc tag requires an exact verified scoped candidate manifest."
             )
-        _candidate_identity(candidate_manifest, repository, tag, commit)
+        if tag == "v0.5.4rc4":
+            _candidate_identity(
+                candidate_manifest,
+                repository,
+                tag,
+                commit,
+                original_context=original_context,
+                original_context_sha256=original_context_sha256,
+                trusted_pins=trusted_pins,
+                trusted_pins_sha256=trusted_pins_sha256,
+                manifest_sha256=manifest_sha256,
+            )
+        else:
+            _candidate_identity(candidate_manifest, repository, tag, commit)
     elif candidate_manifest is not None:
         raise ValueError(
             "A scoped candidate manifest cannot authorise a stable release tag."
@@ -112,6 +172,20 @@ def ensure_release_tag(
     if status != 404:
         raise ValueError(
             f"GitHub returned HTTP {status} while checking the release tag."
+        )
+    if tag == "v0.5.4rc4":
+        # The original gates and staged bytes must still agree immediately before
+        # the only mutating GitHub operation; earlier integrity is not authority.
+        _candidate_identity(
+            candidate_manifest,
+            repository,
+            tag,
+            commit,
+            original_context=original_context,
+            original_context_sha256=original_context_sha256,
+            trusted_pins=trusted_pins,
+            trusted_pins_sha256=trusted_pins_sha256,
+            manifest_sha256=manifest_sha256,
         )
     # Creating a ref is atomic: an existing ref cannot be overwritten by POST.
     status, value = _api(
@@ -142,16 +216,30 @@ def main(argv: list[str] | None = None) -> None:
         type=Path,
         help="Required verified scoped asset manifest for an rc tag.",
     )
+    parser.add_argument("--original-context", type=Path)
+    parser.add_argument("--original-context-sha256")
+    parser.add_argument("--trusted-pins", type=Path)
+    parser.add_argument("--trusted-pins-sha256")
+    parser.add_argument("--manifest-sha256")
     args = parser.parse_args(argv)
     try:
         ensure_release_tag(
-            args.repository, args.tag, args.commit, args.candidate_manifest
+            args.repository,
+            args.tag,
+            args.commit,
+            args.candidate_manifest,
+            original_context=args.original_context,
+            original_context_sha256=args.original_context_sha256,
+            trusted_pins=args.trusted_pins,
+            trusted_pins_sha256=args.trusted_pins_sha256,
+            manifest_sha256=args.manifest_sha256,
         )
     except (
         OSError,
         ValueError,
         KeyError,
         TypeError,
+        ImportError,
         subprocess.SubprocessError,
         zipfile.BadZipFile,
         tarfile.TarError,

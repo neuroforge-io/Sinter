@@ -5,6 +5,22 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Add a separate RC4 candidate authorization route that checks the original
+  installed evidence and exact source, package and binary identities. Public
+  bundle inspection verifies integrity only. Preserve earlier preview rules;
+  development source remains ineligible for publication.
+
+- Match workflow receipts and release checks to the exact source catalogue: the
+  recognized 53-entry earlier profile or 54-entry funding profile. Keep the
+  existing 22 named UI checks and 13 evidence roles distinct from that count.
+  Refuse UID 0 before preparation and retain the first failure and complete
+  diagnostics when a qualification receipt cannot be saved.
+
+- Read declared RC4 manifests through their bounded format without changing the
+  older preview reader. Preserve the first read failure when descriptor cleanup
+  is interrupted, including every later cleanup failure. Independent source
+  review and combined checks pass; installed release qualification is pending.
+
 - Preserve complete native qualification diagnostics when their sidecar writes
   fail. Keep the first exception and all unpublished bytes, including filesystem
   names that cannot be decoded as Unicode. Preserve valid Unicode output and

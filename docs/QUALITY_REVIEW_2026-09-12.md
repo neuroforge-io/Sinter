@@ -1889,3 +1889,41 @@ None of these timings is product-performance, actual Windows, installed, upgrade
 cold-install or release evidence. The known synthetic stale-frame/reused-exception
 edge remains an explicitly unsupported occurrence, not a proven native lifecycle
 failure. The physical app remains closed and no Sinter provider request is made.
+
+
+### RC4 original-workflow and candidate source composition, 2 October
+
+The separate RC4 candidate authorizer, manifest-dispatch correction, interrupted
+descriptor-cleanup correction, workflow owner and source-catalogue alignment are
+now composed against exact `3ab6a20077f37b79ee6a814619487692d2c10992`. The original
+failed controls and all earlier release assets remain unchanged. Independent
+source acceptances include cleanup `dbb1a930...`, workflow `ca99c434...` and
+catalogue alignment `b221cbdd...`; their complete pinned records are retained
+in the operator evidence.
+
+The unchanged trusted catalogue parser recognizes the exact 53-entry earlier
+profile and 54-entry funding-enabled profile. The workflow receipt and candidate
+gate now use the actual source count, while preserving 22 named UI checks and
+13 retained roles. This does not mean every catalogue operation was exercised
+through the interface. All other workflow producer and contract code is conserved
+from the independently accepted correction, except the declared source-count
+functions. UID 0 is refused before preparation. Failed receipt publication keeps
+the original exception, complete serialized bytes and later publication outcomes.
+The manifest reader similarly preserves its original read failure across an
+actual interrupted descriptor close. Earlier preview policies remain unchanged.
+
+The exact private composition passes 722 source cases without failures or skips.
+Formatting, F/I lint, Python 3.10 grammar and the public boundary pass; this is
+source evidence, not installed execution or product-performance evidence. Public
+inspection remains byte-integrity inspection and cannot substitute for original
+installed qualification. The actual final RC4 build, installed workflow, prior
+preview upgrades, native/recovery checks, cold install and independent final asset
+review remain required. The current version stays `0.5.4rc4.dev0`.
+
+The hosted source run for `3ab6a2` (36959550809) ended cancelled. Only two of six
+expected primary test artifacts were present, so their original Windows records
+are partial observations and establish no complete platform pass. The reason for
+cancellation is unconfirmed. Development publish run 36959551002 skipped native
+build, qualification and publication; its success was a no-op. Those complete
+available raw records remain pinned separately. The physical Sinter app remains
+closed after the user's normal close, and no Sinter provider call is made in this pass.

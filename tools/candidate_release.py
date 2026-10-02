@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import shlex
 import shutil
 import stat
@@ -34,6 +36,107 @@ from tools.candidate_qualification import (  # noqa: E402
 )
 
 
+def _manifest_for_dispatch(path: Path) -> dict:
+    """Discover an exact RC4 profile; this read never grants release authority.
+
+    RC4's finite inventory may exceed the legacy document limit. Discovery has
+    the unchanged 64 MiB member bound, while every non-RC4 document still goes
+    through the unchanged 2 MiB legacy reader before qualification can proceed.
+    The fixed original authorizer independently rereads and pins RC4 bytes.
+    """
+    path = Path(path)
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_FILE:
+        raise ValueError("Candidate manifest is special or exceeds discovery bound.")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    flags |= getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+
+        def identity(row):
+            return (
+                row.st_dev,
+                row.st_ino,
+                row.st_size,
+                row.st_mtime_ns,
+                row.st_ctime_ns,
+            )
+
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or identity(before) != identity(opened):
+            raise ValueError("Candidate manifest changed before discovery.")
+        chunks, size = [], 0
+        while chunk := os.read(descriptor, min(1024 * 1024, MAX_FILE + 1 - size)):
+            size += len(chunk)
+            if size > MAX_FILE:
+                raise ValueError("Candidate manifest grew beyond discovery bound.")
+            chunks.append(chunk)
+        if (
+            size != before.st_size
+            or identity(before) != identity(os.fstat(descriptor))
+            or identity(before) != identity(path.lstat())
+        ):
+            raise ValueError("Candidate manifest changed during discovery.")
+    except BaseException as error:
+        try:
+            os.close(descriptor)
+        except BaseException as cleanup_error:
+            cleanup_errors = getattr(error, "manifest_cleanup_errors", ())
+            error.manifest_cleanup_errors = cleanup_errors + (cleanup_error,)
+            error.manifest_cleanup_error = cleanup_error
+        raise
+    else:
+        os.close(descriptor)
+
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("Candidate manifest has a duplicate JSON field.")
+            result[key] = value
+        return result
+
+    raw = b"".join(chunks)
+    try:
+        plan = json.loads(raw.decode("utf-8"), object_pairs_hook=unique)
+    except (UnicodeError, RecursionError) as error:
+        raise ValueError("Candidate discovery requires bounded UTF-8 JSON.") from error
+    if type(plan) is not dict:
+        raise ValueError("Candidate discovery requires one JSON object.")
+    if plan.get("version") != "0.5.4rc4":
+        # This authoritative legacy call retains its exact original size bound,
+        # schema, version policy and defaults; discovery is not size admission.
+        return _json(path)
+
+    from tools import rc4_candidate_release as rc4
+
+    plan = rc4.strict_json(raw)
+    expected = {
+        "schema": rc4.SCHEMA,
+        "version": rc4.VERSION,
+        "repository": REPOSITORY,
+        "tag": "v" + rc4.VERSION,
+        "prerelease": True,
+        "latest": False,
+        "qualified_targets": [TARGET],
+        "unqualified_targets": UNQUALIFIED,
+        "all_platform_release_qualified": False,
+        "publication_executed": False,
+        "original_authorization_required": True,
+        "historical_semantic_replay": False,
+        "new_installed_execution": False,
+    }
+    if not all(
+        type(plan.get(key)) is type(value) and plan[key] == value
+        for key, value in expected.items()
+    ) or not (
+        type(plan.get("source_commit")) is str
+        and re.fullmatch(r"[0-9a-f]{40}", plan["source_commit"])
+    ):
+        raise ValueError("Candidate discovery requires the exact RC4 identity/profile.")
+    return plan
+
+
 def _write_checksums(folder: Path) -> None:
     rows = [
         f"{digest(path)}  {name}"
@@ -45,6 +148,10 @@ def _write_checksums(folder: Path) -> None:
 
 def release_notes(version: str, commit: str) -> str:
     """Keep public prose bound to the same qualified scope as its manifest."""
+    if version == "0.5.4rc4":
+        from tools.rc4_candidate_release import release_notes as rc4_notes
+
+        return rc4_notes(commit)
     if version == "0.5.4rc2":
         return _rc2_release_notes(commit)
     if version == "0.5.4rc3":
@@ -183,10 +290,26 @@ Customer-device acceptance and other-platform qualification remain outstanding.
 """
 
 
-def verify_plan(path: Path, repository: Path = ROOT) -> dict:
+def verify_plan(
+    path: Path,
+    repository: Path = ROOT,
+    *,
+    rc4_context=None,
+    rc4_pins=None,
+    rc4_manifest_sha256=None,
+) -> dict:
     """Validate a sealed candidate stage immediately before authorised publication."""
-    plan = _json(path)
+    plan = _manifest_for_dispatch(path)
     version, commit = plan.get("version", ""), plan.get("source_commit", "")
+    if version == "0.5.4rc4":
+        from tools.rc4_candidate_release import authorize_original
+
+        return authorize_original(
+            path,
+            context=rc4_context,
+            pins=rc4_pins,
+            manifest_sha256=rc4_manifest_sha256,
+        )
     _identity(version, commit)
     if (
         plan.get("schema") != SCHEMA
@@ -292,6 +415,9 @@ def prepare(
     version: str,
     commit: str,
     repository: Path = ROOT,
+    *,
+    rc4_context=None,
+    rc4_pins=None,
 ) -> Path:
     """Create a new reviewable stage while leaving canonical artifacts untouched."""
     if (
@@ -302,6 +428,25 @@ def prepare(
         raise ValueError(
             "Choose a new staging directory; existing bundles are never overwritten."
         )
+    if version == "0.5.4rc4":
+        from tools.rc4_candidate_release import (
+            OriginalContext,
+            OriginalPins,
+            prepare_original,
+        )
+
+        if (
+            type(rc4_context) is not OriginalContext
+            or type(rc4_pins) is not OriginalPins
+            or rc4_context.candidate != folder
+            or rc4_context.independent_review != review
+            or rc4_context.repository != repository
+            or rc4_pins.source_commit != commit
+        ):
+            raise ValueError(
+                "RC4 staging requires its explicit original context and independently trusted pins."
+            )
+        return prepare_original(rc4_context, output, rc4_pins)
     result = verify_candidate(folder, review, version, commit, repository)
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
@@ -355,9 +500,24 @@ def prepare(
     return output / "candidate-release-manifest.json"
 
 
-def publication_commands(manifest: Path) -> str:
+def publication_commands(
+    manifest: Path,
+    *,
+    rc4_context=None,
+    rc4_pins=None,
+    rc4_manifest_sha256=None,
+    rc4_authorization_files=None,
+) -> str:
     """Render the explicit post-approval commands; do not execute them."""
-    plan = verify_plan(manifest)
+    if any(value is not None for value in (rc4_context, rc4_pins, rc4_manifest_sha256)):
+        plan = verify_plan(
+            manifest,
+            rc4_context=rc4_context,
+            rc4_pins=rc4_pins,
+            rc4_manifest_sha256=rc4_manifest_sha256,
+        )
+    else:
+        plan = verify_plan(manifest)
     files = [manifest.parent / row["path"] for row in plan["assets"]]
     files += [manifest, manifest.parent / "SHA256SUMS.txt"]
     tag = [
@@ -372,6 +532,38 @@ def publication_commands(manifest: Path) -> str:
         "--candidate-manifest",
         str(manifest),
     ]
+    if plan["version"] == "0.5.4rc4":
+        tag.insert(1, "-B")
+        if type(rc4_authorization_files) is not dict or set(
+            rc4_authorization_files
+        ) != {
+            "original-context",
+            "original-context-sha256",
+            "trusted-pins",
+            "trusted-pins-sha256",
+            "manifest-sha256",
+        }:
+            raise ValueError(
+                "RC4 publication commands require exact externally pinned original authorization files."
+            )
+        from tools.rc4_candidate_release import load_original
+
+        supplied_context, supplied_pins = load_original(
+            rc4_authorization_files["original-context"],
+            rc4_authorization_files["original-context-sha256"],
+            rc4_authorization_files["trusted-pins"],
+            rc4_authorization_files["trusted-pins-sha256"],
+        )
+        if (
+            supplied_context,
+            supplied_pins,
+            rc4_authorization_files["manifest-sha256"],
+        ) != (rc4_context, rc4_pins, rc4_manifest_sha256):
+            raise ValueError(
+                "Rendered RC4 tag commands name different original authorization inputs."
+            )
+        for name, value in rc4_authorization_files.items():
+            tag += ["--" + name, str(value)]
     release = [
         "gh",
         "release",
@@ -416,8 +608,45 @@ def main(argv: list[str] | None = None) -> None:
         "commands", help="Print publication commands for human review; never run them."
     )
     render.add_argument("manifest", type=Path)
+    for command in (stage, verify, render):
+        command.add_argument("--original-context", type=Path)
+        command.add_argument("--original-context-sha256")
+        command.add_argument("--trusted-pins", type=Path)
+        command.add_argument("--trusted-pins-sha256")
+        command.add_argument("--manifest-sha256")
     args = parser.parse_args(argv)
     try:
+        version = (
+            args.version
+            if args.operation == "prepare"
+            else _manifest_for_dispatch(args.manifest).get("version")
+        )
+        rc4 = {}
+        if version == "0.5.4rc4":
+            from tools.rc4_candidate_release import load_original
+
+            if not all(
+                (
+                    args.original_context,
+                    args.original_context_sha256,
+                    args.trusted_pins,
+                    args.trusted_pins_sha256,
+                )
+            ):
+                raise ValueError(
+                    "RC4 requires explicit original context and trusted pins with independent file hashes."
+                )
+            context, pins = load_original(
+                args.original_context,
+                args.original_context_sha256,
+                args.trusted_pins,
+                args.trusted_pins_sha256,
+            )
+            rc4 = {"rc4_context": context, "rc4_pins": pins}
+            if args.operation == "prepare":
+                rc4["repository"] = context.repository
+            if args.operation != "prepare":
+                rc4["rc4_manifest_sha256"] = args.manifest_sha256
         if args.operation == "prepare":
             path = prepare(
                 args.candidate,
@@ -425,23 +654,33 @@ def main(argv: list[str] | None = None) -> None:
                 args.output,
                 args.version,
                 args.commit,
+                **rc4,
             )
             print(
                 f"Prepared scoped candidate manifest: {path}; no publication performed."
             )
         elif args.operation == "verify":
-            plan = verify_plan(args.manifest)
+            plan = verify_plan(args.manifest, **rc4)
             print(
                 f"Verified {plan['version']} at {plan['source_commit']}: "
                 "Linux x64 only; no publication performed."
             )
         else:
-            print(publication_commands(args.manifest), end="")
+            if rc4:
+                rc4["rc4_authorization_files"] = {
+                    "original-context": args.original_context,
+                    "original-context-sha256": args.original_context_sha256,
+                    "trusted-pins": args.trusted_pins,
+                    "trusted-pins-sha256": args.trusted_pins_sha256,
+                    "manifest-sha256": args.manifest_sha256,
+                }
+            print(publication_commands(args.manifest, **rc4), end="")
     except (
         OSError,
         ValueError,
         KeyError,
         TypeError,
+        ImportError,
         subprocess.SubprocessError,
         zipfile.BadZipFile,
         tarfile.TarError,
