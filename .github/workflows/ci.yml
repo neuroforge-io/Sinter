@@ -96,6 +96,11 @@ jobs:
       - run: python tools/campaign_backup_browser.py
       - run: python tools/campaign_source_picker_browser.py
       - run: python tools/campaign_currency_browser.py
+      - name: Funding records, full-portfolio pagination and stale-response protection
+        run: |
+          python tools/campaign_funding_browser.py
+          node --experimental-default-type=module tests/campaign_funding.mjs
+          node --experimental-default-type=module tests/campaign_opportunity_view.mjs
       - run: python tools/campaign_budget_browser.py
       - run: python tools/campaign_action_bar_browser.py
       - run: python tools/communication_view_browser.py

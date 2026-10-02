@@ -259,6 +259,13 @@ _OPERATIONS = (
         "write",
     ),
     Operation(
+        "campaigns.funding_summary",
+        "POST",
+        "/api/campaigns/funding-summary",
+        "Inspect recorded funding totals by stage, benefit and currency.",
+        "document; totals cover this campaign only, without conversion or submission.",
+    ),
+    Operation(
         "campaigns.delete",
         "POST",
         "/api/campaigns/delete",

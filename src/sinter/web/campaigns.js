@@ -24,6 +24,10 @@ import {selectWindowSource} from './campaign-window-source.js';
 import {campaignBackupControls, resetCampaignBackupControls} from './campaign-backup.js';
 import {CEILING_CURRENCY_OPTIONS, campaignCeilingCurrency,
   campaignFundingAmount, campaignCurrencyComparisonNote} from './campaign-currency.js';
+import {createFundingSummaryState, fundingTrackingEditor,
+  fundingReferencesSource, renderFundingSummary} from './campaign-funding.js';
+import {CAMPAIGN_OPPORTUNITY_LIMIT, OPPORTUNITY_PAGE_SIZE,
+  canAddCampaignOpportunity, campaignOpportunityView} from './campaign-opportunity-view.js';
 
 import {campaignBudgetRowState, campaignQuotedBudget, QUOTED_BUDGET_NOTE}
   from './campaign-budget.js';
@@ -178,6 +182,10 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   let pendingBudgetFocus = null;
   let toolbarObserver = null, toolbarObserverFrame = null;
   let sourceQuery = typeof seed.sourceQuery === 'string' ? seed.sourceQuery : '';
+  let opportunityQuery = typeof seed.opportunityQuery === 'string' ? seed.opportunityQuery : '';
+  let opportunityStatus = opportunityStates.some(([key]) => key === seed.opportunityStatus)
+    ? seed.opportunityStatus : 'all';
+  let opportunityPage = Number.isSafeInteger(seed.opportunityPage) ? Math.max(0, seed.opportunityPage) : 0;
   let assetQuery = typeof seed.assetQuery === 'string' ? seed.assetQuery : '';
   let communicationQuery = typeof seed.communicationQuery === 'string' ? seed.communicationQuery : '';
   let communicationRoute = typeof seed.communicationRoute === 'string' ? seed.communicationRoute : null;
@@ -199,10 +207,59 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   const saveButton = button('Save campaign', () => save(), 'primary');
   const prepareButton = button('Prepare campaign brief', () => prepare(), 'quiet');
   const newButton = button('Start a new campaign', newCampaign, 'quiet');
+  const fundingState = createFundingSummaryState();
+  let fundingProblem = '';
+  let renderedFundingSummary = null, renderedFundingProblem = '';
+  const fundingStatus = h('p', {class: 'fine', role: 'status', 'aria-live': 'polite'});
+  const fundingContent = h('div', {class: 'campaign-funding-content'});
+  const fundingButton = button('Update funding totals', updateFundingTotals, 'quiet');
+  const fundingPanel = h('section', {class: 'campaign-funding-summary',
+    'aria-label': 'Current campaign funding totals'},
+    h('div', {class: 'campaign-section-heading'}, h('div', {}, h('h3', {}, 'Funding totals'),
+      h('p', {class: 'muted'}, 'One calculated view of the current campaign, including unsaved edits. Records remain on this computer; this action does not contact a funder.')),
+    fundingButton), fundingStatus, fundingContent);
+
+  function renderFunding() {
+    fundingButton.disabled = busy || fundingState.pending || fundingState.closed;
+    fundingPanel.dataset.stale = String(fundingState.stale);
+    fundingStatus.textContent = fundingState.stale
+      ? fundingState.pending
+        ? 'Earlier campaign version · totals are stale. Wait for the current request to finish, then update from these edits.'
+        : 'Earlier campaign version · totals are stale. Update funding totals before using them.'
+      : fundingState.pending ? 'Updating from the current campaign records…'
+        : fundingState.summary ? 'Calculated from the current recorded data. Eligibility and income are not independently verified.'
+          : 'Totals have not been calculated. Open Funding tracking under a route to record its round, statuses, amounts and evidence, then update totals.';
+    if (renderedFundingSummary !== fundingState.summary || renderedFundingProblem !== fundingProblem) {
+      fundingContent.replaceChildren(...[
+        fundingProblem ? notice(fundingProblem, 'error') : null,
+        fundingState.summary ? renderFundingSummary(fundingState.summary) : null,
+      ].filter(Boolean));
+      renderedFundingSummary = fundingState.summary;
+      renderedFundingProblem = fundingProblem;
+    }
+  }
+  async function updateFundingTotals() {
+    if (busy || fundingState.closed) return;
+    const token = fundingState.begin();
+    fundingProblem = ''; lock(true); renderFunding();
+    try {
+      const result = await request('/api/campaigns/funding-summary', {
+        data: {document: structuredClone(document)},
+      });
+      if (fundingState.accept(token, result)) {
+        renderFunding(); announce('Funding totals updated from the current recorded campaign.');
+      }
+    } catch (problem) {
+      if (fundingState.current(token)) { fundingProblem = problem.message; renderFunding(); }
+    } finally {
+      if (fundingState.finish(token)) { lock(false); renderFunding(); }
+    }
+  }
 
   function rememberCampaign() {
     remember('campaigns', {document: structuredClone(document), id: savedId, revision,
       dirty, selected, tab, sourceQuery, assetQuery, communicationQuery,
+      opportunityQuery, opportunityStatus, opportunityPage,
       communicationRoute, communicationOrder, practice,
       budgetDisclosures: document.budget.map(row => budgetOpenState.get(row) ?? null)});
   }
@@ -227,12 +284,14 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   // A native toggle event may still be queued when the container is removed.
   root.dispose = () => {
+    fundingState.close();
     toolbarObserver?.disconnect();
     if (toolbarObserverFrame !== null) cancelAnimationFrame(toolbarObserverFrame);
     captureBudgetDisclosures();
     rememberCampaign();
   };
   function changed() {
+    fundingState.edited(); fundingProblem = ''; renderFunding();
     dirty = true; status.textContent = 'Unsaved changes';
     feedback.querySelector('.notice.success')?.remove();
     if (output.children.length && output.dataset.stale !== 'true') {
@@ -338,7 +397,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       rows.splice(rows.indexOf(item), 1); changed(); renderEditor();
     }, 'quiet');
   }
-  function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; newButton.disabled = value; editor.inert = value; sectionNavigation.inert = value; transfers.inert = value; }
+  function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; newButton.disabled = value; fundingButton.disabled = value || fundingState.pending || fundingState.closed; editor.inert = value; sectionNavigation.inert = value; transfers.inert = value; }
   function apply(next, id = null, rev = null, preferActionable = false) {
     const resumeCurrentCampaign = Boolean(id && id === savedId);
     const previousTab = tab;
@@ -350,6 +409,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       route: communicationRoute, order: communicationOrder};
     practice = null; practiceGuide.hidden = true;
     document = compatibleCampaign(next); savedId = id; revision = rev; dirty = false;
+    fundingState.reset(); fundingProblem = ''; renderFunding();
     resetCampaignBackupControls(backupControls);
     expandedActionRows = null;
     communicationOpenState = new WeakMap();
@@ -362,6 +422,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     tab = resumeCurrentCampaign && campaignTabs.some(([key]) => key === previousTab)
       ? previousTab : 'overview';
     sourceQuery = resumeCurrentCampaign ? previousSourceQuery : '';
+    if (!resumeCurrentCampaign) {
+      opportunityQuery = ''; opportunityStatus = 'all'; opportunityPage = 0;
+    }
     assetQuery = resumeCurrentCampaign ? previousAssetQuery : '';
     communicationQuery = resumeCurrentCampaign ? previousCommunicationView.query : '';
     communicationRoute = resumeCurrentCampaign ? previousCommunicationView.route : null;
@@ -406,6 +469,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       const openCommunications = document.communications.map(row => communicationOpenState.get(row));
       const openBudgetRows = document.budget.map(row => budgetOpenState.get(row));
       document = saved.document; savedId = saved.id; revision = saved.revision; dirty = false;
+      fundingState.edited(); renderFunding();
       communicationOpenState = new WeakMap();
       // The save response retains the submitted canonical order, including hidden rows.
       document.communications.forEach((row, index) => {
@@ -428,6 +492,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   async function prepare() {
     if (busy) return;
+    const fundingToken = fundingState.begin();
+    fundingProblem = ''; renderFunding();
     lock(true); feedback.replaceChildren();
     try {
       const decision = campaignDecision(document, undefined,
@@ -435,12 +501,15 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       const report = await request('/api/campaigns/prepare', {data: {
         document, focused_opportunity: decision.focusOpportunity,
       }});
+      if (!fundingState.current(fundingToken)) return;
+      if (report.funding_summary) fundingState.accept(fundingToken, report.funding_summary);
+      renderFunding();
       output.replaceChildren(renderReport(report));
       delete output.dataset.stale; output.classList.remove('campaign-output-stale');
       scrollCampaignTarget(output);
       announce('Campaign brief prepared. Unknowns and review items remain visible.');
-    } catch (problem) { error(problem.message); }
-    finally { lock(false); }
+    } catch (problem) { if (fundingState.current(fundingToken)) error(problem.message); }
+    finally { if (fundingState.finish(fundingToken)) { lock(false); renderFunding(); } }
   }
   function exportBackup() {
     download('sinter-campaign-backup.json', JSON.stringify(document, null, 2), 'application/json');
@@ -603,10 +672,17 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   function scopeChoices() { return [['', 'Whole campaign'], ...document.opportunities.map(row => [row.name, row.name])]; }
   function addOpportunity() {
+    if (!canAddCampaignOpportunity(document.opportunities)) {
+      error(`This campaign has reached its ${CAMPAIGN_OPPORTUNITY_LIMIT}-route limit. Your existing records are unchanged. Export a campaign backup before splitting further routes into another campaign; text and byte limits still apply.`);
+      return;
+    }
     let number = document.opportunities.length + 1;
     while (document.opportunities.some(row => row.name === 'Opportunity ' + number)) number++;
     document.opportunities.push({name: 'Opportunity ' + number, funder: '', url: '', deadline: '', decision_window: '', ceiling: null, ceiling_currency: 'unconfirmed', fit: '', route_type: 'unknown', status: 'researching'});
-    selected = document.opportunities.length - 1; changed(); renderEditor();
+    selected = document.opportunities.length - 1;
+    opportunityQuery = ''; opportunityStatus = 'all';
+    opportunityPage = Math.floor(selected / OPPORTUNITY_PAGE_SIZE);
+    changed(); renderEditor();
   }
   function revealSelectedCampaignTab() {
     const tabs = sectionNavigation.querySelector('.campaign-tabs');
@@ -741,22 +817,74 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     if (!document.opportunities.length) {
       panel.append(h('div', {class: 'campaign-empty'}, h('h4', {}, 'Start with one opportunity'), h('p', {}, 'Add a funder or programme, then record what you know and what needs checking. No eligibility is assumed.'))); return;
     }
-    const rail = h('div', {class: 'campaign-opportunities', 'aria-label': 'Funding and support routes'});
-    const cards = [];
-    document.opportunities.forEach((row, index) => {
-      const choose = button('', () => {
-        selected = index; rememberCampaign(); renderEditor(); renderSummary();
-      }, 'campaign-opportunity');
-      choose.setAttribute('aria-pressed', String(index === selected));
-      const cardName = h('strong', {}, row.name), cardFunder = h('span', {}, row.funder || 'Funder to confirm');
-      const cardType = h('small', {}, opportunityTypes.find(([key]) => key === row.route_type)?.[1] || 'Not classified');
-      const cardAmount = h('small', {}, routeAmountLabel(row));
-      const cardTiming = h('small', {}, opportunityTiming(row));
-      choose.append(cardName, cardFunder, cardType, cardAmount, cardTiming);
-      cards.push({choose, cardName, cardFunder, cardType, cardAmount, cardTiming});
-      rail.append(choose);
-    });
     selected = Math.min(selected, document.opportunities.length - 1);
+    const rail = h('div', {class: 'campaign-opportunities', 'aria-label': 'Funding and support routes'});
+    const search = field('Search funding routes', 'search', opportunityQuery,
+      'Search names, funders, links and route notes. This view does not change campaign data or the whole-campaign funding totals.',
+      {placeholder: 'Try a funder or programme', maxLength: 200});
+    const filter = selectField('Filter funding routes by status',
+      [['all', 'All recorded statuses'], ...opportunityStates], opportunityStatus);
+    const count = h('p', {class: 'campaign-filter-status', role: 'status',
+      'aria-live': 'polite', 'aria-label': 'Funding route list count'});
+    const empty = h('p', {class: 'campaign-filter-empty', hidden: true},
+      'No funding routes match. Clear the search or change the status filter. The selected editor and all records are retained.');
+    const selection = h('p', {class: 'fine', 'aria-label': 'Retained selected funding route'});
+    const previous = button('Previous funding routes page', () => {
+      if (busy || opportunityPage <= 0) return;
+      opportunityPage--; renderOpportunityRail(); rememberCampaign();
+    }, 'quiet');
+    const next = button('Next funding routes page', () => {
+      if (busy || next.disabled) return;
+      opportunityPage++; renderOpportunityRail(); rememberCampaign();
+    }, 'quiet');
+    const showSelected = button('Show selected route in list', () => {
+      if (busy) return;
+      opportunityQuery = ''; opportunityStatus = 'all';
+      search.input.value = ''; filter.input.value = 'all';
+      opportunityPage = Math.floor(selected / OPPORTUNITY_PAGE_SIZE);
+      renderOpportunityRail(); rememberCampaign();
+    }, 'quiet');
+    function renderOpportunityRail() {
+      const view = campaignOpportunityView(document.opportunities, {
+        query: opportunityQuery, status: opportunityStatus, page: opportunityPage,
+      });
+      opportunityPage = view.page;
+      rail.replaceChildren(...view.entries.map(({row, index}) => {
+        const choose = button('', () => {
+          selected = index; rememberCampaign(); renderEditor(); renderSummary();
+        }, 'campaign-opportunity');
+        choose.setAttribute('aria-pressed', String(index === selected));
+        choose.dataset.opportunityIndex = String(index);
+        choose.append(h('strong', {}, row.name), h('span', {}, row.funder || 'Funder to confirm'),
+          h('small', {}, opportunityTypes.find(([key]) => key === row.route_type)?.[1] || 'Not classified'),
+          h('small', {}, routeAmountLabel(row)), h('small', {}, opportunityTiming(row)));
+        return choose;
+      }));
+      count.textContent = view.matched
+        ? `${view.matched} of ${view.total} routes match · showing ${view.start}–${view.end} · page ${view.page + 1} of ${view.pages}`
+        : `0 of ${view.total} routes match · no pages`;
+      empty.hidden = view.matched !== 0;
+      previous.disabled = view.page <= 0;
+      next.disabled = !view.pages || view.page >= view.pages - 1;
+      const selectedVisible = view.entries.some(({index}) => index === selected);
+      selection.textContent = `Selected editor: ${document.opportunities[selected]?.name || 'Untitled route'}. `
+        + (selectedVisible ? 'Shown in this page.'
+          : view.matchedIndexes.includes(selected) ? 'Retained from another page.'
+            : 'Retained outside the current filters.');
+      showSelected.hidden = selectedVisible;
+    }
+    search.input.addEventListener('input', () => {
+      opportunityQuery = search.input.value; opportunityPage = 0;
+      renderOpportunityRail(); rememberCampaign();
+    });
+    filter.input.addEventListener('change', () => {
+      opportunityStatus = filter.input.value; opportunityPage = 0;
+      renderOpportunityRail(); rememberCampaign();
+    });
+    const routeList = h('div', {class: 'campaign-opportunity-list'},
+      search.wrap, filter.wrap, count, empty, rail,
+      h('div', {class: 'campaign-opportunity-pagination button-row'}, previous, next),
+      selection, showSelected);
     const item = document.opportunities[selected], focus = h('section', {class: 'campaign-focus', 'aria-label': 'Selected opportunity'});
     const headerFunder = h('span', {class: 'eyebrow'}), headerName = h('h3', {}), programme = h('div');
     const windowSourceInfo = h('p', {class: 'campaign-window-source', role: 'status'});
@@ -765,14 +893,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const decisionValue = h('dd', {}), statusValue = h('dd', {}), workflowValue = h('dd', {}), fitValue = h('p', {});
     const applicantConfirmationStatus = h('small', {class: 'campaign-action-meta'});
     function updateOpportunityView() {
-      const card = cards[selected];
-      if (card) {
-        card.cardName.textContent = item.name || 'Untitled opportunity';
-        card.cardFunder.textContent = item.funder || 'Funder to confirm';
-        card.cardType.textContent = opportunityTypes.find(([key]) => key === item.route_type)?.[1] || 'Not classified';
-        card.cardAmount.textContent = routeAmountLabel(item);
-        card.cardTiming.textContent = opportunityTiming(item);
-      }
+      renderOpportunityRail();
       headerFunder.textContent = item.funder || 'FUNDER TO CONFIRM';
       headerName.textContent = item.name || 'Untitled opportunity';
       programme.replaceChildren(item.url ? safeLink(item.url, 'Open programme guidance')
@@ -926,7 +1047,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         h('div', {}, h('dt', {}, 'Status'), statusValue)),
       currencyComparison,
       h('div', {class: 'campaign-fit'}, h('strong', {}, 'Project fit and timing'), fitValue),
-      opportunityEditor);
+      opportunityEditor,
+      fundingTrackingEditor(item, {sources: document.sources,
+        sourcePicker: campaignSourcePicker, changed}));
     updateOpportunityView();
     const requirements = h('div', {class: 'campaign-checks'});
     function addRequirement() { document.requirements.push({opportunity: item.name, rule: '', status: 'unknown', evidence: '', source_id: '', source_url: '', source_quote: '', checked_at: ''}); changed(); renderEditor(); }
@@ -1027,7 +1150,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       location.hash = 'brief';
     }, 'quiet'));
     focus.append(requirements);
-    panel.append(h('div', {class: 'campaign-opportunity-layout'}, rail, focus));
+    panel.append(h('div', {class: 'campaign-opportunity-layout'}, routeList, focus));
   }
   function renderAnswers(panel) {
     panel.append(h('h3', {}, 'Prepare application answers'), h('p', {class: 'muted'}, 'Keep the exact form question and its limit together. Drafts can be saved over the limit; they still need shortening before use.'));
@@ -1979,10 +2102,11 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
             reference => reference.source_id === row.id))
             || document.requirements.some(requirement => requirement.source_id === row.id)
             || document.opportunities.some(opportunity => opportunity.window_source_id === row.id)
+            || document.opportunities.some(opportunity => fundingReferencesSource(opportunity, row.id))
             || document.communications.some(communication =>
               communication.evidence_links?.some(link => link.source_id === row.id));
           if (linked) {
-            error('This source is linked to a product, eligibility check, route window or communication. Unlink or replace those references before removing the source.');
+            error('This source is linked to a product, eligibility check, route window, funding record or communication. Unlink or replace those references before removing the source.');
             return;
           }
           document.sources.splice(document.sources.indexOf(row), 1);
@@ -2022,9 +2146,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     h('p', {}, 'Compare opportunities, map products and IP questions to funding routes, prepare answers and turn missing details into next actions. Saved locally, with your sources beside the work.')),
     h('div', {class: 'campaign-save-bar non-print', role: 'region', 'aria-label': 'Campaign save and preview'},
       h('div', {class: 'button-row'}, saveButton, prepareButton), status, feedback),
-    practiceGuide, sectionNavigation, decisionCard, savedPanel, shelf, summary, capacity, editor, transfers, output);
+    practiceGuide, sectionNavigation, decisionCard, savedPanel, shelf, summary, fundingPanel, capacity, editor, transfers, output);
   status.textContent = dirty ? 'Unsaved changes' : savedId ? 'Saved on this computer' : 'Not saved yet';
-  renderEditor(); renderSummary();
+  renderEditor(); renderSummary(); renderFunding();
   const existing = await refreshShelf();
   if (!seed.document && !seed.id && !seed.dirty && existing.length) {
     try {
