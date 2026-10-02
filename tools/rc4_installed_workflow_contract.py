@@ -207,6 +207,16 @@ def streams(row, folder, names=("stdout", "stderr"), *, directory=False):
         )
 
 
+def browser_stdout(opener: str, port: int) -> bytes:
+    """Bind the exact browser-mode startup banner to its admitted listener."""
+    from tools.installed_workflow_browser import inner_address
+
+    require(type(opener) is str and type(port) is int, "Typed app listener required.")
+    _host, admitted_port = inner_address(opener)
+    require(port == admitted_port, "Opener and actual listener identity differ.")
+    return f"Sinter local workspace: {opener}\n".encode("ascii")
+
+
 def command(row, argv, *, status=0):
     native.stopped(row, expected_exit=status)
     require(
@@ -504,18 +514,13 @@ def app_rows(value, inputs, notice, folder):
             and row["returncode"] == row["exit_code"],
             "Only observed normal UI quit may qualify.",
         )
-        opener = full(row["opener"], 1024).decode("ascii").strip()
-        from tools.installed_workflow_browser import inner_address
-
-        _host, port = inner_address(opener)
-        require(
-            type(row["port"]) is int and row["port"] == port,
-            "Opener and actual listener identity differ.",
-        )
-        ports.add(port)
+        opener = full(row["opener"], 1024).decode("ascii")
+        expected_stdout = browser_stdout(opener, row["port"])
+        ports.add(row["port"])
         streams(row, folder / "process" / f"run-{index}", directory=True)
         require(
-            regular(folder / "process" / f"run-{index}" / "stdout", MAX_FILE) == b""
+            regular(folder / "process" / f"run-{index}" / "stdout", MAX_FILE)
+            == expected_stdout
             and regular(folder / "process" / f"run-{index}" / "stderr", MAX_FILE)
             == notice,
             "Installed app emitted unexpected actual diagnostics.",

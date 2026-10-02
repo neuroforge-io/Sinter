@@ -162,3 +162,17 @@ operation limits remain unchanged. The earlier held proposal and all successful
 historical replays stay intact. Natural original Windows socket state remains
 unknown. These overlapping source observations do not qualify installed
 behavior, raise the product score or replace final-source hosted checks.
+
+
+### Actual installed workflow correction, 2 October
+
+The first exact791 installed browser journey quit normally after six completed
+checks, but its qualification owner rejected the product's startup banner.
+A separate cleanup field error is retained alongside that first failure. The
+source correction admits only the exact banner bound to the actual local URL
+and listener, records the fixed temporary directory before collector startup,
+and permits narrow cleanup after a fully observed failed collector without
+turning it into a passing workflow. Existing stream, ownership and inventory
+guards remain. The original partial run does not establish reopen, restore or
+Word export. Its package is held; new exact-source hosted and full installed
+qualification are required. See the dated quality-review record for scope.

@@ -1694,3 +1694,126 @@ def test_multiple_cache_removal_faults_retain_every_actual_outcome(
     assert (
         result["complete"] is False and result["failure"]["type"] == "PermissionError"
     )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "default",
+        "exit_bool",
+        "exit_zero",
+        "exit_negative",
+        "exit_130",
+        "exit_none",
+        "missing_pid",
+        "missing_exit",
+        "missing_group",
+        "remaining_group",
+        "forced",
+        "error",
+        "missing_complete",
+        "incomplete",
+        "missing_stdout",
+        "missing_stderr",
+        "missing_passed",
+        "truncated",
+        "passed",
+        "expected_bool",
+        "expected_negative",
+        "expected_130",
+        "expected_none",
+        "unknown_cache",
+    ],
+)
+def test_failed_collector_cache_cleanup_refuses_unobserved_or_unsafe_rows(
+    tmp_path, mutation
+):
+    temporary = tmp_path / "t"
+    temporary.mkdir()
+    cache = temporary / "com.google.Chrome.chrome_chrome_url_fetcher_.abc123"
+    cache.mkdir()
+    path = cache / producer.CACHE_NAME
+    path.write_bytes(b"SOURCE cache must remain on refusal")
+    browser = {"temporary_directory": str(temporary)}
+    host = synthetic_command_row(
+        ["SOURCE failed collector"], stderr=b"SOURCE failure\n"
+    )
+    host.update(exit_code=1, passed=False)
+    expected = 1
+    changes = {
+        "exit_bool": ("exit_code", True),
+        "exit_zero": ("exit_code", 0),
+        "exit_negative": ("exit_code", -1),
+        "exit_130": ("exit_code", 130),
+        "exit_none": ("exit_code", None),
+        "remaining_group": ("owned_group_remaining", True),
+        "forced": ("forced_cleanup", True),
+        "error": ("capture_error", "SOURCE retained failure"),
+        "incomplete": ("streams_complete", False),
+        "passed": ("passed", True),
+    }
+    if mutation in changes:
+        key, value = changes[mutation]
+        host[key] = value
+    missing = {
+        "missing_pid": "pid",
+        "missing_exit": "exit_code",
+        "missing_group": "owned_group_remaining",
+        "missing_complete": "streams_complete",
+        "missing_stdout": "stdout",
+        "missing_stderr": "stderr",
+        "missing_passed": "passed",
+    }
+    if mutation in missing:
+        del host[missing[mutation]]
+    if mutation == "truncated":
+        from tools.installed_native_menu import stream_record
+
+        host["stderr"] = stream_record(io.BytesIO(b"x" * 65_537))
+    if mutation.startswith("expected_"):
+        expected = {
+            "expected_bool": True,
+            "expected_negative": -1,
+            "expected_130": 130,
+            "expected_none": None,
+        }[mutation]
+    if mutation == "unknown_cache":
+        (temporary / "unknown").write_bytes(b"SOURCE unknown must remain")
+    before = copy.deepcopy(host)
+    with pytest.raises((ValueError, KeyError)):
+        if mutation == "default":
+            producer.clean_browser_temp(tmp_path, host, browser)
+        else:
+            producer.clean_browser_temp(tmp_path, host, browser, expected_exit=expected)
+    assert (
+        host == before and path.read_bytes() == b"SOURCE cache must remain on refusal"
+    )
+    assert browser["temporary_cleanup"]["complete"] is False
+    assert browser["temporary_cleanup"]["outcomes"] == []
+    if mutation == "unknown_cache":
+        assert (temporary / "unknown").read_bytes() == b"SOURCE unknown must remain"
+
+
+def test_explicit_completed_failure_cleanup_preserves_first_failure_and_host(tmp_path):
+    from tools.rc4_installed_workflow import Attempts
+
+    (tmp_path / "t").mkdir()
+    browser = {"temporary_directory": str(tmp_path / "t")}
+    host = synthetic_command_row(
+        ["SOURCE failed collector"], stderr=b"SOURCE failure\n"
+    )
+    host.update(exit_code=1, passed=False)
+    before = copy.deepcopy(host)
+    first = RuntimeError("SOURCE original workflow failure")
+    attempts = Attempts(first)
+    attempts.call(
+        "completed collector cache",
+        lambda: producer.clean_browser_temp(tmp_path, host, browser, expected_exit=1),
+    )
+    contract.validate_browser_temp(browser["temporary_cleanup"])
+    assert browser["temporary_cleanup"]["inventory"] == {}
+    assert browser["temporary_cleanup"]["outcomes"] == []
+    assert host == before and host["passed"] is False and attempts.errors == []
+    with pytest.raises(RuntimeError) as raised:
+        attempts.raise_first()
+    assert raised.value is first

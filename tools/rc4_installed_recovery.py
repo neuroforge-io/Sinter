@@ -1346,8 +1346,8 @@ CACHE_NAME = "fbdd96f424c67bd94b857b415c88a5711d0711f4d7a62d733ee650e5afe87766"
 CACHE_DIRECTORY = r"com\.google\.Chrome\.chrome_chrome_url_fetcher_\.[A-Za-z0-9]{6}"
 
 
-def clean_browser_temp(root, host, browser):
-    """Record/remove only observed cache shapes inside the fixed fresh owned /t."""
+def clean_browser_temp(root, host, browser, *, expected_exit: int = 0):
+    """Clean owned caches after an exactly observed exit; never qualify failure."""
     from tools import installed_native_entry_contract as native
 
     directory = root / "t"
@@ -1366,11 +1366,19 @@ def clean_browser_temp(root, host, browser):
             and browser["temporary_directory"] == str(directory),
             "Fixed browser temporary directory differs.",
         )
-        native.stopped(host)
+        contract.require(
+            type(expected_exit) is int and expected_exit in (0, 1),
+            "Only an explicit completed collector exit of zero or one is supported.",
+        )
+        native.stopped(host, expected_exit=expected_exit)
         contract.require(
             host["streams_complete"] is True,
             "Collector capture must finish before cache cleanup.",
         )
+        if expected_exit == 1:
+            native.exact(host.get("passed"), False, "Failed collector status differs.")
+            for name in ("stdout", "stderr"):
+                native.stream_bytes(host.get(name))
         observation["attempted"] = True
         files, folders = [], []
         # Bound enumeration before reading or deleting any cache entry.

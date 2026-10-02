@@ -2060,3 +2060,39 @@ operation limits remain unchanged. The earlier held proposal and all successful
 historical replays stay intact. Natural original Windows socket state remains
 unknown. These overlapping source observations do not qualify installed
 behavior, raise the product score or replace final-source hosted checks.
+
+
+### 2 October: actual installed workflow diagnostic mismatch
+
+The exact `791c9d87beee325d87f7090118b9600a4ba6eda6` Linux candidate
+built successfully after the separate build-runner PATH correction. Its first
+installed browser journey completed six named checks: package and desktop
+identity, example discovery, exact handover originals, handover preparation and
+save, and campaign action/draft save. The app then quit through its interface
+with exit 0, no termination signal or forced cleanup, and its listener closed.
+This is a normal quit, not a product crash or a completed workflow qualification.
+
+The qualification owner and verifier incorrectly required empty app stdout.
+The actual product prints its exact local-workspace URL; the unchanged quit
+notice is on stderr. The original failed owner, all streams, partial browser
+receipt and screenshots remain retained. A later cleanup attempt also lacked
+the fixed browser temporary-directory field, producing a separate `KeyError`.
+Reopen, restore and the three Word exports did not complete in that attempt.
+The old package remains held and is not relabelled as qualified.
+
+The source correction binds the exact startup banner to the canonical opener
+and typed, actually admitted listener in both producer and original verifier.
+It rejects missing, changed or extra output and keeps the exact stderr notice.
+The owned temporary directory is recorded before the browser collector starts.
+Cache cleanup still defaults to a normally stopped successful collector; only
+an explicit, fully captured exit-1 collector after a retained original failure
+may use the failure-cleanup path. Process ownership, complete streams, no forced
+cleanup and the finite cache inventory remain required. Failure stays failure.
+
+The author retained an initial inert-fixture shape failure, corrected that
+fixture and passed 284 final focused SOURCE tests with zero failures, errors or
+skips, plus required lint, changed-file formatting, Python 3.10 syntax and public
+boundary checks. These are source checks only. A new exact-source hosted run,
+new build, independent review and complete installed/recovery/upgrade journeys
+are still required before RC4 publication. No provider call, real campaign edit
+or higher product rating follows from this correction.

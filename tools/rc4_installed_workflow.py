@@ -494,8 +494,15 @@ class Controller:
             "Only an observed normal interface quit may qualify.",
         )
         notice = base64.b64decode(self.identity["notice_base64"])
+        expected_stdout = contract.browser_stdout(
+            contract.full(row["opener"], 1024).decode("ascii"), row["port"]
+        )
         contract.require(
-            contract.regular(self.paths["stdout"], contract.MAX_FILE) == b""
+            row["port"] == self.inner.port,
+            "App listener differs from its actual relay admission.",
+        )
+        contract.require(
+            contract.regular(self.paths["stdout"], contract.MAX_FILE) == expected_stdout
             and contract.regular(self.paths["stderr"], contract.MAX_FILE) == notice,
             "Actual app diagnostics differ; retained streams are not a pass.",
         )
@@ -1633,6 +1640,7 @@ def run(args):
         "browser": {
             **inputs["browser"],
             "sha256_after": None,
+            "temporary_directory": str(root / "t"),
             "temporary_empty_before": not any((root / "t").iterdir()),
             "temporary_empty_after": None,
         },
@@ -1856,11 +1864,23 @@ def run(args):
                 ]
             ),
         )
+        host_command = value.get("host_command", {})
+        host_exit = host_command.get("exit_code")
+        # A completed failed collector permits cleanup only after the original
+        # body failure is retained. It never qualifies that failed workflow.
+        expected_host_exit = (
+            1
+            if primary is not None and type(host_exit) is int and host_exit == 1
+            else 0
+        )
         attempts.call(
             "post-reap browser cache",
             lambda: value["browser"].update(
                 cleanup=recovery.clean_browser_temp(
-                    root, value.get("host_command", {}), value["browser"]
+                    root,
+                    host_command,
+                    value["browser"],
+                    expected_exit=expected_host_exit,
                 )
             ),
         )

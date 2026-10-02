@@ -7,6 +7,11 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Match installed browser startup diagnostics to the actual admitted local URL
+  and listener. Preserve the exact quit notice, complete streams and original
+  failure. Clean known owned browser caches after an explicitly observed failed
+  collector without counting that failed workflow as a pass.
+
 - Correct source qualification across runner ownership and filesystem semantics.
   Require actual socket backpressure in cancellation tests, preserve Windows
   path/descriptor metadata channels during manifest reads, and retain original

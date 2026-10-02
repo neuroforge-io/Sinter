@@ -337,8 +337,21 @@ def test_controller_metadata_read_fault_is_retained_without_start_or_masking(
 
 
 @pytest.mark.parametrize("stop_fault", [False, True])
+@pytest.mark.parametrize(
+    "diagnostics",
+    [
+        "exact",
+        "missing",
+        "changed",
+        "extra",
+        "wrong_port",
+        "extra_notice",
+        "wrong_opener",
+        "wrong_listener",
+    ],
+)
 def test_app_reap_retains_both_original_streams_and_independent_listener(
-    tmp_path, monkeypatch, stop_fault
+    tmp_path, monkeypatch, stop_fault, diagnostics
 ):
     from tools import native_window_smoke as native
     from tools import rc4_installed_recovery as recovery
@@ -358,7 +371,20 @@ def test_app_reap_retains_both_original_streams_and_independent_listener(
     controller.streams = {
         name: path.open("xb") for name, path in controller.paths.items()
     }
-    controller.streams["stderr"].write(notice)
+    opener = b"http://127.0.0.1:12345"
+    banner = b"Sinter local workspace: http://127.0.0.1:12345\n"
+    if diagnostics == "wrong_listener":
+        opener = opener.replace(b"12345", b"12346")
+        banner = banner.replace(b"12345", b"12346")
+    observed_stdout = {
+        "missing": b"",
+        "changed": banner.replace(b"workspace", b"Workspace"),
+        "extra": banner + b"extra\n",
+        "wrong_port": banner.replace(b"12345", b"12346"),
+    }.get(diagnostics, banner)
+    observed_stderr = notice + (b"extra\n" if diagnostics == "extra_notice" else b"")
+    controller.streams["stdout"].write(observed_stdout)
+    controller.streams["stderr"].write(observed_stderr)
     controller.process = SimpleNamespace(poll=lambda: 0)
     argv = [contract.BINARY, "app", "--mode", "browser", "--directory", "/proof/data"]
     controller.rows = [
@@ -369,6 +395,10 @@ def test_app_reap_retains_both_original_streams_and_independent_listener(
             "sigterm_sent": False,
             "forced_cleanup": False,
             "stop_method": "interface_quit",
+            "opener": contract.full_record(
+                opener + (b"\n" if diagnostics == "wrong_opener" else b"")
+            ),
+            "port": 12346 if diagnostics == "wrong_listener" else 12345,
         }
     ]
     observed = []
@@ -387,12 +417,18 @@ def test_app_reap_retains_both_original_streams_and_independent_listener(
         with pytest.raises(RuntimeError) as raised:
             controller.reap()
         assert raised.value is first
-    else:
+    elif diagnostics == "exact":
         controller.reap()
+        assert producer.read_json(tmp_path / "state.json")["phase"] == "stopped"
+    else:
+        with pytest.raises(ValueError):
+            controller.reap()
+        assert not (tmp_path / "state.json").exists()
     assert observed == [12345] and all(
         stream.closed for stream in controller.streams.values()
     )
-    assert controller.paths["stderr"].read_bytes() == notice
+    assert controller.paths["stdout"].read_bytes() == observed_stdout
+    assert controller.paths["stderr"].read_bytes() == observed_stderr
     retained = producer.read_json(folder / "observation.json")
     contract.streams(retained, folder, directory=True)
     assert len(retained["cleanup_observation"]["attempts"]) == 6
@@ -1359,3 +1395,231 @@ def test_final_failed_publication_carries_full_primary_beyond_receipt_summary(
     for path, raw in calls[1:]:
         _failed_bytes(error, path, raw)
     assert error.published_paths == () and len(error.publication_errors) == 2
+
+
+@pytest.mark.parametrize(
+    "opener,port",
+    [
+        ("http://127.0.0.1:12345/", 12345),
+        (" http://127.0.0.1:12345", 12345),
+        ("http://127.0.0.1:12345\n", 12345),
+        ("http://localhost:12345", 12345),
+        ("https://127.0.0.1:12345", 12345),
+        ("http://127.0.0.1:12345?x=1", 12345),
+        ("http://user@127.0.0.1:12345", 12345),
+        ("http://127.0.0.1:12345", 12346),
+        ("http://127.0.0.1:12345", True),
+        ("http://127.0.0.1:12345", None),
+        (b"http://127.0.0.1:12345", 12345),
+    ],
+)
+def test_browser_banner_refuses_noncanonical_or_unbound_opener(opener, port):
+    with pytest.raises(ValueError):
+        contract.browser_stdout(opener, port)
+
+
+@pytest.mark.parametrize("mutation", [None, "missing", "extra", "wrong_port", "notice"])
+def test_original_app_rows_bind_exact_browser_diagnostics(tmp_path, mutation):
+    # Projected SOURCE parser inputs only, never a full installed proof.
+    from tools.installed_native_menu import stream_record
+
+    inputs = input_fixture()
+    notice = b"SOURCE exact inert quit notice\n"
+    controller_argv = ["python3", "-B", "/source/" + contract.SOURCE_FILE, "controller"]
+    value = {
+        "schema": contract.CONTROLLER,
+        "uid": inputs["uid"],
+        "gid": inputs["gid"],
+        "pid": 10,
+        "argv": controller_argv,
+        "cmdline": contract.full_record(
+            b"\0".join(p.encode() for p in controller_argv) + b"\0"
+        ),
+        "rows": [],
+        "failure": None,
+        "cleanup_errors": [],
+        "acquisition_cleanup": [],
+        "resources": {
+            name: True
+            for name in (
+                "inner_thread_closed",
+                "inner_requests_closed",
+                "inner_socket_absent",
+                "app_groups_absent",
+            )
+        },
+        "cleanup_attempts": [
+            {"resource": name, "succeeded": True}
+            for name in (
+                "app final reap",
+                "relay shutdown",
+                "relay close",
+                "relay join",
+                "relay socket removal",
+                "controller final observation",
+            )
+        ],
+    }
+    for run in (1, 2):
+        port = 12344 + run
+        opener = f"http://127.0.0.1:{port}"
+        stdout = f"Sinter local workspace: {opener}\n".encode()
+        stderr = notice
+        if run == 2:
+            stdout = {
+                "missing": b"",
+                "extra": stdout + b"extra\n",
+                "wrong_port": stdout.replace(b"12346", b"12347"),
+            }.get(mutation, stdout)
+            if mutation == "notice":
+                stderr += b"extra\n"
+        argv = [
+            contract.BINARY,
+            "app",
+            "--mode",
+            "browser",
+            "--directory",
+            "/proof/data",
+        ]
+        row = {
+            "run": run,
+            "pid": 10 + run,
+            "argv": argv,
+            "stop_method": "interface_quit",
+            "forced_cleanup": False,
+            "sigterm_sent": False,
+            "cmdline": contract.full_record(
+                b"\0".join(p.encode() for p in argv) + b"\0"
+            ),
+            "opener": contract.full_record(opener.encode()),
+            "port": port,
+            "exit_code": 0,
+            "owned_group_remaining": False,
+            "stdout": stream_record(io.BytesIO(stdout)),
+            "stderr": stream_record(io.BytesIO(stderr)),
+            "streams_complete": True,
+            "port_closed": True,
+            "returncode": 0,
+            "cleanup_observation": {
+                "errors": [],
+                "attempts": [
+                    {"resource": name, "succeeded": True}
+                    for name in (
+                        "app stop",
+                        "stdout close",
+                        "stderr close",
+                        "stdout retention",
+                        "stderr retention",
+                        "listener observation",
+                    )
+                ],
+            },
+        }
+        folder = tmp_path / "process" / f"run-{run}"
+        folder.mkdir(parents=True)
+        (folder / "stdout").write_bytes(stdout)
+        (folder / "stderr").write_bytes(stderr)
+        producer.write_json(folder / "observation.json", row)
+        value["rows"].append(row)
+    if mutation is None:
+        assert contract.app_rows(value, inputs, notice, tmp_path) == (
+            {11, 12},
+            {12345, 12346},
+        )
+    else:
+        with pytest.raises(ValueError, match="unexpected actual diagnostics"):
+            contract.app_rows(value, inputs, notice, tmp_path)
+
+
+def test_failed_host_cleanup_uses_fixed_early_path_and_keeps_original_failure(
+    tmp_path, monkeypatch
+):
+    # Execute the real outer exception/cleanup code with inert transport only.
+    from tools import installed_native_container as owner
+    from tools import installed_native_menu as menu
+    from tools import rc4_installed_recovery as recovery
+
+    (tmp_path / "t").mkdir()
+    inputs = input_fixture()
+    args = SimpleNamespace(
+        owner_sha256=inputs["owner_sha256"],
+        source_commit=inputs["source_commit"],
+        installer=Path(inputs["installer_name"]),
+        package_receipt=Path(inputs["package_receipt_name"]),
+    )
+    monkeypatch.setattr(producer, "prepare", lambda _: (tmp_path, {}, {}, {}, inputs))
+    monkeypatch.setattr(owner, "pins_for", lambda *_: {})
+    sentinel = tmp_path / "inert-client"
+    sentinel.write_bytes(b"SOURCE")
+    monkeypatch.setattr(owner, "client_identity", lambda *_: {"path": str(sentinel)})
+    monkeypatch.setattr(owner, "capture", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(contract, "outer_argv", lambda *_: ["SOURCE inert create"])
+    monkeypatch.setattr(contract, "exec_argv", lambda *_: ["SOURCE inert controller"])
+    monkeypatch.setattr(contract.recovery, "admitted_create", lambda *_: "1" * 64)
+    monkeypatch.setattr(contract.native, "validate_image", lambda *_: None)
+    monkeypatch.setattr(
+        contract.native, "validate_container_observation", lambda *_: None
+    )
+    monkeypatch.setattr(contract.native, "validate_removal", lambda *_: None)
+    monkeypatch.setattr(producer, "wait", lambda *_: None)
+    monkeypatch.setattr(recovery, "browser_identity", lambda *_: inputs["browser"])
+    monkeypatch.setattr(recovery, "source_records", lambda *_: inputs["qa_files"])
+
+    def docker(role, argv, root, env, rows, clients, **kwargs):
+        rows.append({"role": role})
+        return (1 if role == "removed" else 0), b"[{}]"
+
+    monkeypatch.setattr(owner, "docker_row", docker)
+
+    class InertThread:
+        def __init__(self, target, **kwargs):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+        def join(self, **kwargs):
+            pass
+
+        def is_alive(self):
+            return False
+
+    monkeypatch.setattr(producer.threading, "Thread", InertThread)
+    original = RuntimeError("SOURCE original controller refusal")
+    actual_require = contract.require
+
+    def require(condition, message):
+        if not condition and message == "Actual user controller failed.":
+            raise original
+        actual_require(condition, message)
+
+    monkeypatch.setattr(contract, "require", require)
+    host = {
+        "pid": 123,
+        "exit_code": 1,
+        "owned_group_remaining": False,
+        "streams_complete": True,
+        "passed": False,
+        "stdout": menu.stream_record(io.BytesIO(b"")),
+        "stderr": menu.stream_record(io.BytesIO(b"SOURCE failed collector\n")),
+    }
+    original_host = copy.deepcopy(host)
+
+    def command(argv, rows, **kwargs):
+        rows.append(host if "host" in argv else {"SOURCE": "controller refusal"})
+        return 1, b""
+
+    monkeypatch.setattr(menu, "command", command)
+    with pytest.raises(RuntimeError) as raised:
+        producer.run(args)
+    assert raised.value is original and host == original_host
+    retained = producer.read_json(tmp_path / "workflow-owner.json")
+    assert retained["passed"] is False
+    assert retained["failure"] == {"type": "RuntimeError", "message": str(original)}
+    assert retained["host_command"] == original_host
+    assert retained["browser"]["temporary_directory"] == str(tmp_path / "t")
+    assert retained["browser"]["temporary_empty_before"] is True
+    assert retained["browser"]["temporary_empty_after"] is True
+    assert retained["browser"]["temporary_cleanup"]["complete"] is True
+    assert retained["browser"]["temporary_cleanup"]["outcomes"] == []
+    assert retained["cleanup_errors"] == [] and not any((tmp_path / "t").iterdir())
