@@ -7,6 +7,12 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Add a reviewed opening summary to source-only volunteer handovers. Enter status
+  and proposed next steps, select literal retained evidence, and explicitly
+  approve replacement before saving. Keep unknown owners, missing evidence,
+  historical wording and stale reviews visible. Compact row editing restores
+  pending session work; narrow-screen tables support sideways keyboard scrolling.
+
 - Retain recorded closing dates in campaign reports when the application window
   is unverified. Label those dates explicitly; keep urgency, eligibility,
   historical records and saved source snapshots unchanged.

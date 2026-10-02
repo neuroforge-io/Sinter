@@ -1,20 +1,20 @@
 import {h, button, field, check, notice, selectField, safeLink, dateTime, announce, download} from './ui.js';
 import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
-import {unsavedReportDrafts} from './report-drafts.js';
+import {unsavedReportDrafts, reportDraftNotice} from './report-drafts.js';
 
 export async function library({onEditProject} = {}) {
   const root = h('div');
   const list = h('div', {class: 'stack non-print'}), opened = h('div');
   const feedback = h('div', {class: 'non-print', 'aria-live': 'polite'});
-  const pending = h('section', {class: 'card stack non-print', 'aria-label': 'Unsaved document edits'});
+  const pending = h('section', {class: 'card stack non-print', 'aria-label': 'Unsaved document or form work'});
   async function refresh() {
     const drafts = unsavedReportDrafts();
     pending.hidden = !drafts.length;
-    pending.replaceChildren(h('h3', {}, 'Draft edits in this session'),
-      notice('These edits are kept while you move between pages. Open each draft, apply any pending text, then choose Save to My workspace before closing Sinter.'),
-      ...drafts.map(({report, editor}) => h('article', {}, h('strong', {}, report.document_title || report.title || 'Untitled draft'),
-        h('p', {class: 'muted'}, editor ? 'Text is still waiting to be applied.' : 'Applied edits have not been saved.'),
+    pending.replaceChildren(h('h3', {}, 'Pending work in this session'),
+      notice('Open each draft to apply or discard pending text and summary rows. Save applied document edits before closing Sinter.'),
+      ...drafts.map(({report}) => h('article', {}, h('strong', {}, report.document_title || report.title || 'Untitled draft'),
+        h('p', {class: 'muted'}, reportDraftNotice(report)),
         button('Open unsaved draft', () => { opened.replaceChildren(renderReport(report, {recovered: true,
           onSaved: () => refresh().catch(error => feedback.replaceChildren(notice('The draft was saved, but refreshing the list failed: ' + error.message, 'error')))})); opened.scrollIntoView({block: 'start'}); }))));
     const {reports} = await request('/api/reports');

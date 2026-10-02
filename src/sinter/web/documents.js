@@ -78,6 +78,13 @@ export function documentMarkdown(report) {
     ? marker + '\n\n' + content : content;
 }
 
+/** One explicit local edit route, shared by ordinary edits and reviewed summaries. */
+export function applyDocumentEdit(report, text, editedAt = new Date().toISOString()) {
+  if (typeof text !== 'string' || !text.trim()) throw new Error('Keep some document text, or cancel to retain the current draft.');
+  if (text.length > 500000) throw new Error('Keep this draft under 500,000 characters before applying edits. Your existing draft is retained.');
+  report.document_edits = {markdown: text, edited_at: editedAt, author: 'user'};
+}
+
 /** An unchanged open editor can export; changed wording needs an explicit choice. */
 export function hasUnappliedDocumentEdits(current, text, open) {
   return open === true && text !== current;
@@ -286,10 +293,8 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
   input.input.addEventListener('input', () => { onEditorChange(input.input.value, true); refreshLocalCopy(); });
   const edit = button(isCampaign ? 'Edit decision brief' : 'Edit draft', () => { if (editor.hidden) input.input.value = documentMarkdown(report); editor.hidden = false; input.input.focus(); }, 'quiet');
   const apply = button('Apply edits', () => {
-    if (!input.input.value.trim()) { feedback.replaceChildren(notice('Keep some document text, or cancel to retain the current draft.', 'error')); return; }
-    if (input.input.value.length > input.input.maxLength) { feedback.replaceChildren(notice('Keep this draft under 500,000 characters before applying edits.', 'error')); return; }
-    report.document_edits = {markdown: input.input.value, edited_at: new Date().toISOString(), author: 'user'};
-    editor.hidden = true; onChange(); refreshLocalCopy(); feedback.replaceChildren(notice('Edits applied. Save this draft to keep them.', 'success')); announce('Draft updated. Original evidence retained.'); exports.querySelector('summary').focus();
+    try { applyMarkdown(input.input.value); }
+    catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
   }, 'primary');
   const pageBreak = button('Insert page break', () => {
     const inserted = insertDocumentPageBreak(input.input.value, input.input.selectionStart);
@@ -358,5 +363,12 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
           : 'Copied. Ready to paste into your email or document.')); announce(isCampaign ? 'Decision brief copied.' : report.incomplete ? 'Incomplete draft text copied.' : 'Draft text copied.'); }
       catch { feedback.replaceChildren(notice('Clipboard access is unavailable. Download the document instead.', 'error')); }
     }, 'primary'), word, save || null, exports), wordSaveOptions);
-  return {controls, feedback, editor, canUseDocument};
+  function applyMarkdown(text) {
+    applyDocumentEdit(report, text);
+    editor.hidden = true; onChange(); refreshLocalCopy();
+    feedback.replaceChildren(notice('Edits applied. Save this draft to keep them.', 'success'));
+    announce('Draft updated. Original evidence retained.'); exports.querySelector('summary').focus();
+  }
+  return {controls, feedback, editor, canUseDocument, applyMarkdown,
+    currentMarkdown: () => documentMarkdown(report)};
 }

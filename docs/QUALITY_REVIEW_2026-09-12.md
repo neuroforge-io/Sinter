@@ -2291,3 +2291,39 @@ loading failure and inherited import-order warnings remain recorded separately.
 Independent byte and complete production AST review accepts the exact three-path
 patch; it does not establish installed or release qualification. The user's
 normal app closure remains separate from every disposable test run.
+
+### 3 October: reviewed local handover opening
+
+The optional source-only handover editor compiles explicit user wording with
+literal subspans of the saved report's retained evidence. Original source hashes,
+Unicode offsets, citations, inputs and review status remain unchanged. Unknown
+and unassigned owners, unconfirmed acceptance and dates, missing evidence and
+historical wording stay distinct. A stale report adds a visible review notice;
+that source control does not claim an actual stale-report browser exercise.
+Compilation does not contact a provider. Replacement of existing document edits
+requires explicit approval and refuses changed report or draft snapshots.
+
+Twenty-six distinct Node controls and three Python storage/Word controls pass.
+The Python wrapper for those Node controls was excluded from that count. Eight
+static source checks pass. The initial stale-fixture setup failure remains
+recorded; independent review accepts the exact eight source paths.
+
+A root-operated browser prototype used committed `9469cce` plus those exact
+eight paths and a copied fictional workspace. The prior five-item saved report
+reopened intact. Two new items exercised missing evidence, unknown/unassigned
+owners and a literal retained sentence. Add focused the new item, collapsed the
+earlier card and restored deliberately chosen card states after navigation.
+Save and My workspace correctly called unapplied rows session-only. Cancelled
+discard, quit and replacement preserved work. View-only toggles retained the
+preview; changed wording required a new preview. Explicit replacement, save and
+reopen preserved the two items and original evidence. A distinct Word copy was
+saved; the temporary app quit normally and its only owned tab was closed.
+
+At 540 pixels the summary table uses readable wrapping and a focusable horizontal
+scroll container. Keyboard scrolling exposed the Evidence column. The regular
+two-item opening was visually inspected. The earlier five-item Word opening
+spans two pages and remains a material formatting limitation. Structured rows
+remain session-only until applied; they are saved as ordinary document text.
+These source and fictional interface observations do not qualify an installed
+package, a customer platform, an AI task or a whole-product 10/10 rating. The
+failed earlier installed workflow remains failed; fresh qualification is required.

@@ -78,6 +78,23 @@ An unchanged reopened saved project does not require an unsaved-work warning.
 Actual edits and an unsaved restored backup do. A browser warning cannot replace
 an exported backup.
 
+### Optional opening summary in current development source
+
+This feature is not in the published RC3 installer. In a prepared source-only
+volunteer handover, expand **Review an opening summary**. Enter a recorded status
+and a proposed next step for each item. Choose the owner type explicitly; a
+suggested role is not an accepted person. Dates remain unconfirmed targets.
+For evidence, choose a retained passage, select the literal wording and use
+**Use selected wording**. Keep the insurance answer unknown with no citation.
+
+Choose **Preview opening summary** and read the selected wording. **Apply
+reviewed opening summary** asks before replacing an already edited draft;
+Cancel keeps it. Then choose **Save to My workspace**. The saved document keeps
+the original checklist, sources, citations and review state. Unapplied rows are
+session-only work, not a separately saved form. On small screens, scroll the
+summary table sideways; its focusable container also supports arrow keys.
+The five-item Word opening can span two pages and remains a formatting limit.
+
 ## Operate the action and funding review
 
 1. Open the saved garden campaign and choose **Next actions**. Compare:

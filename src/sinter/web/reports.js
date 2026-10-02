@@ -5,10 +5,11 @@ import {campaignCommunicationFromDraft, campaignDraftLogBlockReason} from './cam
 import {campaignActionOwnerState} from './campaign-owner.js';
 import {campaignActionPhaseLabel} from './campaign-plan.js';
 import {registerReportDraft, trackReportEdits, trackReportEditor, reportEditorDraft,
-  markReportSaved, isReportDraftUnsaved} from './report-drafts.js';
+  markReportSaved, isReportDraftUnsaved, reportDraftNotice} from './report-drafts.js';
 import {reportCitationIndex, reportCitationMatcher} from './report-citations.js';
 import {casebookQuestionEvidence} from './casebook-question-evidence.js';
 import {retainedCasebookSource, retainedQuestionContext} from './casebook-retained-context.js';
+import {handoverSummaryEditor, handoverSummaryAvailable} from './handover-summary.js';
 
 /** The document is the default view; provenance remains one click away. */
 export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated, onSaved, recovered = false} = {}) {
@@ -28,7 +29,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       save.disabled = !newerEdits;
       if (!newerEdits) actions.feedback.replaceChildren();
       message.replaceChildren(notice(newerEdits
-        ? 'The earlier version was saved in My workspace. Your newer edits are still unsaved; apply and save them before closing Sinter.'
+        ? 'The submitted document was saved in My workspace. ' + reportDraftNotice(report)
         : 'Saved in My workspace, including your edits and original evidence.', newerEdits ? 'warning' : 'success'));
       announce('Report saved to My workspace.');
       onSaved?.();
@@ -88,10 +89,13 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   function updateDocument() {
     const article = markdown(documentMarkdown(report));
     if (isCampaign) article.classList.add('campaign-decision-document');
+    const hasSummary = handoverSummaryAvailable(report) && documentMarkdown(report).includes('## At a glance\n');
+    if (hasSummary) article.classList.add('handover-summary-document');
     connectCitations(article, report, sources, () => select('evidence'), true);
     paper.replaceChildren(h('div', {class: 'paper-label'}, report.workflow === 'campaign'
       ? 'CAMPAIGN DECISION RECORD'
-      : report.incomplete ? 'INCOMPLETE MODEL DRAFT' : report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'), article);
+      : report.incomplete ? 'INCOMPLETE MODEL DRAFT' : report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'),
+      ...(hasSummary ? [h('p', {class: 'handover-summary-scroll-hint fine'}, 'On a small screen, scroll the summary table sideways to review every column.')] : []), article);
     completion.replaceChildren(h('div', {}, h('strong', {}, report.document_edits ? 'Check these details' : 'Finish the details'),
       h('p', {}, (report.document_edits ? 'Originally missing: ' : '') + (report.missing_fields || []).map(item => item.label).join(' · '))),
       onEditInputs ? button('Add missing details', onEditInputs) : h('span', {class: 'fine'}, 'Use More options → Edit draft to complete these.'));
@@ -116,6 +120,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   const actions = documentActions(report, {save, editorSeed: reportEditorDraft(report),
     onEditorChange: (text, open) => trackReportEditor(report, text, open),
     onChange: () => { trackReportEdits(report, documentMarkdown(report)); updateDocument(); select('document'); }});
+  const summaryEditor = handoverSummaryEditor(report, {actions});
   const missing = report.missing_fields || [];
   result.append(...[recovered ? notice('Recovered draft from an earlier preparation. It retains the original inputs and evidence; later project changes are not included. Check the current saved project before using this draft.', 'warning') : null,
     h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'CAMPAIGN PREVIEW' : 'YOUR DOCUMENT'),
@@ -123,7 +128,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       ? 'Review the decision and privacy before sharing. The full audit trail and source notes are in Audit & evidence.'
       : 'Review the wording, make it yours, then copy or download.'))),
     missing.length ? completion : null,
-    actions.controls, campaignLog, message, actions.feedback, actions.editor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel].filter(Boolean));
+    actions.controls, campaignLog, message, actions.feedback, actions.editor, summaryEditor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel].filter(Boolean));
   select('document'); updateDocument();
   if (report.workflow === 'grants' && report.sources?.length) {
     documentPanel.append(grantChecks(report, () => {
