@@ -7,6 +7,10 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Retain recorded closing dates in campaign reports when the application window
+  is unverified. Label those dates explicitly; keep urgency, eligibility,
+  historical records and saved source snapshots unchanged.
+
 - Align the installed-workflow producer and verifier with the shared browser
   cleanup record. Require its exact temporary directory, typed cleanup result
   and unchanged browser identity. Preserve the failed earlier qualification;

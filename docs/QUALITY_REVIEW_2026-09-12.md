@@ -2273,3 +2273,21 @@ accepts the narrow three-path correction; it does not replay or rehabilitate
 the failed installed result. Fresh exact-source hosted, build and original
 installed qualification remain required. The user's normally closed app and
 real saved workspace remain untouched.
+
+### 3 October: recorded dates in campaign exports
+
+The current interface preserves a recorded closing date when the application
+window is unknown. Both campaign export forms now do the same, with the explicit
+label `current window unverified`. This changes two presentation branches only;
+the date does not establish a current window, urgency or eligibility. Original
+source quotes, changed or stale snapshots, historical route status and saved
+campaign bytes remain intact.
+
+The campaign module passes 226 unique Python cases. Fourteen focused cases
+overlap that total. Seven Node 22 cases pass, including the existing six
+interface controls and a policy matrix for past/future dates and source changes.
+The literal earlier label fails its expected control. The initial Node 18 ESM
+loading failure and inherited import-order warnings remain recorded separately.
+Independent byte and complete production AST review accepts the exact three-path
+patch; it does not establish installed or release qualification. The user's
+normal app closure remains separate from every disposable test run.

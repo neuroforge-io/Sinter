@@ -1111,6 +1111,9 @@ def _window_description(row: dict, sources: list[dict] = ()) -> str:
         label = "Rolling / year-round"
     elif kind == "fixed":
         label = "Fixed closing date: " + (row["deadline"] or "Not recorded")
+    elif row["deadline"]:
+        label = ("Recorded closing date: " + row["deadline"]
+                 + "; current window unverified")
     else:
         label = "Not checked"
     if row["window_source_quote"]:
@@ -1143,6 +1146,9 @@ def _brief_window_description(row: dict, sources: list[dict] = ()) -> str:
     elif kind == "fixed":
         label = "Fixed closing date: " + (
             _display_date(row["deadline"]) if row["deadline"] else "Not recorded")
+    elif row["deadline"]:
+        label = ("Recorded closing date: " + _display_date(row["deadline"])
+                 + "; current window unverified")
     else:
         label = "Not checked"
     if row["window_source_quote"]:

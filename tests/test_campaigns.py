@@ -1221,6 +1221,116 @@ def test_invalid_application_window_is_rejected_instead_of_silently_changed():
         campaigns.validate(document)
 
 
+@pytest.mark.parametrize("deadline,display", [
+    ("2000-01-02", "2 Jan 2000"),
+    ("2099-01-02", "2 Jan 2099"),
+])
+@pytest.mark.parametrize("source_state", [
+    "matching", "changed_url", "changed_checked_date", "stale", "future_check",
+])
+def test_unknown_recorded_deadline_keeps_source_history_and_open_review_work(
+    deadline, display, source_state,
+):
+    document = campaigns.validate(campaign())
+    source = document["sources"][0]
+    checked = date.today().isoformat()
+    if source_state == "stale":
+        checked = (date.today() - timedelta(days=91)).isoformat()
+    elif source_state == "future_check":
+        checked = (date.today() + timedelta(days=1)).isoformat()
+    source["checked_at"] = checked
+    route = document["opportunities"][0]
+    route.update(
+        deadline=deadline, application_window="unknown",
+        window_source_id=source["id"], window_source_url=source["url"],
+        window_source_quote="Fictional prior round closed on " + deadline + ".",
+        window_checked_at=checked,
+    )
+    requirement = document["requirements"][0]
+    requirement.update(
+        status="met", source_id=source["id"], source_url=source["url"],
+        checked_at=checked,
+    )
+    if source_state == "changed_url":
+        source["url"] = "https://example.org/new-round-guidance"
+    elif source_state == "changed_checked_date":
+        source["checked_at"] = (date.today() - timedelta(days=1)).isoformat()
+    original = copy.deepcopy(document)
+    report = campaigns.prepare(document)
+
+    assert document == original
+    assert report["campaign"]["opportunities"][0] == route
+    for output, date_label in ((report["markdown"], deadline),
+                               (report["document_markdown"], display)):
+        assert ("Recorded closing date: " + date_label
+                + "; current window unverified") in output
+        assert route["window_source_quote"] in output
+        assert "(user-entered; unverified)" in output
+        if source_state in {"changed_url", "changed_checked_date"}:
+            assert "saved source snapshot is missing or out of date" in output
+        elif source_state == "stale":
+            assert "last checked 91 days ago; recheck before use" in output
+        elif source_state == "future_check":
+            assert "future-dated check; correct before use" in output
+    assert not campaigns._application_window_is_current(
+        route, date.today(), document["sources"])
+    assert report["readiness"]["application_windows_to_check"] == 1
+    assert report["readiness"]["claims_without_evidence"] == (
+        0 if source_state == "matching" else 1)
+    without_date = copy.deepcopy(document)
+    without_date["opportunities"][0]["deadline"] = ""
+    undated = campaigns.prepare(without_date)
+    assert report["readiness"] == undated["readiness"]
+    assert report["budget_summary"] == undated["budget_summary"]
+    assert ("Route in focus: " + route["name"]
+            + " (selected in Sinter; not an eligibility decision).") in (
+                report["document_markdown"])
+
+
+@pytest.mark.parametrize("status", ["closed", "submitted", "not_pursuing"])
+def test_unknown_recorded_deadline_preserves_historical_status_in_exports(status):
+    document = campaigns.validate(campaign())
+    route = document["opportunities"][0]
+    route.update(status=status, deadline="2000-01-02", application_window="unknown")
+    original = copy.deepcopy(document)
+    report = campaigns.prepare(document)
+
+    assert document == original
+    assert ("Recorded closing date: 2000-01-02; current window unverified"
+            in report["markdown"])
+    label = "not pursuing this round" if status == "not_pursuing" else status
+    assert "Campaign status entered: " + label in report["markdown"]
+    assert "Historical record · User-entered status · not checked" in report["markdown"]
+    assert report["readiness"]["requirements_archived"] == 1
+    assert report["readiness"]["requirements_total"] == 0
+    assert report["readiness"]["application_windows_to_check"] == 0
+    assert "No application route is currently recorded as active." in (
+        report["document_markdown"])
+    if status == "submitted":
+        assert "### Submitted routes" in report["document_markdown"]
+        assert "status entered: submitted" in report["document_markdown"]
+
+
+def test_exporting_unknown_recorded_deadline_never_rewrites_saved_campaign(tmp_path):
+    document = campaigns.validate(campaign())
+    document["opportunities"][0].update(
+        deadline="2099-01-02", application_window="unknown",
+        window_source_quote="Fictional historical wording, not a current round.",
+        window_checked_at="2000-01-02",
+    )
+    store = campaigns.CampaignStore(tmp_path)
+    saved = store.save(document)
+    original_bytes = store.path.read_bytes()
+    original_record = copy.deepcopy(saved)
+
+    report = campaigns.prepare(saved["document"])
+
+    assert "Recorded closing date: 2 Jan 2099; current window unverified" in (
+        report["document_markdown"])
+    assert saved == original_record and store.get(saved["id"]) == original_record
+    assert store.path.read_bytes() == original_bytes
+
+
 def test_action_scope_is_optional_but_must_reference_a_campaign_opportunity():
     document = campaign(actions=[{
         "opportunity": "Fictional access fund", "task": "Confirm the match",

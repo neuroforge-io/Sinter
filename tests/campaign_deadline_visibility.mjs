@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {hasUnverifiedRecordedDeadline, opportunityTiming}
   from '../src/sinter/web/campaigns.js';
+import {defaultCampaignOpportunityIndex, hasCurrentApplicationWindowEvidence}
+  from '../src/sinter/web/campaign-state.js';
+import {campaignDecision} from '../src/sinter/web/campaign-decision.js';
 
 const row = values => Object.freeze({status: 'researching', application_window: 'unknown',
   deadline: '2026-10-06', window_checked_at: '', ...values});
@@ -77,4 +80,35 @@ test('all status/window/date combinations remain presentation-only', () => {
   }
   assert.match(opportunityTiming(row({status: 'not_pursuing'})),
     /^Not pursuing · recorded programme closing date/);
+});
+
+test('visible unknown dates never become current evidence, urgent focus or a ready route', () => {
+  const today = '2026-10-03';
+  for (const sourceState of ['matching', 'changed-url', 'changed-check', 'stale']) {
+    const source = {id: 'a'.repeat(32), url: 'https://example.invalid/prior-round',
+      checked_at: sourceState === 'stale' ? '2000-01-02' : today};
+    const item = row({name: 'Fictional prior round', status: 'open',
+      url: source.url, application_mode: 'required', applicant: 'Fictional volunteers',
+      applicant_confirmed: true, window_source_id: source.id,
+      window_source_url: source.url, window_checked_at: source.checked_at,
+      window_source_quote: 'Fictional recorded prior round; recheck current terms.'});
+    if (sourceState === 'changed-url') source.url = 'https://example.invalid/new-round';
+    if (sourceState === 'changed-check') source.checked_at = '2026-10-02';
+    const baseline = campaignDecision({opportunities: [{...item, deadline: ''}],
+      sources: [source]}, today);
+    for (const deadline of ['2000-01-02', '2099-01-02']) {
+      const recorded = Object.freeze({...item, deadline});
+      const before = JSON.stringify(recorded);
+      const currentRoute = {name: 'Fictional current rolling route', status: 'open',
+        application_window: 'rolling', deadline: ''};
+      assert.equal(hasUnverifiedRecordedDeadline(recorded), true);
+      assert.match(opportunityTiming(recorded), /Application window not verified$/);
+      assert.equal(hasCurrentApplicationWindowEvidence(recorded, today, [source]), false);
+      assert.equal(defaultCampaignOpportunityIndex([currentRoute, recorded], today, [source]), 0);
+      const decision = campaignDecision({opportunities: [recorded], sources: [source]}, today);
+      assert.deepEqual(decision, baseline);
+      assert.equal(decision.state, 'not_ready');
+      assert.equal(JSON.stringify(recorded), before);
+    }
+  }
 });
