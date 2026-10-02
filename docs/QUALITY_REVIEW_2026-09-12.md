@@ -2126,3 +2126,31 @@ The four relevant Python modules pass 362 tests. These are source regressions;
 successor hosted, installed, recovery, upgrade and release gates remain pending.
 The physical workspace and actual campaign data stay closed and untouched, with
 no provider calls or change to the product ratings.
+
+
+### 2 October: hosted Windows suite budget and timing evidence
+
+Exact source `c4534142661c4fd78f5a4fcd172946a100e66627` hosted Quality
+run `37005985832`, attempt 1, was cancelled. The original check annotation
+states that the Windows Python 3.13 job exceeded its 12-minute execution limit.
+Ten jobs succeeded; the source/portable job was skipped. This run is not green
+and does not admit a native build or release. Its original logs and artifact
+ZIP/XML bytes remain retained, including the later interruption teardown error.
+
+The interrupted Windows 3.13 XML retains 4,605 of the expected 5,076 cases:
+4,034 passed and 571 skipped, with no recorded failures or errors. Its suite
+time is 711.679 seconds. The successful current Windows 3.10 suite took 582.324
+seconds; the prior `af5c40a` Windows 3.13 suite took 409.790 seconds for 5,064
+cases. Slow current cases are spread across qualification and campaign modules,
+with the four slowest taking 15.679, 14.463, 14.184 and 12.058 seconds. The
+interrupt happened while creating a local SQLite schema. These observations
+show broad timing variation; they do not establish a deadlock or its cause.
+
+The hosted Python job budget becomes 20 minutes, and its unchanged full Pytest
+suite reports the slowest 25 tests. All matrix targets, assertions, correctness
+checks, original XML uploads and downstream source dependencies remain required.
+The time bound stays finite. This is qualification tooling only; it does not
+change application behavior or raise product ratings. The successful portable
+build for `c453414` remains mechanical evidence for that source, while its
+cancelled hosted run and unexecuted installed proposals stay held. A successor
+source requires its own hosted and original installed qualification.

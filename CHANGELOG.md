@@ -7,6 +7,10 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Allow the complete hosted Python suite up to 20 minutes and retain the 25
+  slowest tests in its logs. The earlier Windows timeout remains a failed gate;
+  no assertions, required jobs or installed qualification checks are removed.
+
 - Complete the source-specific quit decision in the installed workflow after
   intentionally editing an unsaved report. Modern on-page confirmation and
   historical browser confirmation keep separate handling; approval still needs
