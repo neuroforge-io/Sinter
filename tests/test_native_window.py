@@ -1311,7 +1311,15 @@ def test_real_native_campaign_report_sources_totals_refresh_and_parent_cleanup(t
     try:
         window.example()
         runtime = window.controller.runtime
-        saved = runtime.call("campaigns.save", {"document": fictional_native_campaign()})
+        document = fictional_native_campaign()
+        document["sources"].extend({
+            "id": f"{index:032x}", "title": f"Fictional source {index + 1}",
+            "url": f"https://example.invalid/fictional-source-{index + 1}",
+            "checked_at": date.today().isoformat(),
+            "notes": f"Wholly fictional source {index + 1} notes 🌱\n"
+                     "<keep literally> [source] \\notes\nNothing was submitted.",
+        } for index in range(1, 56))
+        saved = runtime.call("campaigns.save", {"document": document})
         report = runtime.call("campaigns.prepare", {"document": saved["document"]})
         report["created_at"] = "2026-09-30T12:34:56Z"
         report_id = runtime.call("reports.save", {"report": report})["id"]
@@ -1323,9 +1331,21 @@ def test_real_native_campaign_report_sources_totals_refresh_and_parent_cleanup(t
         assert "snapshot dated 2026-09-30" in window.report_notice.get()
         assert "model output" not in window.report_notice.get()
         assert window.campaign_sources.rows == native_window.campaign_source_records(saved["document"])
+        assert len(window.campaign_sources.rows) == 56
+        assert int(window.campaign_sources.tree.cget("height")) == 8
         notes = saved["document"]["sources"][0]["notes"]
         assert notes in window.campaign_sources.details.get("1.0", "end")
         assert window.report_tabs.tab(window.campaign_sources_page, "state") == "normal"
+        window.report_tabs.select(window.campaign_sources_page)
+        window.campaign_sources.tree.selection_set("55")
+        window.campaign_sources.tree.see("55")
+        window.campaign_sources.select()
+        window.root.update()
+        assert window.campaign_sources.scrollbar.winfo_ismapped()
+        assert window.campaign_sources.tree.bbox("55")
+        assert saved["document"]["sources"][-1]["notes"] in (
+            window.campaign_sources.details.get("1.0", "end")
+        )
         state = copy.deepcopy((window.controller.document, window.controller.generation,
                                window.controller.dirty, window.controller.result))
         window.open_funding_campaigns()
@@ -1336,16 +1356,42 @@ def test_real_native_campaign_report_sources_totals_refresh_and_parent_cleanup(t
         window.root.update()
         assert "Recorded funding totals" in child.summary_text.get("1.0", "end")
         assert child.controller.summary == runtime.call("campaigns.funding_summary", {"document": saved["document"]})
+        child.tabs.select(child.sources_page)
+        window.root.update()
+        assert child.sources.scrollbar.winfo_ismapped()
+        assert int(child.sources.tree.cget("height")) == 8
+        assert len(child.sources.tree.get_children()) == 56
+        child.sources.scrollbar.tk.call(
+            child.sources.scrollbar.cget("command"), "moveto", 1
+        )
+        child.sources.tree.selection_set("55")
+        child.sources.tree.see("55")
+        child.sources.select()
+        window.root.update()
+        assert child.sources.tree.bbox("55")
+        assert child.sources.scrollbar.get() == pytest.approx(child.sources.tree.yview())
+        last_source = saved["document"]["sources"][-1]
+        assert last_source["notes"] in child.sources.details.get("1.0", "end")
         child.sources.copy_url()
-        assert window.root.clipboard_get() == saved["document"]["sources"][0]["url"]
+        assert window.root.clipboard_get() == last_source["url"]
         edited = copy.deepcopy(saved["document"])
         edited["sources"][0]["notes"] = "Fictional revised source notes; historical report stays original."
+        edited["sources"][-1]["notes"] = "Fictional last-row revised notes; selection stays visible."
+        revised_last_source = edited["sources"][-1]
+        edited["sources"] = edited["sources"][1:] + edited["sources"][:1]
         edited["opportunities"][0]["funding_tracking"]["requested"]["amount"] = "1400.00"
         updated = runtime.call("campaigns.save", {**saved, "document": edited})
         child.refresh()
+        window.root.update()
         assert child.controller.saved == updated
-        assert edited["sources"][0]["notes"] in child.sources.details.get("1.0", "end")
+        selection = child.sources.tree.selection()
+        assert selection == ("54",)
+        assert child.sources.rows[int(selection[0])]["id"] == last_source["id"]
+        assert child.sources.tree.bbox(selection[0])
+        assert child.sources.scrollbar.winfo_ismapped()
+        assert revised_last_source["notes"] in child.sources.details.get("1.0", "end")
         assert runtime.call("reports.get", {"id": report_id})["campaign"]["sources"][0]["notes"] == notes
+        assert last_source["notes"] in window.campaign_sources.details.get("1.0", "end")
         assert (window.controller.document, window.controller.generation,
                 window.controller.dirty, window.controller.result) == state
         child.close()

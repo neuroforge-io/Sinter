@@ -99,6 +99,71 @@ def test_currencies_cash_and_credits_never_mix_and_unknown_is_not_zero():
     assert group(zero, "submitted", currency="USD")["total"] == "0.00"
 
 
+def test_submission_history_distinguishes_cash_credits_eois_and_closed_events(tmp_path):
+    cash = [route(f"Fictional cash round {index}", status="submitted", application="submitted")
+            for index in range(6)]
+    for row in cash[:-1]:
+        row["funding_tracking"]["requested"] = amount("10")
+    credit = route("Fictional current credits", status="submitted", kind="credits", application="submitted")
+    historical = route("Fictional historic credits", status="closed", kind="credits", application="submitted")
+    historical["funding_tracking"]["closure_reason"] = "round_closed"
+    investors = [route(f"Fictional investment EOI {index}", status="submitted", application="submitted")
+                 for index in range(3)]
+    for row in investors:
+        row["route_type"] = "equity"
+        row["funding_tracking"]["requested"] = amount("999")
+    document = campaign(*cash, credit, historical, *investors)
+    result = campaigns.funding_summary(document)
+    history = result["counts"]["submission_history"]
+    assert result["stages"]["submitted"]["opportunities"] == 11
+    assert history["ever_recorded"] == {"cash": 6, "credits": 2, "equity": 3}
+    assert history["not_marked_closed"] == {"cash": 6, "credits": 1, "equity": 3}
+    assert history["marked_closed"] == {"credits": 1}
+    assert history["closure_conflicting"] == {} and history["application_conflicting"] == 0
+    assert "Cash: 6" in result["markdown"] and "Investment / EOI: 3" in result["markdown"]
+    assert "Submitted requests — all recorded history (11 rounds / records)" in result["markdown"]
+    assert "verified current application window" in history["notice"]
+    assert "Eligible recorded ceilings — not guaranteed" in result["markdown"]
+    assert group(result, "submitted")["known_total"] == "50.00"
+    assert group(result, "submitted")["total"] is None
+    with Runtime(tmp_path / "fictional-mixed-submissions") as runtime:
+        assert runtime.call("campaigns.funding_summary", {"document": document}) == result
+
+
+def test_duplicate_types_and_closure_states_are_not_double_counted():
+    current = route("Fictional current duplicate", status="submitted", application="submitted")
+    closed = route("Fictional closed duplicate", status="closed", kind="credits", application="submitted")
+    for row in (current, closed):
+        row["funding_tracking"]["round_key"] = "Fictional same round"
+    result = campaigns.funding_summary(campaign(current, closed))
+    history = result["counts"]["submission_history"]
+    assert history["ever_recorded"] == {"conflicting_type": 1}
+    assert history["not_marked_closed"] == history["marked_closed"] == {}
+    assert history["closure_conflicting"] == {"conflicting_type": 1}
+    assert result["counts"]["duplicate_rounds"] == 1
+    assert "Closure state conflicting: Conflicting type: 1" in result["markdown"]
+
+
+def test_contradictory_duplicate_application_states_do_not_invent_submissions():
+    submitted = route("Fictional submitted duplicate", status="submitted", application="submitted")
+    preparing = route("Fictional preparing duplicate")
+    for row in (submitted, preparing):
+        row["funding_tracking"]["round_key"] = "Fictional unresolved round"
+    history = campaigns.funding_summary(campaign(submitted, preparing))["counts"]["submission_history"]
+    assert history["ever_recorded"] == {} and history["not_marked_closed"] == {}
+    assert history["application_conflicting"] == 1
+
+
+def test_legacy_unclassified_submissions_do_not_become_cash_grants():
+    row = route("Fictional legacy submitted", status="submitted", application="submitted")
+    del row["funding_tracking"]
+    original = copy.deepcopy(row)
+    result = campaigns.funding_summary(campaign(row))
+    assert result["counts"]["submission_history"]["ever_recorded"] == {"unclassified": 1}
+    assert result["counts"]["submission_history"]["not_marked_closed"] == {"unclassified": 1}
+    assert row == original
+
+
 @pytest.mark.parametrize("currency", ["unconfirmed", "other"])
 def test_unconfirmed_denominations_never_produce_numeric_totals(currency):
     row = route(status="submitted", application="submitted")

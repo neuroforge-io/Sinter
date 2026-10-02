@@ -26,6 +26,16 @@ selected campaign, not all campaigns or an audited lifetime ledger. A blank
 amount is unknown; an entered zero is a known zero. Empty stages do not prove
 there was no historical funding.
 
+Submission counts also separate cash, credits, investment/EOIs and other route
+types. **Ever recorded as submitted** includes historical closed outcomes;
+**Not marked closed** is entered route state, not a verified current application
+window. **Marked closed** and conflicting closure/submission states remain
+explicit. The combined stage count is never a cash-grant application count.
+Available figures are labelled **Eligible recorded ceilings**, not awards or
+guaranteed funding. Counts deduplicate explicit round keys; unidentified records
+remain separate and their amounts remain excluded. These labels use the same
+computed summary across browser/native/CLI/Python.
+
 Available totals use individual ceilings for recorded eligible **Open** routes
 with current application-window, eligibility and ceiling source checks. They
 are possible ceilings, not guaranteed funding. Whole programme pools, equity,
@@ -57,6 +67,12 @@ date separately from the date of refreshed derived checks.
 `sinter-funding-summary/v1`: `as_of`, `scope`, `counts`, `stages`,
 `duplicate_rounds`, `exclusions`, `amount_basis`, `notice` and human `markdown`.
 Each stage has `opportunities`, currency/benefit `groups`, and `excluded_rows`.
+`counts.submission_history` adds per-type `ever_recorded`, `not_marked_closed`,
+`marked_closed`, `closure_conflicting` and an `application_conflicting` count.
+The route type takes precedence over a cash label for investment, tax relief and
+matched vouchers; duplicate records with conflicting types have one explicit
+`conflicting_type` count. These are recorded events, not independently verified
+applications, and do not change the amount arithmetic.
 Groups expose `known_total`, `total`, `known_amounts`, `unknown_amounts` and
 `excluded_amounts`. `total` is null for incomplete groups; `known_total` is null
 when no amount qualifies. A numeric known subtotal never fills unknown amounts.
@@ -117,3 +133,12 @@ schema remains `sinter-campaign/v1` with an optional additive field. New readers
 accept older backups; older binaries that reject unknown fields cannot edit a
 tracking-enabled backup. Preserve original backups and upgrade the consumer;
 do not remove tracking merely to make an old binary accept it.
+
+## Next native editing scope
+
+The current native campaign view remains read-only. The next scoped editing
+work should use the existing Runtime validator and revision-guarded
+`campaigns.save` for campaign import/tracking/source and amount evidence. It must
+preserve unsaved changes, exact source snapshots, consent, conflicts and recovery
+without an alternate store/backend or a browser-policy workaround. This editing
+path is a backlog item, not implemented or qualified in this pass.

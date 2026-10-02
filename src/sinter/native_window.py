@@ -171,15 +171,22 @@ class CampaignSourcesPane:
         owner.ttk.Label(
             self.frame, text="Campaign sources · user-entered, unverified"
         ).pack(anchor="w")
+        source_list = owner.ttk.Frame(self.frame)
+        source_list.pack(fill="x", pady=4)
         self.tree = owner.ttk.Treeview(
-            self.frame, columns=("checked",), height=3, selectmode="browse"
+            source_list, columns=("checked",), height=8, selectmode="browse"
         )
         self.tree.heading(
             "#0", text="Source title — select to inspect URL and full notes"
         )
         self.tree.heading("checked", text="Recorded check date")
         self.tree.column("checked", width=140, stretch=False)
-        self.tree.pack(fill="x", pady=4)
+        self.scrollbar = owner.ttk.Scrollbar(
+            source_list, orient="vertical", command=self.tree.yview
+        )
+        self.tree.configure(yscrollcommand=self.scrollbar.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
         self.tree.bind("<<TreeviewSelect>>", lambda _event: self.select())
         self.details = owner._text(self.frame, height=5, readonly=True)
         self.copy_button = owner.ttk.Button(
@@ -190,6 +197,8 @@ class CampaignSourcesPane:
         self.set_document(None)
 
     def set_document(self, document):
+        selected = self.tree.selection()
+        selected_id = self.rows[int(selected[0])]["id"] if selected else None
         self.rows = campaign_source_records(document)
         self.tree.delete(*self.tree.get_children())
         for index, row in enumerate(self.rows):
@@ -198,7 +207,12 @@ class CampaignSourcesPane:
                 values=(row["checked_at"] or "Not recorded",),
             )
         if self.rows:
-            self.tree.selection_set("0")
+            target = str(next(
+                (index for index, row in enumerate(self.rows)
+                 if row["id"] == selected_id), 0
+            ))
+            self.tree.selection_set(target)
+            self.tree.see(target)
             self.select()
         else:
             self.owner._put(
@@ -278,9 +292,10 @@ class NativeFundingWindow:
         body.add(view, weight=3)
         self.notice = owner.tk.StringVar(value="Select a saved campaign to inspect.")
         owner.ttk.Label(view, textvariable=self.notice, wraplength=620).pack(anchor="w")
-        tabs = owner.ttk.Notebook(view)
+        tabs = self.tabs = owner.ttk.Notebook(view)
         tabs.pack(fill="both", expand=True, pady=6)
         totals, sources = owner.ttk.Frame(tabs), owner.ttk.Frame(tabs)
+        self.sources_page = sources
         tabs.add(totals, text="Recorded totals")
         tabs.add(sources, text="Sources and notes")
         self.summary_text = owner._text(totals, readonly=True)

@@ -646,7 +646,7 @@ def relay_cleanup_diagnostics(relay, server):
 
 @pytest.mark.parametrize("shutdown_interrupts", [True, False])
 def test_actual_host_relay_closes_idle_preconnect_workers_and_listener(
-    tmp_path, monkeypatch, shutdown_interrupts=True
+    tmp_path, monkeypatch, shutdown_interrupts
 ):
     # Observe the exact method used by cleanup, including OSError normally caught
     # by the unchanged production transport. Never substitute a shutdown result.
@@ -796,7 +796,7 @@ def test_idle_tcp_refusal_keeps_actual_worker_and_socket_diagnostics(
     monkeypatch.setattr(probe.HostRelay, "close_owned", report_surviving_worker)
     with pytest.raises(AssertionError) as refused:
         test_actual_host_relay_closes_idle_preconnect_workers_and_listener(
-            tmp_path, monkeypatch
+            tmp_path, monkeypatch, True
         )
     details, _ = json.JSONDecoder().raw_decode(str(refused.value))
     assert details["remaining"] == [1, 1]

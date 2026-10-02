@@ -13,6 +13,12 @@ from .evidence import literal
 
 SCHEMA = "sinter-funding-summary/v1"
 STAGES = ("available", "targets", "submitted", "awarded", "received", "closed")
+SUBMISSION_TYPES = {
+    "cash": "Cash", "credits": "Credits", "equity": "Investment / EOI",
+    "tax_incentive": "Tax relief", "matched_voucher": "Matched research support",
+    "non_cash_support": "Other non-cash support", "unclassified": "Unclassified",
+    "conflicting_type": "Conflicting type",
+}
 NOTE = (
     "Recorded totals cover this campaign only, not audited lifetime funding. "
     "Available amounts are individual ceilings supported by entered eligibility "
@@ -68,6 +74,48 @@ def _receipt(row):
     return state
 
 
+def _closed(row):
+    return (row["status"] in {"closed", "not_pursuing"}
+            or row.get("funding_tracking", {}).get("closure_reason", "unknown") != "unknown")
+
+
+def _submission_type(row):
+    route = row["route_type"]
+    if route in {"equity", "tax_incentive", "matched_voucher"}:
+        return route
+    benefit = row.get("funding_tracking", {}).get("benefit_type", "unknown")
+    if benefit == "credits":
+        return "credits"
+    if route == "non_cash_support":
+        return "non_cash_support"
+    return "cash" if benefit == "cash" else "unclassified"
+
+
+def _submission_history(entities):
+    buckets = {key: Counter() for key in (
+        "ever_recorded", "not_marked_closed", "marked_closed", "closure_conflicting",
+    )}
+    conflicts = 0
+    for members in entities.values():
+        states = {_application(row) for row in members}
+        if states != {"submitted"}:
+            conflicts += int("submitted" in states or "conflicting" in states)
+            continue
+        kinds = {_submission_type(row) for row in members}
+        kind = next(iter(kinds)) if len(kinds) == 1 else "conflicting_type"
+        buckets["ever_recorded"][kind] += 1
+        closed = {_closed(row) for row in members}
+        bucket = ("closure_conflicting" if len(closed) != 1
+                  else "marked_closed" if True in closed else "not_marked_closed")
+        buckets[bucket][kind] += 1
+    return {**{key: dict(sorted(value.items())) for key, value in buckets.items()},
+            "application_conflicting": conflicts,
+            "notice": "Counts cover recorded submission events, including investment EOIs and "
+            "historical closed outcomes. Not marked closed is entered route state, not a "
+            "verified current application window. Round identities deduplicate counts; "
+            "unidentified records remain separate and their amounts are excluded."}
+
+
 def summarize(campaign, as_of, current_windows, current_claims):
     """Pure totals; no caller-owned input is mutated or normalized here."""
     rows = campaign["opportunities"]
@@ -103,6 +151,7 @@ def summarize(campaign, as_of, current_windows, current_claims):
         "awards": entity_counts("award_status"),
         "receipts": entity_counts("receipt_status"),
         "closed_outcomes": {},
+        "submission_history": _submission_history(entities),
     }
     stages = {stage: {"opportunities": 0, "groups": [], "excluded_rows": 0}
               for stage in STAGES}
@@ -156,7 +205,7 @@ def summarize(campaign, as_of, current_windows, current_claims):
     for row in rows:
         tracking = row.get("funding_tracking", {})
         application = _application(row)
-        closed = row["status"] in {"closed", "not_pursuing"} or tracking.get("closure_reason", "unknown") != "unknown"
+        closed = _closed(row)
         if closed:
             key = _round_key(row) or ("unidentified", row["name"])
             reason = tracking.get("closure_reason", "unknown")
@@ -221,7 +270,7 @@ def summarize(campaign, as_of, current_windows, current_claims):
         "amount_basis": {
             "available": "Individual ceilings for recorded eligible open routes with current source checks",
             "targets": "Draft targets for preparing applications",
-            "submitted": "Actual requested amounts of recorded submitted applications",
+            "submitted": "Actual requested amounts across all recorded submission history; not a cash-application count",
             "awarded": "Amounts of explicitly recorded awards",
             "received": "Amounts of explicitly recorded receipts",
             "closed": "Requested amounts of closed submitted applications; never historical ceilings",
@@ -241,8 +290,28 @@ def render(summary):
         lines.extend(["Closed outcomes: " + "; ".join(
             f"{reason.replace('_', ' ')}: {count}" for reason, count in outcomes.items()
         ) + ".", ""])
+    history = summary["counts"].get("submission_history")
+    if history is not None:
+        lines.extend(["### Recorded submission events by type", history["notice"]])
+        for key, label in (
+            ("ever_recorded", "Ever recorded as submitted"),
+            ("not_marked_closed", "Not marked closed"),
+            ("marked_closed", "Marked closed"),
+            ("closure_conflicting", "Closure state conflicting"),
+        ):
+            counts = history[key]
+            lines.append(label + ": " + (
+                "; ".join(f"{SUBMISSION_TYPES[kind]}: {count}"
+                          for kind, count in counts.items()) if counts else "No recorded events"
+            ) + ".")
+        if history["application_conflicting"]:
+            lines.append(f"{history['application_conflicting']} conflicting submission states excluded from these counts.")
+        lines.append("")
     for stage, bucket in summary["stages"].items():
-        lines.extend([f"### {stage.title()} ({bucket['opportunities']} opportunities)",
+        title = ("Submitted requests — all recorded history" if stage == "submitted"
+                 else "Eligible recorded ceilings — not guaranteed" if stage == "available"
+                 else stage.title())
+        lines.extend([f"### {title} ({bucket['opportunities']} rounds / records)",
                       summary["amount_basis"][stage]])
         if not bucket["groups"]:
             lines.append("No qualified amount records; historical amounts may be unknown.")

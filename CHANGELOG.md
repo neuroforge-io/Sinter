@@ -16,6 +16,11 @@ qualification and does not change any published RC3 asset or historical receipt.
   the full workbench. Fictional browser and source Tk journeys pass; this does not
   establish general assistant quality or new customer-platform qualification.
 
+- Separate cash, credits and investment/EOI submission counts, with recorded
+  history and entered closure states labelled explicitly. Describe availability
+  as possible recorded eligible ceilings. Make the native source list eight rows
+  tall with a visible scrollbar and retain the selected source by ID on refresh.
+
 - Make RC4 relay client reads cooperatively cancellable when socket shutdown
   does not wake an idle Windows worker. Preserve the existing raw parser, read
   deadline, real worker/socket counters and partial-request failures. Compare

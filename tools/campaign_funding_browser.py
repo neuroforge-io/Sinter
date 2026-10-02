@@ -89,6 +89,55 @@ def portfolio_fixture(count: int, title: str) -> dict:
 
 
 class FundingChecks(CampaignChecks):
+    def submission_history_labels_separate_cash_and_other_events(self, page):
+        from playwright.sync_api import expect
+
+        document = fixture("Fictional mixed submission history")
+        cash, credit = document["opportunities"]
+        rows = []
+        for index in range(11):
+            credits = index in (6, 7)
+            row = dict(credit if credits else cash,
+                       name=f"Fictional recorded submission {index + 1}",
+                       status="closed" if index == 7 else "submitted",
+                       route_type="equity" if index > 7 else
+                       "non_cash_support" if credits else "cash_grant")
+            row["funding_tracking"] = {
+                "round_key": row["name"], "benefit_type": "credits" if credits else "cash",
+                "application_status": "submitted",
+                "requested": {"amount": None if index == 5 else "10.00",
+                              "currency": "USD" if credits else "AUD"},
+            }
+            rows.append(row)
+        document["opportunities"] = rows
+        self.import_fixture(page, document)
+        summary = self.update(page)
+        history = summary["counts"]["submission_history"]
+        assert history["ever_recorded"] == {"cash": 6, "credits": 2, "equity": 3}
+        assert history["not_marked_closed"] == {"cash": 6, "credits": 1, "equity": 3}
+        assert history["marked_closed"] == {"credits": 1}
+        visible = page.locator(".campaign-funding-submission-history")
+        expect(visible).to_be_visible()
+        expect(visible).to_contain_text("Ever recorded as submitted: Cash: 6 · Credits: 2 · Investment / EOI: 3")
+        expect(visible).to_contain_text("Not marked closed: Cash: 6 · Credits: 1 · Investment / EOI: 3")
+        expect(visible).to_contain_text("Marked closed: Credits: 1")
+        expect(visible).to_contain_text("not a verified current application window")
+        submitted = page.locator('[data-funding-stage="submitted"]')
+        expect(submitted).to_contain_text("Submitted requests · all recorded history")
+        expect(submitted).to_contain_text("not a cash-application count")
+        expect(submitted).to_contain_text("11 rounds / records")
+        expect(page.locator('[data-funding-stage="available"]')).to_contain_text(
+            "Eligible recorded ceilings"
+        )
+        expect(page.locator('[data-funding-stage="available"]')).to_contain_text(
+            "Not awards or guaranteed funding"
+        )
+        saved = self.save_snapshot(page)
+        assert saved["document"]["opportunities"] == self.backup(
+            page, "funding-mixed-submission-history"
+        )["opportunities"]
+        self.screenshot(page, "funding-mixed-submission-history", full_page=True)
+
     def tracking(self, page, opportunity=CASH):
         page.get_by_role("tab", name="Opportunities", exact=True).click()
         page.locator(".campaign-opportunity").filter(has_text=opportunity).click()
@@ -574,6 +623,7 @@ def main(argv: list[str] | None = None) -> None:
                             "delayed_summary_cannot_replace_edited_records",
                             "portfolio_view_retains_full_records_and_totals",
                             "portfolio_add_limit_keeps_backup",
+                            "submission_history_labels_separate_cash_and_other_events",
                         ):
                             checks.check("funding-" + name, getattr(checks, name))
                     finally:

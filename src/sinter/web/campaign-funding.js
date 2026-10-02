@@ -224,17 +224,34 @@ export function fundingTrackingEditor(opportunity, {sources, sourcePicker, chang
     amounts);
 }
 
-const stageLabels = [['available', 'Available'], ['targets', 'Targets'], ['submitted', 'Submitted'],
+const stageLabels = [['available', 'Eligible recorded ceilings'], ['targets', 'Targets'], ['submitted', 'Submitted requests · all recorded history'],
   ['awarded', 'Awarded'], ['received', 'Received'], ['closed', 'Closed']];
 const stageHelp = {
-  available: 'Eligible individual ceilings with current source claims and an open application window.',
+  available: 'Possible individual ceilings with recorded eligibility, current entered source claims and an open application window. Not awards or guaranteed funding.',
   targets: 'Recorded planning amounts; no application or award is implied.',
-  submitted: 'Requested amounts for recorded submitted applications.',
+  submitted: 'Requested amounts across all recorded submission history, including closed outcomes. The combined record count is not a cash-application count.',
   awarded: 'Recorded confirmed award amounts; receipt is separate.',
   received: 'Recorded received cash or credits.',
   closed: 'Requested amounts of closed submitted applications; historical ceilings are excluded.',
 };
 const humanKey = value => String(value || 'unknown').replaceAll('_', ' ');
+const submissionTypes = {cash: 'Cash', credits: 'Credits', equity: 'Investment / EOI',
+  tax_incentive: 'Tax relief', matched_voucher: 'Matched research support',
+  non_cash_support: 'Other non-cash support', unclassified: 'Unclassified', conflicting_type: 'Conflicting type'};
+
+function submissionHistory(history) {
+  if (!history) return [];
+  return h('section', {class: 'campaign-funding-submission-history'},
+    h('h4', {}, 'Recorded submission events by type'), h('p', {class: 'fine'}, history.notice),
+    ...[['ever_recorded', 'Ever recorded as submitted'], ['not_marked_closed', 'Not marked closed'],
+      ['marked_closed', 'Marked closed'], ['closure_conflicting', 'Closure state conflicting']].map(([key, label]) => {
+      const rows = Object.entries(history[key] || {});
+      return h('p', {}, h('strong', {}, label + ': '), rows.length
+        ? rows.map(([kind, count]) => (submissionTypes[kind] || humanKey(kind)) + ': ' + count).join(' · ')
+        : 'No recorded events');
+    }), history.application_conflicting
+      ? h('p', {class: 'fine'}, `${history.application_conflicting} conflicting submission states excluded from these counts.`) : []);
+}
 const decimalText = value => {
   const [integer, fraction] = String(value).split('.');
   return integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (fraction === undefined ? '' : '.' + fraction);
@@ -292,6 +309,7 @@ export function renderFundingSummary(summary) {
       `${counts.missing_round_keys} routes have no programme round key. Their amounts are excluded until identified; possible repeated rounds cannot be resolved.`) : null,
     duplicates.length ? h('div', {class: 'notice warning'},
       `${counts.duplicate_rounds} repeated round keys · ${counts.duplicate_rows} additional duplicate rows. All amount records for those repeated rounds are excluded pending review.`) : null,
+    submissionHistory(counts.submission_history),
     h('div', {class: 'campaign-funding-stages'}, stages),
     h('p', {class: 'fine'}, 'Unknown and excluded amount counts can overlap when an unknown amount is also excluded.'), review);
 }
