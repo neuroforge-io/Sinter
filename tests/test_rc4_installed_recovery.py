@@ -1006,6 +1006,7 @@ def inert_playwright(monkeypatch):
     package.__path__ = []
     api = ModuleType("playwright.sync_api")
     api.sync_playwright = lambda: pytest.fail("Install an explicit inert driver")
+    api.expect = lambda *_args, **_kwargs: pytest.fail("Inert UI body must fail first")
     package.sync_api = api
     monkeypatch.setitem(sys.modules, "playwright", package)
     monkeypatch.setitem(sys.modules, "playwright.sync_api", api)
