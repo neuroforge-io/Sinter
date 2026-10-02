@@ -32,8 +32,9 @@ Separate copied-workspace and actual package upgrades from v0.5.3, RC1 and RC2
 retain fictional work, preferences and explicit model selections. No model
 operation was requested by these checks.
 
-Current `main` is `0.5.4rc4.dev0`, a source development version with no new
-qualified installer. Its Word-copy lock, recipient handover navigation and
+Current `main` is the `0.5.4rc4` candidate source, with no new qualified
+installer. Exact-source hosted checks and installed qualification are still
+required before a separate RC4 preview can be published. Its Word-copy lock, recipient handover navigation and
 release-tool changes are separate from the published RC3 evidence. Read the
 [Word handover source review](docs/WORD_HANDOVER_NAVIGATION_2026-10-01.md) for the
 tested scope and remaining installer gates.

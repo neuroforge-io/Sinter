@@ -1,9 +1,11 @@
 # Changelog
 
-## 0.5.4rc4.dev0 - source development, no published installer
+## 0.5.4rc4 - candidate source, installed qualification pending
 
-This development source follows the frozen RC3 release. It has no new installed
+This candidate source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
+The candidate version does not publish automatically: exact-source hosted and
+original installed gates must pass before a separate Linux preview is admitted.
 
 - Correct source qualification across runner ownership and filesystem semantics.
   Require actual socket backpressure in cancellation tests, preserve Windows
@@ -13,7 +15,7 @@ qualification and does not change any published RC3 asset or historical receipt.
 - Add a separate RC4 candidate authorization route that checks the original
   installed evidence and exact source, package and binary identities. Public
   bundle inspection verifies integrity only. Preserve earlier preview rules;
-  development source remains ineligible for publication.
+  candidate source requires original installed qualification before publication.
 
 - Match workflow receipts and release checks to the exact source catalogue: the
   recognized 53-entry earlier profile or 54-entry funding profile. Keep the

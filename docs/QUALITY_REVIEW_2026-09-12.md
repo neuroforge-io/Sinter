@@ -2016,3 +2016,47 @@ errors or skips, in 80.17 seconds. Three Pytest diagnostic-property/JUnit format
 warnings are retained in the complete raw output and XML. F/I, formatting,
 Python 3.10 grammar and the public-boundary check pass. No score is raised by
 this source result; exact-source hosted and installed checks remain required.
+
+
+### Follow-up hosted result and final candidate source
+
+Exact `079263662b079051aeb2fedd361dfd90e1cc3636` Quality run 36969962677,
+attempt 1, ended FAILURE. Both Windows Python phases have one remaining
+cancellation-fixture setup failure; its actual failed-run buffer, byte and mode
+observations remain unknown. Linux and macOS Python phases, Chromium, RKC and
+all speech jobs passed, retaining their original skips and warnings. Five Linux
+native GUI checks form a separate source phase. The dependent verified-source
+job was skipped. All original logs and artifact ZIP/XML bytes remain retained.
+
+The previous 23 Windows manifest failure identities now pass. The two earlier
+Windows 3.10 launcher timeout cases also pass on this exact source; their earlier
+cause remains unproven. Explicit POSIX-resource skips do not qualify Windows
+ownership or installed behavior. The follow-up capture handoff is
+`2a4017b3b31198ac6a47190b2216c267704678628b8f9d042c434605aefdbc7c`.
+
+The final candidate version is `0.5.4rc4`. A version change grants no release
+qualification. Its exact source must pass hosted checks; one fixed Linux
+installer then needs the original offline workflow, recovery, native handoff,
+four-prior replacement, cold-install, notices and independent authorization
+gates. RC versions do not publish automatically. The physical app and real
+workspace remain closed and untouched. No score is increased by source tests.
+
+
+### Accepted cancellation correction and composed source replay
+
+The final composed 17-file Linux source replay passed 1,600 unique cases with
+no failures, errors or skips in 124.00 seconds wall time. Its six actual
+Pytest diagnostic-property/JUnit warnings are retained in the original stdout
+and XML. Required full-tree CI correctness lint, changed-Python F/I lint,
+formatting, Python 3.10 grammar and the public-boundary check passed. The broader
+full-tree F/I check failed with 42 diagnostics; exact comparison found the same
+42 diagnostic signatures on unchanged079. That failure and comparison are
+retained, with no broader-lint PASS claim or unrelated source edits.
+
+The cancellation correction has separate independent source acceptance,
+including first-error preservation, all later cleanup errors, invalid-context
+refusals and an actual active zero-additional-fill control. Production code and
+operation limits remain unchanged. The earlier held proposal and all successful
+historical replays stay intact. Natural original Windows socket state remains
+unknown. These overlapping source observations do not qualify installed
+behavior, raise the product score or replace final-source hosted checks.

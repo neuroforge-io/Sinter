@@ -1,9 +1,11 @@
 """Actual owned loopback cancellation controls; no app, UI, or provider calls."""
 
 import errno
+import hashlib
 import json
 import socket
 import socketserver
+import sys
 import tempfile
 import threading
 import time
@@ -18,30 +20,57 @@ from tools.installed_workflow_browser import RelayClosed, receive_request
 
 @contextmanager
 def _unread_tcp_pair():
-    """Bound both real kernel windows before handshake; never read the peer."""
-    with socket.socket() as listener, socket.socket() as peer:
+    """Own all three sockets and conserve first failure through LIFO cleanup."""
+    owned, attempts, cleanup_errors, primary = [], [], [], None
+    observations = {"pair_cleanup_attempts": attempts}
+    try:
+        listener = socket.socket()
+        owned.append(("listener", listener))
+        peer = socket.socket()
+        owned.append(("peer", peer))
         listener.bind(("127.0.0.1", 0))
         listener.listen()
         peer.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
         peer.settimeout(2)
         peer.connect(listener.getsockname())
         channel, _ = listener.accept()
-        with channel:
-            channel.settimeout(20)
-            channel.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
-            observations = {
-                "sender_buffer": channel.getsockopt(
-                    socket.SOL_SOCKET, socket.SO_SNDBUF
-                ),
-                "unread_peer_buffer": peer.getsockopt(
-                    socket.SOL_SOCKET, socket.SO_RCVBUF
-                ),
-                "peer_reads": 0,
-                "peer_shutdowns": 0,
-            }
-            assert observations["sender_buffer"] > 0
-            assert observations["unread_peer_buffer"] > 0
-            yield channel, peer, observations
+        owned.append(("channel", channel))
+        channel.settimeout(20)
+        channel.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+        observations.update(
+            sender_buffer=channel.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF),
+            unread_peer_buffer=peer.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF),
+            peer_reads=0,
+            peer_shutdowns=0,
+        )
+        assert observations["sender_buffer"] > 0
+        assert observations["unread_peer_buffer"] > 0
+        yield channel, peer, observations
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        for role, channel in reversed(owned):
+            attempt = {"role": role, "fileno_before": channel.fileno()}
+            attempts.append(attempt)
+            try:
+                channel.close()
+            except BaseException as error:
+                cleanup_errors.append(error)
+                attempt["error"] = {
+                    "type": type(error).__name__,
+                    "message": str(error),
+                }
+            finally:
+                attempt["fileno_after"] = channel.fileno()
+        if primary is not None:
+            primary.source_pair_cleanup_errors = tuple(cleanup_errors)
+            primary.source_pair_cleanup_attempts = tuple(attempts)
+        elif cleanup_errors:
+            first = cleanup_errors[0]
+            first.source_pair_cleanup_errors = tuple(cleanup_errors[1:])
+            first.source_pair_cleanup_attempts = tuple(attempts)
+            raise first
 
 
 def _observe_unread_peer(monkeypatch, peer, observations):
@@ -81,36 +110,83 @@ def _require_pending_send(observations, payload_bytes):
     assert observations["peer_reads"] == observations["peer_shutdowns"] == 0
 
 
-def _fill_until_actual_backpressure(channel, observations):
-    """Retain a genuine would-block and unwritable result within finite bounds."""
+def _fill_until_actual_backpressure(
+    channel,
+    observations,
+    *,
+    send_syscall=None,
+    select_syscall=None,
+    production_prefix=None,
+    production_payload=None,
+    requests_stopped=None,
+):
+    """Bound fixture bytes separately from the production payload under test."""
+    active_context = any(
+        value is not None
+        for value in (production_prefix, production_payload, requests_stopped)
+    )
+    if active_context:
+        assert all(
+            value is not None
+            for value in (production_prefix, production_payload, requests_stopped)
+        )
+        prefix = bytes(production_prefix)
+        assert 0 < len(prefix) < len(production_payload)
+        assert prefix == production_payload[: len(prefix)]
+        assert observations["sent_bytes"] == len(prefix)
+        assert observations["peer_reads"] == observations["peer_shutdowns"] == 0
+        assert not requests_stopped.is_set()
+    actual_send = send_syscall or socket.socket.send
+    actual_select = select_syscall or probe.select.select
     original_timeout = channel.gettimeout()
-    deadline, sent = time.monotonic() + 2, 0
+    started = time.monotonic()
+    deadline, sent = started + 2, 0
     chunk = b"SOURCE pending fixture bytes\x00\xff" * 2048
-    modes = []
+    digest, modes, primary = hashlib.sha256(), set(), None
+    observations.update(prefill_limit_bytes=32 * 1024 * 1024, prefill_limit_seconds=2)
     try:
         channel.setblocking(False)
         while time.monotonic() < deadline and sent < 32 * 1024 * 1024:
-            modes.append(channel.gettimeout())
+            modes.add(channel.gettimeout())
+            data = chunk[: min(len(chunk), 32 * 1024 * 1024 - sent)]
             try:
-                count = channel.send(chunk[: min(len(chunk), 32 * 1024 * 1024 - sent)])
+                count = actual_send(channel, data)
             except BlockingIOError as actual:
-                _, writable, _ = probe.select.select([], [channel], [], 0.05)
+                observations["prefill_would_block_type"] = type(actual).__name__
+                observations["prefill_would_block_errno"] = actual.errno
+                observations["would_block_type"] = type(actual).__name__
+                observations["would_block_errno"] = actual.errno
+                _, writable, _ = actual_select([], [channel], [], 0.05)
+                observations["prefill_unwritable"] = not writable
                 if not writable:
-                    observations.update(
-                        prefill_bytes=sent,
-                        would_block_type=type(actual).__name__,
-                        would_block_errno=actual.errno,
-                        unwritable=True,
-                        prefill_modes=sorted(set(modes)),
-                    )
-                    assert sent > 0 and observations["prefill_modes"] == [0.0]
+                    assert (sent > 0 or active_context) and modes == {0.0}
+                    if active_context:
+                        assert not requests_stopped.is_set()
+                    observations["zero_extra_prefill"] = sent == 0
+                    observations["unwritable"] = True
                     return
             else:
                 assert count > 0
                 sent += count
+                digest.update(data[:count])
         pytest.fail("Bounded real unread socket did not demonstrate backpressure")
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        channel.settimeout(original_timeout)
+        observations.update(
+            prefill_bytes=sent,
+            prefill_sha256=digest.hexdigest(),
+            prefill_modes=sorted(modes),
+            prefill_elapsed=time.monotonic() - started,
+        )
+        try:
+            channel.settimeout(original_timeout)
+        except BaseException as error:
+            observations["prefill_restoration_error"] = type(error).__name__
+            if primary is None:
+                raise
+            primary.source_prefill_restoration_errors = (error,)
 
 
 @pytest.mark.parametrize("scope", ["idle", "header", "body"])
@@ -477,28 +553,85 @@ def test_actual_backpressured_send_stops_without_peer_read_or_shutdown(
 ):
     relay = probe.HostRelay(tmp_path)
     actual_send, actual_select = socket.socket.send, probe.select.select
-    pending, release = threading.Event(), threading.Event()
-    outcomes, modes = [], []
+    prepared, pending, release = (threading.Event() for _ in range(3))
+    outcomes, modes, setup_errors, cleanup_errors = [], [], [], []
     payload = b"literal bytes\x00\xff" * 524_288
+    sent_prefix = bytearray()
+    observations = {
+        "phase": "pair_setup",
+        "payload_bytes": len(payload),
+        "payload_sha256": hashlib.sha256(payload).hexdigest(),
+        "production_send_cap_bytes": 16_384,
+        "operation_timeout": 20,
+        "pending_limit_seconds": 2,
+        "cancellation_limit_seconds": 2,
+        "sent_bytes": 0,
+        "unwritable": False,
+    }
+    worker, primary = None, None
+
+    def error_record(error):
+        return {"type": type(error).__name__, "message": str(error)}
+
     try:
-        with _unread_tcp_pair() as (channel, unread_peer, observations):
-            observations.update(sent_bytes=0, unwritable=False)
+        with _unread_tcp_pair() as (channel, unread_peer, buffers):
+            observations.update(buffers)
             _observe_unread_peer(monkeypatch, unread_peer, observations)
+            assert channel.gettimeout() == 20 and not relay.requests_stopped.is_set()
+
+            def admit_pending(kind):
+                # Fixture prefill alone cannot admit a production pending send.
+                assert observations["phase"] == "production_pending"
+                assert observations["prefill_unwritable"] is True
+                assert not relay.requests_stopped.is_set()
+                assert bytes(sent_prefix) == payload[: len(sent_prefix)]
+                observations["unwritable"] = True
+                _require_pending_send(observations, len(payload))
+                observations["pending_kind"] = kind
+                pending.set()
+                assert release.wait(2)
 
             def observe_send(writer, data, flags=0):
                 assert writer is channel
                 modes.append(writer.gettimeout())
-                sent = actual_send(writer, data, flags)
+                try:
+                    sent = actual_send(writer, data[:16_384], flags)
+                except BlockingIOError as actual:
+                    observations["production_would_block_type"] = type(actual).__name__
+                    observations["production_would_block_errno"] = actual.errno
+                    if prepared.is_set() and not pending.is_set():
+                        admit_pending("actual_send_would_block")
+                    raise
                 observations["sent_bytes"] += sent
+                sent_prefix.extend(bytes(data[:sent]))
+                if not prepared.is_set():
+                    observations["phase"] = "fixture_prefill"
+                    try:
+                        assert 0 < sent < len(payload) and writer.gettimeout() == 0.0
+                        _fill_until_actual_backpressure(
+                            writer,
+                            observations,
+                            send_syscall=actual_send,
+                            select_syscall=actual_select,
+                            production_prefix=sent_prefix,
+                            production_payload=payload,
+                            requests_stopped=relay.requests_stopped,
+                        )
+                        observations["unwritable"] = False
+                        observations["phase"] = "production_pending"
+                    except BaseException as error:
+                        setup_errors.append(error)
+                        raise
+                    finally:
+                        prepared.set()
                 return sent
 
             def observe_pending(readers, writers, errors, timeout=None):
                 result = actual_select(readers, writers, errors, timeout)
-                if channel in writers and not result[1] and not pending.is_set():
-                    observations["unwritable"] = True
-                    _require_pending_send(observations, len(payload))
-                    pending.set()
-                    assert release.wait(2)
+                if channel in writers:
+                    observations["production_select_writable"] = bool(result[1])
+                    if not result[1] and not pending.is_set():
+                        admit_pending("actual_select_unwritable")
                 return result
 
             def sending():
@@ -506,34 +639,375 @@ def test_actual_backpressured_send_stops_without_peer_read_or_shutdown(
                     relay.send_owned(channel, payload)
                 except BaseException as error:
                     outcomes.append(error)
+                finally:
+                    prepared.set()
 
             monkeypatch.setattr(socket.socket, "send", observe_send)
             monkeypatch.setattr(probe.select, "select", observe_pending)
             worker = threading.Thread(target=sending)
             worker.start()
             try:
-                assert pending.wait(2) and worker.is_alive()
+                assert prepared.wait(2), "Bounded actual prefill did not complete"
+                if setup_errors:
+                    raise setup_errors[0]
+                if outcomes:
+                    raise outcomes[0]
+                assert observations["phase"] == "production_pending"
+                admitted = pending.wait(2)
+                if not admitted and outcomes:
+                    raise outcomes[0]
+                assert admitted and worker.is_alive()
                 _require_pending_send(observations, len(payload))
+                assert not relay.requests_stopped.is_set()
+                observations["phase"] = "cancel"
                 started = time.monotonic()
                 relay.requests_stopped.set()
                 release.set()
                 worker.join(2)
-                assert not worker.is_alive() and time.monotonic() - started < 2
+                elapsed = time.monotonic() - started
+                assert not worker.is_alive() and elapsed < 2
                 assert len(outcomes) == 1 and isinstance(outcomes[0], RelayClosed)
                 assert channel.gettimeout() == 20 and set(modes) == {0.0}
                 assert unread_peer.fileno() >= 0
                 observations["cancel_exception"] = type(outcomes[0]).__name__
-                observations["cancel_elapsed"] = time.monotonic() - started
+                observations["cancel_elapsed"] = elapsed
+                observations["phase"] = "passed"
             finally:
+                try:
+                    observations["before_cleanup"] = {
+                        "worker_alive": worker.is_alive(),
+                        "stopped": relay.requests_stopped.is_set(),
+                        "pending": pending.is_set(),
+                        "timeout": channel.gettimeout(),
+                        "peer_open": unread_peer.fileno() >= 0,
+                    }
+                except BaseException as error:
+                    cleanup_errors.append(error)
                 relay.requests_stopped.set()
                 release.set()
-                worker.join(2)
-                assert not worker.is_alive()
+                try:
+                    worker.join(2)
+                    assert not worker.is_alive()
+                except BaseException as error:
+                    cleanup_errors.append(error)
         observations["pair_closed"] = channel.fileno() == unread_peer.fileno() == -1
         assert observations["pair_closed"]
+    except BaseException as error:
+        primary = error
+        cleanup_errors.extend(getattr(error, "source_pair_cleanup_errors", ()))
+        observations["pair_cleanup_attempts"] = list(
+            getattr(error, "source_pair_cleanup_attempts", ())
+        )
+        raise
     finally:
-        assert relay.close_owned() == (0, 0)
-    record_property("SOURCE_backpressure_cancel", json.dumps(observations))
+        try:
+            observations["relay_close"] = relay.close_owned()
+            assert observations["relay_close"] == (0, 0)
+        except BaseException as error:
+            cleanup_errors.append(error)
+        observations.update(
+            sent_prefix_bytes=len(sent_prefix),
+            sent_prefix_sha256=hashlib.sha256(sent_prefix).hexdigest(),
+            sent_prefix_matches_payload=bytes(sent_prefix)
+            == payload[: len(sent_prefix)],
+            production_modes=sorted(set(modes)),
+            worker_alive=worker.is_alive() if worker else None,
+            outcomes=[error_record(error) for error in outcomes],
+            setup_errors=[error_record(error) for error in setup_errors],
+            primary=error_record(primary) if primary else None,
+            cleanup_errors=[error_record(error) for error in cleanup_errors],
+            pair_cleanup_errors=[
+                error_record(error)
+                for error in getattr(primary, "source_pair_cleanup_errors", ())
+            ],
+        )
+        try:
+            record_property("SOURCE_backpressure_cancel", json.dumps(observations))
+        except BaseException as error:
+            cleanup_errors.append(error)
+        if primary is not None:
+            primary.source_cleanup_errors = tuple(cleanup_errors)
+        elif cleanup_errors:
+            raise cleanup_errors[0]
+
+
+def test_actual_pending_send_with_stale_write_readiness(
+    tmp_path, monkeypatch, record_property
+):
+    """A source seam for stale readiness still needs a genuine kernel send fault."""
+
+    def stale_ready(owner, channel, *, reading, deadline):
+        owner._check_open()
+        assert not reading and time.monotonic() < deadline
+
+    monkeypatch.setattr(probe.TrackedRequests, "_ready", stale_ready)
+    test_actual_backpressured_send_stops_without_peer_read_or_shutdown(
+        tmp_path, monkeypatch, record_property
+    )
+
+
+@pytest.mark.parametrize("later_stage", ["cleanup", "diagnostics"])
+def test_pending_setup_failure_retains_primary_and_failure_telemetry(
+    tmp_path, monkeypatch, later_stage
+):
+    """Synthetic setup/cleanup faults retain the real partial prefix and sockets."""
+    first, later = OSError("literal-prefill-first"), KeyboardInterrupt("literal-later")
+    properties, relays = [], []
+    actual_relay = probe.HostRelay
+
+    def own_relay(path):
+        relay = actual_relay(path)
+        relays.append(relay)
+        if later_stage == "cleanup":
+            close = relay.close_owned
+
+            def fail_after_close():
+                assert close() == (0, 0)
+                raise later
+
+            monkeypatch.setattr(relay, "close_owned", fail_after_close)
+        return relay
+
+    def fail_prefill(*args, **kwargs):
+        raise first
+
+    def retain_property(name, value):
+        properties.append((name, json.loads(value)))
+        if later_stage == "diagnostics":
+            raise later
+
+    monkeypatch.setattr(probe, "HostRelay", own_relay)
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_fill_until_actual_backpressure",
+        fail_prefill,
+    )
+    with pytest.raises(OSError) as failed:
+        test_actual_backpressured_send_stops_without_peer_read_or_shutdown(
+            tmp_path, monkeypatch, retain_property
+        )
+    assert failed.value is first and first.source_cleanup_errors == (later,)
+    assert len(properties) == 1
+    name, evidence = properties[0]
+    assert name == "SOURCE_backpressure_cancel"
+    assert evidence["phase"] == "fixture_prefill"
+    assert evidence["primary"] == {"type": "OSError", "message": str(first)}
+    assert 0 < evidence["sent_bytes"] < evidence["payload_bytes"]
+    assert evidence["sent_prefix_matches_payload"] is True
+    assert evidence["production_modes"] == [0.0]
+    assert evidence["before_cleanup"]["stopped"] is False
+    assert evidence["before_cleanup"]["timeout"] == 20
+    assert evidence["before_cleanup"]["peer_open"] is True
+    assert evidence["worker_alive"] is False
+    assert evidence["peer_reads"] == evidence["peer_shutdowns"] == 0
+    assert probe.closed_port(relays[0].server_address[1]) != 0
+
+
+def test_prefill_primary_survives_timeout_restoration_failure():
+    first, later = OSError("literal-send-first"), KeyboardInterrupt("restore-later")
+    observations = {}
+
+    class Channel:
+        def gettimeout(self):
+            return 20
+
+        def setblocking(self, value):
+            assert value is False
+
+        def settimeout(self, value):
+            assert value == 20
+            raise later
+
+    def actual_failure(channel, data):
+        raise first
+
+    with pytest.raises(OSError) as failed:
+        _fill_until_actual_backpressure(
+            Channel(), observations, send_syscall=actual_failure
+        )
+    assert failed.value is first and first.source_prefill_restoration_errors == (later,)
+    assert observations["prefill_bytes"] == 0
+    assert observations["prefill_restoration_error"] == "KeyboardInterrupt"
+
+
+@pytest.mark.parametrize("first_type", [OSError, KeyboardInterrupt])
+@pytest.mark.parametrize("close_type", [OSError, KeyboardInterrupt])
+def test_actual_pair_close_faults_keep_setup_first_and_all_later(
+    tmp_path, monkeypatch, first_type, close_type
+):
+    """Actual closes plus explicit faults conserve first/three later objects."""
+    first = first_type("actual-prefix-prefill-first")
+    later = [
+        close_type("channel-close-later"),
+        OSError("peer-close-later"),
+        KeyboardInterrupt("listener-close-later"),
+    ]
+    properties, closed, captured, relays = [], [], {}, []
+    actual_close, actual_relay = socket.socket.close, probe.HostRelay
+
+    def own_relay(path):
+        relay = actual_relay(path)
+        relays.append(relay)
+        return relay
+
+    def fail_prefill(channel, observations, **kwargs):
+        captured["channel"] = channel
+        captured["fault_active"] = True
+        raise first
+
+    def close(channel):
+        result = actual_close(channel)
+        if captured.get("fault_active") and len(closed) < 3:
+            closed.append(channel)
+            raise later[len(closed) - 1]
+        return result
+
+    monkeypatch.setattr(probe, "HostRelay", own_relay)
+    monkeypatch.setattr(
+        sys.modules[__name__], "_fill_until_actual_backpressure", fail_prefill
+    )
+    monkeypatch.setattr(socket.socket, "close", close)
+    with pytest.raises(first_type) as failed:
+        test_actual_backpressured_send_stops_without_peer_read_or_shutdown(
+            tmp_path,
+            monkeypatch,
+            lambda name, value: properties.append((name, json.loads(value))),
+        )
+    assert failed.value is first
+    assert first.source_pair_cleanup_errors == tuple(later)
+    assert first.source_cleanup_errors == tuple(later)
+    assert len(properties) == 1
+    evidence = properties[0][1]
+    assert 0 < evidence["sent_bytes"] < evidence["payload_bytes"]
+    assert evidence["sent_prefix_matches_payload"] is True
+    assert evidence["before_cleanup"]["stopped"] is False
+    assert evidence["before_cleanup"]["timeout"] == 20
+    assert evidence["worker_alive"] is False
+    assert evidence["peer_reads"] == evidence["peer_shutdowns"] == 0
+    attempts = evidence["pair_cleanup_attempts"]
+    assert [attempt["role"] for attempt in attempts] == ["channel", "peer", "listener"]
+    assert all(
+        attempt["fileno_before"] >= 0 and attempt["fileno_after"] == -1
+        for attempt in attempts
+    )
+    assert [error["type"] for error in evidence["pair_cleanup_errors"]] == [
+        type(error).__name__ for error in later
+    ]
+    assert evidence["primary"] == {"type": first_type.__name__, "message": str(first)}
+    assert closed[0] is captured["channel"]
+    assert all(channel.fileno() == -1 for channel in closed)
+    assert probe.closed_port(relays[0].server_address[1]) != 0
+
+
+@pytest.mark.parametrize("close_type", [OSError, KeyboardInterrupt])
+def test_actual_pair_close_first_without_body_error_keeps_later(
+    monkeypatch, close_type
+):
+    first, later = close_type("first-close"), OSError("second-close")
+    actual_close, closed, active = socket.socket.close, [], False
+
+    def close(channel):
+        result = actual_close(channel)
+        if active:
+            closed.append(channel)
+            if len(closed) < 3:
+                raise first if len(closed) == 1 else later
+        return result
+
+    monkeypatch.setattr(socket.socket, "close", close)
+    with pytest.raises(close_type) as failed:
+        with _unread_tcp_pair() as (channel, peer, observations):
+            active = True
+    assert failed.value is first and first.source_pair_cleanup_errors == (later,)
+    assert [attempt["role"] for attempt in observations["pair_cleanup_attempts"]] == [
+        "channel",
+        "peer",
+        "listener",
+    ]
+    assert all(item.fileno() == -1 for item in closed)
+    assert channel.fileno() == peer.fileno() == -1
+
+
+@pytest.mark.parametrize("active_context", [False, True])
+def test_actual_zero_extra_prefill_requires_active_original_prefix(
+    tmp_path, monkeypatch, record_property, active_context
+):
+    """Real production prefix, real already-full kernel, unchanged next gate."""
+    actual_fill = _fill_until_actual_backpressure
+    captured = []
+
+    def already_full(channel, observations, **kwargs):
+        # This bounded source setup does not fabricate a syscall result. The
+        # fresh helper must actually refuse zero extra bytes before the active
+        # context can admit that same kernel state. No peer read or shutdown.
+        started, attempts = time.monotonic(), []
+        observations["already_full_setup_attempts"] = attempts
+        for _ in range(8):
+            assert time.monotonic() - started < 2
+            trial = {}
+            try:
+                actual_fill(
+                    channel,
+                    trial,
+                    send_syscall=kwargs["send_syscall"],
+                    select_syscall=kwargs["select_syscall"],
+                )
+            except AssertionError:
+                assert trial["prefill_bytes"] == 0
+                assert trial["prefill_unwritable"] is True
+                assert trial["prefill_would_block_type"] == "BlockingIOError"
+                attempts.append(trial)
+                break
+            else:
+                attempts.append(trial)
+        else:
+            pytest.fail("Bounded actual setup never demonstrated zero extra fill")
+        if not active_context:
+            kwargs = {key: kwargs[key] for key in ("send_syscall", "select_syscall")}
+        actual_fill(channel, observations, **kwargs)
+        assert observations["prefill_bytes"] == 0
+        assert observations["zero_extra_prefill"] is True
+        assert observations["prefill_unwritable"] is True
+        assert observations["prefill_would_block_type"] == "BlockingIOError"
+
+    def retain_property(name, value):
+        captured.append(json.loads(value))
+        record_property(name, value)
+
+    monkeypatch.setattr(
+        sys.modules[__name__], "_fill_until_actual_backpressure", already_full
+    )
+    if active_context:
+        test_actual_backpressured_send_stops_without_peer_read_or_shutdown(
+            tmp_path, monkeypatch, retain_property
+        )
+    else:
+        with pytest.raises(AssertionError):
+            test_actual_backpressured_send_stops_without_peer_read_or_shutdown(
+                tmp_path, monkeypatch, retain_property
+            )
+    assert len(captured) == 1
+    evidence = captured[0]
+    assert 0 < evidence["sent_bytes"] < evidence["payload_bytes"]
+    assert evidence["sent_prefix_matches_payload"] is True
+    assert evidence["prefill_bytes"] == 0 and evidence["prefill_unwritable"] is True
+    assert evidence["peer_reads"] == evidence["peer_shutdowns"] == 0
+    assert evidence["worker_alive"] is False and evidence["relay_close"] == [0, 0]
+    assert all(
+        attempt["fileno_after"] == -1 for attempt in evidence["pair_cleanup_attempts"]
+    )
+    if active_context:
+        assert evidence["phase"] == "passed"
+        assert evidence["cancel_exception"] == "RelayClosed"
+        assert evidence["pending_kind"] in {
+            "actual_select_unwritable",
+            "actual_send_would_block",
+        }
+        assert evidence["cancel_elapsed"] < 2
+    else:
+        assert evidence["phase"] == "fixture_prefill"
+        assert evidence["primary"]["type"] == "AssertionError"
+        assert evidence["before_cleanup"]["pending"] is False
 
 
 def test_actual_fixed_loopback_connect_and_send_conserve_bytes(tmp_path):

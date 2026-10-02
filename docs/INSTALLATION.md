@@ -81,6 +81,11 @@ unqualified. Earlier rc2 installers do not include local Word-copy recovery.
 
 ## Platform qualification
 
+Current RC4 candidate source is version `0.5.4rc4`; an RC4 installer is not yet
+qualified or published. Source CI results do not establish installed operation.
+The published RC3 Linux preview remains the available qualified download while
+the separate RC4 installed and upgrade gates are completed.
+
 The table below declares the CI build/test environments. It is not a pass matrix
 for every candidate. Earlier v0.5.3, RC1 and RC2 packages have separate evidence;
 consult [0.5.4rc3 qualification](releases/PREVIEW_0.5.4rc3_PUBLICATION_RECEIPT.md)
