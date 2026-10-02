@@ -5,6 +5,17 @@
 This development source follows the frozen RC3 release. It has no new installed
 qualification and does not change any published RC3 asset or historical receipt.
 
+- Add optional funding records and shared UI, CLI and Python totals for available
+  ceilings, targets, submitted requests, awards, receipts and closed outcomes.
+  Keep currencies, cash/credits, unknowns and duplicate rounds separate; retain
+  legacy documents. Search and paginate up to 200 opportunities without clipping
+  saved records or whole-campaign totals.
+
+- Add read-only native funding inspection, full campaign source notes and dated
+  saved report labels through the existing runtime. Campaign editing remains in
+  the full workbench. Fictional browser and source Tk journeys pass; this does not
+  establish general assistant quality or new customer-platform qualification.
+
 - Make ten inert recovery-tool tests independent of the optional Playwright
   package. Keep browser execution guarded and every existing assertion active.
   Independent and root source checks pass; full hosted and installed qualification
