@@ -21,7 +21,7 @@ jobs:
           - {os: windows-2022, arch: x86, python_arch: x86, execution: compatibility, accounts: false, account_args: '--without-accounts'}
           - {os: windows-11-arm, arch: arm64, python_arch: arm64, execution: native, accounts: false, account_args: '--without-accounts'}
           - {os: macos-15-intel, arch: x64, python_arch: x64, execution: native, accounts: false, account_args: '--without-accounts'}
-          - {os: macos-14, arch: arm64, python_arch: arm64, execution: native, accounts: true, account_args: ''}
+          - {os: macos-15, arch: arm64, python_arch: arm64, execution: native, accounts: true, account_args: ''}
           - {os: ubuntu-22.04, arch: x64, python_arch: x64, execution: native, accounts: true, account_args: ''}
           - {os: ubuntu-22.04-arm, arch: arm64, python_arch: arm64, execution: native, accounts: true, account_args: ''}
     steps:
