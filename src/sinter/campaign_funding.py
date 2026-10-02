@@ -311,7 +311,8 @@ def render(summary):
         title = ("Submitted requests — all recorded history" if stage == "submitted"
                  else "Eligible recorded ceilings — not guaranteed" if stage == "available"
                  else stage.title())
-        lines.extend([f"### {title} ({bucket['opportunities']} rounds / records)",
+        unit = "round / record" if bucket["opportunities"] == 1 else "rounds / records"
+        lines.extend([f"### {title} ({bucket['opportunities']} {unit})",
                       summary["amount_basis"][stage]])
         if not bucket["groups"]:
             lines.append("No qualified amount records; historical amounts may be unknown.")

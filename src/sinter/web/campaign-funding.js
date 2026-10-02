@@ -297,7 +297,7 @@ export function renderFundingSummary(summary) {
       h('ul', {}, exclusions.map(row => h('li', {}, h('strong', {}, row.opportunity),
         ' · ', humanKey(row.stage), ' · ', row.message || humanKey(row.reason)))))
       : h('p', {class: 'fine'}, 'No exclusion records returned.'),
-    ...[['applications', 'Application records'], ['awards', 'Award records'], ['receipts', 'Receipt records'],
+    ...[['applications', 'Application / EOI states · all route types'], ['awards', 'Award records'], ['receipts', 'Receipt records'],
       ['closed_outcomes', 'Closed outcomes']].map(([key, label]) =>
       h('div', {}, h('h4', {}, label), h('dl', {class: 'campaign-funding-record-counts'},
         Object.entries(counts[key] || {}).map(([state, count]) =>

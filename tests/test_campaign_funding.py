@@ -418,4 +418,4 @@ def test_ui_route_cli_and_programmatic_share_the_exact_totals(server, tmp_path, 
                     "--directory", str(tmp_path / "human")]):
         cli.launch()
     assert "Recorded funding totals" in human.getvalue()
-    assert "Targets (1 opportunities)" in human.getvalue()
+    assert "Targets (1 round / record)" in human.getvalue()
