@@ -140,7 +140,7 @@ const displayDate = value => {
   return Number.isNaN(parsed.getTime()) ? value
     : new Intl.DateTimeFormat('en-AU', {day: 'numeric', month: 'short', year: 'numeric'}).format(parsed);
 };
-function opportunityTiming(row) {
+export function opportunityTiming(row) {
   if (row.status === 'closed') return row.deadline
     ? `Recorded closed · closing date ${displayDate(row.deadline)}` : 'Recorded closed';
   if (row.status === 'submitted') return row.deadline
@@ -158,7 +158,14 @@ function opportunityTiming(row) {
     return row.deadline ? `Recorded closing date · ${displayDate(row.deadline)}`
       : 'Closing date needed';
   }
-  return 'Application window not checked';
+  return row.deadline
+    ? `Recorded closing date · ${displayDate(row.deadline)} · Application window not verified`
+    : 'Application window not verified';
+}
+export function hasUnverifiedRecordedDeadline(row) {
+  const kind = row.application_window || (row.deadline ? 'fixed' : 'unknown');
+  return Boolean(row.deadline) && kind === 'unknown'
+    && row.status !== 'closed' && row.status !== 'submitted';
 }
 export async function campaignsPage({setBusy = () => {}, remember = () => {}, seed = {}, onOpenGarden} = {}) {
   let document = compatibleCampaign(seed.document || blank()), savedId = seed.id || null, revision = seed.revision || null;
@@ -889,6 +896,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const headerFunder = h('span', {class: 'eyebrow'}), headerName = h('h3', {}), programme = h('div');
     const windowSourceInfo = h('p', {class: 'campaign-window-source', role: 'status'});
     const maximum = h('dd', {}), deadlineLabel = h('dt', {}), deadlineValue = h('dd', {});
+    const recordedDeadlineValue = h('dd', {});
+    const recordedDeadline = h('div', {},
+      h('dt', {}, 'Recorded closing date'), recordedDeadlineValue);
     const currencyComparison = h('p', {class: 'fine campaign-currency-comparison', role: 'status'});
     const decisionValue = h('dd', {}), statusValue = h('dd', {}), workflowValue = h('dd', {}), fitValue = h('p', {});
     const applicantConfirmationStatus = h('small', {class: 'campaign-action-meta'});
@@ -927,8 +937,12 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         deadlineValue.textContent = item.deadline ? displayDate(item.deadline) : 'Closing date needed';
       } else {
         deadlineLabel.textContent = 'Application window';
-        deadlineValue.textContent = 'Not checked';
+        deadlineValue.textContent = 'Application window not verified';
       }
+      // Retain a recorded date even when current window evidence is unknown.
+      // This presentation does not promote the date to a verified open window.
+      recordedDeadline.hidden = !hasUnverifiedRecordedDeadline(item);
+      recordedDeadlineValue.textContent = item.deadline ? displayDate(item.deadline) : '';
       decisionValue.textContent = item.decision_window || 'Not confirmed';
       statusValue.textContent = opportunityStates.find(([key]) => key === item.status)?.[1] || 'Researching';
       const applicantName = String(item.applicant || '').trim();
@@ -1041,7 +1055,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     focus.append(h('header', {class: 'campaign-focus-heading'}, headerFunder, headerName, programme),
       h('dl', {class: 'campaign-opportunity-facts'},
         h('div', {}, h('dt', {}, 'Recorded funding amount / ceiling'), maximum),
-        h('div', {}, deadlineLabel, deadlineValue),
+        h('div', {}, deadlineLabel, deadlineValue), recordedDeadline,
         h('div', {}, h('dt', {}, 'Application lead'), workflowValue),
         h('div', {}, h('dt', {}, 'Decision timing'), decisionValue),
         h('div', {}, h('dt', {}, 'Status'), statusValue)),

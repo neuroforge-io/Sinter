@@ -89,6 +89,67 @@ def portfolio_fixture(count: int, title: str) -> dict:
 
 
 class FundingChecks(CampaignChecks):
+    def recorded_deadline_visibility(self, page):
+        from playwright.sync_api import expect
+
+        document = fixture("Fictional recorded deadline visibility")
+        row = document["opportunities"][0]
+        row.update(application_window="unknown", deadline="2099-01-02",
+                   window_checked_at="", window_source_quote="")
+        document["opportunities"] = [row]
+        self.import_fixture(page, document)
+        baseline = self.update(page)
+        saved = self.save_snapshot(page)
+        page.get_by_role("tab", name="Opportunities", exact=True).click()
+        facts = page.locator(".campaign-opportunity-facts")
+        rail = page.locator(".campaign-opportunity")
+        date_labels = facts.locator("dt:visible").filter(
+            has_text=re.compile(r"^Recorded closing date$"))
+        expect(date_labels).to_have_count(1)
+        expect(facts).to_contain_text("2 Jan 2099")
+        expect(facts).to_contain_text("Application window not verified")
+        expect(rail).to_contain_text("Application window not verified")
+        assert self.app.campaigns.get(saved["id"]) == saved
+        details = page.locator(".campaign-opportunity-editor")
+        if details.get_attribute("open") is None:
+            details.locator("summary").click()
+        date_input = page.get_by_label("Recorded closing date", exact=True)
+        checked_input = page.get_by_label("Window wording checked on", exact=True)
+        window_input = page.get_by_label("Application window", exact=True)
+        status_input = page.get_by_label("Opportunity status", exact=True)
+        expect(checked_input).to_have_value("")
+        date_input.fill("")
+        expect(date_labels).to_have_count(0)
+        date_input.fill("2000-01-02")
+        expect(date_labels).to_have_count(1)
+        expect(facts).to_contain_text("2 Jan 2000")
+        expect(rail).not_to_contain_text("Recorded closing date passed")
+        for kind in ("fixed", "rolling", "unknown"):
+            window_input.select_option(kind)
+            expect(date_labels).to_have_count(0 if kind == "rolling" else 1)
+            expect(checked_input).to_have_value("")
+            if kind == "unknown":
+                expect(facts).to_contain_text("Application window not verified")
+        for status in ("submitted", "closed", "not_pursuing", "open"):
+            status_input.select_option(status)
+            expect(date_labels).to_have_count(1)
+            if status in ("submitted", "closed"):
+                expect(facts).not_to_contain_text("Application window not verified")
+            else:
+                expect(facts).to_contain_text("Application window not verified")
+        date_input.fill("2099-01-02")
+        restored = self.save_snapshot(page)
+        assert restored["document"] == saved["document"]
+        assert self.update(page) == baseline
+        page.reload()
+        expect(page.get_by_label("Campaign name", exact=True)).to_have_value(saved["document"]["title"])
+        page.get_by_role("tab", name="Opportunities", exact=True).click()
+        expect(page.locator(".campaign-opportunity-facts")).to_contain_text(
+            "Application window not verified")
+        expect(page.locator(".campaign-opportunity-facts")).to_contain_text("2 Jan 2099")
+        assert self.app.campaigns.get(saved["id"]) == restored
+        self.screenshot(page, "recorded-deadline-unverified", full_page=True)
+
     def submission_history_labels_separate_cash_and_other_events(self, page):
         from playwright.sync_api import expect
 
@@ -624,6 +685,7 @@ def main(argv: list[str] | None = None) -> None:
                             "portfolio_view_retains_full_records_and_totals",
                             "portfolio_add_limit_keeps_backup",
                             "submission_history_labels_separate_cash_and_other_events",
+                            "recorded_deadline_visibility",
                         ):
                             checks.check("funding-" + name, getattr(checks, name))
                     finally:
