@@ -19,6 +19,7 @@ from types import MappingProxyType
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from tools import rc4_host_tools as host_tools  # noqa: E402
 from tools.published_rc3_fixture import PUBLISHED_E  # noqa: E402
 from tools.qualified_priors import QUALIFIED_PRIORS  # noqa: E402
 
@@ -76,31 +77,63 @@ RUN_ORDER = (
 )
 
 
-def host_identity(chromium, browser_tmp):
-    """Pin the private host runtime without admitting any installed app result."""
+def observe_host_identity(chromium, browser_tmp):
+    """Observe each selected actual host file independently, including failures."""
     import importlib.metadata
+    import shutil
 
-    chromium = Path(chromium)
-    require(
-        chromium.is_absolute() and chromium == chromium.resolve(),
-        "Use the exact regular host Chromium path.",
-    )
-    raw = regular(chromium, 512 * 1024 * 1024)
-    python = Path(sys.executable)
-    executable = python.resolve()
-    return {
-        "chromium": str(chromium),
-        "browser_tmp": str(browser_tmp),
-        "chromium_bytes": len(raw),
-        "chromium_sha256": sha(raw),
-        "python": str(python),
-        "python_realpath": str(executable),
-        "python_sha256": sha(regular(executable)),
-        "playwright_version": importlib.metadata.version("playwright"),
-        "collector_source_sha256": sha(
-            regular(Path(__file__).with_name("rc4_replacement_probe.py"))
+    def driver_root():
+        import playwright
+
+        return Path(playwright.__file__).resolve(strict=True).parent / "driver"
+
+    # Every discovery and file read stays in its independent callback, so one
+    # removed/redirected file or missing library cannot skip other observations.
+    # Fixed collector environment excludes PLAYWRIGHT_NODEJS_PATH and selects
+    # this installed library's bundled Node/CLI.
+    callbacks = {
+        "docker": lambda: host_tools.fingerprint(
+            Path(shutil.which("docker", path=os.defpath) or "/missing-docker").resolve(
+                strict=True
+            )
         ),
+        "chromium": lambda: host_tools.fingerprint(Path(chromium)),
+        "python": lambda: host_tools.fingerprint(Path(sys.executable).resolve()),
+        "playwright_node": lambda: host_tools.fingerprint(
+            (driver_root() / "node").resolve()
+        ),
+        "driver_cli": lambda: host_tools.fingerprint(
+            (driver_root() / "package/cli.js").resolve()
+        ),
+        "collector_source": lambda: host_tools.fingerprint(
+            Path(__file__).with_name("rc4_replacement_probe.py").resolve()
+        ),
+        "playwright_version": lambda: importlib.metadata.version("playwright"),
     }
+    records, errors, primary = host_tools.observe(callbacks)
+    return (
+        {
+            "tools": {name: records[name] for name in host_tools.TOOLS},
+            "browser_tmp": str(browser_tmp),
+            "python_launch": str(Path(sys.executable)),
+            **{
+                name: records[name]
+                for name in ("driver_cli", "collector_source", "playwright_version")
+            },
+        },
+        errors,
+        primary,
+    )
+
+
+def host_identity(chromium, browser_tmp):
+    """Require a complete actual before snapshot; no app admission is implied."""
+    result, errors, primary = observe_host_identity(chromium, browser_tmp)
+    if primary is not None:
+        primary.host_observation_errors = errors
+        raise primary
+    host_tools.validate_host_snapshot(result)
+    return result
 
 
 def collector_argv(folder, chromium, phase, browser_tmp):
@@ -1788,16 +1821,20 @@ def verify(args):
                 "host",
                 "collectors",
             }
-            and outer["schema"] == "sinter-rc4-replacement-owner/v1"
+            and outer["schema"] == "sinter-rc4-replacement-owner/v2"
             and outer["failure"] is None
             and outer["cleanup_failure"] is None
             and outer["owner_sha256"] == args.outer_owner_sha256
             and equal(outer["pins"], pins),
             "Actual outer owner/input mount identity differs.",
         )
+        host_tools.validate_host_pair(outer["host"])
         require(
-            equal(outer["host"], host_identity(args.chromium, args.owned_root / "t")),
-            "Private host collector/browser runtime identity differs.",
+            equal(
+                outer["host"]["before"],
+                host_identity(args.chromium, args.owned_root / "t"),
+            ),
+            "Private actual host collector/browser runtime identity differs.",
         )
         owned = shared_contract.validate_lifecycle(
             outer["commands"], pins, outer_argv, MOUNTS

@@ -10,6 +10,12 @@ qualification and does not change any published RC3 asset or historical receipt.
   Independent and root source checks pass; full hosted and installed qualification
   remain separate gates.
 
+- Bind native and replacement qualification to independently read before/after
+  host-tool identities. Keep executable payloads outside the bounded evidence
+  bundle and preserve the trusted host/library boundary. Source checks pass;
+  native diagnostic-publication limitations and actual installed gates remain
+  explicit repair and qualification work.
+
 - Allow installed-workflow qualification to use an explicitly owned browser
   session. Keep the existing UI journey, omitted defaults and historical receipt
   contracts intact. Independent source checks and all six hosted Python/platform

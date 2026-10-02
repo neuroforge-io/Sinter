@@ -1755,3 +1755,41 @@ Other recovery/replacement portability failures remain recorded, including an
 unexplained Windows idle-relay cleanup refusal. This new test-only adoption does
 not erase those failures or qualify an installer. The user app remains closed;
 no model request or release publication occurs.
+
+### Before/after host-tool observations, 2 October
+
+Independent root review
+`c054739c1a9c8d373cd6653e9a2d63e0d1190e71209c2a94fbbf8d3d3d229e14`
+accepts the bounded eight-path source change against frozen `427baeeb`. Its
+453-file base and 456-file proposal conserve 448 unowned original files and
+canonical Git modes. The exact patch replays; 805 canonical source checks pass
+without skips in 14.84 seconds. A declared composition with seven later main
+paths passes 1,049 unique source checks without skips in 71.15 seconds. These
+are overlapping source runs, not additive installed or performance evidence.
+
+The native browser and replacement outer records require new explicit schemas
+with independently read before/after fingerprints. Missing, changed or untyped
+after identities refuse; actual selected Docker, Chromium, Python and Playwright
+Node/CLI identities stay within the declared trusted host/library/daemon boundary.
+Host executable payloads are not copied, and the public 64 MiB member/256 MiB
+bundle limits remain unchanged. Source fingerprint reads have a separate bounded
+limit and confer no executable, library or daemon byte closure.
+
+Twelve separate independent controls pass. Two demonstrate remaining limitations,
+not successful qualification: native failed sidecar writes retain the first
+exception and later errors but carry no complete unpublished records; the unchanged
+final native owner-run diagnostic write can obscure the earlier failed context.
+Only replacement currently carries complete unpublished bytes through its explicit
+failure object. Both native boundaries remain repair work before a complete
+failure-conservation claim. The narrow acceptance does not mark them fixed.
+
+Root retains 10,304 author/reviewer byte/hash references. The author's sealed
+inventory remains unchanged. Initial reviewer comparisons incorrectly treated tar
+permission metadata as canonical Git modes; the corrected comparison uses
+`git ls-tree` and preserves the original refusal. Twenty generated compiled caches
+match their exact sources and remain in the two reviewer runtime views; those
+views are explicitly not closed release source trees. No source bytes, assertions
+or deadlines are altered to conceal either refusal. Static, formatting and Python
+3.10 grammar checks pass. Actual final installed execution, bounded public inventory,
+release authorization and publication remain pending. The physical user app stays
+closed and no Sinter provider call is made.

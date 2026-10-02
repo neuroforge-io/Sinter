@@ -694,6 +694,7 @@ def test_canonical_unicode_json_writer_and_fixed_fixture_keep_originals(tmp_path
 def browser_fixture(inner):
     scoped = json.loads(old.stream_bytes(inner["seed"][1]["stdout"]))["result"]
     return {
+        "schema": "sinter-rc4-native-handoff-browser/v2",
         "origin": "http://127.0.0.1:32124",
         "relay_port": 32124,
         "debug_port": 32125,
@@ -738,12 +739,14 @@ def browser_fixture(inner):
         "chromium": {
             "path": str(contract.HOST_CHROMIUM),
             "sha256": "a" * 64,
+            "sha256_after": "a" * 64,
             "version": "fixture",
         },
         "driver_process": {
             "pid": 903,
             "path": "/fixed/playwright/driver/node",
             "sha256": "b" * 64,
+            "sha256_after": "b" * 64,
         },
         "chromium_process": child(
             contract.chromium_argv(PurePosixPath("/owned/client/browser-home")), pid=901

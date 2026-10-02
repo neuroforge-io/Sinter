@@ -64,11 +64,14 @@ class Cleanup:
 
     def __init__(self):
         self.errors = []
+        self.first_error = None
 
     def call(self, role, callback):
         try:
             return callback()
         except BaseException as error:
+            if self.first_error is None:
+                self.first_error = error
             self.errors.append(
                 {
                     "role": role,
@@ -865,6 +868,7 @@ def browser(root, executable):
 
     wait_file(root / "state.json", lambda v: v.get("phase") == "ready", 90)
     proof = {
+        "schema": "sinter-rc4-native-handoff-browser/v2",
         "page_errors": [],
         "external_requests": 0,
         "quit_posts": 0,
@@ -874,6 +878,7 @@ def browser(root, executable):
         "chromium": {
             "path": str(executable),
             "sha256": native.binary_digest(executable),
+            "sha256_after": None,
         },
     }
     chrome, context, relay, thread = None, None, None, None
@@ -924,6 +929,7 @@ def browser(root, executable):
             "pid": driver_pid,
             "path": str(driver_path),
             "sha256": native.binary_digest(driver_path),
+            "sha256_after": None,
         }
         chrome_row = proof["chromium_process"] = {
             "argv": contract.chromium_argv(browser_home)
@@ -1233,6 +1239,14 @@ def browser(root, executable):
                 else False,
             },
         )
+        proof["chromium"]["sha256_after"] = clean(
+            "observe-chromium-after", lambda: native.binary_digest(executable)
+        )
+        if "driver_process" in proof:
+            proof["driver_process"]["sha256_after"] = clean(
+                "observe-driver-after",
+                lambda: native.binary_digest(Path(proof["driver_process"]["path"])),
+            )
         if cleanup.errors:
             proof["cleanup_errors"] = cleanup.errors
         clean(
@@ -1246,9 +1260,8 @@ def browser(root, executable):
     if primary is not None:
         raise primary
     if cleanup.errors:
-        raise RuntimeError(
-            "Owned browser cleanup failed; every diagnostic was retained."
-        )
+        cleanup.first_error.cleanup_errors = cleanup.errors
+        raise cleanup.first_error
     return proof
 
 
@@ -1431,6 +1444,54 @@ def handoff_lifecycle(root, environment, pins, rows, client_rows, cleanup, execu
     return old.validate_lifecycle(rows, pins, contract.creation_argv)["container_id"]
 
 
+def observe_handoff_outer(
+    root, environment, pins, commands, client_rows, cleanup, chromium, client, records
+):
+    """Retain actual Docker-after and all sidecars without masking the first error."""
+    primary, identifier = None, None
+    observations = Cleanup()
+    try:
+        identifier = handoff_lifecycle(
+            root, environment, pins, commands, client_rows, cleanup, chromium
+        )
+    except BaseException as error:
+        primary = error
+    finally:
+        client["sha256_after"] = observations.call(
+            "observe-docker-after", lambda: native.binary_digest(Path(client["path"]))
+        )
+        observations.call(
+            "retain-client-commands",
+            lambda: write_json(root / "client-commands.json", client_rows),
+        )
+        outer = {
+            "schema": "sinter-owned-native-handoff-container/v1",
+            "commands": commands,
+            "cleanup_commands": cleanup,
+            "docker_client": client,
+            "source_manifest": records,
+            "source_manifest_sha256": observations.call(
+                "observe-source-manifest", lambda: owner.records_hash(records)
+            ),
+            "tools": observations.call(
+                "observe-reviewed-tools",
+                lambda: {name: records[name] for name in contract.FILES},
+            ),
+        }
+        if observations.errors:
+            outer["observation_errors"] = observations.errors
+        observations.call(
+            "retain-handoff-outer", lambda: write_json(root / "outer.json", outer)
+        )
+    if primary is not None:
+        primary.host_observation_errors = observations.errors
+        raise primary
+    if observations.first_error is not None:
+        observations.first_error.host_observation_errors = observations.errors
+        raise observations.first_error
+    return identifier
+
+
 def run(args):
     old.require(platform.system() == "Linux", "Only the Linux host route is supported.")
     old.require(not os.path.lexists(args.output), "Use a new private output root.")
@@ -1528,25 +1589,17 @@ def run(args):
             args.package_receipt.name,
         )
         pins["qualification"] = args.qualification
-        try:
-            identifier = handoff_lifecycle(
-                root, environment, pins, commands, client_rows, cleanup, args.chromium
-            )
-        finally:
-            client["sha256_after"] = native.binary_digest(Path(client["path"]))
-            write_json(root / "client-commands.json", client_rows)
-            write_json(
-                root / "outer.json",
-                {
-                    "schema": "sinter-owned-native-handoff-container/v1",
-                    "commands": commands,
-                    "cleanup_commands": cleanup,
-                    "docker_client": client,
-                    "source_manifest": records,
-                    "source_manifest_sha256": owner.records_hash(records),
-                    "tools": {name: records[name] for name in contract.FILES},
-                },
-            )
+        identifier = observe_handoff_outer(
+            root,
+            environment,
+            pins,
+            commands,
+            client_rows,
+            cleanup,
+            args.chromium,
+            client,
+            records,
+        )
         admission = contract.verify(args)
         old.exact(
             admission["handoff_container_id"],
@@ -1556,6 +1609,8 @@ def run(args):
         context.update(passed=True, admission=admission)
     except BaseException as error:
         context.update(error_type=type(error).__name__, error=str(error)[:4096])
+        if hasattr(error, "host_observation_errors"):
+            context["host_observation_errors"] = error.host_observation_errors
     finally:
         write_json(args.output / "owner-run.json", context)
     return 0 if context["passed"] is True else 1
