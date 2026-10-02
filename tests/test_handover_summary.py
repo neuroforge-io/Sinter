@@ -26,13 +26,14 @@ def node(*arguments):
         [executable, *arguments],
         cwd=ROOT,
         capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="strict",
         timeout=30,
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    return result.stdout
+    # Decode in the caller: Windows reads pipes on background threads, where
+    # text-mode decoding failures do not propagate through subprocess.run().
+    stdout = result.stdout.decode("utf-8", errors="strict")
+    stderr = result.stderr.decode("utf-8", errors="strict")
+    assert result.returncode == 0, stdout + stderr
+    return stdout
 
 
 def test_reviewed_summary_compiler_and_replacement_boundaries():
@@ -148,17 +149,40 @@ def test_stale_record_notice_survives_word_export_without_changing_original_fiel
 
 
 def test_node_unicode_channel_ignores_an_ansi_locale_default(monkeypatch):
-    # Simulate the Windows default decoder, while using an actual Node pipe.
-    # This does not inspect encoding kwargs or substitute emitted bytes.
-    monkeypatch.setattr(subprocess, "_text_encoding", lambda: "cp1252")
-    result = json.loads(
-        node(
-            "-e",
-            "process.stdout.write(JSON.stringify({text: "
-            "String.fromCodePoint(0x2014, 0x2013, 0xe9, 0x1f41d, 0x65, 0x301)}))",
-        )
+    # Simulate an ANSI default at the public process boundary on every supported
+    # Python version, retaining real Node output and actual pipe decoding.
+    real_popen = subprocess.Popen
+
+    def ansi_default_popen(*args, **kwargs):
+        if (
+            kwargs.get("text")
+            or kwargs.get("universal_newlines")
+            or kwargs.get("errors")
+        ) and kwargs.get("encoding") is None:
+            kwargs["encoding"] = "cp1252"
+        return real_popen(*args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "Popen", ansi_default_popen)
+    script = (
+        "process.stdout.write(JSON.stringify({text: "
+        "String.fromCodePoint(0x2014, 0x2013, 0xe9, 0x1f41d, 0x65, 0x301)}))"
     )
-    assert result == {"text": "—–é🐝e\u0301"}
+    expected = {"text": "—–é🐝e\u0301"}
+    result = json.loads(node("-e", script))
+    control = subprocess.run(
+        [
+            shutil.which("node"),
+            "-e",
+            "process.stdout.write(String.fromCodePoint(0xe9))",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert control.returncode == 0, control.stdout + control.stderr
+    assert control.stdout == "Ã©"
+    assert result == expected
 
 
 @pytest.mark.parametrize("channel", ["stdout", "stderr"])
