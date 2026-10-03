@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import inspect
 import io
 import json
+import os
 import shutil
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -26,10 +29,10 @@ def node(*arguments):
         [executable, *arguments],
         cwd=ROOT,
         capture_output=True,
+        text=False,
         timeout=30,
     )
-    # Decode in the caller: Windows reads pipes on background threads, where
-    # text-mode decoding failures do not propagate through subprocess.run().
+    # Decode on the calling thread: Windows reads captured pipes in threads.
     stdout = result.stdout.decode("utf-8", errors="strict")
     stderr = result.stderr.decode("utf-8", errors="strict")
     assert result.returncode == 0, stdout + stderr
@@ -148,6 +151,39 @@ def test_stale_record_notice_survives_word_export_without_changing_original_fiel
     assert "Original evidence and historical wording remain unchanged" in text
 
 
+def test_node_unicode_channel_with_utf8_mode_disabled():
+    if shutil.which("node") is None:
+        pytest.skip("Node.js is required for browser-module source checks")
+    # Use an actual stdlib child and Node pipe, without a private Python helper.
+    # A platform may keep a UTF-8 locale; record it instead of assuming ANSI.
+    program = (
+        "import io, json, shutil, subprocess, sys\n"
+        "from pathlib import Path\n"
+        f"ROOT = Path({str(ROOT)!r})\n"
+        + inspect.getsource(node)
+        + "\nvalue = json.loads(node('-e', "
+        "'process.stdout.write(JSON.stringify({text: "
+        "String.fromCodePoint(0x2014, 0x2013, 0xe9, 0x1f41d, 0x65, 0x301)}))'))\n"
+        "print(json.dumps({'value': value, 'utf8_mode': sys.flags.utf8_mode, "
+        "'locale_encoding': "
+        "io.TextIOWrapper(io.BytesIO(), encoding='locale').encoding}, "
+        "ensure_ascii=True))\n"
+    )
+    environment = dict(os.environ)
+    environment.update(LANG="C", LC_ALL="C", PYTHONUTF8="0", PYTHONCOERCECLOCALE="0")
+    result = subprocess.run(
+        [sys.executable, "-X", "utf8=0", "-c", program],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        timeout=45,
+    )
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="strict")
+    payload = json.loads(result.stdout.decode("utf-8", errors="strict"))
+    assert payload["utf8_mode"] == 0, payload
+    assert payload["value"] == {"text": "—–é🐝e\u0301"}, payload
+
+
 def test_node_unicode_channel_ignores_an_ansi_locale_default(monkeypatch):
     # Simulate an ANSI default at the public process boundary on every supported
     # Python version, retaining real Node output and actual pipe decoding.
@@ -187,5 +223,7 @@ def test_node_unicode_channel_ignores_an_ansi_locale_default(monkeypatch):
 
 @pytest.mark.parametrize("channel", ["stdout", "stderr"])
 def test_node_unicode_channel_refuses_invalid_utf8_without_replacement(channel):
-    with pytest.raises(UnicodeDecodeError):
+    with pytest.raises(UnicodeDecodeError) as error:
         node("-e", f"process.{channel}.write(Buffer.from([0xff]))")
+    assert error.value.object == b"\xff"
+    assert error.value.encoding == "utf-8"

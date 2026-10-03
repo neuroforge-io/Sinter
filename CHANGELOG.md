@@ -12,9 +12,10 @@ original installed gates must pass before a separate Linux preview is admitted.
   The five-item fictional opening now fits its first rendered page. Longer
   summaries remain multipage; evidence-appendix pagination still needs polish.
 
-- Decode the handover test's Node output explicitly as strict UTF-8, preserving
-  Unicode passage labels and Word navigation on platforms with a legacy default
-  encoding. Check the actual saved snapshot and newer unsaved wording in browser
+- Decode the handover test's captured Node bytes as strict UTF-8 on the caller
+  thread, preserving Unicode passage labels and surfacing invalid-byte errors
+  across Python versions and Windows pipe readers. Check the actual saved
+  snapshot and newer unsaved wording in browser
   recovery. Keep the original hosted failures; fresh qualification is required.
 
 - Add a reviewed opening summary to source-only volunteer handovers. Enter status

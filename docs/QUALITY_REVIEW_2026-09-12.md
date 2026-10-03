@@ -2377,3 +2377,41 @@ errors or skips. Required correctness lint, touched-file formatting, public
 boundary checks and Python 3.10 grammar for all 286 Python paths pass. The
 deterministic local self-audit records no network requests. These checks do
 not substitute for the fresh exact-source hosted and installed gates.
+
+### 3 October: actual cross-version pipe boundary
+
+Successor `f9de1db12fe22521485d0600bddeb208679e6825` hosted Quality
+run `37043622354`, attempt 1, ended with seven successful jobs, four failed
+jobs and one skipped job. Its original 5,172 cases per platform, complete logs,
+warnings and artifacts remain retained. All six platforms passed the original
+eight-bookmark/22-link Word check and the 19 scoped-layout cases. Packaging
+was skipped; this whole source qualification remains failed.
+
+The new positive regression assumed a private Python helper that is absent
+in 3.10. Both Windows versions also emitted the intended invalid byte, but
+their subprocess reader threads raised the decoding exception without passing
+it to the caller. The original warnings contain the exact `0xff` byte; they
+were not suppressed or treated as successful caller validation.
+
+The source-test helper now captures actual bytes and decodes both channels as
+strict UTF-8 on the calling thread. The positive case runs the exact helper in
+a real Python child with UTF-8 mode and locale coercion disabled, recording the
+observed codec rather than patching private internals. Both invalid-channel
+cases require the caller's exception to retain the original byte. All four
+original scenarios and the fixture, storage and navigation checks remain intact.
+Seven source cases pass; the literal earlier decoder fails as expected.
+
+A separate cached, network-free container exercised the actual boundary once
+with Python 3.10.12 and an observed ASCII locale. Unicode remained exact, both
+invalid channels reached the caller, and the original default decoder failed
+on the real Unicode bytes. Complete streams, normal exit, container removal,
+full-ID absence and unchanged inputs/image were retained. This proves that
+source boundary; it does not replace the complete fresh Python 3.10, Windows,
+installed-app or release qualification. The unexecuted earlier build plans
+remain held, and the user's closed workspace remains untouched.
+
+The reconciled source also retains the independently pushed public `Popen`
+ANSI-default simulation and its real-pipe control. Both positive paths run,
+with the stronger original-byte checks on each invalid channel. The remote
+macOS 15 runner update is retained. Fresh hosted checks must qualify this
+combined source; no prior result is promoted to it.
