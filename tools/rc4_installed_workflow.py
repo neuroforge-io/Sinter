@@ -428,9 +428,6 @@ class Controller:
             "sigterm_sent": False,
         }
         self.rows.append(row)
-        row["cmdline"] = contract.full_record(
-            contract.regular(Path(f"/proc/{self.process.pid}/cmdline"), 4096)
-        )
         deadline = time.monotonic() + 25
         while not capture.exists():
             contract.require(
@@ -441,6 +438,20 @@ class Controller:
         raw = contract.regular(capture, 1024)
         _, self.inner.port = inner_address(raw.decode("ascii"))
         row.update(opener=contract.full_record(raw), port=self.inner.port)
+        contract.require(
+            self.process.poll() is None,
+            "Installed app exited before identity acquisition.",
+        )
+        cmdline = contract.regular(Path(f"/proc/{self.process.pid}/cmdline"), 4096)
+        row["cmdline"] = contract.full_record(cmdline)
+        contract.require(
+            cmdline == b"\0".join(part.encode() for part in argv) + b"\0",
+            "Actual app cmdline differs.",
+        )
+        contract.require(
+            self.process.poll() is None,
+            "Installed app exited after identity acquisition.",
+        )
         write_json(
             self.runtime / "state.json",
             {

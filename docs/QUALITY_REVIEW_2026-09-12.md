@@ -2415,3 +2415,34 @@ ANSI-default simulation and its real-pipe control. Both positive paths run,
 with the stronger original-byte checks on each invalid channel. The remote
 macOS 15 runner update is retained. Fresh hosted checks must qualify this
 combined source; no prior result is promoted to it.
+
+### 3 October: installed startup identity acquisition
+
+Exact source `42ea64a8e723240b2b26f3e3af7ed45ed9ddcd13` completed all
+twelve jobs in hosted Quality run `37084753205`, attempt 1. The original
+portable and native builds passed their mechanical checks. These observations
+did not qualify the installed release.
+
+Its one original installed workflow failed with `Actual app cmdline differs.`
+The second launch retained an empty process-command snapshot; the first retained
+the exact 73-byte command. Both launches later quit through the interface with
+exit 0, complete streams, closed listeners and absent process groups. The browser
+producer reported 22 checks passing, but the owner remained failed and the final
+generic interface verifier was not reached. Four later gate plans were not run.
+The failed records and partial outputs remain intact.
+
+The producer had sampled identity immediately after process creation, before
+bounded opener readiness. The correction takes one complete snapshot after the
+validated opener, with a live-process check before and after, and immediately
+requires the exact NUL-delimited command before publishing running state. It
+does not retry an empty reading, substitute expected bytes, relax the final
+verifier or change the startup limit, lifecycle or cleanup requirements. Fresh
+exact-source hosted, build and installed qualification remain required. The
+user's normally closed app and saved workspace remain untouched.
+
+The affected module passes 187 source cases with no failures, errors or skips,
+including 24 new controls for readiness ordering, malformed or missing openers,
+early process exit, exact original command bytes, read failures and independent
+cleanup. The initial 23-case selection overlaps that total. Correctness lint,
+touched-file formatting and Python 3.10 grammar pass. These injected controls
+do not substitute for an actual installed run.

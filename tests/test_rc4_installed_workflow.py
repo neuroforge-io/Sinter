@@ -337,6 +337,345 @@ def test_controller_metadata_read_fault_is_retained_without_start_or_masking(
     assert retained["cmdline"] is None and retained["failure"]["message"] == str(first)
 
 
+@pytest.fixture
+def inert_app_identity(tmp_path, monkeypatch):
+    """Real retained files, with app, relay, thread and time operations injected."""
+    from tools import installed_workflow_browser as browser
+    from tools import native_window_smoke as native
+    from tools import rc4_installed_recovery as recovery
+
+    (tmp_path / "process").mkdir()
+    events, cleanup, publications = [], [], []
+    state = {
+        "opener": b"http://127.0.0.1:12345",
+        "ready_after": 1,
+        "sleeps": 0,
+        "elapsed": 0,
+        "opener_validated": False,
+        "cmdline_read": False,
+        "cmdline": None,
+        "read_error": None,
+        "dead": None,
+        "stopped": False,
+        "close_error": None,
+    }
+    capture = tmp_path / "launch-url.txt"
+    notice = b"SOURCE inert browser-mode notice\n"
+
+    class Process:
+        pid = 87655
+
+        def poll(self):
+            events.append("poll")
+            if (
+                state["stopped"]
+                or state["dead"] == "waiting"
+                or state["dead"] == "before"
+                and state["opener_validated"]
+                or state["dead"] == "after"
+                and state["cmdline_read"]
+            ):
+                return 0
+            return None
+
+    def spawn(argv, **kwargs):
+        events.append("spawn")
+        state["spawn"] = {"argv": argv, **kwargs}
+        kwargs["stdout"].write(b"Sinter local workspace: http://127.0.0.1:12345\n")
+        kwargs["stderr"].write(notice)
+        return Process()
+
+    ordinary_read, ordinary_address = contract.regular, browser.inner_address
+    ordinary_write = producer.write_json
+
+    def read(path, limit):
+        if Path(path) == Path("/proc/self/cmdline"):
+            return b"SOURCE\0inert-controller\0"
+        if Path(path) == Path(f"/proc/{Process.pid}/cmdline"):
+            assert limit == 4096
+            events.append("cmdline")
+            state["cmdline_read"] = True
+            if state["read_error"] is not None:
+                raise state["read_error"]
+            argv = controller.rows[-1]["argv"]
+            expected = b"\0".join(part.encode() for part in argv) + b"\0"
+            if state["cmdline"] is not None:
+                return state["cmdline"](expected, argv)
+            # The former pre-read sees empty bytes; the sole ready read is exact.
+            return expected if state["opener_validated"] else b""
+        if Path(path) == capture:
+            assert limit == 1024
+            events.append("opener")
+        return ordinary_read(path, limit)
+
+    def address(value):
+        try:
+            result = ordinary_address(value)
+        except ValueError as error:
+            state["opener_error"] = error
+            raise
+        events.append("validated-opener")
+        state["opener_validated"] = True
+        return result
+
+    def sleep(seconds):
+        assert seconds == 0.02
+        events.append("sleep")
+        state["sleeps"] += 1
+        state["elapsed"] += seconds
+        if state["sleeps"] == state["ready_after"]:
+            capture.write_bytes(state["opener"])
+
+    def write(path, value):
+        if Path(path) == tmp_path / "state.json":
+            publications.append(value["phase"])
+            events.append("state:" + value["phase"])
+        ordinary_write(path, value)
+
+    def close_relay():
+        cleanup.append("relay-close")
+        if state["close_error"] is not None:
+            raise state["close_error"]
+
+    relay = SimpleNamespace(
+        serve_forever=lambda: None,
+        port=0,
+        idle=lambda: True,
+        shutdown=lambda: cleanup.append("relay-shutdown"),
+        server_close=close_relay,
+    )
+    monkeypatch.setattr(recovery, "owned_inner_relay", lambda root: relay)
+    controller = producer.Controller(
+        tmp_path, {"notice_base64": base64.b64encode(notice).decode()}
+    )
+    controller.thread = SimpleNamespace(
+        start=lambda: cleanup.append("thread-start"),
+        is_alive=lambda: False,
+        join=lambda **kwargs: cleanup.append("relay-join"),
+    )
+
+    def stop(process, row):
+        cleanup.append("app-stop")
+        state["stopped"] = True
+        row.update(exit_code=0, owned_group_remaining=False)
+
+    monkeypatch.setattr(producer.subprocess, "Popen", spawn)
+    monkeypatch.setattr(producer.time, "monotonic", lambda: state["elapsed"])
+    monkeypatch.setattr(producer.time, "sleep", sleep)
+    monkeypatch.setattr(contract, "regular", read)
+    monkeypatch.setattr(browser, "inner_address", address)
+    monkeypatch.setattr(producer, "write_json", write)
+    monkeypatch.setattr(producer, "closed_port", lambda port: True)
+    monkeypatch.setattr(native, "stop_process", stop)
+    monkeypatch.setattr(native, "group_alive", lambda pid: False)
+    monkeypatch.setattr(producer.os, "geteuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(producer.os, "getegid", lambda: 1000, raising=False)
+    yield SimpleNamespace(
+        controller=controller,
+        state=state,
+        events=events,
+        cleanup=cleanup,
+        publications=publications,
+        root=tmp_path,
+    )
+    for stream in controller.streams.values():
+        stream.close()
+
+
+def test_app_identity_acquired_once_after_ready_before_running(inert_app_identity):
+    proof = inert_app_identity
+    proof.controller.launch(1)
+    assert proof.events == [
+        "spawn",
+        "poll",
+        "sleep",
+        "opener",
+        "validated-opener",
+        "poll",
+        "cmdline",
+        "poll",
+        "state:running",
+    ]
+    row = proof.controller.rows[0]
+    assert contract.full(row["cmdline"], 4096) == (
+        b"\0".join(part.encode() for part in row["argv"]) + b"\0"
+    )
+    assert proof.state["spawn"] == {
+        "argv": row["argv"],
+        "env": producer.app_environment(),
+        "stdin": producer.subprocess.DEVNULL,
+        "stdout": proof.controller.streams["stdout"],
+        "stderr": proof.controller.streams["stderr"],
+        "start_new_session": True,
+    }
+    assert proof.publications == ["running"]
+
+
+@pytest.mark.parametrize(
+    "opener",
+    [
+        b"",
+        b"http://127.0.0.1:12345\n",
+        b"http://127.0.0.1:0",
+        b"http://127.0.0.1:65536",
+        b"http://localhost:12345",
+        b"http://127.0.0.1:12345/path",
+        b"\xff",
+    ],
+)
+def test_app_identity_invalid_opener_never_reads_or_publishes(
+    inert_app_identity, opener
+):
+    proof = inert_app_identity
+    proof.state["opener"] = opener
+    with pytest.raises((ValueError, UnicodeDecodeError)):
+        proof.controller.launch(1)
+    assert "cmdline" not in proof.events and proof.publications == []
+    assert "cmdline" not in proof.controller.rows[0]
+
+
+def test_app_identity_invalid_opener_keeps_first_error_during_cleanup(
+    inert_app_identity,
+):
+    proof = inert_app_identity
+    proof.state["opener"] = b"http://127.0.0.1:12345/not-local-root"
+    with pytest.raises(ValueError) as raised:
+        proof.controller.run()
+    assert raised.value is proof.state["opener_error"]
+    assert "cmdline" not in proof.events and "running" not in proof.publications
+    assert (proof.root / "launch-url.txt").read_bytes() == proof.state["opener"]
+    assert proof.cleanup == [
+        "thread-start",
+        "app-stop",
+        "relay-shutdown",
+        "relay-close",
+        "relay-join",
+    ]
+    assert all(stream.closed for stream in proof.controller.streams.values())
+    retained = producer.read_json(proof.root / "controller.json")
+    assert retained["failure"] == {"type": "ValueError", "message": str(raised.value)}
+    assert len(retained["cleanup_attempts"]) == 6
+    assert retained["cleanup_errors"] == [
+        {"resource": "app final reap", "type": "KeyError", "message": "'opener'"}
+    ]
+    app = retained["rows"][0]
+    assert all(
+        row["succeeded"] is True for row in app["cleanup_observation"]["attempts"]
+    )
+    assert app["streams_complete"] is True
+    contract.streams(app, proof.root / "process/run-1", directory=True)
+
+
+def test_app_identity_missing_opener_retains_fixed_timeout(inert_app_identity):
+    proof = inert_app_identity
+    proof.state["ready_after"] = None
+    with pytest.raises(ValueError, match="failed before fixed opener capture"):
+        proof.controller.launch(1)
+    assert 25 <= proof.state["elapsed"] < 25.02
+    assert "opener" not in proof.events and "cmdline" not in proof.events
+    assert proof.publications == []
+
+
+@pytest.mark.parametrize("stage", ["waiting", "before", "after"])
+def test_app_identity_dead_child_never_publishes_running(inert_app_identity, stage):
+    proof = inert_app_identity
+    proof.state["dead"] = stage
+    with pytest.raises(ValueError, match="failed before|exited before|exited after"):
+        proof.controller.launch(1)
+    assert proof.events.count("cmdline") == int(stage == "after")
+    assert ("cmdline" in proof.controller.rows[0]) is (stage == "after")
+    assert proof.publications == []
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["empty", "missing", "unterminated", "extra", "trailing", "changed", "reordered"],
+)
+def test_app_identity_wrong_original_bytes_retained_without_retry_or_publication(
+    inert_app_identity, mutation
+):
+    proof = inert_app_identity
+    observed = []
+
+    def wrong(expected, argv):
+        parts = [part.encode() for part in argv]
+        if mutation == "empty":
+            raw = b""
+        elif mutation == "missing":
+            raw = b"\0".join(parts[:-1]) + b"\0"
+        elif mutation == "unterminated":
+            raw = expected[:-1]
+        elif mutation == "extra":
+            raw = expected + b"--extra\0"
+        elif mutation == "trailing":
+            raw = expected + b"unparsed-trailing-bytes"
+        elif mutation == "changed":
+            raw = expected.replace(b"/proof/data", b"/proof/other")
+        else:
+            parts[1], parts[2] = parts[2], parts[1]
+            raw = b"\0".join(parts) + b"\0"
+        observed.append(raw)
+        return raw
+
+    proof.state["cmdline"] = wrong
+    with pytest.raises(ValueError, match="Actual app cmdline differs"):
+        proof.controller.launch(1)
+    assert contract.full(proof.controller.rows[0]["cmdline"], 4096) == observed[0]
+    assert proof.events.count("cmdline") == 1 and proof.publications == []
+
+
+@pytest.mark.parametrize("missing", [False, True])
+@pytest.mark.parametrize("cleanup_fault", [False, True])
+def test_app_identity_read_fault_keeps_first_error_and_independent_cleanup(
+    inert_app_identity, missing, cleanup_fault
+):
+    proof = inert_app_identity
+    first = (
+        FileNotFoundError("SOURCE missing app identity")
+        if missing
+        else OSError("SOURCE app identity read failed")
+    )
+    later = OSError("SOURCE relay close failed")
+    proof.state["read_error"] = first
+    proof.state["close_error"] = later if cleanup_fault else None
+    with pytest.raises(type(first)) as raised:
+        proof.controller.run()
+    assert raised.value is first and proof.events.count("cmdline") == 1
+    assert "running" not in proof.publications
+    assert "cmdline" not in proof.controller.rows[0]
+    assert proof.cleanup == [
+        "thread-start",
+        "app-stop",
+        "relay-shutdown",
+        "relay-close",
+        "relay-join",
+    ]
+    assert all(stream.closed for stream in proof.controller.streams.values())
+    retained = producer.read_json(proof.root / "controller.json")
+    assert retained["failure"] == {"type": type(first).__name__, "message": str(first)}
+    assert retained["resources"] == {
+        "inner_thread_closed": True,
+        "inner_requests_closed": True,
+        "inner_socket_absent": True,
+        "app_groups_absent": True,
+    }
+    assert len(retained["cleanup_attempts"]) == 6
+    assert retained["cleanup_errors"] == (
+        [{"resource": "relay close", "type": "OSError", "message": str(later)}]
+        if cleanup_fault
+        else []
+    )
+    app = retained["rows"][0]
+    assert (
+        app["cleanup_observation"]["errors"] == [] and app["streams_complete"] is True
+    )
+    assert all(
+        row["succeeded"] is True for row in app["cleanup_observation"]["attempts"]
+    )
+    folder = proof.root / "process/run-1"
+    contract.streams(app, folder, directory=True)
+
+
 @pytest.mark.parametrize("stop_fault", [False, True])
 @pytest.mark.parametrize(
     "diagnostics",

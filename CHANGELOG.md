@@ -7,6 +7,11 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Capture the installed app's exact process command once after startup readiness,
+  with live-process checks before and after. Reject empty or different commands
+  before the browser uses the app. Keep the original failed qualification and
+  the final identity, lifecycle and cleanup checks intact.
+
 - Give the reviewed handover opening useful Word column widths while preserving
   complete user wording, evidence, citations and the original source tables.
   The five-item fictional opening now fits its first rendered page. Longer
