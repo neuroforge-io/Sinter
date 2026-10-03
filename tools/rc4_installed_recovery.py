@@ -1362,6 +1362,46 @@ def browser_identity(path):
 
 CACHE_NAME = "fbdd96f424c67bd94b857b415c88a5711d0711f4d7a62d733ee650e5afe87766"
 CACHE_DIRECTORY = r"com\.google\.Chrome\.chrome_chrome_url_fetcher_\.[A-Za-z0-9]{6}"
+OWNED_TEMP_FILE = r"\.org\.chromium\.Chromium\.[A-Za-z0-9]{6}"
+OWNED_TEMP_LIMIT = 524_288
+
+
+def browser_temp_metadata(info: os.stat_result) -> dict[str, int]:
+    """Retain stable metadata; reading itself may change access time."""
+    return {
+        name: getattr(info, "st_" + name)
+        for name in (
+            "dev",
+            "ino",
+            "mode",
+            "uid",
+            "gid",
+            "nlink",
+            "size",
+            "mtime_ns",
+            "ctime_ns",
+        )
+    }
+
+
+def owned_browser_temp_bytes(path: Path, before: os.stat_result) -> bytes:
+    """Read one bounded private shape, without claiming filename provenance."""
+    expected = browser_temp_metadata(before)
+    contract.require(
+        stat.S_ISREG(before.st_mode)
+        and stat.S_IMODE(before.st_mode) == 0o600
+        and before.st_uid == (os.getuid() if hasattr(os, "getuid") else 0)
+        and before.st_gid == (os.getgid() if hasattr(os, "getgid") else 0)
+        and before.st_nlink == 1
+        and before.st_size <= OWNED_TEMP_LIMIT,
+        "Bounded private single-link browser temporary file required.",
+    )
+    raw = contract.regular(path, OWNED_TEMP_LIMIT)
+    contract.require(
+        browser_temp_metadata(path.lstat()) == expected and len(raw) == before.st_size,
+        "Browser temporary file metadata changed while reading.",
+    )
+    return raw
 
 
 def cleanup_browser_after_host(root, host, browser, *, failed):
@@ -1411,7 +1451,8 @@ def clean_browser_temp(root, host, browser, *, expected_exit: int = 0):
             for name in ("stdout", "stderr"):
                 native.stream_bytes(host.get(name))
         observation["attempted"] = True
-        files, folders = [], []
+        files, folders, owned_files = [], [], {}
+        temporary_info = directory.lstat()
         # Bound enumeration before reading or deleting any cache entry.
         entries = []
         for folder in directory.iterdir():
@@ -1454,6 +1495,24 @@ def clean_browser_temp(root, host, browser, *, expected_exit: int = 0):
                 )
                 folders.append((path, info))
             else:
+                if (
+                    row["type"] == "file"
+                    and len(path.relative_to(directory).parts) == 1
+                    and re.fullmatch(OWNED_TEMP_FILE, path.name)
+                ):
+                    contract.require(
+                        temporary_info.st_uid == info.st_uid
+                        and temporary_info.st_gid == info.st_gid
+                        and stat.S_IMODE(temporary_info.st_mode) == 0o700,
+                        "Owned private browser temporary directory required.",
+                    )
+                    for name in ("stdout", "stderr"):
+                        native.stream_bytes(host.get(name))
+                    row["metadata"] = browser_temp_metadata(info)
+                    row.update(contract.record(owned_browser_temp_bytes(path, info)))
+                    owned_files[path] = row
+                    files.append((path, info))
+                    continue
                 contract.require(
                     row["type"] == "file"
                     and info.st_nlink == 1
@@ -1471,6 +1530,25 @@ def clean_browser_temp(root, host, browser, *, expected_exit: int = 0):
             observation["outcomes"].append(outcome)
             try:
                 after = path.lstat()
+                if path in owned_files:
+                    current_directory = directory.lstat()
+                    contract.require(
+                        (temporary_info.st_dev, temporary_info.st_ino)
+                        == (current_directory.st_dev, current_directory.st_ino)
+                        and current_directory.st_uid == temporary_info.st_uid
+                        and current_directory.st_gid == temporary_info.st_gid
+                        and stat.S_IMODE(current_directory.st_mode) == 0o700,
+                        "Browser temporary directory changed before cleanup.",
+                    )
+                    raw = owned_browser_temp_bytes(path, before)
+                    contract.require(
+                        contract.record(raw)
+                        == {
+                            "bytes": owned_files[path]["bytes"],
+                            "sha256": owned_files[path]["sha256"],
+                        },
+                        "Browser temporary bytes changed before cleanup.",
+                    )
                 contract.require(
                     (before.st_dev, before.st_ino) == (after.st_dev, after.st_ino),
                     "Browser cache identity changed before cleanup.",

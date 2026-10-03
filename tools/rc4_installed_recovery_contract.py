@@ -694,7 +694,12 @@ def profile_roles(profile):
 
 
 def validate_browser_temp(observation):
-    from tools.rc4_installed_recovery import CACHE_DIRECTORY, CACHE_NAME
+    from tools.rc4_installed_recovery import (
+        CACHE_DIRECTORY,
+        CACHE_NAME,
+        OWNED_TEMP_FILE,
+        OWNED_TEMP_LIMIT,
+    )
 
     require(
         type(observation) is dict
@@ -727,6 +732,40 @@ def validate_browser_temp(observation):
                 "Unknown cache directory refused.",
             )
         else:
+            if len(parts) == 1 and re.fullmatch(OWNED_TEMP_FILE, name):
+                metadata = row.get("metadata")
+                require(
+                    row.get("type") == "file"
+                    and set(row) == {"type", "bytes", "sha256", "metadata"}
+                    and row["bytes"] <= OWNED_TEMP_LIMIT
+                    and type(row["sha256"]) is str
+                    and re.fullmatch(r"[0-9a-f]{64}", row["sha256"])
+                    and type(metadata) is dict
+                    and set(metadata)
+                    == {
+                        "dev",
+                        "ino",
+                        "mode",
+                        "uid",
+                        "gid",
+                        "nlink",
+                        "size",
+                        "mtime_ns",
+                        "ctime_ns",
+                    }
+                    and all(
+                        type(value) is int and value >= 0 for value in metadata.values()
+                    )
+                    and metadata["dev"] > 0
+                    and metadata["ino"] > 0
+                    and metadata["mode"] == stat.S_IFREG | 0o600
+                    and metadata["uid"] == (os.getuid() if hasattr(os, "getuid") else 0)
+                    and metadata["gid"] == (os.getgid() if hasattr(os, "getgid") else 0)
+                    and metadata["nlink"] == 1
+                    and metadata["size"] == row["bytes"],
+                    "Unknown or non-private top-level temporary file refused.",
+                )
+                continue
             require(
                 len(parts) == 2
                 and re.fullmatch(CACHE_DIRECTORY, parts[0])

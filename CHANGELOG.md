@@ -7,6 +7,12 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Admit one additional bounded, private temporary-file shape after the installed
+  browser test has fully stopped. Keep the original cache rule, reject unknown
+  or unsafe entries before any deletion, and recheck file identity and contents
+  before cleanup. This repairs a qualification failure after normal app exits;
+  the failed run remains historical evidence and needs a fresh qualification.
+
 - Admit the scoped recovery CLI's bounded, source-defined progress and exact
   export confirmation while continuing to reject unexpected diagnostics.
   Failed cleanup closes owned resources without repeating supporting reads or

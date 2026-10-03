@@ -2384,3 +2384,445 @@ def test_failed_host_cleanup_refuses_unknown_signal_and_bool_outcomes(tmp_path, 
     with pytest.raises(ValueError):
         producer.cleanup_browser_after_host(tmp_path, host, browser, failed=True)
     assert host == before and browser["temporary_cleanup"]["complete"] is False
+
+
+@pytest.mark.skipif(
+    os.name != "posix", reason="Actual private mode/ownership needs POSIX"
+)
+@pytest.mark.parametrize("size", [0, 524_288])
+def test_private_top_level_temp_shape_has_complete_original_metadata(tmp_path, size):
+    temporary = tmp_path / "t"
+    temporary.mkdir(mode=0o700)
+    path = temporary / ".org.chromium.Chromium.Abc123"
+    raw = b"x" * size
+    path.write_bytes(raw)
+    path.chmod(0o600)
+    before = producer.browser_temp_metadata(path.lstat())
+    browser = {"temporary_directory": str(temporary)}
+    host = synthetic_command_row(["SOURCE stopped collector"])
+    producer.clean_browser_temp(tmp_path, host, browser)
+    observation = browser["temporary_cleanup"]
+    contract.validate_browser_temp(observation)
+    assert observation["inventory"] == {
+        path.name: {
+            "type": "file",
+            "bytes": size,
+            "sha256": contract.sha(raw),
+            "metadata": before,
+        }
+    }
+    assert observation["outcomes"] == [{"path": path.name, "removed": True}]
+    assert not any(temporary.iterdir()) and host["passed"] is True
+
+
+def private_temp_observation():
+    """Typed portable source observation, never a measured installed file."""
+    name = ".org.chromium.Chromium.Abc123"
+    return {
+        "attempted": True,
+        "complete": True,
+        "failure": None,
+        "inventory": {
+            name: {
+                "type": "file",
+                "bytes": 524_288,
+                "sha256": "a" * 64,
+                "metadata": {
+                    "dev": 1,
+                    "ino": 2,
+                    "mode": 0o100600,
+                    "uid": os.getuid() if hasattr(os, "getuid") else 0,
+                    "gid": os.getgid() if hasattr(os, "getgid") else 0,
+                    "nlink": 1,
+                    "size": 524_288,
+                    "mtime_ns": 3,
+                    "ctime_ns": 4,
+                },
+            }
+        },
+        "outcomes": [{"path": name, "removed": True}],
+    }
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        None,
+        "suffix5",
+        "suffix7",
+        "suffix_dash",
+        "different_prefix",
+        "nested",
+        "path_escape",
+        "size",
+        "size_bool",
+        "sha",
+        "extra",
+        "missing_metadata",
+        "mode",
+        "uid",
+        "gid",
+        "links",
+        "size_mismatch",
+        "dev_zero",
+        "ino_zero",
+        "metadata_bool",
+        "negative_time",
+        "metadata_extra",
+        "missing_ctime",
+        "not_removed",
+        "unknown_entry",
+        "over64",
+        "legacy_oversize",
+    ],
+)
+def test_private_temp_contract_closed_shape_and_original_legacy_bound(mutation):
+    observed = private_temp_observation()
+    name = next(iter(observed["inventory"]))
+    row = observed["inventory"][name]
+    metadata = row["metadata"]
+    names = {
+        "suffix5": ".org.chromium.Chromium.Abc12",
+        "suffix7": ".org.chromium.Chromium.Abc1234",
+        "suffix_dash": ".org.chromium.Chromium.Ab-123",
+        "different_prefix": ".org.chromium.Chrome.Abc123",
+        "nested": "folder/" + name,
+        "path_escape": "../" + name,
+    }
+    if mutation in names:
+        changed = names[mutation]
+        observed["inventory"] = {changed: row}
+        observed["outcomes"][0]["path"] = changed
+    elif mutation == "size":
+        row["bytes"] = metadata["size"] = 524_289
+    elif mutation == "size_bool":
+        row["bytes"] = True
+    elif mutation == "sha":
+        row["sha256"] = "unknown"
+    elif mutation == "extra":
+        row["provenance"] = "Chromium"
+    elif mutation == "missing_metadata":
+        del row["metadata"]
+    elif mutation in {
+        "mode",
+        "uid",
+        "gid",
+        "links",
+        "size_mismatch",
+        "dev_zero",
+        "ino_zero",
+        "metadata_bool",
+        "negative_time",
+    }:
+        field, value = {
+            "mode": ("mode", 0o100644),
+            "uid": ("uid", metadata["uid"] + 1),
+            "gid": ("gid", metadata["gid"] + 1),
+            "links": ("nlink", 2),
+            "size_mismatch": ("size", 0),
+            "dev_zero": ("dev", 0),
+            "ino_zero": ("ino", 0),
+            "metadata_bool": ("mtime_ns", True),
+            "negative_time": ("ctime_ns", -1),
+        }[mutation]
+        metadata[field] = value
+    elif mutation == "metadata_extra":
+        metadata["atime_ns"] = 0
+    elif mutation == "missing_ctime":
+        del metadata["ctime_ns"]
+    elif mutation == "not_removed":
+        observed["outcomes"][0]["removed"] = False
+    elif mutation == "unknown_entry":
+        observed["inventory"]["private-but-unknown"] = copy.deepcopy(row)
+    elif mutation == "over64":
+        observed["inventory"] = {
+            f".org.chromium.Chromium.{n:06d}": copy.deepcopy(row) for n in range(65)
+        }
+    elif mutation == "legacy_oversize":
+        observed["inventory"] = {
+            "com.google.Chrome.chrome_chrome_url_fetcher_.abc123": {
+                "type": "directory",
+                "bytes": 4096,
+            },
+            "com.google.Chrome.chrome_chrome_url_fetcher_.abc123/"
+            + producer.CACHE_NAME: {
+                "type": "file",
+                "bytes": 32769,
+                "sha256": "a" * 64,
+            },
+        }
+    if mutation is None:
+        contract.validate_browser_temp(observed)
+    else:
+        with pytest.raises(ValueError):
+            contract.validate_browser_temp(observed)
+
+
+@pytest.mark.skipif(
+    os.name != "posix", reason="Actual private mode/ownership needs POSIX"
+)
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "unknown",
+        "oversize",
+        "mode",
+        "root_mode",
+        "hardlink",
+        "symlink",
+        "special",
+        "live_group",
+        "incomplete",
+        "missing_stdout",
+        "bad_stderr",
+        "directory_shape",
+        "over64",
+    ],
+)
+def test_private_temp_inventory_refusal_deletes_nothing(tmp_path, mutation):
+    temporary = tmp_path / "t"
+    temporary.mkdir(mode=0o700)
+    path = temporary / ".org.chromium.Chromium.Abc123"
+    path.write_bytes(b"SOURCE private cache")
+    path.chmod(0o600)
+    host = synthetic_command_row(["SOURCE stopped collector"])
+    browser = {"temporary_directory": str(temporary)}
+    if mutation == "unknown":
+        (temporary / "unknown").write_bytes(b"must remain")
+    elif mutation == "oversize":
+        path.write_bytes(b"x" * 524_289)
+    elif mutation == "mode":
+        path.chmod(0o644)
+    elif mutation == "root_mode":
+        temporary.chmod(0o755)
+    elif mutation == "hardlink":
+        os.link(path, tmp_path / "second-link")
+    elif mutation == "symlink":
+        outside = tmp_path / "outside"
+        outside.write_bytes(b"must remain")
+        path.unlink()
+        path.symlink_to(outside)
+    elif mutation == "special":
+        path.unlink()
+        os.mkfifo(path, 0o600)
+    elif mutation == "live_group":
+        host["owned_group_remaining"] = True
+    elif mutation == "incomplete":
+        host["streams_complete"] = False
+    elif mutation == "missing_stdout":
+        del host["stdout"]
+    elif mutation == "bad_stderr":
+        host["stderr"]["sha256"] = "wrong"
+    elif mutation == "directory_shape":
+        path.unlink()
+        path.mkdir(mode=0o700)
+    elif mutation == "over64":
+        for n in range(64):
+            another = temporary / f".org.chromium.Chromium.{n:06d}"
+            another.write_bytes(b"SOURCE")
+            another.chmod(0o600)
+    before = sorted(p.name for p in temporary.iterdir())
+    with pytest.raises(ValueError):
+        producer.clean_browser_temp(tmp_path, host, browser)
+    assert sorted(p.name for p in temporary.iterdir()) == before
+    assert browser["temporary_cleanup"]["complete"] is False
+    assert browser["temporary_cleanup"]["outcomes"] == []
+
+
+@pytest.mark.skipif(
+    os.name != "posix", reason="Actual private mode/ownership needs POSIX"
+)
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "bytes",
+        "mode",
+        "link",
+        "replace",
+        "directory_replace",
+        "read_error",
+        "unlink_error",
+    ],
+)
+def test_private_temp_before_delete_race_and_original_failure_retained(
+    tmp_path, monkeypatch, mutation
+):
+    temporary = tmp_path / "t"
+    temporary.mkdir(mode=0o700)
+    path = temporary / ".org.chromium.Chromium.Abc123"
+    original_bytes = b"SOURCE private cache"
+    path.write_bytes(original_bytes)
+    path.chmod(0o600)
+    browser = {"temporary_directory": str(temporary)}
+    host = synthetic_command_row(["SOURCE stopped collector"])
+    original = producer.owned_browser_temp_bytes
+    calls = []
+    fault = OSError("SOURCE original cleanup read refusal")
+
+    def reader(p, before):
+        calls.append(str(p))
+        if len(calls) == 2:
+            if mutation == "bytes":
+                p.write_bytes(b"changed same bytes!!")
+            elif mutation == "mode":
+                p.chmod(0o644)
+            elif mutation == "link":
+                os.link(p, tmp_path / "second-link")
+            elif mutation == "replace":
+                p.unlink()
+                p.write_bytes(original_bytes)
+                p.chmod(0o600)
+            elif mutation == "read_error":
+                raise fault
+        return original(p, before)
+
+    monkeypatch.setattr(producer, "owned_browser_temp_bytes", reader)
+    original_lstat = type(path).lstat
+    count = [0]
+
+    def lstat(p, *args, **kwargs):
+        if p == temporary:
+            count[0] += 1
+            if mutation == "directory_replace" and count[0] == 3:
+                temporary.rename(tmp_path / "old-t")
+                temporary.mkdir(mode=0o700)
+                (temporary / path.name).write_bytes(original_bytes)
+                (temporary / path.name).chmod(0o600)
+        return original_lstat(p, *args, **kwargs)
+
+    monkeypatch.setattr(type(path), "lstat", lstat)
+    original_unlink = type(path).unlink
+
+    def unlink(p, *args, **kwargs):
+        if p == path and mutation == "unlink_error":
+            raise fault
+        return original_unlink(p, *args, **kwargs)
+
+    monkeypatch.setattr(type(path), "unlink", unlink)
+    with pytest.raises((ValueError, OSError)) as caught:
+        producer.clean_browser_temp(tmp_path, host, browser)
+    if mutation in {"read_error", "unlink_error"}:
+        assert caught.value is fault
+    observed = browser["temporary_cleanup"]
+    assert observed["complete"] is False and path.exists()
+    assert observed["inventory"][path.name]["sha256"] == contract.sha(original_bytes)
+    assert observed["outcomes"][0]["removed"] is False
+    assert observed["failure"]["type"] == type(caught.value).__name__
+
+
+@pytest.mark.skipif(
+    os.name != "posix", reason="Actual private mode/ownership needs POSIX"
+)
+def test_private_temp_and_original_nested_cache_both_retained_before_cleanup(tmp_path):
+    temporary = tmp_path / "t"
+    temporary.mkdir(mode=0o700)
+    top = temporary / ".org.chromium.Chromium.Abc123"
+    top.write_bytes(b"SOURCE new bounded shape")
+    top.chmod(0o600)
+    directory = temporary / "com.google.Chrome.chrome_chrome_url_fetcher_.abc123"
+    directory.mkdir()
+    nested = directory / producer.CACHE_NAME
+    nested.write_bytes(b"SOURCE original cache")
+    browser = {"temporary_directory": str(temporary)}
+    producer.clean_browser_temp(
+        tmp_path, synthetic_command_row(["SOURCE stopped collector"]), browser
+    )
+    observed = browser["temporary_cleanup"]
+    contract.validate_browser_temp(observed)
+    assert len(observed["inventory"]) == len(observed["outcomes"]) == 3
+    assert set(observed["inventory"][nested.relative_to(temporary).as_posix()]) == {
+        "type",
+        "bytes",
+        "sha256",
+    }
+    assert not any(temporary.iterdir())
+
+
+@pytest.mark.skipif(
+    os.name != "posix", reason="Actual private mode/ownership needs POSIX"
+)
+@pytest.mark.parametrize("failed", [False, True])
+def test_private_temp_failed_host_cleanup_is_explicit_and_never_success(
+    tmp_path, failed
+):
+    temporary = tmp_path / "t"
+    temporary.mkdir(mode=0o700)
+    path = temporary / ".org.chromium.Chromium.Abc123"
+    path.write_bytes(b"SOURCE bounded failed-host cache")
+    path.chmod(0o600)
+    host = synthetic_command_row(["SOURCE failed collector"], stderr=b"held failure\n")
+    host.update(exit_code=1, passed=False)
+    before = copy.deepcopy(host)
+    browser = {"temporary_directory": str(temporary)}
+    if failed:
+        producer.cleanup_browser_after_host(tmp_path, host, browser, failed=True)
+        contract.validate_browser_temp(browser["temporary_cleanup"])
+        assert not path.exists()
+    else:
+        with pytest.raises(ValueError):
+            producer.cleanup_browser_after_host(tmp_path, host, browser, failed=False)
+        assert path.exists() and browser["temporary_cleanup"]["outcomes"] == []
+    assert host == before and host["passed"] is False
+
+
+@pytest.mark.skipif(
+    os.name != "posix", reason="Actual private mode/ownership needs POSIX"
+)
+@pytest.mark.parametrize("field", ["st_uid", "st_gid"])
+def test_private_temp_read_refuses_foreign_observed_metadata(tmp_path, field):
+    path = tmp_path / ".org.chromium.Chromium.Abc123"
+    path.write_bytes(b"SOURCE bytes remain")
+    path.chmod(0o600)
+    actual = path.lstat()
+    before = SimpleNamespace(
+        **{
+            "st_" + key: value
+            for key, value in producer.browser_temp_metadata(actual).items()
+        }
+    )
+    setattr(before, field, getattr(before, field) + 1)
+    with pytest.raises(ValueError, match="private single-link"):
+        producer.owned_browser_temp_bytes(path, before)
+    assert path.read_bytes() == b"SOURCE bytes remain"
+
+
+@pytest.mark.skipif(
+    os.name != "posix", reason="Actual private mode/ownership needs POSIX"
+)
+def test_private_temp_independent_removals_preserve_first_exception(
+    tmp_path, monkeypatch
+):
+    temporary = tmp_path / "t"
+    temporary.mkdir(mode=0o700)
+    names = [".org.chromium.Chromium.Abc123", ".org.chromium.Chromium.Def456"]
+    for name in names:
+        path = temporary / name
+        path.write_bytes(b"SOURCE owned bytes")
+        path.chmod(0o600)
+    first = OSError("SOURCE first unlink refusal")
+    second = PermissionError("SOURCE later unlink refusal")
+    original = type(temporary).unlink
+    attempted = []
+
+    def unlink(path, *args, **kwargs):
+        if path.name in names:
+            attempted.append(path.name)
+            raise first if len(attempted) == 1 else second
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(type(temporary), "unlink", unlink)
+    browser = {"temporary_directory": str(temporary)}
+    with pytest.raises(OSError) as caught:
+        producer.clean_browser_temp(
+            tmp_path, synthetic_command_row(["SOURCE stopped"]), browser
+        )
+    assert caught.value is first and attempted == names
+    observation = browser["temporary_cleanup"]
+    assert [row["error"]["type"] for row in observation["outcomes"]] == [
+        "OSError",
+        "PermissionError",
+    ]
+    assert observation["complete"] is False and observation["failure"][
+        "message"
+    ] == str(first)
+    assert sorted(p.name for p in temporary.iterdir()) == names

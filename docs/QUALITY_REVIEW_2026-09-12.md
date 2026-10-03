@@ -2529,3 +2529,61 @@ disabled provider, preserving the original v2 inputs. Source refusal controls
 cover unexpected and reordered diagnostics, invalid identities, capture faults
 and cleanup without repeated readers. These checks do not qualify the failed
 installed run or the corrected source for publication.
+
+### 3 October: fresh recovery browser temporary-file refusal
+
+Exact source `f4e3ae17854448e32d6ffdf1c596221593af8814` passed all twelve
+hosted jobs. Each of the six core phases contained 5,292 unique cases with no
+failures or errors; the original platform skips remain explicit. All 49 new
+recovery controls passed in every phase. The separate Linux GUI suite passed
+five cases. These are source checks, not installed Windows or macOS coverage.
+
+The fresh portable build and Linux native build passed independent mechanical
+review. The native build completed normally in 61.95 seconds; this single timing
+does not establish a performance improvement. The following original installed
+workflow completed normally in 22.97 seconds. Its consumer screens and four Word
+outputs retain the earlier behaviour and document bytes, so the scoped ratings
+remain UX 7.0, functionality 7.8 and aesthetics 7.2.
+
+The next original recovery operation failed in 50.37 seconds. Both inner profiles
+completed all ten app lifetimes with known exit 0, closed ports and no remaining
+owned groups. All sixteen supporting scoped CLI observations remain intact with
+successful exits and full captures. Build progress and exact export confirmations
+are accepted, and the original inputs remain unchanged. Those inner results do
+not promote the failed whole operation.
+
+The sole recorded owner failure occurred during browser temporary-file cleanup,
+after the host had exited normally with complete empty streams. Its initially
+empty private directory contained a top-level ordinary file named
+`.org.chromium.Chromium.CEKzUp`: mode 0600, the operator's UID/GID, one link and
+524,288 bytes. Its SHA-256 is
+`07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541`.
+The existing cleaner and final contract admit only the separately named nested
+URL-fetcher cache shape. They refused this additional top-level shape before
+unlinking anything. The filename alone does not establish Chromium provenance.
+
+The failed receipt and leftover file remain intact. Native handoff, cold Ubuntu
+installation and the four prior-preview replacements were never run. RC4 remains
+unpublished; any correction needs fresh exact-source qualification. The user's
+deliberately closed app, saved workspace, accounts and browser tabs remain
+untouched, and no model requests were made in this pass.
+
+The independently reviewed source correction adds only the exact top-level
+temporary-file pattern observed above, with a 524,288-byte maximum. Admission
+requires the fixed private directory, a regular mode-0600 file owned by the
+current UID/GID with one link, stable full metadata and a complete byte hash.
+The host must already have stopped with complete captured streams. Every entry
+is admitted before any deletion; metadata and contents are checked again before
+removal. The original nested cache rule and 32,768-byte limit remain unchanged.
+Unknown, oversized, linked, foreign or changed entries still refuse. The name
+does not establish which process created the file.
+
+The affected module passes 274 unique source tests with no failures, errors or
+skips in 4.22 seconds: all 219 earlier cases and 55 new controls. The focused
+55-case selection overlaps that total. Of the new controls, 27 test the portable
+receipt contract and 28 require POSIX filesystem behaviour; other-platform
+coverage must retain those skips. A faithful copy of the old cleaner refuses
+the positive fixture before any deletion, while corrected source accepts it.
+Earlier CLI progress, capture, first-error preservation and no-replay behaviour
+remain intact. This source result does not qualify the retained failed run,
+establish a performance improvement or admit an installer for publication.
