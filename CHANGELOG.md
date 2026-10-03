@@ -7,6 +7,11 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Recognise the exact protected, empty account store and two empty save locks in
+  installed offline qualification. Populated accounts, credentials, unknown files
+  and unsafe storage still refuse. Preserve the failed original workflow;
+  qualification requires a new exact-source installed run.
+
 - Capture the installed app's exact process command once after startup readiness,
   with live-process checks before and after. Reject empty or different commands
   before the browser uses the app. Keep the original failed qualification and

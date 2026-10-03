@@ -2446,3 +2446,36 @@ early process exit, exact original command bytes, read failures and independent
 cleanup. The initial 23-case selection overlaps that total. Correctness lint,
 touched-file formatting and Python 3.10 grammar pass. These injected controls
 do not substitute for an actual installed run.
+
+### 3 October: account-free local storage qualification
+
+Exact source `01571921de074d80fbcbeade347bf298a358cfe1` completed all twelve
+hosted Quality jobs in run `37088829782`, attempt 1. Its original portable and
+native builds passed their mechanical checks. The one original installed
+workflow then failed with `Unexpected fictional workspace storage entry refuses.`
+Both app launches retained the exact live command and quit normally with exit 0.
+The browser producer completed its 22 checks and 13 evidence roles, but the whole
+owner remained failed. Recovery, native handoff, cold installation and replacement
+were not run. The failed original evidence remains intact.
+
+The closed storage projection omitted three ordinary local files: the blank
+`accounts/chatgpt.json`, empty `accounts/.chatgpt.lock` and empty
+`exports/.word-copy.lock`. Normal startup creates the account store without any
+registered profile; explicit safe Word saving creates its lock. Actual files are
+private, owned, regular and singly linked, and the account has no active identity
+or profiles. This is a stale qualification projection, rather than evidence of
+sign-in, credentials or a model call.
+
+The source correction admits only those exact paths with bounded, protected
+metadata and the exact empty account shape. Unknown storage, populated accounts,
+credentials, malformed identities and nonempty locks still refuse. Original
+database, source, Word, historical-evidence, lifecycle and cleanup checks remain.
+A fresh exact-source hosted and installed run is required before publication;
+the user's deliberately closed app and real workspace remain untouched.
+
+The affected module passes 233 unique source cases with no failures, errors or
+skips: all 187 earlier cases and 46 new controls. The 46-case focused selection
+overlaps that total. Twenty-two content controls are portable; 24 filesystem
+controls explicitly require POSIX metadata and do not imply Windows installation
+coverage. Required lint, touched-file formatting and Python 3.10 grammar pass.
+These source controls do not promote the failed installed run.

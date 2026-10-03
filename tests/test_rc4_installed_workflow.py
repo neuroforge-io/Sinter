@@ -2423,3 +2423,234 @@ def test_browser_boundary_unicode_path_uses_bytes(browser_boundary_case):
     assert len(browser["temporary_directory"].encode("utf-8")) > 55
     with pytest.raises(ValueError, match="browser/temp boundary"):
         contract.validate_browser_boundary(browser, expected, root)
+
+
+def empty_account_registration():
+    return {
+        "schema": 1,
+        "host_id": "urn:uuid:12345678-1234-4234-8234-123456789abc",
+        "active_id": "",
+        "profiles": {},
+    }
+
+
+def test_empty_account_registration_matches_local_startup_shape():
+    value = empty_account_registration()
+    raw = json.dumps(value).encode("utf-8")
+    assert producer.validate_empty_account_registration(raw) is None
+    assert json.loads(raw) == value
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("schema", True),
+        ("schema", 1.0),
+        ("schema", 2),
+        ("active_id", "registered"),
+        ("active_id", None),
+        ("profiles", []),
+        ("profiles", {"registered": {}}),
+        ("profiles", {"registered": {"access_token": "fictional-token"}}),
+        ("host_id", None),
+        ("host_id", "12345678-1234-4234-8234-123456789abc"),
+        ("host_id", "urn:uuid:12345678-1234-1234-8234-123456789abc"),
+        ("host_id", "urn:uuid:12345678-1234-4234-7234-123456789abc"),
+        ("host_id", "urn:uuid:12345678-1234-4234-8234-123456789ABC"),
+        ("host_id", "urn:uuid:12345678-1234-4234-8234-123456789abc\n"),
+    ],
+)
+def test_account_free_storage_refuses_registration_and_noncanonical_fields(key, value):
+    account = empty_account_registration()
+    account[key] = value
+    with pytest.raises(ValueError):
+        producer.validate_empty_account_registration(json.dumps(account).encode())
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"[]",
+        b"{broken}",
+        b'{"schema": 1, "schema": 1}',
+        b'{"schema": NaN}',
+        b'{"schema": Infinity}',
+        json.dumps({**empty_account_registration(), "credentials": {}}).encode(),
+        json.dumps(
+            {k: v for k, v in empty_account_registration().items() if k != "profiles"}
+        ).encode(),
+    ],
+)
+def test_account_free_storage_refuses_malformed_duplicate_or_extra_json(raw):
+    with pytest.raises(ValueError):
+        producer.validate_empty_account_registration(raw)
+
+
+@pytest.fixture
+def fictional_storage_case(tmp_path):
+    if os.name != "posix" or not hasattr(os, "geteuid"):
+        pytest.skip("Actual POSIX metadata for the Linux installed storage boundary")
+    data = tmp_path / "runtime/data"
+    for directory in (data, data / "accounts", data / "exports"):
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        directory.chmod(0o700)
+    contents = {
+        "workspace.sqlite3": b"fictional-workspace",
+        "campaigns.sqlite3": b"fictional-campaigns",
+        "accounts/chatgpt.json": json.dumps(empty_account_registration()).encode(),
+        "accounts/.chatgpt.lock": b"",
+        "exports/.word-copy.lock": b"",
+        "exports/first.docx": b"retained-fictional-original-copy",
+        "exports/second.docx": b"distinct-fictional-changed-copy",
+    }
+    for name, raw in contents.items():
+        path = data / name
+        path.write_bytes(raw)
+        path.chmod(0o600)
+    yield tmp_path, {"uid": os.geteuid(), "gid": os.getegid()}, set(contents)
+
+
+def test_fictional_storage_preserves_empty_accounts_locks_and_distinct_copies(
+    fictional_storage_case,
+):
+    root, inputs, files = fictional_storage_case
+    data = root / "runtime/data"
+    original = {name: (data / name).read_bytes() for name in files}
+    assert producer.validate_fictional_storage(root, inputs, files) is None
+    assert {name: (data / name).read_bytes() for name in files} == original
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "accounts/token.json",
+        "accounts/.other.lock",
+        "accounts/nested/chatgpt.json",
+        "exports/.other.lock",
+        "exports/first.docx.pending",
+        "unexpected.sqlite3",
+    ],
+)
+def test_fictional_storage_refuses_unknown_names_before_reads(
+    fictional_storage_case, monkeypatch, name
+):
+    root, inputs, files = fictional_storage_case
+    monkeypatch.setattr(
+        contract, "regular", lambda *_: pytest.fail("Unknown role read")
+    )
+    with pytest.raises(ValueError, match="Unexpected fictional workspace"):
+        producer.validate_fictional_storage(root, inputs, files | {name})
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["accounts/chatgpt.json", "accounts/.chatgpt.lock", "exports/.word-copy.lock"],
+)
+def test_fictional_storage_requires_each_account_free_state_file(
+    fictional_storage_case, name
+):
+    root, inputs, files = fictional_storage_case
+    with pytest.raises(ValueError, match="Unexpected fictional workspace"):
+        producer.validate_fictional_storage(root, inputs, files - {name})
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "account-lock-content",
+        "word-lock-content",
+        "oversized-account",
+        "file-mode",
+        "directory-mode",
+        "wrong-uid",
+        "wrong-gid",
+        "file-hardlink",
+        "file-symlink",
+        "directory-symlink",
+        "directory-as-file",
+        "fifo-as-file",
+    ],
+)
+def test_fictional_storage_refuses_unsafe_actual_metadata_before_reads(
+    fictional_storage_case, monkeypatch, mutation
+):
+    root, inputs, files = fictional_storage_case
+    data = root / "runtime/data"
+    path = data / "accounts/chatgpt.json"
+    if mutation == "account-lock-content":
+        (data / "accounts/.chatgpt.lock").write_bytes(b"x")
+    elif mutation == "word-lock-content":
+        (data / "exports/.word-copy.lock").write_bytes(b"x")
+    elif mutation == "oversized-account":
+        path.write_bytes(path.read_bytes() + b" " * 513)
+    elif mutation == "file-mode":
+        path.chmod(0o644)
+    elif mutation == "directory-mode":
+        (data / "accounts").chmod(0o755)
+    elif mutation in {"wrong-uid", "wrong-gid"}:
+        inputs["uid" if mutation == "wrong-uid" else "gid"] += 1
+    elif mutation == "file-hardlink":
+        os.link(path, root / "alias")
+    elif mutation == "directory-symlink":
+        directory = data / "accounts"
+        directory.rename(root / "aliased-accounts")
+        directory.symlink_to(root / "aliased-accounts", target_is_directory=True)
+    else:
+        path.unlink()
+        if mutation == "file-symlink":
+            target = root / "alias"
+            target.write_text(json.dumps(empty_account_registration()))
+            path.symlink_to(target)
+        elif mutation == "directory-as-file":
+            path.mkdir()
+        else:
+            os.mkfifo(path, 0o600)
+    original_read = contract.regular
+    reads = []
+
+    def read(candidate, limit):
+        reads.append(candidate)
+        return original_read(candidate, limit)
+
+    monkeypatch.setattr(contract, "regular", read)
+    with pytest.raises(ValueError):
+        producer.validate_fictional_storage(root, inputs, files)
+    refused = data / (
+        "exports/.word-copy.lock"
+        if mutation == "word-lock-content"
+        else "accounts/.chatgpt.lock"
+        if mutation == "account-lock-content"
+        else "accounts/chatgpt.json"
+    )
+    assert refused not in reads
+
+
+def test_fictional_storage_preserves_original_read_failure(
+    fictional_storage_case, monkeypatch
+):
+    root, inputs, files = fictional_storage_case
+    original = OSError("fictional bounded storage read failure")
+    monkeypatch.setattr(contract, "regular", lambda *_: (_ for _ in ()).throw(original))
+    with pytest.raises(OSError) as raised:
+        producer.validate_fictional_storage(root, inputs, files)
+    assert raised.value is original
+    assert (
+        root / "runtime/data/exports/first.docx"
+    ).read_bytes() == b"retained-fictional-original-copy"
+
+
+def test_fictional_storage_refuses_content_change_during_bounded_read(
+    fictional_storage_case, monkeypatch
+):
+    root, inputs, files = fictional_storage_case
+    original_read = contract.regular
+
+    def change_after_read(path, limit):
+        raw = original_read(path, limit)
+        if path.name == "chatgpt.json":
+            path.write_bytes(raw[:-1] + b" ")
+        return raw
+
+    monkeypatch.setattr(contract, "regular", change_after_read)
+    with pytest.raises(ValueError, match="changed while reading"):
+        producer.validate_fictional_storage(root, inputs, files)

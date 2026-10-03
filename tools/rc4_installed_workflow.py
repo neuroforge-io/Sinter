@@ -1456,6 +1456,91 @@ def host(root, chromium):
     return 0
 
 
+def validate_empty_account_registration(raw):
+    """Admit the exact credential-free registration created during local startup."""
+    value = contract.read_json(raw)
+    contract.require(
+        set(value) == {"schema", "host_id", "active_id", "profiles"}
+        and type(value["schema"]) is int
+        and value["schema"] == 1
+        and type(value["active_id"]) is str
+        and value["active_id"] == ""
+        and type(value["profiles"]) is dict
+        and not value["profiles"]
+        and type(value["host_id"]) is str
+        and re.fullmatch(
+            r"urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}"
+            r"-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+            value["host_id"],
+        ),
+        "Fictional workspace requires an empty canonical account registration.",
+    )
+
+
+def validate_fictional_storage(root, inputs, data_files):
+    """Retain only the fixed local stores, Word copies and credential-free state."""
+    private = {
+        "accounts/.chatgpt.lock": 0,
+        "accounts/chatgpt.json": 512,
+        "exports/.word-copy.lock": 0,
+    }
+    contract.require(
+        {"workspace.sqlite3", "campaigns.sqlite3", *private}.issubset(data_files)
+        and all(
+            name in {"workspace.sqlite3", "campaigns.sqlite3", "preferences.json"}
+            or name in private
+            or name.startswith("exports/")
+            and name.endswith(".docx")
+            for name in data_files
+        ),
+        "Unexpected fictional workspace storage entry refuses.",
+    )
+    data = Path(root) / "runtime/data"
+    for directory in (data, data / "accounts", data / "exports"):
+        info = directory.lstat()
+        contract.require(
+            directory.resolve(strict=True) == directory
+            and stat.S_ISDIR(info.st_mode)
+            and stat.S_IMODE(info.st_mode) == 0o700
+            and (info.st_uid, info.st_gid) == (inputs["uid"], inputs["gid"]),
+            "Fictional private storage directory differs.",
+        )
+    fields = (
+        "st_dev",
+        "st_ino",
+        "st_mode",
+        "st_uid",
+        "st_gid",
+        "st_nlink",
+        "st_size",
+        "st_mtime_ns",
+        "st_ctime_ns",
+    )
+    for name, limit in private.items():
+        path = data / name
+        before = path.lstat()
+        contract.require(
+            path.resolve(strict=True) == path
+            and stat.S_ISREG(before.st_mode)
+            and stat.S_IMODE(before.st_mode) == 0o600
+            and before.st_nlink == 1
+            and (before.st_uid, before.st_gid) == (inputs["uid"], inputs["gid"])
+            and before.st_size <= limit,
+            "Fictional private storage file differs.",
+        )
+        raw = contract.regular(path, limit)
+        after = path.lstat()
+        contract.require(
+            all(getattr(before, field) == getattr(after, field) for field in fields)
+            and len(raw) == before.st_size,
+            "Fictional private storage changed while reading.",
+        )
+        if name == "accounts/chatgpt.json":
+            validate_empty_account_registration(raw)
+        else:
+            contract.require(raw == b"", "Fictional storage lock is not empty.")
+
+
 def validate_inventory(root, inputs):
     """Close fixed evidence roles and bound only fresh fictional/private runtime data."""
     from tools.installed_workflow_contract import workflow_artifact_paths
@@ -1569,16 +1654,7 @@ def validate_inventory(root, inputs):
         for name in files
         if name.startswith("runtime/data/")
     }
-    contract.require(
-        {"workspace.sqlite3", "campaigns.sqlite3"}.issubset(data_files)
-        and all(
-            name in {"workspace.sqlite3", "campaigns.sqlite3", "preferences.json"}
-            or name.startswith("exports/")
-            and name.endswith(".docx")
-            for name in data_files
-        ),
-        "Unexpected fictional workspace storage entry refuses.",
-    )
+    validate_fictional_storage(root, inputs, data_files)
     contract.require(
         not any((root / "runtime/home").iterdir()),
         "Fictional account-free app home is not empty.",
