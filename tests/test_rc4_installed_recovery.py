@@ -802,7 +802,10 @@ def test_cli_record_change_refuses_before_any_next_reader(tmp_path, monkeypatch)
 
     def changed(argv, rows, **kw):
         called.append(list(map(str, argv)))
-        raw = b'{"ok":true,"version":"fictional-version"}\n'
+        raw = (
+            b'{"schema":"sinter-operation-result/v1","operation":"casebooks.get",'
+            b'"ok":true,"version":"fictional-version"}\n'
+        )
         rows.append(synthetic_command_row(argv, stdout=raw))
         for name, path in kw["save_streams"].items():
             path.write_bytes(raw if name == "stdout" else b"")
@@ -1817,3 +1820,567 @@ def test_explicit_completed_failure_cleanup_preserves_first_failure_and_host(tmp
     with pytest.raises(RuntimeError) as raised:
         attempts.raise_first()
     assert raised.value is first
+
+
+BUILD_PROGRESS = [
+    b"Waiting for an available worker\n",
+    b"Starting\n",
+    b"Indexing the supplied text locally; nothing is being uploaded\n",
+    *(f"Reading document {n} of 3\n".encode("ascii") for n in range(1, 4)),
+    *([b"Matching a question to exact passages, including surrounding wording\n"] * 3),
+    b"Validating citations and recording retrieval coverage\n",
+    b"Ready for review\n",
+]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        BUILD_PROGRESS[-1],
+        BUILD_PROGRESS[0] + BUILD_PROGRESS[-1],
+        BUILD_PROGRESS[1] + BUILD_PROGRESS[4] + b"".join(BUILD_PROGRESS[-2:]),
+        b"".join(BUILD_PROGRESS),
+    ],
+)
+def test_sampled_build_progress_admits_only_ordered_source_trace(raw):
+    contract.validate_cli_stderr("casebooks.build", raw, "/fixed/export.json")
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"",
+        b"Starting\n",
+        b"Ready for review",
+        b"Ready for review\n\n",
+        b"Ready for review\r\n",
+        b"Ready for review\nSaved: other\n",
+        b"\xff diagnostic\nReady for review\n",
+        "Unexpected café 🐝\nReady for review\n".encode("utf-8"),
+        b"Reading document 4 of 3\nReady for review\n",
+        b"Reading document 1 of 4\nReady for review\n",
+        b"Reading document 2 of 3\nReading document 1 of 3\nReady for review\n",
+        b"Starting\nWaiting for an available worker\nReady for review\n",
+        b"Ready for review\nReady for review\n",
+        BUILD_PROGRESS[6] * 4 + BUILD_PROGRESS[-1],
+    ],
+)
+def test_build_progress_refuses_extra_reordered_incomplete_or_nonutf8_bytes(raw):
+    with pytest.raises(ValueError):
+        contract.validate_cli_stderr("casebooks.build", raw, "/fixed/export.json")
+
+
+@pytest.mark.parametrize("operation", ["casebooks.get", "casebooks.validate"])
+def test_local_readers_keep_empty_diagnostic_contract(operation):
+    contract.validate_cli_stderr(operation, b"", "/fixed/export.json")
+    with pytest.raises(ValueError):
+        contract.validate_cli_stderr(
+            operation, b"Ready for review\n", "/fixed/export.json"
+        )
+
+
+def test_export_progress_binds_exact_utf8_output_and_line_boundary():
+    exported = "/fixed/café-é-🐝.json"
+    raw = ("Saved: " + exported + "\n").encode("utf-8")
+    contract.validate_cli_stderr("export", raw, exported)
+    for altered in (raw + b"\n", raw[:-1], raw.replace(b".json", b".txt"), b"\xff"):
+        with pytest.raises(ValueError):
+            contract.validate_cli_stderr("export", altered, exported)
+    for path in ("", "/bad\npath", "/bad\x00path", "🐝" * 129):
+        with pytest.raises(ValueError):
+            contract.validate_cli_stderr("export", raw, path)
+    with pytest.raises(ValueError):
+        contract.validate_cli_stderr("unknown", b"", exported)
+    with pytest.raises(ValueError):
+        contract.validate_cli_stderr("casebooks.get", "", exported)
+
+
+def source_cli_exchange(tmp_path, monkeypatch, mutate=None):
+    """Inert complete CLI streams; no process or installed operation is executed."""
+    from tools import installed_native_menu as menu
+    from tools.rc4_scoped_recovery_contract import TITLE, wrappers
+
+    lifecycle, before = scoped_lifecycle(tmp_path)
+    stored = next(
+        row
+        for row in wrappers(before, "casebooks_scoped_v2")
+        if row["document"]["title"] == TITLE
+    )
+    called = []
+
+    def command(argv, rows, **kw):
+        argv = list(map(str, argv))
+        operation = "export" if argv[1] == "export" else argv[2]
+        called.append(operation)
+        exported = lifecycle.output / "process/run-1.cli-export.json"
+        result = {
+            "casebooks.get": stored,
+            "casebooks.validate": {"document": stored["document"]},
+            "casebooks.build": {
+                "question_scopes": stored["document"]["question_scopes"]
+            },
+            "export": {"exported": str(exported), "kind": "casebook", "format": "json"},
+        }[operation]
+        envelope = {
+            "schema": "sinter-operation-result/v1",
+            "version": "fictional-version",
+            "operation": "casebooks.get" if operation == "export" else operation,
+            "ok": True,
+            "result": result,
+        }
+        stderr = (
+            BUILD_PROGRESS[-1]
+            if operation == "casebooks.build"
+            else ("Saved: " + str(exported) + "\n").encode("utf-8")
+            if operation == "export"
+            else b""
+        )
+        code = 0
+        if mutate:
+            code, stderr = mutate(operation, envelope, None, code, stderr)
+        raw = (contract.canonical(envelope) + "\n").encode("utf-8")
+        row = synthetic_command_row(argv, stdout=raw, stderr=stderr)
+        if mutate:
+            mutate(operation, envelope, row, code, stderr)
+        rows.append(row)
+        for name, path in kw["save_streams"].items():
+            path.write_bytes(raw if name == "stdout" else stderr)
+            row[name + "_file"] = str(path)
+        if operation == "export":
+            producer.write_json(exported, stored["document"])
+        return code, raw
+
+    monkeypatch.setattr(menu, "command", command)
+    return lifecycle, before, called
+
+
+def final_cli_data(lifecycle):
+    """Use the fixed installed paths in a finite source-only verifier fixture."""
+    from tools import installed_native_menu as menu
+
+    data = {
+        path.relative_to(lifecycle.output).as_posix(): path.read_bytes()
+        for path in lifecycle.output.rglob("*")
+        if path.is_file()
+    }
+    receipt = contract.json_object(data["process/run-1.cli.json"])
+    for operation, row in receipt["operations"].items():
+        prefix = "process/run-1." + operation.replace(".", "-")
+        row["argv"] = [
+            "/out/evidence/scoped/"
+            + Path(part).relative_to(lifecycle.output).as_posix()
+            if Path(part).is_relative_to(lifecycle.output)
+            else "/out/runtime/scoped/data"
+            if part == str(lifecycle.runtime / "data")
+            else part
+            for part in row["argv"]
+        ]
+        if operation == "export":
+            data[prefix + ".stderr"] = (
+                b"Saved: /out/evidence/scoped/process/run-1.cli-export.json\n"
+            )
+            row["stderr"] = menu.stream_record(io.BytesIO(data[prefix + ".stderr"]))
+        for name in ("stdout", "stderr"):
+            row[name + "_file"] = "/out/evidence/scoped/" + prefix + "." + name
+    data["process/run-1.cli.json"] = contract.canonical(receipt).encode("utf-8")
+    return data
+
+
+def test_complete_source_cli_progress_and_export_pass_both_admission_boundaries(
+    tmp_path, monkeypatch
+):
+    lifecycle, before, called = source_cli_exchange(tmp_path, monkeypatch)
+    lifecycle.cli_readers(1, before)
+    assert called == [
+        "casebooks.get",
+        "casebooks.validate",
+        "casebooks.build",
+        "export",
+    ]
+    result = producer.read_json(lifecycle.output / "process/run-1.cli.json")
+    assert contract.equal(result["before"], result["after"])
+    raw = (lifecycle.output / "process/run-1.casebooks-build.stderr").read_bytes()
+    assert raw == b"Ready for review\n"
+    contract.validate_cli(final_cli_data(lifecycle), 1, before, "fictional-version")
+
+
+def test_real_offline_dispatcher_progress_export_and_scoped_inputs_are_preserved(
+    tmp_path,
+):
+    from sinter import __version__
+    from sinter.casebooks import Casebooks, validate
+    from sinter.store import Store
+    from tools import rc4_scoped_recovery_contract as scoped
+    from tools import rc4_scoped_recovery_worker as worker
+    from tools.rc4_recovery_worker import seed, snapshot
+
+    root = tmp_path / "fictional café é 🐝"
+    root.mkdir()
+    data = root / "data"
+    seed(data)
+    book = validate(scoped.fixture())
+    book = validate(
+        {
+            **book,
+            "schema": "sinter-casebook/v2",
+            "question_scopes": [
+                {
+                    "question_index": i,
+                    "question": question,
+                    "source_ids": [book["documents"][i]["id"]],
+                }
+                for i, question in enumerate(scoped.QUESTIONS)
+            ],
+        }
+    )
+    saved = Casebooks(Store(data)).save(book)
+    before = snapshot(data)
+    for operation in (
+        "casebooks.get",
+        "casebooks.validate",
+        "casebooks.build",
+        "export",
+    ):
+        payload = root / (operation.replace(".", "-") + ".input.json")
+        body = (
+            {"document": book}
+            if operation == "casebooks.validate"
+            else {"id": saved["id"]}
+        )
+        if operation == "casebooks.build":
+            body["revision"] = saved["revision"]
+        producer.write_json(payload, body)
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-B",
+                "-X",
+                "utf8",
+                str(worker.__file__),
+                "--cli-child",
+                str(producer.ROOT),
+                str(data),
+                operation,
+                str(payload),
+            ],
+            env=worker.cli_reader_environment(root / "home"),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=20,
+            check=False,
+        )
+        (root / (operation + ".stdout")).write_bytes(result.stdout)
+        (root / (operation + ".stderr")).write_bytes(result.stderr)
+        assert result.returncode == 0
+        envelope = contract.json_object(result.stdout)
+        assert envelope["schema"] == "sinter-operation-result/v1"
+        assert envelope["version"] == __version__ and envelope["ok"] is True
+        assert envelope["operation"] == (
+            "casebooks.get" if operation == "export" else operation
+        )
+        exported = payload.with_name(
+            payload.name.replace(".input.json", ".cli-export.json")
+        )
+        # Qualification is Linux-only. The source dispatcher uses the native
+        # platform print separator; retain those raw bytes before this fixture
+        # projection.
+        diagnostic = (
+            result.stderr.replace(b"\r\n", b"\n") if os.name == "nt" else result.stderr
+        )
+        contract.validate_cli_stderr(operation, diagnostic, str(exported))
+        if operation == "casebooks.build":
+            assert diagnostic.endswith(b"Ready for review\n")
+            assert contract.equal(
+                envelope["result"]["question_scopes"], book["question_scopes"]
+            )
+        if operation == "export":
+            assert diagnostic == ("Saved: " + str(exported) + "\n").encode("utf-8")
+            assert contract.equal(producer.read_json(exported), book)
+        assert contract.equal(snapshot(data), before)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "schema",
+        "operation",
+        "version",
+        "ok",
+        "nonzero",
+        "bool_code",
+        "group",
+        "forced",
+        "incomplete",
+        "stdout_hash",
+        "stderr_hash",
+        "diagnostic",
+        "invalid_utf8",
+    ],
+)
+def test_source_cli_refuses_identity_exit_capture_or_diagnostics_before_next_reader(
+    tmp_path, monkeypatch, mutation
+):
+    def mutate(operation, envelope, row, code, stderr):
+        if operation != "casebooks.get":
+            return code, stderr
+        if row is None:
+            if mutation in {"schema", "operation", "version"}:
+                envelope[mutation] = "wrong"
+            elif mutation == "ok":
+                envelope["ok"] = False
+            elif mutation == "nonzero":
+                code = 1
+            elif mutation == "bool_code":
+                code = False
+            elif mutation == "diagnostic":
+                stderr = b"Ready for review\n"
+            elif mutation == "invalid_utf8":
+                stderr = b"\xff diagnostic\n"
+        elif mutation in {"group", "forced", "incomplete"}:
+            field = {
+                "group": "owned_group_remaining",
+                "forced": "forced_cleanup",
+                "incomplete": "streams_complete",
+            }[mutation]
+            row[field] = mutation != "incomplete"
+        elif mutation in {"stdout_hash", "stderr_hash"}:
+            row[mutation.split("_")[0]]["sha256"] = "0" * 64
+        elif mutation == "nonzero":
+            row["exit_code"] = 1
+        return code, stderr
+
+    lifecycle, before, called = source_cli_exchange(tmp_path, monkeypatch, mutate)
+    with pytest.raises(ValueError):
+        lifecycle.cli_readers(1, before)
+    assert called == ["casebooks.get"]
+    result = producer.read_json(lifecycle.output / "process/run-1.cli.json")
+    assert result["after"] is None and set(result["operations"]) == {"casebooks.get"}
+    assert (lifecycle.output / "process/run-1.casebooks-get.stdout").is_file()
+    assert (lifecycle.output / "process/run-1.casebooks-get.stderr").is_file()
+
+
+@pytest.mark.parametrize("operation", ["casebooks.build", "export"])
+@pytest.mark.parametrize("diagnostic", [b"extra\n", b"\xff diagnostic\n"])
+def test_final_cli_contract_rejects_retained_extra_or_invalid_diagnostics(
+    tmp_path, monkeypatch, operation, diagnostic
+):
+    from tools import installed_native_menu as menu
+
+    lifecycle, before, _ = source_cli_exchange(tmp_path, monkeypatch)
+    lifecycle.cli_readers(1, before)
+    data = final_cli_data(lifecycle)
+    receipt = contract.json_object(data["process/run-1.cli.json"])
+    prefix = "process/run-1." + operation.replace(".", "-")
+    data[prefix + ".stderr"] += diagnostic
+    receipt["operations"][operation]["stderr"] = menu.stream_record(
+        io.BytesIO(data[prefix + ".stderr"])
+    )
+    data["process/run-1.cli.json"] = contract.canonical(receipt).encode("utf-8")
+    with pytest.raises(ValueError):
+        contract.validate_cli(data, 1, before, "fictional-version")
+
+
+@pytest.mark.parametrize("stop_fault", [False, True])
+def test_failed_lifecycle_reaps_ownership_without_replaying_cli_or_overwriting_proof(
+    tmp_path, monkeypatch, stop_fault
+):
+    from tools import native_window_smoke as native
+
+    runtime, output = exchange(tmp_path, "scoped")
+    paths = {name: output / f"process/run-1.{name}" for name in ("stdout", "stderr")}
+    paths["stdout"].write_bytes(b"SOURCE app stdout\n")
+    paths["stderr"].write_bytes(b"")
+    streams = [paths[name].open("ab") for name in ("stdout", "stderr")]
+    lifecycle = producer.InstalledLifecycle.__new__(producer.InstalledLifecycle)
+    lifecycle.runtime, lifecycle.output, lifecycle.profile = runtime, output, "scoped"
+    lifecycle.paths, lifecycle.streams, lifecycle.notice = paths, streams, b""
+    lifecycle.rows = [{"run": 1, "pid": 4321, "stop_method": "interface_quit"}]
+    lifecycle.identity = {"version": "SOURCE"}
+    lifecycle.process = SimpleNamespace(poll=lambda: 0)
+    lifecycle.failure, lifecycle.closed = None, False
+    events, reader_pins = [], {}
+    primary = ValueError("SOURCE first reader refusal")
+    lifecycle.launch = lambda run: events.append(("launch", run))
+    lifecycle.admission = lambda label: {"unchanged": True}
+    lifecycle.rpc = SimpleNamespace(service=lambda: events.append("rpc"))
+    lifecycle.thread = SimpleNamespace(
+        start=lambda: events.append("thread start"),
+        join=lambda **kw: events.append(("thread join", kw)),
+        is_alive=lambda: False,
+    )
+    lifecycle.inner = SimpleNamespace(
+        port=1,
+        shutdown=lambda: events.append("shutdown"),
+        server_close=lambda: events.append("server close"),
+        idle=lambda: True,
+    )
+
+    def stop(process, row):
+        events.append("stop")
+        row.update(forced_cleanup=False, owned_group_remaining=False)
+        if stop_fault and events.count("stop") == 2:
+            raise RuntimeError("SOURCE later stop fault")
+
+    def reader(run, before):
+        events.append("reader")
+        path = output / "process/run-1.cli.json"
+        raw_path = output / "process/run-1.casebooks-build.stderr"
+        if events.count("reader") > 1:
+            path.write_bytes(b"SOURCE overwritten original")
+            raise FileExistsError("SOURCE replay must never occur")
+        path.write_bytes(b"SOURCE original first CLI receipt\n")
+        raw_path.write_bytes(b"Ready for review\n")
+        reader_pins.update({path: path.read_bytes(), raw_path: raw_path.read_bytes()})
+        raise primary
+
+    class Probe:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def settimeout(self, timeout):
+            assert timeout == 1
+
+        def connect_ex(self, target):
+            assert target == ("127.0.0.1", 1)
+            return 111
+
+    lifecycle.cli_readers = reader
+    monkeypatch.setattr(native, "stop_process", stop)
+    monkeypatch.setattr(producer.socket, "socket", Probe)
+    monkeypatch.setattr(producer, "fixed_snapshot", lambda path: {"unchanged": True})
+    lifecycle.run()
+    assert events.count("reader") == 1 and events.count("stop") == 2
+    assert all(path.read_bytes() == raw for path, raw in reader_pins.items())
+    row = producer.read_json(output / "process/run-1.json")
+    cleanup = producer.read_json(output / "process/run-1.cleanup.json")
+    assert row == cleanup and row["stop_method"] == "interface_quit"
+    assert row["returncode"] == 0 and row["owned_group_remaining"] is False
+    assert all(stream.closed for stream in streams)
+    assert "shutdown" in events and "server close" in events
+    assert ("thread join", {"timeout": 5}) in events
+    state = producer.read_json(runtime / "state.json")
+    first_failure = "ValueError: observation: " + str(primary)
+    assert state == {"phase": "failed", "failure": first_failure}
+    result = producer.read_json(output / "processes.json")
+    assert result["closed"] is True and result["failure"].startswith(first_failure)
+    if stop_fault:
+        assert "SOURCE later stop fault" in result["failure"]
+    else:
+        assert "cleanup:" not in result["failure"]
+
+
+def test_cleanup_stop_and_stream_faults_still_attempt_all_capture_without_readers(
+    tmp_path, monkeypatch
+):
+    from tools import native_window_smoke as native
+    from tools import rc4_recovery_source as source
+
+    runtime, output = exchange(tmp_path, "scoped")
+    paths = {name: output / f"process/run-1.{name}" for name in ("stdout", "stderr")}
+    for name, path in paths.items():
+        path.write_bytes(("SOURCE " + name + "\n").encode("ascii"))
+    lifecycle = producer.InstalledLifecycle.__new__(producer.InstalledLifecycle)
+    lifecycle.runtime, lifecycle.output, lifecycle.profile = runtime, output, "scoped"
+    lifecycle.paths, lifecycle.notice = paths, b""
+    lifecycle.process = SimpleNamespace(poll=lambda: 0)
+    lifecycle.rows = [{"run": 1, "pid": 4321, "stop_method": "interface_quit"}]
+    events = []
+
+    def stop(*args):
+        events.append("stop")
+        raise RuntimeError("SOURCE first stop fault")
+
+    class Stream:
+        def __init__(self, name):
+            self.name = name
+
+        def close(self):
+            events.append("close " + self.name)
+            raise OSError("SOURCE close " + self.name)
+
+    class Probe:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, target):
+            events.append("port")
+            return 111
+
+    original_capture = source.capture_stream
+
+    def capture(path):
+        events.append("capture " + path.suffix[1:])
+        if path.suffix == ".stderr":
+            raise OSError("SOURCE stderr capture fault")
+        return original_capture(path)
+
+    def forbidden(*args):
+        raise AssertionError("Cleanup must never replay optional admissions")
+
+    lifecycle.streams = [Stream(name) for name in ("stdout", "stderr")]
+    lifecycle.inner = SimpleNamespace(port=1)
+    lifecycle.admission = lifecycle.cli_readers = forbidden
+    monkeypatch.setattr(producer, "fixed_snapshot", forbidden)
+    monkeypatch.setattr(native, "stop_process", stop)
+    monkeypatch.setattr(producer.socket, "socket", Probe)
+    monkeypatch.setattr(source, "capture_stream", capture)
+    with pytest.raises(ValueError) as raised:
+        lifecycle.reap(1, observe=False)
+    assert str(raised.value) == (
+        "stop: SOURCE first stop fault; stream close: SOURCE close stdout; "
+        "stream close: SOURCE close stderr; stderr capture: SOURCE stderr capture fault"
+    )
+    assert events == [
+        "stop",
+        "close stdout",
+        "close stderr",
+        "capture stderr",
+        "capture stdout",
+        "port",
+    ]
+    row = producer.read_json(output / "process/run-1.cleanup.json")
+    assert row["stdout"]["sha256"] == contract.sha(paths["stdout"].read_bytes())
+    assert not (output / "process/run-1.json").exists()
+    assert not (runtime / "state.json").exists()
+
+
+@pytest.mark.parametrize("held", [False, True])
+def test_failed_host_cleanup_requires_held_normal_failure_and_does_not_promote(
+    tmp_path, held
+):
+    (tmp_path / "t").mkdir()
+    browser = {"temporary_directory": str(tmp_path / "t")}
+    host = synthetic_command_row(["SOURCE host"], stderr=b"SOURCE failure\n")
+    host.update(exit_code=1, passed=False)
+    before = copy.deepcopy(host)
+    if held:
+        producer.cleanup_browser_after_host(tmp_path, host, browser, failed=True)
+        contract.validate_browser_temp(browser["temporary_cleanup"])
+        assert browser["temporary_cleanup"]["complete"] is True
+    else:
+        with pytest.raises(ValueError):
+            producer.cleanup_browser_after_host(tmp_path, host, browser, failed=False)
+    assert host == before and host["passed"] is False
+
+
+@pytest.mark.parametrize("code", [True, -1, 130, None])
+def test_failed_host_cleanup_refuses_unknown_signal_and_bool_outcomes(tmp_path, code):
+    (tmp_path / "t").mkdir()
+    browser = {"temporary_directory": str(tmp_path / "t")}
+    host = synthetic_command_row(["SOURCE host"], stderr=b"SOURCE failure\n")
+    host.update(exit_code=code, passed=False)
+    before = copy.deepcopy(host)
+    with pytest.raises(ValueError):
+        producer.cleanup_browser_after_host(tmp_path, host, browser, failed=True)
+    assert host == before and browser["temporary_cleanup"]["complete"] is False

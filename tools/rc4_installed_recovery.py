@@ -604,7 +604,7 @@ class InstalledLifecycle:
             },
         )
 
-    def reap(self, run):
+    def reap(self, run, *, observe=True):
         from tools import native_window_smoke as native
         from tools.rc4_recovery_source import capture_stream
 
@@ -635,17 +635,19 @@ class InstalledLifecycle:
                 row["port_closed"] = (
                     probe.connect_ex(("127.0.0.1", self.inner.port)) != 0
                 )
-            row["persistent_snapshot"] = snapshot(self.runtime / "data")
-            write_json(
-                self.output / f"process/run-{run}.snapshot.json",
-                row["persistent_snapshot"],
-            )
-            before = self.admission(f"stopped-{run}")
-            if self.profile == "scoped":
-                self.cli_readers(run, before)
+            if observe:
+                row["persistent_snapshot"] = snapshot(self.runtime / "data")
+                write_json(
+                    self.output / f"process/run-{run}.snapshot.json",
+                    row["persistent_snapshot"],
+                )
+                before = self.admission(f"stopped-{run}")
+                if self.profile == "scoped":
+                    self.cli_readers(run, before)
         except Exception as exc:
             errors.append("observation: " + str(exc))
-        write_json(self.output / f"process/run-{run}.json", row)
+        suffix = "" if observe else ".cleanup"
+        write_json(self.output / f"process/run-{run}{suffix}.json", row)
         contract.require(not errors, "; ".join(errors))
         contract.require(
             row["returncode"] == 0
@@ -655,6 +657,8 @@ class InstalledLifecycle:
             and contract.regular(self.paths["stderr"], 65536) == self.notice,
             "Installed process exit/diagnostics/ownership refused.",
         )
+        if not observe:
+            return
         write_json(
             self.runtime / "state.json",
             {
@@ -671,6 +675,7 @@ class InstalledLifecycle:
 
     def cli_readers(self, run, before):
         """Admit each actual frozen CLI after typed raw conservation checks."""
+        from tools import installed_native_entry_contract as native
         from tools import installed_native_menu as menu
 
         snapshot = fixed_snapshot
@@ -758,10 +763,22 @@ class InstalledLifecycle:
                         },
                     )
                     envelope = contract.json_object(raw)
+                    native.stopped(rows[-1])
+                    diagnostics = contract.regular(
+                        self.output / f"process/run-{run}.{suffix}.stderr", MAX_RPC
+                    )
+                    contract.validate_cli_stderr(operation, diagnostics, str(exported))
                     contract.require(
-                        code == 0
-                        and rows[-1]["stderr"]["bytes"] == 0
+                        type(code) is int
+                        and code == 0
+                        and rows[-1]["streams_complete"] is True
+                        and native.stream_bytes(rows[-1]["stderr"]) == diagnostics
+                        and rows[-1]["stdout"]["bytes"] == len(raw)
+                        and rows[-1]["stdout"]["sha256"] == contract.sha(raw)
                         and envelope["ok"] is True
+                        and envelope["schema"] == "sinter-operation-result/v1"
+                        and envelope["operation"]
+                        == ("casebooks.get" if operation == "export" else operation)
                         and envelope["version"] == self.identity["version"],
                         "Actual installed scoped CLI refused.",
                     )
@@ -834,8 +851,9 @@ class InstalledLifecycle:
         finally:
             if self.process is not None and not reaped:
                 try:
-                    self.rows[-1]["stop_method"] = "cleanup"
-                    self.reap(run)
+                    if self.process.poll() is None:
+                        self.rows[-1]["stop_method"] = "cleanup"
+                    self.reap(run, observe=False)
                 except Exception as exc:
                     self.failure = (self.failure or "") + "; cleanup: " + str(exc)
             for action in (self.inner.shutdown, self.inner.server_close):
@@ -1346,6 +1364,19 @@ CACHE_NAME = "fbdd96f424c67bd94b857b415c88a5711d0711f4d7a62d733ee650e5afe87766"
 CACHE_DIRECTORY = r"com\.google\.Chrome\.chrome_chrome_url_fetcher_\.[A-Za-z0-9]{6}"
 
 
+def cleanup_browser_after_host(root, host, browser, *, failed):
+    """A held failure may clean a completely captured normal exit of one."""
+    expected = (
+        1
+        if failed is True
+        and type(host.get("exit_code")) is int
+        and host["exit_code"] == 1
+        and host.get("passed") is False
+        else 0
+    )
+    return clean_browser_temp(root, host, browser, expected_exit=expected)
+
+
 def clean_browser_temp(root, host, browser, *, expected_exit: int = 0):
     """Clean owned caches after an exactly observed exit; never qualify failure."""
     from tools import installed_native_entry_contract as native
@@ -1801,8 +1832,11 @@ def run(args):
             ),
             (
                 "browser cache cleanup",
-                lambda: clean_browser_temp(
-                    root, receipt.get("host_process", {}), receipt["browser"]
+                lambda: cleanup_browser_after_host(
+                    root,
+                    receipt.get("host_process", {}),
+                    receipt["browser"],
+                    failed=error is not None,
                 ),
             ),
             (

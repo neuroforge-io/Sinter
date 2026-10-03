@@ -7,6 +7,12 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Admit the scoped recovery CLI's bounded, source-defined progress and exact
+  export confirmation while continuing to reject unexpected diagnostics.
+  Failed cleanup closes owned resources without repeating supporting reads or
+  overwriting the first observation. Preserve the failed installed attempt;
+  corrected source needs fresh hosted and installed qualification.
+
 - Recognise the exact protected, empty account store and two empty save locks in
   installed offline qualification. Populated accounts, credentials, unknown files
   and unsafe storage still refuse. Preserve the failed original workflow;

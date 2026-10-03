@@ -2479,3 +2479,53 @@ overlaps that total. Twenty-two content controls are portable; 24 filesystem
 controls explicitly require POSIX metadata and do not imply Windows installation
 coverage. Required lint, touched-file formatting and Python 3.10 grammar pass.
 These source controls do not promote the failed installed run.
+
+### 3 October: recovery CLI diagnostics and failed-observation cleanup
+
+Exact source `33280c06b5dc7233e20bf7484a9507a51c69d047` passed all twelve
+hosted jobs and its first original installed workflow. That workflow completed
+normally in 20.82 seconds, with 22 browser checks, 13 retained artifact roles
+and two normal UI quits. Independent review verified the original source,
+package, saved work, preferences, citations, Word copies and closed resources.
+This establishes that workflow only.
+
+The following original recovery operation failed in 38.60 seconds. The
+campaign profile recorded six closed lifetimes without a profile error; the
+scoped profile failed after its first lifetime. Native handoff, cold installation
+and replacement were never run. Publication remains held.
+
+The scoped supporting CLI produced a current-version successful build envelope
+and the normal 17-byte `Ready for review\n` diagnostic. The qualification owner
+and contract required empty stderr for every operation, despite the public CLI
+printing job progress and an export confirmation there. Failed cleanup then
+reentered the supporting readers under the same filenames. The original build
+stdout and stderr survive, but its first exit metadata was overwritten by the
+later read collision and remains unknown. Neither the failed run nor the lost
+metadata is repaired retrospectively.
+
+The source correction admits only the bounded, ordered sample of source-defined
+build progress ending in `Ready for review`, the exact fixed export confirmation,
+and empty diagnostics for get/validate. It retains exact operation, schema,
+version, successful result, exit, stream and source-conservation requirements.
+Failure cleanup stops and closes owned resources through a distinct receipt;
+it does not rerun supporting readers or overwrite their failed observation.
+An already failed host's known normal exit 1 can be observed during cleanup
+without promoting the overall failure. Signal, unknown and ownership failures
+remain refusals. Corrected source requires fresh hosted and installed gates.
+
+Read-only review of the actual five workflow screens and four Word XML artifacts
+rates the demonstrated offline journey at UX 7.0, functionality 7.8 and aesthetics
+7.2. These are scoped judgments, not AI-quality, funding-outcome or whole-product
+10/10 claims. The reviewed opening is too easy to miss, save states still require
+too much interpretation, and broad references make recipients reread evidence.
+Current Word page fit was not rendered in this review; pagination polish remains
+open.
+
+The affected recovery module passes 219 unique source cases with no failures,
+errors or skips in 42.63 seconds: 170 existing cases and 49 new controls. The
+49-case focused selection overlaps this total. A fresh offline dispatcher check
+executes all four supporting CLI commands with a closed account store and a
+disabled provider, preserving the original v2 inputs. Source refusal controls
+cover unexpected and reordered diagnostics, invalid identities, capture faults
+and cleanup without repeated readers. These checks do not qualify the failed
+installed run or the corrected source for publication.

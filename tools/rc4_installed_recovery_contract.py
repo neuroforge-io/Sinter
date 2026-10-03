@@ -444,6 +444,55 @@ def validate_processes(data, profile, binding, package, session):
     return processes
 
 
+def validate_cli_stderr(operation, raw, exported):
+    """Admit only the fixed local readers' complete source-defined progress."""
+    require(type(raw) is bytes, "Supporting CLI diagnostics must be raw bytes.")
+    if operation in {"casebooks.get", "casebooks.validate"}:
+        require(raw == b"", "Supporting CLI reader diagnostics differ.")
+    elif operation == "export":
+        require(
+            type(exported) is str
+            and exported
+            and len(exported.encode("utf-8")) <= 512
+            and not any(c in exported for c in "\r\n\x00")
+            and raw == ("Saved: " + exported + "\n").encode("utf-8"),
+            "Supporting CLI export diagnostics differ from its fixed output.",
+        )
+    elif operation == "casebooks.build":
+        # Runtime.wait samples the job state, so it can omit intermediate
+        # messages. This fixed three-source/three-question fixture never admits
+        # arbitrary diagnostics, reordered stages or repeated terminal messages.
+        trace = [
+            b"Waiting for an available worker\n",
+            b"Starting\n",
+            b"Indexing the supplied text locally; nothing is being uploaded\n",
+            *(f"Reading document {n} of 3\n".encode("ascii") for n in range(1, 4)),
+            *(
+                [
+                    b"Matching a question to exact passages, "
+                    b"including surrounding wording\n"
+                ]
+                * 3
+            ),
+            b"Validating citations and recording retrieval coverage\n",
+            b"Ready for review\n",
+        ]
+        require(
+            0 < len(raw) <= sum(map(len, trace)) and raw.endswith(trace[-1]),
+            "Supporting CLI build progress is incomplete or over bound.",
+        )
+        position = 0
+        for line in raw.splitlines(keepends=True):
+            try:
+                position = trace.index(line, position) + 1
+            except ValueError:
+                raise ValueError(
+                    "Supporting CLI build progress differs from its fixed trace."
+                ) from None
+    else:
+        raise ValueError("Unknown supporting CLI diagnostic operation.")
+
+
 def validate_cli(data, index, snapshot, version):
     from tools.rc4_scoped_recovery_contract import TITLE, wrappers
 
@@ -540,9 +589,13 @@ def validate_cli(data, index, snapshot, version):
                 "Supporting CLI complete stream/file identity differs.",
             )
         envelope = json_object(data[prefix + ".stdout"])
+        validate_cli_stderr(
+            op,
+            data[prefix + ".stderr"],
+            f"/out/evidence/scoped/process/run-{index}.cli-export.json",
+        )
         require(
-            data[prefix + ".stderr"] == b""
-            and envelope["ok"] is True
+            envelope["ok"] is True
             and envelope["version"] == version
             and envelope["schema"] == "sinter-operation-result/v1"
             and envelope["operation"] == ("casebooks.get" if op == "export" else op),
