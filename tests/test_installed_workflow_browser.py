@@ -27,6 +27,31 @@ from tools.installed_workflow_contract import (  # noqa: E402
 )
 
 
+def test_atomic_json_write_preserves_unicode_with_windows_default_encoding(
+    tmp_path, monkeypatch
+):
+    write_text = Path.write_text
+
+    def windows_write_text(path, text, encoding=None, errors=None, **kwargs):
+        return write_text(
+            path, text, encoding=encoding or "cp1252", errors=errors, **kwargs
+        )
+
+    monkeypatch.setattr(Path, "write_text", windows_write_text)
+    path = tmp_path / "fictional-recovery.json"
+    value = {
+        "decomposed": "Fictional Cafe\u0301",
+        "precomposed": "Fictional Café",
+        "notes": "Fictional 🐝 中文 sources retained.",
+    }
+    flow.write_json(path, value)
+    assert path.read_bytes() == json.dumps(
+        value, ensure_ascii=False, indent=2
+    ).encode("utf-8")
+    assert json.loads(path.read_bytes()) == value
+    assert not path.with_suffix(".tmp").exists()
+
+
 @pytest.mark.parametrize("arguments,code", [(["--help"], 0), ([], 2)])
 def test_help_and_missing_arguments_need_no_browser_or_docker(arguments, code):
     result = subprocess.run(
