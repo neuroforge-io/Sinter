@@ -27,7 +27,7 @@ def build(output, vendor=None):
     html=html.replace('<main id="content" tabindex="-1">', '<main id="main"><div id="content" tabindex="-1">').replace('</main>', '</div></main>')
     html=html.replace('<div id="view">', '<span id="home" hidden></span><div id="view">')
     description='Use Sinter in your browser: local casebooks, funding campaigns, source-linked reports, meeting records and portable workspace backups.'
-    meta=['<link rel="canonical" href="https://neuroforge.io/sinter/app/">']
+    meta=['<link rel="canonical" href="https://neuroforge.io/sinter/app/">', '<meta name="robots" content="noindex, follow">']
     social={'og:title':'Sinter browser workbench','og:description':description,'og:url':'https://neuroforge.io/sinter/app/','og:image':'https://neuroforge.io/assets/og-sinter.jpg','og:image:type':'image/jpeg','og:image:width':'1200','og:image:height':'630','og:image:alt':'Sinter community workbench','twitter:card':'summary_large_image','twitter:image':'https://neuroforge.io/assets/og-sinter.jpg','twitter:image:alt':'Sinter community workbench'}
     meta.extend(f'<meta property="{key}" content="{value}">' for key,value in social.items())
     html=html.replace('</head>', '\n'.join(meta)+'\n</head>')

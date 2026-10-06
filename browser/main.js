@@ -8,7 +8,7 @@ let worker, ready=false, counter=0, pending=new Map(), active=0;
 let releaseLock, ownsLock=false;
 function failed(error) {
   ready=false; status.textContent=error.message||String(error);status.className='notice error';
-  for(const item of pending.values()) {clearTimeout(item.timer);item.reject(error);} pending.clear(); active=0;
+  for(const item of pending.values()) {clearTimeout(item.timer);item.reject(error);} pending.clear();
 }
 function rpc(kind,payload,signal) {
   if(signal?.aborted)return Promise.reject(new Error('Cancelled before starting.'));
@@ -17,7 +17,7 @@ function rpc(kind,payload,signal) {
     const abort=()=>{worker.terminate();failed(new Error('Operation stopped. Saved work is preserved; unfinished results were discarded. Reload to continue. No request was replayed.'));};
     const timer=setTimeout(abort,180000);
     signal?.addEventListener('abort',abort,{once:true});
-    pending.set(id,{timer,reject,resolve:result=>{signal?.removeEventListener('abort',abort);resolve(result);}});
+    pending.set(id,{timer,reject:error=>{signal?.removeEventListener('abort',abort);reject(error);},resolve:result=>{signal?.removeEventListener('abort',abort);resolve(result);}});
     worker.postMessage({id,kind,payload});
   });
 }
@@ -37,7 +37,11 @@ async function request(path,options={}) {
 }
 async function start(recovery=false) {
   if(!ownsLock)throw new Error('Close the other Sinter tab and reload here before recovering data.');
-  worker?.terminate(); worker=new Worker('./worker.js',{type:'module'});
+  ready=false;
+  worker?.terminate();
+  for(const item of pending.values()) {clearTimeout(item.timer);item.reject(new Error('The browser engine was restarted. No request was replayed.'));}
+  pending.clear();
+  worker=new Worker('./worker.js',{type:'module'});
   worker.onmessage=({data})=>{
     if(data.phase){status.textContent=data.phase;return;}
     const item=pending.get(data.id);if(!item)return;
