@@ -1,3 +1,4 @@
+import {browserSettingsPage} from './browser-settings.js';
 /** Settings are local. API keys stay in process memory, never browser storage. */
 import {h, field, selectField, check, button, notice, announce, safeLink} from './ui.js';
 import {request} from './api.js';
@@ -16,6 +17,7 @@ export function applyAppearance(settings) {
 }
 
 export async function settingsPage() {
+  if (globalThis.sinterBrowser) return browserSettingsPage(applyAppearance);
   let current = await request('/api/settings');
   const s = current.settings;
   const organisation = field('Your group or organisation', 'text', s.organisation, 'A local preference; no account is created.', {maxLength: 200});

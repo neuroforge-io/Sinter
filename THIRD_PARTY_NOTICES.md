@@ -51,3 +51,16 @@ Windows installer: Inno Setup, Copyright Jordan Russell and Martijn Laan.
 Installer tooling and publisher signing are independent of Sinter's source licence.
 These initial packages are unsigned by a publisher; macOS bundles are ad-hoc
 signed for runtime integrity, not notarised. Do not disable OS security checks.
+
+## Browser edition
+
+The browser edition self-hosts Pyodide 0.29.3 and the matching CPython/SQLite/OpenSSL
+WebAssembly packages from the official Pyodide distribution. Versioned asset hashes
+are in browser/vendor-sha256.json. Pyodide's Mozilla Public License 2.0 is included
+in browser/PYODIDE-LICENSE and distributed with the browser assets. Package archives
+retain their original metadata and third-party licence files.
+
+Upstream source and notices: https://github.com/pyodide/pyodide/tree/0.29.3
+Python licence: https://docs.python.org/3.13/license.html
+SQLite is public domain: https://sqlite.org/copyright.html
+OpenSSL 1.1.1 licence: https://github.com/openssl/openssl/blob/OpenSSL_1_1_1w/LICENSE

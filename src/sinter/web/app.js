@@ -49,6 +49,7 @@ async function openGarden(kind) {
 }
 
 function help() {
+  if (globalThis.sinterBrowser) return h('div', {class:'stack'}, h('h2', {}, 'Start with one piece of work'), h('p', {}, 'Try the fictional garden example, or create a casebook or funding campaign with your own notes. Use Save project, then export your saved workspace above. Individual project backup JSON works in the installed app too.'), h('p', {}, 'Your documents stay in this browser unless you explicitly choose a search or approve model context. Optional public search provides snippets and citations, not verified answers. Read the originals. Nothing is submitted or sent as an official communication.'), h('p', {}, 'Imports are validated before they replace saved work. Whole-workspace imports start search watches paused. Unsaved editor inputs are not included in workspace backups; use the editor backup controls before closing.'), h('p', {}, 'The browser edition runs the actual Python source tools. Local speech, operating-system file paths, ChatGPT sign-in and RKC executable connections need installed Sinter. Use the What runs here? section above for details.'), gardenCard(openGarden));
   const connection = h('div', {'aria-live': 'polite'});
   return h('div', {class: 'stack'}, h('header', {class: 'page-intro'}, h('h2', {}, 'You do not need to be technical.'),
     h('p', {}, 'Start with a fictional example, then bring one real piece of work.')),

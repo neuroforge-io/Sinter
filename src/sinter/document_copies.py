@@ -34,6 +34,7 @@ _PARTS = {
 }
 SAFE_LOCAL_SAVE = (
     os.name == "posix"
+    and hasattr(os, "link")
     and all(
         operation in os.supports_dir_fd
         for operation in (os.open, os.mkdir, os.link, os.unlink, os.stat)

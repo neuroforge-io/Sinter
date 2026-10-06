@@ -7,6 +7,7 @@ export function session() {
 
 export async function request(path, {data, signal, method = data === undefined ? 'GET' : 'POST', responseType = 'json', headers: suppliedHeaders = {}} = {}) {
   if (!path.startsWith('/api/')) throw new Error('Only local API paths are allowed.');
+  if (globalThis.sinterBrowser) return globalThis.sinterBrowser.request(path, {data, signal, method, responseType, headers: suppliedHeaders});
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (signal?.aborted) abort();
@@ -60,6 +61,11 @@ export function sseParser(onData) {
 
 export async function stream(path, data, onEvent, signal) {
   if (!path.startsWith('/api/')) throw new Error('Only local API paths are allowed.');
+  if (globalThis.sinterBrowser) {
+    const result = await globalThis.sinterBrowser.request(path, {data, signal});
+    for (const event of result.events || []) { if (event.type === 'error') throw new Error(event.error); onEvent(event); }
+    return;
+  }
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (signal?.aborted) abort();

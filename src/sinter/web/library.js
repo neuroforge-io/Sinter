@@ -82,7 +82,7 @@ export async function watches({setBusy, seed = {}} = {}) {
     try {
       await request('/api/watches', {data: {title: title.input.value, query: query.input.value,
         interval: Number(interval.input.value), deadline: deadline.input.value, consent: true}});
-      feedback.replaceChildren(notice('Watch created. It checks while the launcher is running.', 'success'));
+      feedback.replaceChildren(notice(globalThis.sinterBrowser ? 'Watch created. It checks while this webpage is open and active.' : 'Watch created. It checks while the launcher is running.', 'success'));
       title.input.value = ''; query.input.value = ''; deadline.input.value = ''; consent.input.checked = false;
       await refresh();
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
@@ -100,6 +100,10 @@ export async function watches({setBusy, seed = {}} = {}) {
   });
   const calendar = button('Download calendar reminders', async () => {
     try {
+      if (globalThis.sinterBrowser) {
+        const blob = await request('/api/calendar', {responseType:'blob'});
+        download('sinter-reminders.ics', blob, 'text/calendar;charset=utf-8'); return;
+      }
       const response = await fetch('/api/calendar', {cache: 'no-store'});
       if (!response.ok) throw new Error('Calendar export failed. Reload the app and try again.');
       download('sinter-reminders.ics', await response.text(), 'text/calendar;charset=utf-8');
@@ -107,7 +111,7 @@ export async function watches({setBusy, seed = {}} = {}) {
   });
   root.append(h('header', {class: 'page-intro'}, h('h2', {}, 'Stay ahead of the next opportunity.'),
     h('p', {}, 'Saved search watches with change tracking, safe retries and calendar reminders.')),
-    notice('Keep the Sinter launcher running for automatic checks. Closing it pauses execution; overdue work resumes on restart. No email alerts or applications are sent.'),
+    notice(globalThis.sinterBrowser ? 'Keep this page open and active for automatic checks. Browser sleep can delay checks. No email alerts or applications are sent.' : 'Keep the Sinter launcher running for automatic checks. Closing it pauses execution; overdue work resumes on restart. No email alerts or applications are sent.'),
     form, feedback, h('div', {class: 'button-row'}, run, calendar,
       button('Refresh results', () => refresh().catch(error => feedback.replaceChildren(notice(error.message, 'error'))))), list);
   await refresh();

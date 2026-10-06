@@ -1,0 +1,4 @@
+#browser-controls{margin:1rem 2rem 0;padding:1rem 1.25rem;border:1px solid var(--border,#45515c);border-radius:14px;background:var(--surface,#152026)}
+.browser-heading{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}.browser-heading a{color:inherit}
+#browser-controls>p{margin:.6rem 0}#browser-controls details{margin-top:.6rem}#browser-controls summary{cursor:pointer}#browser-controls .button-row{flex-wrap:wrap}
+@media(max-width:700px){#browser-controls{margin:1rem .75rem 0;padding:.85rem}.top-actions{flex-wrap:wrap}.button-row .button{white-space:normal}input,textarea,select{max-width:100%}body{overflow-wrap:anywhere}}
