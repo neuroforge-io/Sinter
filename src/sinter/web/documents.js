@@ -222,7 +222,7 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
       // An explicit retry of unchanged wording stays within this click and
       // reuses the prepared local file; it does not replay the compile request.
       download(reportName(snapshot.title) + '.docx', preparedWord.content, preparedWord.content.type);
-      feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, 'Word download requested. Check your browser’s downloads. If no file appears, open Word save options to save a copy directly on this computer.')); announce('Word download requested. Check your browser’s downloads.');
+      feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, globalThis.sinterBrowser ? 'Word download prepared. Check your browser’s downloads. If it was blocked, allow this download or use More options to export plain text.' : 'Word download requested. Check your browser’s downloads. If no file appears, open Word save options to save a copy directly on this computer.')); announce('Word download requested. Check your browser’s downloads.');
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
     finally { lockExports(false); }
   });
@@ -278,7 +278,7 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
     h('details', {}, h('summary', {}, 'Saved file verification'),
       h('p', {class: 'fine'}, 'The save records the supplied applied wording, creates a distinct private local file and checks its ZIP integrity and exact bytes. It does not verify facts, eligibility or browser delivery.'),
       h('p', {class: 'fine'}, 'The saved copy stays in Sinter’s exports folder after closing the app. Existing files are never overwritten.')));
-  const wordSaveOptions = h('details', {class: 'document-word-save-options'},
+  const wordSaveOptions = h('details', {class: 'document-word-save-options', hidden: !!globalThis.sinterBrowser},
     h('summary', {}, 'Word save options'),
     h('p', {class: 'fine'}, 'If your browser does not deliver a download, save a distinct Word copy directly in Sinter’s private exports folder on the computer running Sinter. This is an explicit local save; it does not send your text to a model or overwrite an existing file.'),
     localSave, localCopy);

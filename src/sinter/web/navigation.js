@@ -7,6 +7,7 @@ export const tools = [
   {id: 'casebooks', label: 'Community casebooks', group: 'WORKSPACE', icon: '▤', description: 'Connect notes, policies and questions in a saved project', keywords: 'knowledge project collection documents'},
   {id: 'library', label: 'My workspace', group: 'WORKSPACE', icon: '▱', description: 'Open reports you saved on this computer', keywords: 'saved library documents exports'},
   {id: 'activity', label: 'Recent activity', group: 'WORKSPACE', icon: '◷', description: 'Recover a result or check a running task', keywords: 'jobs cancel recover progress'},
+  ...(globalThis.sinterBrowser ? [{id: 'search', label: 'Search the web', group: 'CREATE', icon: '⌕', description: 'Find public sources and use their snippets in a research brief', keywords: 'web internet search sources'}] : []),
   {id: 'research', label: 'Research a topic', group: 'CREATE', icon: '⌕', description: 'Find source highlights, citations and gaps to investigate', keywords: 'research evidence sources search'},
   {id: 'grants', label: 'Find funding', group: 'CREATE', icon: '◇', description: 'Discover opportunities and check requirements', keywords: 'grants money fund eligibility'},
   {id: 'brief', label: 'Briefs & letters', group: 'CREATE', icon: '↗', description: 'Prepare an enquiry, briefing or agenda item', keywords: 'enquiry email writing draft'},

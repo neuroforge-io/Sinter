@@ -66,3 +66,18 @@ all four workbench workflows, export/import validation, rollback and paused watc
 The same contract can run under CPython and Pyodide. `browser/smoke.py` is the real
 browser save/reload/download/multi-tab/mobile contract; the dedicated workflow runs
 it on Chromium, Firefox and WebKit. Passing Node/WASM tests is not a browser pass.
+
+## Application-managed search in chat
+
+The optional chat control offers one exact public search topic for user review.
+A bounded model planning request chooses SEARCH or ANSWER. Only SEARCH invokes
+the public search tool, using that approved topic unchanged. The result trace
+shows the actual query, sources and failures. With usable results, at most three
+320-byte snippets enter a bounded second model call. At most one search and two
+model calls run within a140-second operation budget. No arbitrary tools, changed
+queries or project-file searches are accepted. This is Sinter-managed tool use;
+the native public endpoint still does not accept function-calling fields.
+
+No results or a failed provider never produce a purported source-grounded model
+answer. A malformed planning response triggers an explicit error without search.
+The model's tool-choice and answer quality remain subject to actual verification.

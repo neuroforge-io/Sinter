@@ -25,7 +25,7 @@ async function request(path,options={}) {
   if(!ready)throw new Error('The workspace is not ready. Reload to continue.');
   active++;
   let errorStatus = null;
-  status.textContent='Working locally… Search and AI send only the inputs you choose.';
+  status.textContent='Preparing your request… Search and AI send only the inputs you choose.';
   try {
     const response=await rpc('request',{path,data:options.data,method:options.method|| (options.data===undefined?'GET':'POST')},options.signal);
     if(response.status>=400) {const error=new Error(response.result.error||'The operation could not complete.');error.status=response.status;error.partialResult=response.result.partial_result;throw error;}

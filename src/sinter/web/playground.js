@@ -5,13 +5,14 @@ import {renderReport} from './reports.js';
 import {campaignAssistant} from './assistant.js';
 
 /** Free-form model output is deliberately separate from evidence-only reports. */
-export async function playground({setBusy, seed = {}, remember}) {
+export async function playground({setBusy, seed = {}, remember, pageId = "explore", onUseSearchResults}) {
   const preferences = await request('/api/settings');
   const mode = selectField('Tool', [['assistant', 'Campaign assistant'], ['chat', 'Chat with your model'], ['search', 'Search the web'], ['templates', 'Multi-step templates']], seed.mode || 'assistant');
   const view = h('div');
-  const root = h('div', {}, h('header', {class: 'page-intro'}, h('h2', {}, 'From your context to a useful draft.'),
-    h('p', {}, 'Write, summarise, research or ask a question. Your source material stays visible alongside the result.')),
-    h('p', {class: 'workspace-hint'}, 'Uses your configured model service. Review the result before using it.'), mode.wrap, view);
+  const root = h('div', {}, h('header', {class: 'page-intro'}, h('h2', {}, pageId === 'search' ? 'Find a source. Keep the evidence.' : 'From your context to a useful draft.'),
+    h('p', {}, pageId === 'search' ? 'Search a public topic, inspect the links, then bring useful snippets into a research brief.' : 'Write, summarise, research or ask a question. Your source material stays visible alongside the result.')),
+    h('p', {class: 'workspace-hint'}, pageId === 'search' ? 'Only your search query is sent. Search snippets are not verified source facts.' : globalThis.sinterBrowser ? 'The public native model supports short text. Optional Sinter-managed search lets it request one approved public lookup; native function-calling is not supported.' : 'Uses your configured model service. Review the result before using it.'), mode.wrap, view);
+  mode.wrap.hidden = pageId === 'search';
   const history = [];
   const templateDrafts = new Map();
   let lastTemplate = seed.template || 'enquiry-letter', senderDraft = seed;
@@ -27,13 +28,23 @@ export async function playground({setBusy, seed = {}, remember}) {
   function chatView() {
     const log = h('div', {class: 'chat-log', 'aria-label': 'Conversation'});
     const input = field('Your message', 'textarea', '', 'Your message and this conversation are sent to the model service. Avoid sensitive information.', {required: true, maxLength: 12000, rows: 3});
+    const searchPermit = check('Let the model request web search for this question');
+    const searchTopic = field('Public search topic', 'text', '', 'This exact topic may be sent to public web search. Edit it to remove personal or confidential details. Private project documents are never added automatically.', {minLength:3,maxLength:160});
+    searchTopic.wrap.hidden = true;
+    let topicEdited = false;
+    searchTopic.input.addEventListener('input', () => { topicEdited = true; });
+    input.input.addEventListener('input', () => { if (!topicEdited) searchTopic.input.value = input.input.value.trim().length <= 160 ? input.input.value.trim() : ''; });
+    searchPermit.input.addEventListener('change', () => { searchTopic.wrap.hidden = !searchPermit.input.checked; searchTopic.input.required = searchPermit.input.checked; });
+    const toolHelp = h('p', {class:'fine'}, 'Sinter-managed tool: the model chooses SEARCH or ANSWER. At most one web lookup and two model calls. Search-assisted answers use a bounded snippet pack; sources and failures stay visible.');
     const form = h('form', {class: 'card'}, input.wrap,
+      ...(globalThis.sinterBrowser ? [searchPermit.wrap,searchTopic.wrap,toolHelp] : []),
       h('div', {class: 'button-row'}, h('button', {type: 'submit', class: 'button primary'}, 'Send message'),
         button('Stop', () => controller?.abort()), button('Clear conversation', () => { if (!active) { history.length = 0; log.replaceChildren(); } })));
     form.addEventListener('submit', async event => {
       event.preventDefault();
       if (active || !input.input.value.trim()) return;
       const content = input.input.value.trim();
+      if (globalThis.sinterBrowser && searchPermit.input.checked && !searchTopic.input.reportValidity()) return;
       const messages = [...history, {role: 'user', content}];
       if (messages.length > 63 || messages.reduce((size, item) => size + item.content.length, 0) > 64000) {
         log.append(notice('This conversation reached the context limit. Start a new conversation; context is never silently dropped.', 'error')); return;
@@ -43,33 +54,57 @@ export async function playground({setBusy, seed = {}, remember}) {
       log.append(h('article', {class: 'chat-entry'}, h('div', {class: 'chat-role'}, 'Model / unverified'), body));
       let full = '', scheduled = false;
       input.input.disabled = true;
-      await execute('/api/chat/stream', {messages, max_tokens: preferences.settings.max_tokens}, event => {
+      await execute('/api/chat/stream', {messages, max_tokens: preferences.settings.max_tokens,
+        ...(globalThis.sinterBrowser && searchPermit.input.checked ? {allow_search:true, approved_search_query:searchTopic.input.value.trim()} : {})}, event => {
+        if (event.type === 'search_tool') {
+          const failed = ['unavailable','no_answer','citation_warning'].includes(event.status);
+          const item = h('article', {class:'chat-entry'}, h('div',{class:'chat-role'},'Sinter-managed search'),
+            notice(event.message, failed?'warning':''), event.query ? h('p',{},'Query: '+event.query) : null,
+            event.notice ? notice(event.notice,'warning') : null,
+            event.elapsed_ms ? h('p',{class:'fine'},'Elapsed: '+(event.elapsed_ms/1000).toFixed(1)+' seconds') : null,
+            ...(event.sources || []).map(source=>h('div',{class:'source'},safeLink(source.url,`[${source.citation}] ${source.title}`),h('p',{},source.content))));
+          if (event.sources?.length && onUseSearchResults) item.append(button('Use these sources in a research brief',()=>onUseSearchResults({query:event.query,result:{retrieved_at:event.retrieved_at,results:event.sources}}),'quiet'));
+          log.append(item);
+        }
         if (event.type === 'token') {
           full += event.t;
           if (!scheduled) { scheduled = true; requestAnimationFrame(() => { body.replaceChildren(markdown(full)); scheduled = false; }); }
         }
-      }, () => { history.push({role: 'user', content}, {role: 'assistant', content: full}); input.input.value = ''; });
+      }, () => { if (full.trim()) { history.push({role: 'user', content}, {role: 'assistant', content: full}); input.input.value = ''; if (!topicEdited) searchTopic.input.value = ''; } });
       input.input.disabled = false;
     });
     view.replaceChildren(log, form);
   }
   function searchView() {
-    const query = field('Search query', 'text', '', 'This exact query is sent to NeuroForge search.', {required: true, maxLength: 1024});
+    const query = field('Search query', 'text', seed.query || '', 'Use a public topic, organisation or place: 3–160 characters, at most 24 words. Avoid personal or confidential details.', {required: true, minLength: 3, maxLength: 160});
     const output = h('div', {class: 'stack'});
-    const form = h('form', {class: 'card'}, query.wrap, h('button', {type: 'submit', class: 'button primary'}, 'Search'));
+    const submit = h('button', {type: 'submit', class: 'button primary'}, 'Search');
+    const form = h('form', {class: 'card'}, query.wrap, submit);
+    const keep = (result) => remember?.(pageId, {mode: 'search', query: query.input.value, ...(result ? {searchResult: result} : {})}, {dirty: false});
+    function render(result, searched) {
+      const partial = result.source_status === 'partial' || result.source_status === 'related';
+      output.replaceChildren(...[h('p', {class: 'muted'}, 'Search: ' + searched + ' · Retrieved: ' + (result.retrieved_at || 'Not supplied')),
+        result.notice ? notice(result.notice, partial ? 'warning' : '') : partial ? notice('Some sources could not be checked. Results may be incomplete.', 'warning') : null,
+        ...result.results.map((item, index) => h('article', {class: 'card'}, h('h3', {}, safeLink(item.url, `[${index + 1}] ${item.title}`)), h('p', {}, item.content), h('p', {class:'fine'}, item.url)))].filter(Boolean));
+      if (!result.results.length) output.append(notice('No usable results came back for this query. This does not show that the organisation or information is absent. Try its full name and location, or add an original source to your project.', 'warning'));
+      else output.append(notice('These are search snippets. Open the originals and check their date and relevance before relying on them.'),
+        h('div', {class:'button-row'}, onUseSearchResults ? button('Use these sources in a research brief', () => onUseSearchResults({query: searched, result}), 'primary') : null,
+          button('Download search results', () => download('sinter-search-results.json', JSON.stringify({query: searched, ...result}, null, 2), 'application/json'), 'quiet')));
+    }
+    query.input.addEventListener('input', () => keep());
     form.addEventListener('submit', async event => {
       event.preventDefault();
       if (active) return;
-      active = true; setBusy(true); mode.input.disabled = true; output.replaceChildren(notice('Searching...'));
+      const searched = query.input.value.trim();
+      active = true; setBusy(true); mode.input.disabled = true; submit.disabled = true; query.input.disabled = true; output.replaceChildren(notice('Searching public sources…'));
       try {
-        const result = await request('/api/search', {data: {query: query.input.value}});
-        output.replaceChildren(h('p', {class: 'muted'}, 'Retrieved: ' + (result.retrieved_at || 'Not supplied')),
-          ...result.results.map(item => h('article', {class: 'card'}, h('h3', {}, safeLink(item.url, item.title)), h('p', {}, item.content))));
-        if (!result.results.length) output.append(notice('No results returned. Try a more specific query.'));
+        const result = await request('/api/search', {data: {query: searched}});
+        render(result, searched); keep(result);
       } catch (error) { output.replaceChildren(notice(error.message, 'error')); }
-      finally { active = false; setBusy(false); mode.input.disabled = false; }
+      finally { active = false; setBusy(false); mode.input.disabled = false; submit.disabled = false; query.input.disabled = false; }
     });
     view.replaceChildren(form, output);
+    if (seed.searchResult?.results) render(seed.searchResult, seed.query || 'Previous query');
   }
   async function templateView() {
     const {templates} = await request('/api/templates');

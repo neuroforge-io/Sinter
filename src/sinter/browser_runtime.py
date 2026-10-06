@@ -19,6 +19,7 @@ from . import campaigns, casebooks, client
 from .jobs import Job, Jobs
 from .preferences import Preferences, validate as validate_preferences
 from .runtime import _Capture, _public_error
+from .operations import checkpoint, remaining
 from .store import Store
 
 SCHEMA = "sinter-browser-workspace/v1"
@@ -86,9 +87,15 @@ class Capture(_Capture):
 def configure_network(transport):
     """Use only the fixed same-origin public API; preserve native validation."""
     def request_json(path, body=None):
+        global last_search_metadata
         if path not in {"/search", "/models", "/chat/completions"}:
             raise client.APIError("This endpoint is unavailable in the webpage.")
-        response = json.loads(str(transport(path, json.dumps(body, ensure_ascii=False))))
+        if path == "/search":
+            last_search_metadata = {}
+        timeout_ms = int(max(1, min(client._request_timeout(path, body), remaining(140))) * 1000)
+        checkpoint()
+        response = json.loads(str(transport(path, json.dumps(body, ensure_ascii=False), timeout_ms)))
+        checkpoint()
         if response["status"] >= 400:
             status = response["status"]
             message = ("Search/API rate limit reached. Wait at least 60 seconds before trying again."
@@ -98,11 +105,21 @@ def configure_network(transport):
         result = response["data"]
         if not isinstance(result, dict) or "error" in result:
             raise client.APIError("The public service returned an invalid response. No request was replayed.")
+        if path == "/search":
+            status = result.get("source_status", "")
+            if status in {"results", "no_results", "filtered_empty", "partial", "unavailable", "related"}:
+                last_search_metadata["source_status"] = status
+            if isinstance(result.get("notice"), str):
+                last_search_metadata["notice"] = result["notice"][:600]
+            for key in ("raw_result_count", "considered_result_count", "ranked_result_count", "filtered_result_count", "returned_result_count", "unresponsive_engine_count"):
+                if type(result.get(key)) is int and 0 <= result[key] <= 10000:
+                    last_search_metadata[key] = result[key]
         return result
     client._request_json = request_json
 
 
 app = None
+last_search_metadata = {}
 
 
 def initialize():
@@ -209,6 +226,14 @@ def request(raw):
             forbidden = {"api_url", "provider", "rkc_executable", "rkc_port"}
             if not isinstance(fields, dict) or set(fields) & forbidden or body.get("api_key"):
                 raise ValueError("Webpage connections use the anonymous NeuroForge API. Install Sinter for custom providers or credentials.")
+        if path == "/api/chat/stream" and body and body.get("allow_search") is True:
+            from .search_chat import run
+            with client.connection_settings(app.connection()):
+                result = run(body.get("messages"), body.get("approved_search_query"), body.get("max_tokens",64))
+            for event in result["events"]:
+                if event.get("type") == "search_tool" and event.get("query"):
+                    event.update(last_search_metadata)
+            return json.dumps({"status":200,"result":result},ensure_ascii=False,allow_nan=False)
         capture = Capture(app, casebook_schema=casebooks.SCOPED_SCHEMA)
         parsed = urlsplit(path)
         with client.connection_settings(app.connection()):
@@ -216,6 +241,8 @@ def request(raw):
                 capture._dispatch_get(parsed, parsed.path)
             else:
                 capture._dispatch_post(parsed.path, body or {})
+        if path == "/api/search" and isinstance(capture.result, dict):
+            capture.result.update(last_search_metadata)
         return json.dumps({"status": capture.status, "result": capture.result}, ensure_ascii=False, allow_nan=False)
     except Exception as exc:
         error = _public_error(exc)

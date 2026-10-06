@@ -110,7 +110,14 @@ async function route() {
     else if (id === 'activity') content = await activityPage();
     else if (id === 'library') content = await library({onEditProject: payload => { remember(payload.workflow, payload, {dirty: true}); go(payload.workflow); }});
     else if (id === 'watches') content = await watches(options);
-    else if (id === 'explore') content = await playground(options);
+    else if (id === 'explore' || id === 'search') content = await playground({...options, pageId: id,
+      seed: id === 'search' ? {...options.seed, mode: 'search'} : options.seed,
+      onUseSearchResults: ({query, result}) => {
+        remember('research', {title: query, query, questions: query,
+          notes: 'Public search snippets retrieved ' + (result.retrieved_at || 'at an unspecified time') + '. Original pages have not been verified.',
+          sources: result.results.map(({title, url, content}) => ({title, url, content})), use_search: false, use_model: false}, {dirty: true});
+        go('research');
+      }});
     else if (id === 'atlas') content = atlasPage(options);
     else if (id === 'tools') content = communityPage(options);
     else if (id === 'settings') content = await settingsPage();
@@ -131,7 +138,7 @@ try { applyTheme(localStorage.getItem('sinter-theme') === 'light' ? 'light' : 'd
 theme.addEventListener('click', () => {
   const value = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; applyTheme(value);
   try { localStorage.setItem('sinter-theme', value); } catch { /* Preferences are optional. */ }
-  request('/api/settings').then(state => request('/api/settings', {data: {settings: {...state.settings, theme: value}}})).catch(() => announce('Theme changed for this window; saving the preference failed.'));
+  request('/api/settings', {data: {settings: {theme: value}}}).catch(() => announce('Theme changed for this window; saving the preference failed.'));
 });
 document.querySelector('.skip-link').addEventListener('click', event => {
   event.preventDefault(); document.getElementById('content').focus();

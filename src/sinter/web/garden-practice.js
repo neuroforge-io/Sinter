@@ -21,7 +21,7 @@ export function gardenCard(open) {
     h('div', {class: 'garden-practice-choices'},
       h('div', {}, button('Open garden handover', () => open('casebooks'), 'primary'), h('small', {}, 'Original notes → a source-only document')),
       h('div', {}, button('Open garden campaign', () => open('campaigns')), h('small', {}, 'Funding checks → editable next actions'))),
-    h('p', {class: 'fine'}, 'No account or internet needed. Every person, programme and commitment is fictional. Nothing is sent. Open a practice copy, or resume your current practice edits.'));
+    h('p', {class: 'fine'}, globalThis.sinterBrowser ? 'After the app loads, this practice runs locally without a model. Every person, programme and commitment is fictional. Nothing is sent.' : 'No account or internet needed. Every person, programme and commitment is fictional. Nothing is sent. Open a practice copy, or resume your current practice edits.'));
 }
 
 export function gardenGuide(kind, open) {

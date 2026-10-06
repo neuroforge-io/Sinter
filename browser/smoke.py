@@ -18,6 +18,10 @@ def main():
         page.on('pageerror',lambda error:errors.append(str(error)))
         page.goto(args.url)
         page.get_by_role('heading',name='Your next piece of work starts here.').wait_for(timeout=90000)
+        page.get_by_role('button',name='Switch to light theme',exact=True).click()
+        page.wait_for_function("async () => (await sinterBrowser.request('/api/settings')).settings.theme === 'light'")
+        page.reload()
+        page.get_by_role('button',name='Switch to dark theme',exact=True).wait_for(timeout=90000)
         page.get_by_role('button',name='Open garden handover',exact=True).click()
         page.get_by_role('button',name='Save project',exact=True).click()
         page.locator('[data-casebook-save-success="true"]').wait_for(timeout=30000)
@@ -52,6 +56,28 @@ def main():
         second=context.new_page();second.goto(args.url)
         second.get_by_text('Sinter is already open in another tab.',exact=False).wait_for(timeout=15000)
         second.close()
+        queries=[]
+        def search_fixture(route):
+            query=route.request.post_data_json['query']; queries.append(query)
+            route.fulfill(status=200,content_type='application/json',body=json.dumps({
+                'retrieved_at':'2026-10-07T00:00:00Z','source_status':'partial',
+                'notice':'Fictional fixture: one source engine is unavailable.',
+                'results':[{'title':'Fictional garden water guide','url':'https://example.com/garden',
+                            'content':'Fictional example: check water access before opening the garden.'}]}))
+        context.route('**/v1/search',search_fixture)
+        page.get_by_role('link',name='Search the web',exact=True).click()
+        page.get_by_label('Search query',exact=True).fill('fictional garden water')
+        page.get_by_role('button',name='Search',exact=True).click()
+        page.get_by_role('link',name='[1] Fictional garden water guide',exact=True).wait_for(timeout=30000)
+        page.get_by_text('Fictional fixture: one source engine is unavailable.',exact=True).wait_for()
+        page.get_by_role('button',name='Use these sources in a research brief',exact=True).click()
+        page.get_by_label('Research topic',exact=True).wait_for()
+        assert page.get_by_label('Research topic',exact=True).input_value() == 'fictional garden water'
+        page.get_by_role('button',name='Prepare research brief',exact=True).click()
+        page.get_by_role('button',name='Save to My workspace',exact=True).wait_for(timeout=30000)
+        assert queries == ['fictional garden water']
+        page.get_by_role('button',name='Save to My workspace',exact=True).click()
+        assert page.locator('.document-word-save-options').is_hidden()
         page.set_viewport_size({'width':390,'height':844})
         page.goto(args.url+'#home')
         page.get_by_role('heading',name='Your next piece of work starts here.').wait_for(timeout=90000)

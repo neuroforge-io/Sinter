@@ -55,12 +55,13 @@ async function persist(files) {
   });
   previous=current; current=record;
 }
-function transport(path, raw) {
+function transport(path, raw, timeoutMs=30000) {
   // Synchronous XHR is worker-only: Python stays synchronous, UI stays responsive.
   // Fixed paths, no credentials, redirects cannot cross origin under connect-src.
   if(!['/search','/models','/chat/completions'].includes(path)) throw new Error('Unsupported API path');
   const xhr=new XMLHttpRequest(); xhr.open(raw==='null'?'GET':'POST','/v1'+path,false);
-  xhr.timeout=path==='/chat/completions'?120000:30000; xhr.setRequestHeader('Accept','application/json');
+  xhr.timeout=Math.max(1,Math.min(Number(timeoutMs)||30000,path==='/chat/completions'?120000:30000));
+  self.postMessage({phase:path==='/search'?'Searching the approved public topic…':path==='/chat/completions'?'Waiting for the public model… No request will be automatically replayed.':'Checking the public model catalogue…'}); xhr.setRequestHeader('Accept','application/json');
   if(raw!=='null') xhr.setRequestHeader('Content-Type','application/json');
   try {
     xhr.send(raw==='null'?null:raw);
@@ -71,7 +72,7 @@ function transport(path, raw) {
 }
 async function initialize(recovery=false) {
   if(!py) {
-    self.postMessage({phase:'Loading the local Python engine…'});
+    self.postMessage({phase:'Loading the local Python engine… The first visit downloads about 15 MB; your documents stay on this device.'});
     py=await loadPyodide({indexURL:new URL('./vendor/',self.location.href).href});
     await py.loadPackage(['sqlite3','ssl']);
     const response=await fetch('./python-files.json'); if(!response.ok) throw new Error('Sinter source files could not load. Reload when your connection returns.');
