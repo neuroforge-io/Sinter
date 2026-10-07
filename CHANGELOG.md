@@ -7,6 +7,11 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Write qualification receipts with explicit UTF-8 and LF line endings on every
+  platform. Replace a stale expected-failure test with Unicode, source retention
+  and write-failure regressions. Earlier hosted failures remain recorded; the
+  committed candidate still needs fresh hosted and installed checks.
+
 - Keep recovery-test CLI exports private and retain separate exact-byte evidence
   copies after verified app shutdown. Refuse incomplete termination or cleanup
   records and preserve the first failure. The earlier failed installed recovery

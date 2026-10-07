@@ -32,23 +32,33 @@ def test_atomic_json_write_preserves_unicode_with_windows_default_encoding(
 ):
     write_text = Path.write_text
 
-    def windows_write_text(path, text, encoding=None, errors=None, **kwargs):
+    def windows_write_text(path, text, encoding=None, errors=None, newline=None):
         return write_text(
-            path, text, encoding=encoding or "cp1252", errors=errors, **kwargs
+            path,
+            text,
+            encoding=encoding or "cp1252",
+            errors=errors,
+            newline="\r\n" if newline is None else newline,
         )
 
     monkeypatch.setattr(Path, "write_text", windows_write_text)
+    default_file = tmp_path / "windows-defaults.txt"
+    default_file.write_text("Fictional Café\n")
+    assert default_file.read_bytes() == b"Fictional Caf\xe9\r\n"
     path = tmp_path / "fictional-recovery.json"
     value = {
         "decomposed": "Fictional Cafe\u0301",
         "precomposed": "Fictional Café",
         "notes": "Fictional 🐝 中文 sources retained.",
     }
+    original = copy.deepcopy(value)
+    path.write_bytes(b"Previous receipt stays intact until replacement")
     flow.write_json(path, value)
     assert path.read_bytes() == json.dumps(
         value, ensure_ascii=False, indent=2
     ).encode("utf-8")
     assert json.loads(path.read_bytes()) == value
+    assert value == original
     assert not path.with_suffix(".tmp").exists()
 
 

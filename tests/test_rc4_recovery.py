@@ -669,14 +669,21 @@ def _windows_text_defaults(monkeypatch):
     monkeypatch.setattr(Path, "open", mapped_open)
 
 
+@pytest.mark.parametrize(
+    "writer",
+    [producer.transport.write_json, producer.write_json],
+    ids=["installed-workflow", "source-recovery"],
+)
 def test_owned_json_retains_literal_originals_under_windows_text_defaults(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, writer
 ):
     seeded = worker.seed(tmp_path / "data")
     original = copy.deepcopy(seeded["snapshot"])
     value = {
         "rows": [{"persistent_snapshot": original}],
-        "failure": "Fictional cleanup — e\u0301 🐝",
+        "failure": "Fictional cleanup — e\u0301 🐝 中文",
+        "decomposed": "Fictional Cafe\u0301",
+        "precomposed": "Fictional Café",
         "closed": True,
     }
     expected = json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
@@ -684,16 +691,64 @@ def test_owned_json_retains_literal_originals_under_windows_text_defaults(
     previous = b"original receipt remains until replacement"
     path.write_bytes(previous)
     _windows_text_defaults(monkeypatch)
-    # Retain the observed old default failure; do not alter the legacy helper.
+    # A literal historical default writer still fails under the mapped locale.
+    # Neither current writer is required to retain that corrected failure.
+    def old_default_writer(destination, payload):
+        temporary = destination.with_suffix(".tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+        temporary.replace(destination)
+
     with pytest.raises(UnicodeEncodeError):
-        producer.transport.write_json(path, value)
+        old_default_writer(path, value)
     assert path.read_bytes() == previous
-    producer.write_json(path, value)
+    writer(path, value)
     assert path.read_bytes() == expected
     assert b"\r\n" not in expected and "e\u0301 🐝".encode("utf-8") in expected
     assert json.loads(path.read_bytes()) == value
     assert not path.with_suffix(".tmp").exists()
     assert seeded["snapshot"] == original
+
+
+@pytest.mark.parametrize(
+    "writer",
+    [producer.transport.write_json, producer.write_json],
+    ids=["installed-workflow", "source-recovery"],
+)
+@pytest.mark.parametrize("fault", ["write", "replace"])
+def test_atomic_json_failure_retains_original_and_propagates(
+    tmp_path, monkeypatch, writer, fault
+):
+    path = tmp_path / "retained.json"
+    temporary = path.with_suffix(".tmp")
+    previous = b"Original receipt remains unchanged"
+    path.write_bytes(previous)
+    value = {"source": "Cafe\u0301 / Café / 🐝 / 中文", "failed": False}
+    before = copy.deepcopy(value)
+    expected = json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+    _windows_text_defaults(monkeypatch)
+    failure = OSError("injected " + fault + " failure")
+    if fault == "write":
+        def failed_write(target, *args, **kwargs):
+            assert target == temporary
+            target.write_bytes(b"Incomplete temporary proof")
+            raise failure
+
+        monkeypatch.setattr(Path, "write_text", failed_write)
+    else:
+        def failed_replace(target, destination):
+            assert target == temporary and destination == path
+            assert temporary.read_bytes() == expected
+            raise failure
+
+        monkeypatch.setattr(Path, "replace", failed_replace)
+    with pytest.raises(OSError, match="injected " + fault + " failure") as caught:
+        writer(path, value)
+    assert caught.value is failure
+    assert path.read_bytes() == previous
+    assert value == before
+    assert temporary.read_bytes() == (
+        b"Incomplete temporary proof" if fault == "write" else expected
+    )
 
 
 @pytest.mark.parametrize("fault", ["snapshot", "stop", "relay_close"])
