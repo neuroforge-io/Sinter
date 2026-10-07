@@ -341,6 +341,8 @@ def test_controller_metadata_read_fault_is_retained_without_start_or_masking(
 @pytest.fixture
 def inert_app_identity(tmp_path, monkeypatch):
     """Real retained files, with app, relay, thread and time operations injected."""
+    if os.name != "posix":
+        pytest.skip("Controller capture admission requires POSIX metadata.")
     from tools import installed_workflow_browser as browser
     from tools import native_window_smoke as native
     from tools import rc4_installed_recovery as recovery

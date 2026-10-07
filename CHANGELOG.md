@@ -14,6 +14,12 @@ original installed gates must pass before a separate Linux preview is admitted.
   independent cleanup observation after a startup failure. The failed original
   installed workflow remains failed; corrected source needs fresh qualification.
 
+- Refuse installed capture before filesystem acquisition when POSIX ownership
+  metadata is unavailable. Keep portable input checks active and scope Unix
+  descriptor fixtures explicitly; these source tests do not qualify a Windows
+  or macOS installer. Preserve a packaged CLI bound failure when later cleanup
+  signaling is refused, retain the cleanup error and attempt bounded reaping.
+
 - Write qualification receipts with explicit UTF-8 and LF line endings on every
   platform. Replace a stale expected-failure test with Unicode, source retention
   and write-failure regressions. Earlier hosted failures remain recorded; the

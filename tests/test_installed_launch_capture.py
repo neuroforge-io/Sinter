@@ -6,6 +6,7 @@ import os
 import stat
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -17,6 +18,8 @@ URL = "http://127.0.0.1:12345"
 @pytest.fixture
 def capture_root(tmp_path):
     """Use an exact directory on macOS hosts with a /var symbolic-link prefix."""
+    if os.name != "posix":
+        pytest.skip("Descriptor ownership capture requires POSIX metadata.")
     return tmp_path.resolve(strict=True)
 
 
@@ -149,6 +152,8 @@ def test_ready_reader_does_not_admit_creation_or_valid_prefix_window(
 @pytest.mark.parametrize(
     "value",
     [
+        None,
+        True,
         "",
         "http://127.0.0.1:12345\n",
         "http://localhost:12345",
@@ -163,11 +168,50 @@ def test_ready_reader_does_not_admit_creation_or_valid_prefix_window(
         "http://127.0.0.1:１２３４５",
     ],
 )
-def test_invalid_producer_argument_never_creates_capture(capture_root, value):
-    path = capture_root / "launch-url.txt"
+def test_invalid_producer_argument_never_creates_capture(tmp_path, value):
+    path = tmp_path / "launch-url.txt"
     with pytest.raises(ValueError):
         flow.publish_launch_capture(path, value)
     assert not path.exists() and not flow.launch_capture_pending(path).exists()
+
+
+@pytest.mark.parametrize("unavailable", ["non-posix", "missing-uid"])
+def test_capture_refuses_unsupported_ownership_before_filesystem_or_producer(
+    tmp_path, monkeypatch, unavailable
+):
+    path = tmp_path / "launch-url.txt"
+    attempted = []
+
+    def forbidden(*args, **kwargs):
+        attempted.append("filesystem or producer")
+        raise AssertionError("Unsupported capture must refuse before acquisition.")
+
+    with monkeypatch.context() as patch:
+        if unavailable == "non-posix":
+            patch.setattr(flow, "os", SimpleNamespace(name="nt", getuid=lambda: 0))
+        else:
+            patch.setattr(flow.os, "getuid", None, raising=False)
+        patch.setattr(Path, "lstat", forbidden)
+        for name in ("open", "link", "read", "write", "close"):
+            patch.setattr(flow.os, name, forbidden, raising=False)
+        with pytest.raises(ValueError, match="POSIX ownership metadata"):
+            flow.publish_launch_capture(path, URL)
+        with pytest.raises(ValueError, match="POSIX ownership metadata"):
+            flow.read_launch_capture(path, forbidden)
+    assert attempted == []
+
+
+@pytest.mark.parametrize("timeout,interval", [(26.0, 0.02), (25.0, 0.0)])
+def test_invalid_capture_deadline_refuses_before_any_platform_acquisition(
+    tmp_path, timeout, interval
+):
+    with pytest.raises(ValueError, match="bounded startup deadline"):
+        flow.read_launch_capture(
+            tmp_path / "launch-url.txt",
+            lambda: pytest.fail("Producer queried."),
+            timeout=timeout,
+            interval=interval,
+        )
 
 
 @pytest.mark.parametrize("raw", [b"", b"http://127.0.0.1:12345\n", b"\xff"])

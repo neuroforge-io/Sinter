@@ -210,6 +210,8 @@ def launch_capture_pending(path: Path) -> Path:
 
 
 def _capture_parent(path: Path) -> os.stat_result:
+    if os.name != "posix" or not callable(getattr(os, "getuid", None)):
+        raise ValueError("Installed launch capture requires POSIX ownership metadata.")
     parent = path.parent
     observed = parent.lstat()
     if (
@@ -258,7 +260,9 @@ def publish_launch_capture(path: Path, value: str) -> None:
         value: Actual opener argument; the unchanged exact local-URL rule applies.
 
     Raises:
-        ValueError: The address or owned path is inadmissible.
+        ValueError: POSIX ownership metadata is unavailable, or the address or
+            owned path is inadmissible. This Linux qualification boundary does
+            not qualify native installation on other platforms.
         OSError: Exclusive acquisition, writing, syncing or publication failed.
             The first failure keeps any later close and cleanup failures attached.
     """
@@ -438,7 +442,8 @@ def read_launch_capture(
         still establish the original app's lifecycle and completed workflow.
 
     Raises:
-        ValueError: The producer stopped, deadline expired or capture is unsafe.
+        ValueError: POSIX ownership metadata is unavailable, the producer stopped,
+            the deadline expired or the capture is unsafe.
         OSError: Capture acquisition or reading failed; it is never replayed.
     """
     if not 0 < interval <= timeout <= 25:

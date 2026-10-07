@@ -2648,3 +2648,35 @@ the former empty-file window, explicit acknowledgement limits, startup and clean
 faults, and existing recovery behaviour. They are source regressions, not an
 installed workflow pass. Fresh hosted checks and installed execution against the
 next committed source remain pending.
+
+Hosted source run `37606999479` against subsequent commit
+`119b4a956af835e1ce576a67346a6ddaa15bbe9a` failed three Python jobs. Both Linux
+Python jobs, macOS Python 3.13, Chromium workflows, RKC interoperability and all
+speech jobs passed. The source/portable artifact job was skipped after the
+failures; no new artifact or installed qualification follows from this run.
+
+Windows Python 3.10 had two failures from fixtures that rename an open descriptor.
+Windows Python 3.13 had sixteen failures: the same rename cases plus strict
+descriptor/path metadata mismatch refusals and their dependent expectations.
+The captured logs do not identify the mismatched numeric field. POSIX ownership
+requirements must be explicit before acquisition, without weakening the nine
+Unix identity fields. Filesystem capture fixtures and their controller
+integrations are outside Windows scope; malformed input, deadline and explicit
+unsupported-platform checks remain portable. This is test-scope admission, not
+native Windows or macOS installation evidence.
+
+The macOS Python 3.10 failure was separate. Its packaged CLI output-flood test
+correctly raised the output-bound error, then a process-group signal was refused
+with `PermissionError`. That later error hid the original failure and prevented
+the bounded wait and exit observation. The captured run does not establish the
+cause of the signal refusal or successful reaping. Corrections must preserve
+both failures and attempt independent bounded reaping, with actual exit facts.
+The failed hosted run remains recorded; corrected source requires a new run.
+
+The corrected combined source suites pass 444 cases with no skips in 16.94
+seconds. Full captured output, lint, formatting and whitespace checks pass, with
+unchanged tested implementation files and a normally completed outer test
+process. Mocked permission-refusal and uncertain-exit cases exercise retention
+without replaying the failed hosted or installed operations. This result is
+source evidence only: corrected hosted checks and fresh exact-source installed
+qualification remain pending, and RC4 remains unpublished.

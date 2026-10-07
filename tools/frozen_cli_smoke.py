@@ -28,9 +28,95 @@ class Commands:
         home = self.directory / "home"
         home.mkdir()
         self.environment.update(
-            HOME=str(home), USERPROFILE=str(home), TMP=str(home), TEMP=str(home),
-            XDG_CONFIG_HOME=str(home), SINTER_DATA_DIR=str(self.directory / "work"),
+            HOME=str(home),
+            USERPROFILE=str(home),
+            TMP=str(home),
+            TEMP=str(home),
+            XDG_CONFIG_HOME=str(home),
+            SINTER_DATA_DIR=str(self.directory / "work"),
         )
+
+    @staticmethod
+    def _cleanup_owned_child(
+        process: subprocess.Popen[bytes], row: dict[str, object], name: str
+    ) -> list[BaseException]:
+        """Retain signaling faults and observe the bounded owned-child wait.
+
+        Args:
+            process: This command's child, launched in its own POSIX session.
+            row: Existing command receipt updated with actual cleanup facts.
+            name: Fixed check label used in a missing-exit refusal.
+
+        Returns:
+            Actual cleanup exceptions in attempted order. No request is replayed.
+        """
+        errors: list[BaseException] = []
+        details: list[dict[str, str]] = []
+
+        def retain(label: str, error: BaseException) -> None:
+            errors.append(error)
+            details.append(
+                {
+                    "operation": label,
+                    "type": type(error).__name__,
+                    "message": str(error)[:4096],
+                }
+            )
+
+        def observe(label: str) -> tuple[bool, int | None]:
+            try:
+                return True, process.poll()
+            except BaseException as error:
+                retain(label, error)
+                return False, None
+
+        def signal_child(*, kill: bool) -> None:
+            label = (
+                "owned group " + ("SIGKILL" if kill else "SIGTERM")
+                if os.name == "posix"
+                else "owned child " + ("kill" if kill else "terminate")
+            )
+            try:
+                if os.name == "posix":
+                    # Only this newly created owned process group is targeted.
+                    kind = signal.SIGKILL if kill else signal.SIGTERM
+                    os.killpg(process.pid, kind)
+                elif kill:
+                    process.kill()
+                else:
+                    process.terminate()
+            except BaseException as error:
+                retain(label, error)
+
+        known, status = observe("owned child initial exit observation")
+        if not known or status is None:
+            if known:
+                row["forced_cleanup"] = True
+                signal_child(kill=False)
+            # Signaling refusal does not bypass the wait for this same child.
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired as error:
+                retain("owned child first wait", error)
+                known, status = observe("owned child escalation observation")
+                if known and status is None:
+                    signal_child(kill=True)
+                try:
+                    process.wait(timeout=2)
+                except BaseException as later:
+                    retain("owned child final wait", later)
+            except BaseException as error:
+                retain("owned child first wait", error)
+        known, status = observe("owned child final exit observation")
+        row["owned_process_exited"] = known and status is not None
+        if not row["owned_process_exited"]:
+            retain(
+                "owned child exit admission",
+                RuntimeError(f"Packaged CLI {name} owned child did not exit."),
+            )
+        if details:
+            row["cleanup_errors"] = details
+        return errors
 
     def run(self, name, arguments, *, code=0):
         start = time.monotonic()
@@ -41,48 +127,41 @@ class Commands:
         self.receipt["checks"].append(row)
         with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
             process = subprocess.Popen(
-                [*self.prefix, *arguments], env=self.environment,
-                cwd=self.directory, stdin=subprocess.DEVNULL,
-                stdout=stdout, stderr=stderr, start_new_session=os.name == "posix",
+                [*self.prefix, *arguments],
+                env=self.environment,
+                cwd=self.directory,
+                stdin=subprocess.DEVNULL,
+                stdout=stdout,
+                stderr=stderr,
+                start_new_session=os.name == "posix",
             )
             row["pid"] = process.pid
+            primary = None
             try:
                 deadline = start + min(20, remaining)
                 while process.poll() is None:
-                    if any(os.fstat(stream.fileno()).st_size > 1024 * 1024
-                           for stream in (stdout, stderr)):
+                    if any(
+                        os.fstat(stream.fileno()).st_size > 1024 * 1024
+                        for stream in (stdout, stderr)
+                    ):
                         raise RuntimeError(
                             f"Packaged CLI {name} exceeded output bound."
                         )
                     if time.monotonic() >= deadline:
                         raise RuntimeError(f"Packaged CLI {name} exceeded time bound.")
                     time.sleep(0.02)
+            except BaseException as error:
+                primary = error
             finally:
-                if process.poll() is None:
-                    row["forced_cleanup"] = True
-                    if os.name == "posix":
-                        try:
-                            os.killpg(process.pid, signal.SIGTERM)
-                        except ProcessLookupError:
-                            pass
-                    else:
-                        process.terminate()
-                    try:
-                        process.wait(timeout=2)
-                    except subprocess.TimeoutExpired:
-                        if os.name == "posix":
-                            try:
-                                os.killpg(process.pid, signal.SIGKILL)
-                            except ProcessLookupError:
-                                pass
-                        else:
-                            process.kill()
-                        process.wait(timeout=2)
-                row["owned_process_exited"] = process.poll() is not None
+                cleanup = self._cleanup_owned_child(process, row, name)
                 row.update(
                     seconds=round(time.monotonic() - start, 4),
                     exit_code=process.returncode,
                 )
+            if primary is not None:
+                raise primary
+            if cleanup:
+                raise cleanup[0]
             stdout.seek(0)
             stderr.seek(0)
             output = stdout.read(1024 * 1024 + 1)
@@ -90,8 +169,10 @@ class Commands:
             if max(len(output), len(errors)) > 1024 * 1024:
                 raise RuntimeError(f"Packaged CLI {name} exceeded output bound.")
             result = subprocess.CompletedProcess(
-                process.args, process.returncode,
-                output.decode("utf-8"), errors.decode("utf-8"),
+                process.args,
+                process.returncode,
+                output.decode("utf-8"),
+                errors.decode("utf-8"),
             )
         if result.returncode != code or "Traceback" in result.stderr:
             row.update(stdout=result.stdout[:65536], stderr=result.stderr[:65536])
@@ -128,22 +209,29 @@ def workflow(commands):
     document = {
         "title": "Fictional Lantern library \u03a9",
         "questions": "How long is the lending period?\nZebra insurance premium?",
-        "documents": [{
-            "title": "Fictional handbook.md",
-            "content": "The Lantern lending period is 14 days. Fictional label \u03a9.",
-        }],
+        "documents": [
+            {
+                "title": "Fictional handbook.md",
+                "content": "The Lantern lending period is 14 days. "
+                "Fictional label \u03a9.",
+            }
+        ],
     }
     source = commands.directory / "fictional-\u03a9.json"
     source.write_text(json.dumps(document), encoding="utf-8")
-    saved = commands.json("import_material", [
-        "import", str(source), "--kind", "casebook", "--format", "json"
-    ])
-    assert commands.operation("inspect_sources", "casebooks.get", {
-        "id": saved["id"]
-    }) == saved
-    report = commands.operation("inspect_evidence_and_gap", "casebooks.build", {
-        "id": saved["id"], "revision": saved["revision"]
-    })
+    saved = commands.json(
+        "import_material",
+        ["import", str(source), "--kind", "casebook", "--format", "json"],
+    )
+    assert (
+        commands.operation("inspect_sources", "casebooks.get", {"id": saved["id"]})
+        == saved
+    )
+    report = commands.operation(
+        "inspect_evidence_and_gap",
+        "casebooks.build",
+        {"id": saved["id"], "revision": saved["revision"]},
+    )
     assert "14 days" in report["markdown"] and report["excerpts"]
     assert report["question_index"][1]["excerpt_ids"] == []
     assert report["sources"][0]["content"] == document["documents"][0]["content"]
@@ -151,34 +239,57 @@ def workflow(commands):
     document["documents"][0]["content"] = (
         "The Lantern lending period is 21 days. Fictional label \u03a9."
     )
-    updated = commands.operation("update_sources", "casebooks.save", {
-        "id": saved["id"], "revision": saved["revision"], "document": document
-    })
+    updated = commands.operation(
+        "update_sources",
+        "casebooks.save",
+        {"id": saved["id"], "revision": saved["revision"], "document": document},
+    )
     assert updated["id"] == saved["id"] and updated["revision"] == 2
-    latest = commands.operation("inspect_updated_evidence", "casebooks.build", {
-        "id": updated["id"], "revision": updated["revision"]
-    })
+    latest = commands.operation(
+        "inspect_updated_evidence",
+        "casebooks.build",
+        {"id": updated["id"], "revision": updated["revision"]},
+    )
     assert "21 days" in latest["markdown"] and latest["excerpts"]
-    assert commands.operation("historical_snapshot", "reports.get", {
-        "id": historical["id"]
-    }) == report
-    commands.operation("refuse_stale_update", "casebooks.save", {
-        "id": saved["id"], "revision": saved["revision"], "document": document
-    }, code=2)
-    assert commands.operation("stale_update_keeps_sources", "casebooks.get", {
-        "id": saved["id"]
-    }) == updated
+    assert (
+        commands.operation(
+            "historical_snapshot", "reports.get", {"id": historical["id"]}
+        )
+        == report
+    )
+    commands.operation(
+        "refuse_stale_update",
+        "casebooks.save",
+        {"id": saved["id"], "revision": saved["revision"], "document": document},
+        code=2,
+    )
+    assert (
+        commands.operation(
+            "stale_update_keeps_sources", "casebooks.get", {"id": saved["id"]}
+        )
+        == updated
+    )
     exported = commands.directory / "exported-\u03a9.json"
-    commands.json("export_sources", [
-        "export", "casebook", saved["id"], "-o", str(exported), "--machine"
-    ])
+    commands.json(
+        "export_sources",
+        ["export", "casebook", saved["id"], "-o", str(exported), "--machine"],
+    )
     assert json.loads(exported.read_text(encoding="utf-8")) == updated["document"], (
         "UTF-8 exported backup changed."
     )
-    restored = commands.json("restore_separate_workspace", [
-        "import", str(exported), "--kind", "casebook", "--format", "json",
-        "--directory", str(commands.directory / "restored"),
-    ])
+    restored = commands.json(
+        "restore_separate_workspace",
+        [
+            "import",
+            str(exported),
+            "--kind",
+            "casebook",
+            "--format",
+            "json",
+            "--directory",
+            str(commands.directory / "restored"),
+        ],
+    )
     assert restored["id"] != saved["id"] and restored["document"] == updated["document"]
     status = commands.json("reopened_status", ["status", "--format", "json"])
     assert status["counts"]["casebooks"] == 1 and status["counts"]["reports"] == 1
@@ -193,9 +304,13 @@ def qualify(binary):
     """Return actual frozen-process evidence; never a real-model qualification."""
     binary = Path(binary).resolve()
     receipt = {
-        "schema": "sinter-frozen-cli-test/v1", "passed": False, "checks": [],
-        "fixture_only": True, "provider_inference_exercised": False,
-        "credentials_supplied": False, "gui_exercised": False,
+        "schema": "sinter-frozen-cli-test/v1",
+        "passed": False,
+        "checks": [],
+        "fixture_only": True,
+        "provider_inference_exercised": False,
+        "credentials_supplied": False,
+        "gui_exercised": False,
     }
     start = time.monotonic()
     try:
