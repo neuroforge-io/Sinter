@@ -33,7 +33,9 @@ export async function library({onEditProject} = {}) {
   }
   root.append(h('header', {class: 'page-intro non-print'}, h('h2', {}, 'My workspace'),
     h('p', {}, 'Explicitly saved drafts, with their original evidence packs.')),
-    h('div', {class: 'non-print'}, notice('Saved reports stay in your local Sinter folder, not a cloud account. They are not encrypted. Export important work and protect access to this computer.')),
+    h('div', {class: 'non-print'}, notice(globalThis.sinterBrowser
+      ? 'Saved reports stay in this browser on this device, not a cloud account. They are not encrypted. Clearing browser storage, private browsing or device loss can erase saved work. Use Export saved workspace above to keep a separate backup.'
+      : 'Saved reports stay in your local Sinter folder, not a cloud account. They are not encrypted. Export important work and protect access to this computer.')),
     feedback, pending, list, opened);
   await refresh();
   return root;

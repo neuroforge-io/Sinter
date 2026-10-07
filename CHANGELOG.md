@@ -7,6 +7,10 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Describe saved reports using the actual storage backend. The browser edition
+  now explains device-local storage and workspace backups; installed Sinter keeps
+  its local-folder guidance. Both paths have focused rendering regressions.
+
 - Admit one additional bounded, private temporary-file shape after the installed
   browser test has fully stopped. Keep the original cache rule, reject unknown
   or unsafe entries before any deletion, and recheck file identity and contents
