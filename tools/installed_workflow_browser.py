@@ -27,6 +27,7 @@ import time
 import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
+from typing import Callable
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
@@ -180,6 +181,299 @@ def inner_address(value: str) -> tuple[str, int]:
     ):
         raise ValueError("The native launch address is not an exact local URL.")
     return parsed.hostname, parsed.port
+
+
+MAX_LAUNCH_CAPTURE = 1024
+_CAPTURE_FIELDS = (
+    "st_dev",
+    "st_ino",
+    "st_size",
+    "st_mtime_ns",
+    "st_ctime_ns",
+    "st_mode",
+    "st_uid",
+    "st_gid",
+    "st_nlink",
+)
+
+
+def launch_capture_pending(path: Path) -> Path:
+    """Name the single private, source-defined in-progress capture file.
+
+    Args:
+        path: Final opener capture path inside the owned qualification directory.
+
+    Returns:
+        The fixed sibling name used only while one capture is being published.
+    """
+    return path.with_name("." + path.name + ".pending")
+
+
+def _capture_parent(path: Path) -> os.stat_result:
+    parent = path.parent
+    observed = parent.lstat()
+    if (
+        not path.is_absolute()
+        or parent.resolve(strict=True) != parent
+        or not stat.S_ISDIR(observed.st_mode)
+        or observed.st_uid != getattr(os, "getuid", lambda: 0)()
+    ):
+        raise ValueError("Launch capture requires an exact owned directory.")
+    return observed
+
+
+def _capture_identity(observed: os.stat_result) -> tuple[int, ...]:
+    return tuple(getattr(observed, key) for key in _CAPTURE_FIELDS)
+
+
+def _capture_stat(path: Path, links: set[int]) -> os.stat_result:
+    observed = path.lstat()
+    if (
+        not stat.S_ISREG(observed.st_mode)
+        or observed.st_uid != getattr(os, "getuid", lambda: 0)()
+        or observed.st_nlink not in links
+        or not 0 <= observed.st_size <= MAX_LAUNCH_CAPTURE
+    ):
+        raise ValueError("Launch capture is unowned, redirected or over bound.")
+    return observed
+
+
+def _capture_cleanup_errors(
+    primary: BaseException, errors: list[tuple[str, BaseException]]
+) -> None:
+    if errors:
+        # Do not call exception formatting/truth methods or replace its identity.
+        BaseException.__setattr__(primary, "launch_capture_cleanup", tuple(errors))
+
+
+def _capture_inode(observed: os.stat_result) -> tuple[int, int]:
+    return observed.st_dev, observed.st_ino
+
+
+def publish_launch_capture(path: Path, value: str) -> None:
+    """Publish a complete actual opener URL without exposing a partial file.
+
+    Args:
+        path: Fresh final capture path in the owned qualification directory.
+        value: Actual opener argument; the unchanged exact local-URL rule applies.
+
+    Raises:
+        ValueError: The address or owned path is inadmissible.
+        OSError: Exclusive acquisition, writing, syncing or publication failed.
+            The first failure keeps any later close and cleanup failures attached.
+    """
+    if type(value) is not str:
+        raise ValueError("Launch capture requires the actual ASCII URL argument.")
+    inner_address(value)
+    raw = value.encode("ascii")
+    if not 0 < len(raw) <= MAX_LAUNCH_CAPTURE:
+        raise ValueError("Launch capture is empty or over bound.")
+    parent = _capture_parent(path)
+    pending = launch_capture_pending(path)
+    descriptor = None
+    attempted = published = False
+    publication_identity = None
+    primary = None
+    cleanup = []
+    try:
+        descriptor = os.open(
+            pending,
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+        )
+        acquired = os.fstat(descriptor)
+        publication_identity = _capture_inode(acquired)
+        if _capture_identity(_capture_stat(pending, {1})) != _capture_identity(
+            acquired
+        ):
+            raise ValueError("Launch capture descriptor differs from its owned name.")
+        if os.write(descriptor, raw) != len(raw):
+            raise OSError("The launch capture write was incomplete.")
+        os.fsync(descriptor)
+        completed = os.fstat(descriptor)
+        if (
+            completed.st_size != len(raw)
+            or _capture_inode(completed) != publication_identity
+            or _capture_identity(_capture_stat(pending, {1}))
+            != _capture_identity(completed)
+        ):
+            raise ValueError("Launch capture changed before publication.")
+        closing, descriptor = descriptor, None
+        os.close(closing)
+        if _capture_identity(_capture_stat(pending, {1})) != _capture_identity(
+            completed
+        ) or _capture_inode(_capture_parent(path)) != _capture_inode(parent):
+            raise ValueError(
+                "Launch capture source or parent changed before publication."
+            )
+        # The bytes are closed before this exclusive atomic publication. Keeping
+        # the pending name until unlink completes prevents early reader admission.
+        attempted = True
+        os.link(pending, path, follow_symlinks=False)
+        published = True
+        pending.unlink()
+    except BaseException as error:
+        primary = error
+    finally:
+        if descriptor is not None:
+            closing, descriptor = descriptor, None
+            try:
+                os.close(closing)
+            except BaseException as error:
+                cleanup.append(("descriptor close", error))
+        if primary is not None:
+            if attempted and not published:
+                try:
+                    final = _capture_stat(path, {1, 2})
+                    published = _capture_inode(final) == publication_identity
+                except FileNotFoundError:
+                    pass
+                except BaseException as error:
+                    # An unknown link outcome retains the owned pending evidence.
+                    published = True
+                    cleanup.append(("publication outcome observation", error))
+            if published:
+                BaseException.__setattr__(primary, "launch_capture_uncertain", True)
+                try:
+                    if not os.path.lexists(pending):
+                        final = _capture_stat(path, {1})
+                        if _capture_inode(final) != publication_identity:
+                            raise ValueError(
+                                "Published launch capture identity differs."
+                            )
+                        os.link(path, pending, follow_symlinks=False)
+                    if _capture_inode(_capture_stat(pending, {1, 2})) != (
+                        publication_identity
+                    ):
+                        raise ValueError("Pending launch capture identity differs.")
+                except BaseException as error:
+                    cleanup.append(("pending refusal marker retention", error))
+            elif publication_identity is not None:
+                try:
+                    if _capture_inode(_capture_stat(pending, {1})) != (
+                        publication_identity
+                    ):
+                        raise ValueError("Pending cleanup capture identity differs.")
+                    pending.unlink()
+                except BaseException as error:
+                    cleanup.append(("pending capture removal", error))
+    if primary is not None:
+        _capture_cleanup_errors(primary, cleanup)
+        raise primary
+    if cleanup:
+        primary = cleanup[0][1]
+        _capture_cleanup_errors(primary, cleanup[1:])
+        raise primary
+
+
+def _read_launch_capture(path: Path) -> bytes:
+    before = _capture_stat(path, {1})
+    descriptor = os.open(
+        path,
+        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+    )
+    primary = None
+    cleanup = []
+    raw = b""
+    try:
+        if _capture_identity(os.fstat(descriptor)) != _capture_identity(before):
+            raise ValueError("Launch capture changed before its exact read.")
+        while len(raw) <= MAX_LAUNCH_CAPTURE:
+            chunk = os.read(descriptor, MAX_LAUNCH_CAPTURE + 1 - len(raw))
+            if not chunk:
+                break
+            raw += chunk
+        after = os.fstat(descriptor)
+        final = _capture_stat(path, {1})
+        if (
+            _capture_identity(before) != _capture_identity(after)
+            or _capture_identity(before) != _capture_identity(final)
+            or len(raw) != before.st_size
+        ):
+            raise ValueError("Launch capture changed during its exact read.")
+    except BaseException as error:
+        primary = error
+    finally:
+        try:
+            os.close(descriptor)
+        except BaseException as error:
+            cleanup.append(("capture read close", error))
+    if primary is not None:
+        _capture_cleanup_errors(primary, cleanup)
+        raise primary
+    if cleanup:
+        raise cleanup[0][1]
+    inner_address(raw.decode("ascii"))
+    return raw
+
+
+def read_launch_capture(
+    path: Path,
+    alive: Callable[[], bool],
+    *,
+    timeout: float = 25.0,
+    interval: float = 0.02,
+    clock: Callable[[], float] | None = None,
+    sleep: Callable[[float], None] | None = None,
+) -> bytes:
+    """Wait only for one bounded, live producer's complete capture publication.
+
+    Args:
+        path: Actual final capture, never a URL inferred from expected output.
+        alive: Observe whether the originally owned app is still alive.
+        timeout: Existing startup deadline; waiting does not launch or retry an app.
+        interval: Bounded readiness polling interval.
+        clock: Monotonic clock, injectable for deterministic source regressions.
+        sleep: Poll wait, injectable without app or operating-system execution.
+
+    Returns:
+        Complete unchanged ASCII URL bytes from a stable single-link final file.
+        This admits the address only; an opener or app may subsequently fail.
+        A publisher failure can retain these exact bytes for inspection, including
+        when retaining its pending refusal marker also fails. Qualification must
+        still establish the original app's lifecycle and completed workflow.
+
+    Raises:
+        ValueError: The producer stopped, deadline expired or capture is unsafe.
+        OSError: Capture acquisition or reading failed; it is never replayed.
+    """
+    if not 0 < interval <= timeout <= 25:
+        raise ValueError("Launch capture must retain its bounded startup deadline.")
+    _capture_parent(path)
+    clock = time.monotonic if clock is None else clock
+    sleep = time.sleep if sleep is None else sleep
+    deadline = clock() + timeout
+    pending = launch_capture_pending(path)
+    while True:
+        if not alive() or clock() >= deadline:
+            raise ValueError("Installed app failed before fixed opener capture.")
+        try:
+            in_progress = _capture_stat(pending, {1, 2})
+        except FileNotFoundError:
+            in_progress = None
+        if in_progress is not None:
+            if os.path.lexists(path):
+                try:
+                    final = _capture_stat(path, {1, 2})
+                except FileNotFoundError:
+                    # The known publisher can remove a failed final link. This
+                    # remains not-ready; a bounded live-producer wait cannot pass.
+                    final = None
+                if final is not None and (final.st_dev, final.st_ino) != (
+                    in_progress.st_dev,
+                    in_progress.st_ino,
+                ):
+                    raise ValueError("Launch capture publication identity differs.")
+        elif os.path.lexists(path):
+            raw = _read_launch_capture(path)
+            if not alive() or clock() >= deadline:
+                raise ValueError("Installed app exited before capture admission.")
+            return raw
+        sleep(min(interval, max(0, deadline - clock())))
 
 
 def rewrite_headers(raw: bytes, outer: str, inner: str) -> bytes:

@@ -7,6 +7,13 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Publish the installed test's captured launch address only after the complete
+  file is written and closed. Keep exact local-URL admission, a bounded live
+  startup wait and refusal of stale or incomplete captures. Report resources
+  that were never acquired separately from uncertain cleanup, and attempt every
+  independent cleanup observation after a startup failure. The failed original
+  installed workflow remains failed; corrected source needs fresh qualification.
+
 - Write qualification receipts with explicit UTF-8 and LF line endings on every
   platform. Replace a stale expected-failure test with Unicode, source retention
   and write-failure regressions. Earlier hosted failures remain recorded; the

@@ -187,7 +187,8 @@ def test_real_ordinary_child_full_streams_are_conserved_after_reap(tmp_path):
         "-S",
         "-B",
         "-c",
-        "import os;os.write(1,b'retained stdout\\n'*8000);os.write(2,b'retained diagnostic\\n'*6000)",
+        "import os;os.write(1,b'retained stdout\\n'*8000);"
+        "os.write(2,b'retained diagnostic\\n'*6000)",
     ]
     menu.command(
         argv,
@@ -344,6 +345,9 @@ def inert_app_identity(tmp_path, monkeypatch):
     from tools import native_window_smoke as native
     from tools import rc4_installed_recovery as recovery
 
+    # Hosted macOS temporary roots may include /var -> /private/var. The actual
+    # shared reader requires the canonical owned parent; keep that rule intact.
+    tmp_path = tmp_path.resolve()
     (tmp_path / "process").mkdir()
     events, cleanup, publications = [], [], []
     state = {
@@ -414,12 +418,14 @@ def inert_app_identity(tmp_path, monkeypatch):
         except ValueError as error:
             state["opener_error"] = error
             raise
+        if not state["opener_validated"]:
+            events.append("opener")
         events.append("validated-opener")
         state["opener_validated"] = True
         return result
 
     def sleep(seconds):
-        assert seconds == 0.02
+        assert 0 < seconds <= 0.02
         events.append("sleep")
         state["sleeps"] += 1
         state["elapsed"] += seconds
@@ -489,7 +495,10 @@ def test_app_identity_acquired_once_after_ready_before_running(inert_app_identit
         "spawn",
         "poll",
         "sleep",
+        "poll",
         "opener",
+        "validated-opener",
+        "poll",
         "validated-opener",
         "poll",
         "cmdline",
@@ -509,6 +518,22 @@ def test_app_identity_acquired_once_after_ready_before_running(inert_app_identit
         "start_new_session": True,
     }
     assert proof.publications == ["running"]
+
+
+def test_app_identity_retains_incomplete_capture_without_new_launch(inert_app_identity):
+    from tools.installed_workflow_browser import launch_capture_pending
+
+    proof = inert_app_identity
+    final = proof.root / "launch-url.txt"
+    pending = launch_capture_pending(final)
+    final.write_bytes(b"inert previous final")
+    pending.write_bytes(b"inert incomplete publication")
+    with pytest.raises(ValueError, match="incomplete prior launch capture"):
+        proof.controller.launch(1)
+    assert proof.events == [] and proof.publications == []
+    assert proof.controller.rows == [] and proof.controller.streams == {}
+    assert final.read_bytes() == b"inert previous final"
+    assert pending.read_bytes() == b"inert incomplete publication"
 
 
 @pytest.mark.parametrize(

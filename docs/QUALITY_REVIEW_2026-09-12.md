@@ -2587,3 +2587,64 @@ the positive fixture before any deletion, while corrected source accepts it.
 Earlier CLI progress, capture, first-error preservation and no-replay behaviour
 remain intact. This source result does not qualify the retained failed run,
 establish a performance improvement or admit an installer for publication.
+
+### 7 October: portable walkthrough and failed installed startup capture
+
+Source `0d7dd486ca6f9939f6ca029d48d5d2a845cc10af` passes all twelve
+hosted source jobs. The canonical core catalogue contains 5,427 cases; original
+platform skips remain explicit. A separately executed Linux native build passed
+mechanical asset, dependency-notice and exact-source review. These results do
+not establish installed workflow or upgrade qualification.
+
+A human-operated portable walkthrough used a fresh fictional workspace. It
+opened the garden campaign, changed an action to request two current equipment
+quotes, saved, deliberately closed the app, reopened the saved work, exported
+the handover to Word and restored an exported casebook as a separate project.
+Original source identities, unknown versus unassigned owners and proposed dates
+survived. Both app exits were observed as normal, with closed listeners. No
+provider request, real campaign edit or account change was made.
+
+The downloaded casebook is a project backup, not a backup of the campaign or the
+whole workspace. Its Word export still contains the casebook's original action,
+not the separately edited campaign action. Several question sections retain broad
+source passages rather than concise reviewed answers. Changed-source, stale-review
+and conflicting-edit journeys still require human testing. The scoped historical
+ratings remain UX 7.0, functionality 7.8 and aesthetics 7.2; test totals do not
+raise those scores.
+
+The subsequent original installed workflow failed in 8.04 seconds before browser
+testing. App stdout contained a valid local address, while the test's captured
+address file was empty. The capture producer had exposed the destination before
+finishing its write; the unchanged exact-URL check correctly refused the empty
+capture. This does not establish a separate product-launch failure. Host cleanup
+then indexed browser streams and debugger state that had not been acquired,
+adding five errors and preventing later independent observations.
+
+The outer operation exited with typed status 1 and complete closed streams.
+Recorded container absence is supported after forced removal, which is not a
+normal, unforced cleanup pass. The retained host resource flags remain negative;
+later absence of the recorded processes does not erase those flags or prove
+unrecorded resources clean. The sequence stopped at this first failure, so
+installed recovery, native handoff, cold installation and prior-preview
+replacement were never run. RC4 remains unpublished. The user's separately
+closed app was deliberate and is not recorded as a crash.
+
+Focused source corrections publish the capture exclusively after its complete
+ASCII write, sync and close, then admit only stable final bytes while the original
+producer is still alive within the existing deadline. Exact URL and identity
+checks remain intact. Reading a retained valid address admits the bytes only;
+it does not prove opener acknowledgement or a successful installed workflow.
+Publisher and refusal-marker restoration faults retain their original errors
+and uncertainty. Lifecycle-aware cleanup distinguishes resources that were
+never created from acquired or uncertain resources, preserves the startup error
+and attempts the remaining independent observations. New source regressions and
+fresh exact-source installed execution are required before publication; the
+failed original records remain unchanged.
+
+The combined focused source suites pass 424 cases with no skips in 23.60 seconds.
+Fatal Python lint and whitespace checks also pass, with complete closed captures
+and unchanged tested implementation files. These checks cover atomic publication,
+the former empty-file window, explicit acknowledgement limits, startup and cleanup
+faults, and existing recovery behaviour. They are source regressions, not an
+installed workflow pass. Fresh hosted checks and installed execution against the
+next committed source remain pending.

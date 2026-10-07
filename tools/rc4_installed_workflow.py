@@ -22,8 +22,10 @@ import threading
 import time
 import traceback
 import zipfile
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
@@ -48,7 +50,8 @@ class Attempts:
             row["succeeded"] = True
             return value
         except BaseException as error:
-            self.first = self.first or error
+            if self.first is None:
+                self.first = error
             detail = {
                 "resource": label,
                 "type": type(error).__name__,
@@ -57,6 +60,43 @@ class Attempts:
             row["error"] = detail
             self.errors.append(detail)
             return None
+
+    def skip(self, label: str, state: str) -> None:
+        """Record an unavailable resource without claiming a successful close.
+
+        Args:
+            label: Resource whose unavailable operation was not attempted.
+            state: Actual acquisition state, such as never-created or uncertain.
+        """
+        self.rows.append(
+            {
+                "resource": label,
+                "succeeded": False,
+                "attempted": False,
+                "state": state,
+            }
+        )
+
+    def independent(
+        self, label: str, actions: Iterable[tuple[str, Callable[[], object]]]
+    ) -> None:
+        """Preserve the successful ledger shape and every independent failure.
+
+        Args:
+            label: Existing top-level cleanup ledger resource name.
+            actions: Independent labeled operations to attempt in supplied order.
+        """
+        row = {"resource": label, "succeeded": False}
+        self.rows.append(row)
+        children = Attempts()
+        for name, action in actions:
+            children.call(name, action)
+        row["succeeded"] = children.first is None
+        if children.errors:
+            row["error"] = children.errors[0]
+        if self.first is None:
+            self.first = children.first
+        self.errors.extend(children.errors)
 
     def raise_first(self):
         if self.first is not None:
@@ -209,7 +249,8 @@ def prepare(args):
     )
     contract.require(
         0 < os.geteuid() <= 2**31 - 1,
-        "Prepare this workflow as an observed nonprivileged user; UID 0 is unsupported.",
+        "Prepare this workflow as an observed nonprivileged user; "
+        "UID 0 is unsupported.",
     )
     qa = recovery.source_records(ROOT)
     contract.qa_inventory(qa)
@@ -378,9 +419,17 @@ class Controller:
         self.acquisition_cleanup = []
 
     def launch(self, run):
-        from tools.installed_workflow_browser import inner_address
+        from tools.installed_workflow_browser import (
+            inner_address,
+            launch_capture_pending,
+            read_launch_capture,
+        )
 
         capture = self.runtime / "launch-url.txt"
+        contract.require(
+            not os.path.lexists(launch_capture_pending(capture)),
+            "An incomplete prior launch capture must be retained; do not replay.",
+        )
         capture.unlink(missing_ok=True)
         output = self.runtime / "process" / f"run-{run}"
         output.mkdir(mode=0o700)
@@ -428,14 +477,14 @@ class Controller:
             "sigterm_sent": False,
         }
         self.rows.append(row)
-        deadline = time.monotonic() + 25
-        while not capture.exists():
-            contract.require(
-                self.process.poll() is None and time.monotonic() < deadline,
-                "Installed app failed before fixed opener capture.",
-            )
-            time.sleep(0.02)
-        raw = contract.regular(capture, 1024)
+        raw = read_launch_capture(
+            capture,
+            lambda: self.process.poll() is None,
+            timeout=25.0,
+            interval=0.02,
+            clock=time.monotonic,
+            sleep=time.sleep,
+        )
         _, self.inner.port = inner_address(raw.decode("ascii"))
         row.update(opener=contract.full_record(raw), port=self.inner.port)
         contract.require(
@@ -656,7 +705,9 @@ def controller():
     script = Path("/proof/capture-browser")
     script.write_text(
         "#!/usr/bin/python3\nimport sys\nfrom pathlib import Path\n"
-        "Path('/proof/launch-url.txt').write_text(sys.argv[1], encoding='ascii')\n",
+        "sys.path.insert(0, '/source')\n"
+        "from tools.installed_workflow_browser import publish_launch_capture\n"
+        "publish_launch_capture(Path('/proof/launch-url.txt'), sys.argv[1])\n",
         encoding="utf-8",
     )
     script.chmod(0o700)
@@ -739,7 +790,7 @@ def package_inputs(inputs, source, output, rows):
 
 
 def retain_commands(output, rows):
-    """Small complete commands retain decoded originals; payload already has sidecars."""
+    """Keep decoded small-command originals; payload already has sidecars."""
     for index, row in enumerate(rows):
         for name in ("stdout", "stderr"):
             if row[name].get("truncated") is True:
@@ -1004,12 +1055,26 @@ def captured_session_class():
                 {},
             )
             self.chrome_row = {}
+            self.resource_states = {
+                name: "never-created"
+                for name in (
+                    "driver",
+                    "process",
+                    "stdout",
+                    "stderr",
+                    "debug_port",
+                    "browser_connection",
+                    "cdp",
+                )
+            }
 
         def __enter__(self):
             from tools import rc4_native_handoff as handoff
 
             previous = handoff.children()
+            self.resource_states["driver"] = "uncertain"
             raw_driver = super().__enter__()
+            self.resource_states["driver"] = "acquired"
             try:
                 driver_pids = handoff.children() - previous
                 self.driver_observation = {"candidates": sorted(driver_pids)}
@@ -1070,7 +1135,9 @@ def captured_session_class():
             home = self.root / "client/browser-home"
             home.mkdir(mode=0o700)
             for name in ("stdout", "stderr"):
+                self.resource_states[name] = "uncertain"
                 self.chrome_streams[name] = (self.root / "out/chrome" / name).open("xb")
+                self.resource_states[name] = "acquired"
             environment = {
                 "PATH": os.defpath,
                 "HOME": str(home),
@@ -1084,6 +1151,7 @@ def captured_session_class():
                 "forced_cleanup": False,
                 "debug_port_closed": False,
             }
+            self.resource_states["process"] = "uncertain"
             self.chrome_process = subprocess.Popen(
                 self.chrome_row["argv"],
                 env=environment,
@@ -1092,7 +1160,9 @@ def captured_session_class():
                 stderr=self.chrome_streams["stderr"],
                 start_new_session=True,
             )
+            self.resource_states["process"] = "acquired"
             self.chrome_row["pid"] = self.chrome_process.pid
+            self.browser_pids.add(self.chrome_process.pid)
             active = home / "profile/DevToolsActivePort"
             deadline = time.monotonic() + 15
             while not active.exists():
@@ -1113,6 +1183,7 @@ def captured_session_class():
                 0 < self.chrome_row["debug_port"] <= 65535,
                 "Debugger port outside range.",
             )
+            self.resource_states["debug_port"] = "acquired"
             contract.require(
                 self.chrome_process.poll() is None,
                 "Private Chromium exited before identity acquisition.",
@@ -1131,10 +1202,14 @@ def captured_session_class():
                 self.chrome_process.poll() is None,
                 "Private Chromium exited after identity acquisition.",
             )
+            self.resource_states["browser_connection"] = "uncertain"
             self.chrome = driver.chromium.connect_over_cdp(
                 f"http://127.0.0.1:{lines[0]}"
             )
+            self.resource_states["browser_connection"] = "acquired"
+            self.resource_states["cdp"] = "uncertain"
             self.cdp = self.chrome.new_browser_cdp_session()
+            self.resource_states["cdp"] = "acquired"
             self.observe_pids()
             session, raw = self, self.chrome
 
@@ -1238,12 +1313,289 @@ def receipt(inputs, source, ready, source_zip, receipt_path):
     }
 
 
-def host(root, chromium):
+def cleanup_host_resources(
+    root: Path,
+    session: Any,
+    relay: Any,
+    thread: Any,
+    started: bool,
+    observation: dict[str, Any],
+    attempts: Attempts,
+) -> None:
+    """Observe only actual acquisitions and attempt independent cleanup fully.
+
+    A missing handle after an attempted acquisition is uncertain, not proof of
+    absence. Failed journeys keep those states without changing success gates.
+
+    Args:
+        root: Private staged workflow root containing owned retained evidence.
+        session: Captured session with its explicit acquisition state ledger.
+        relay: Already constructed host relay owned by this workflow.
+        thread: Relay thread whose start result is recorded by the host.
+        started: Whether the relay thread's start returned successfully.
+        observation: Host evidence updated with each available actual fact.
+        attempts: Cleanup ledger retaining the original failure, if any.
+
+    Returns:
+        None. Cleanup and observation errors remain in the supplied ledger.
+
+    Raises:
+        AttributeError: The internal staged session boundary is malformed.
+            Operation faults are recorded independently for caller retention.
+    """
     from tools import installed_native_menu as menu
-    from tools import installed_workflow_browser as workflow
     from tools import native_window_smoke as native
-    from tools import rc4_installed_recovery as recovery
     from tools import rc4_native_handoff as handoff
+
+    states = session.resource_states
+    process, chrome, driver = (
+        session.chrome_process,
+        session.chrome_row,
+        session.driver_observation,
+    )
+
+    def close_browser() -> None:
+        if process.poll() is None:
+            session.cdp.send("Browser.close")
+            process.wait(timeout=5)
+
+    if process is None:
+        attempts.skip("browser close request", states["process"])
+    elif session.cdp is None:
+        attempts.skip("browser close request", states["cdp"])
+    else:
+        attempts.call("browser close request", close_browser)
+    if process is None:
+        attempts.skip("chrome reap", states["process"])
+    else:
+        attempts.call("chrome reap", lambda: native.stop_process(process, chrome))
+
+    for name in ("stdout", "stderr"):
+        stream = session.chrome_streams.get(name)
+        if stream is None:
+            attempts.skip("chrome " + name, states[name])
+            continue
+
+        def capture(n: str = name) -> None:
+            with (root / "out/chrome" / n).open("rb") as retained:
+                chrome[n] = menu.stream_record(retained)
+
+        attempts.independent(
+            "chrome " + name,
+            (
+                ("chrome " + name + " flush", stream.flush),
+                ("chrome " + name + " capture", capture),
+            ),
+        )
+    for name in ("stdout", "stderr"):
+        stream = session.chrome_streams.get(name)
+        if stream is None:
+            attempts.skip("chrome " + name + " close", states[name])
+        else:
+            attempts.call("chrome " + name + " close", stream.close)
+
+    if started:
+        attempts.call("relay shutdown", relay.shutdown)
+    else:
+        attempts.skip("relay shutdown", "never-started")
+    attempts.call("relay close", relay.server_close)
+    if started:
+        attempts.call("relay join", lambda: thread.join(timeout=5))
+    else:
+        attempts.skip("relay join", "never-started")
+
+    observation.update(
+        chrome=chrome,
+        driver=driver,
+        browser_pids=sorted(session.browser_pids),
+    )
+    chrome["streams_complete"] = False
+    chrome["debug_port_closed"] = None
+    driver_pid = driver.get("pid")
+    driver_known = type(driver_pid) is int and driver_pid > 1
+    owned = set(session.browser_pids)
+    if driver_known:
+        owned.add(driver_pid)
+    owned.update(
+        pid for pid in driver.get("candidates", []) if type(pid) is int and pid > 1
+    )
+    pid_results: dict[int, bool] = {}
+
+    def observe_session() -> None:
+        value = session.observations()
+        # all([]) describes no owned wrappers; it is not an observed close.
+        if not session.browsers:
+            value["browser_closed"] = False
+        if not session.contexts:
+            value["contexts_closed"] = False
+        observation["session"] = value
+
+    def wait_owned() -> None:
+        deadline = time.monotonic() + 5
+        while any(handoff.alive(pid) for pid in sorted(owned)):
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.02)
+
+    def observe_pid(pid: int) -> None:
+        pid_results[pid] = handoff.alive(pid)
+
+    def observe_browser_closure() -> None:
+        observation["owned_pids_gone"] = (
+            states["process"] == "acquired"
+            and bool(session.browser_pids)
+            and all(pid_results.get(pid) is False for pid in session.browser_pids)
+        )
+
+    def observe_streams() -> None:
+        chrome["streams_complete"] = (
+            process is not None
+            and process.poll() is not None
+            and chrome.get("owned_group_remaining") is False
+            and all(name in chrome for name in ("stdout", "stderr"))
+            and all(
+                any(
+                    row["resource"] == label and row["succeeded"] is True
+                    for row in attempts.rows
+                )
+                for label in (
+                    "chrome stdout",
+                    "chrome stderr",
+                    "chrome stdout close",
+                    "chrome stderr close",
+                )
+            )
+        )
+
+    def observe_debugger() -> None:
+        chrome["debug_port_closed"] = closed_port(chrome["debug_port"])
+
+    def observe_driver() -> None:
+        driver["gone"] = not handoff.alive(driver_pid)
+
+    def relay_fact(name: str, action: Callable[[], object]) -> None:
+        observation["relay"][name] = action()
+
+    def require_relay_closed() -> None:
+        keys = ("stopped", "idle", "port_closed")
+        # An observation fault is already retained; do not invent another error
+        # from a missing fact. A positively observed survivor is a real refusal.
+        if any(observation["relay"].get(key) is False for key in keys) or all(
+            key in observation["relay"] for key in keys
+        ):
+            contract.require(
+                all(observation["relay"].get(key) is True for key in keys),
+                "Host relay survives.",
+            )
+
+    actions: list[tuple[str, Callable[[], object]]] = [
+        ("browser session observation", observe_session),
+        ("owned process wait", wait_owned),
+        *[
+            ("owned process " + str(pid), lambda p=pid: observe_pid(p))
+            for pid in sorted(owned)
+        ],
+        ("browser process closure", observe_browser_closure),
+        ("chrome stream completion", observe_streams),
+    ]
+    if states["debug_port"] == "acquired":
+        actions.append(("chrome debugger observation", observe_debugger))
+    if driver_known:
+        actions.append(("driver process observation", observe_driver))
+    actions.extend(
+        ("relay " + name + " observation", lambda n=name, a=action: relay_fact(n, a))
+        for name, action in (
+            ("stopped", lambda: not thread.is_alive()),
+            ("idle", lambda: relay.idle()),
+            ("port_closed", lambda: closed_port(relay.server_address[1])),
+            ("model_routes", lambda: relay.model_requests),
+            ("errors", lambda: relay.errors),
+        )
+    )
+    actions.append(("host relay closure", require_relay_closed))
+    attempts.independent("host resource observation", actions)
+    attempts.call(
+        "installed cleanup request",
+        lambda: write_json(root / "runtime/control.json", {"action": "cleanup"}),
+    )
+    if attempts.first is not None or any(
+        value != "acquired" for value in states.values()
+    ):
+        chrome["acquisition"] = {
+            key: value for key, value in states.items() if key != "driver"
+        }
+        driver["acquisition"] = states["driver"]
+        driver["identity_known"] = driver_known
+        if "candidates" in driver:
+            driver["candidate_observations"] = [
+                {"pid": pid, "alive": pid_results.get(pid)}
+                for pid in sorted(set(driver["candidates"]))
+                if type(pid) is int and pid > 1
+            ]
+
+
+def retain_host_result(
+    root: Path,
+    output: Path,
+    report: dict[str, Any],
+    observation: dict[str, Any],
+    attempts: Attempts,
+    failure_trace: str | None,
+    *,
+    completed: bool,
+) -> None:
+    """Keep original failure precedence even if later evidence retention fails.
+
+    Args:
+        root: Private staged workflow root containing the host evidence folder.
+        output: Existing workflow output folder for the unfinished report.
+        report: Incomplete report whose resource summary is retained honestly.
+        observation: Host facts and the completed cleanup observation ledger.
+        attempts: Ledger collecting retention faults after the original failure.
+        failure_trace: Actual original traceback, or None when no startup failed.
+        completed: Whether the host journey finished without a primary failure.
+
+    Returns:
+        None. The caller must raise the ledger's first error after retention.
+
+    Raises:
+        KeyError: An internally constructed report lacks its resources mapping.
+            File retention faults are recorded without replacing the primary.
+    """
+    if failure_trace is not None:
+        attempts.call(
+            "host failure traceback retention",
+            lambda: (root / "out/host-failure.txt").write_text(
+                failure_trace, encoding="utf-8"
+            ),
+        )
+    observation["cleanup_errors"], observation["cleanup_attempts"] = (
+        list(attempts.errors),
+        list(attempts.rows),
+    )
+    report["resources"].update(
+        browser_closed=observation.get("session", {}).get("browser_closed", False),
+        relay_closed=all(
+            observation.get("relay", {}).get(key) is True
+            for key in ("stopped", "idle", "port_closed")
+        ),
+        installed_process_stopped=completed,
+    )
+    attempts.call(
+        "host observation retention",
+        lambda: write_json(root / "out/host.json", observation),
+    )
+    attempts.call(
+        "unfinished workflow retention",
+        lambda: write_json(output / "installed-workflow-browser.pending.json", report),
+    )
+    # Later retention failures cannot be added to an already-written snapshot.
+    # Attempts.raise_first retains all of them in the owned original stderr.
+
+
+def host(root, chromium):
+    from tools import installed_workflow_browser as workflow
+    from tools import rc4_installed_recovery as recovery
     from tools.installed_workflow_contract import CHECKS
 
     inputs = contract.config(read_json(root / "candidate/workflow-input.json"))
@@ -1283,6 +1635,7 @@ def host(root, chromium):
     relay, thread, primary = workflow.Relay(root / "runtime"), None, None
     thread = threading.Thread(target=relay.serve_forever, daemon=True)
     started = False
+    failure_trace = None
     observation = {
         "schema": contract.HOST,
         "failure": None,
@@ -1322,135 +1675,26 @@ def host(root, chromium):
             "type": type(error).__name__,
             "message": str(error)[:4096],
         }
-        (root / "out/host-failure.txt").write_text(
-            traceback.format_exc(), encoding="utf-8"
-        )
+        failure_trace = traceback.format_exc()
     finally:
         attempts = Attempts(primary)
-
-        def close_browser():
-            if (
-                session.chrome_process is not None
-                and session.chrome_process.poll() is None
-            ):
-                session.cdp.send("Browser.close")
-                session.chrome_process.wait(timeout=5)
-
-        attempts.call("browser close request", close_browser)
-        attempts.call(
-            "chrome reap",
-            lambda: (
-                native.stop_process(session.chrome_process, session.chrome_row)
-                if session.chrome_process is not None
-                else None
-            ),
+        cleanup_host_resources(
+            root,
+            session,
+            relay,
+            thread,
+            started,
+            observation,
+            attempts,
         )
-        for name in ("stdout", "stderr"):
-
-            def capture(n=name):
-                path = root / "out/chrome" / n
-                session.chrome_streams[n].flush()
-                with path.open("rb") as stream:
-                    session.chrome_row[n] = menu.stream_record(stream)
-
-            attempts.call("chrome " + name, capture)
-        for name in ("stdout", "stderr"):
-            attempts.call(
-                "chrome " + name + " close",
-                lambda n=name: session.chrome_streams[n].close(),
-            )
-        attempts.call("relay shutdown", lambda: relay.shutdown() if started else None)
-        attempts.call("relay close", relay.server_close)
-        attempts.call("relay join", lambda: thread.join(timeout=5) if started else None)
-
-        def observe():
-            # Preserve every available original observation even if a later
-            # browser identity/read fails during partial acquisition.
-            observation.update(
-                session=session.observations(),
-                chrome=session.chrome_row,
-                driver=session.driver_observation,
-                browser_pids=sorted(session.browser_pids),
-                relay={
-                    "stopped": not thread.is_alive(),
-                    "idle": relay.idle(),
-                    "port_closed": closed_port(relay.server_address[1]),
-                    "model_routes": relay.model_requests,
-                    "errors": relay.errors,
-                },
-            )
-            deadline = time.monotonic() + 5
-            owned = set(session.browser_pids)
-            if (
-                type(session.driver_observation.get("pid")) is int
-                and session.driver_observation["pid"] > 1
-            ):
-                owned.add(session.driver_observation["pid"])
-            while (
-                any(handoff.alive(pid) for pid in owned) and time.monotonic() < deadline
-            ):
-                time.sleep(0.02)
-            observation["session"] = session.observations()
-            session.chrome_row["streams_complete"] = (
-                session.chrome_process is not None
-                and session.chrome_process.poll() is not None
-                and session.chrome_row.get("owned_group_remaining") is False
-            )
-            session.chrome_row["debug_port_closed"] = closed_port(
-                session.chrome_row["debug_port"]
-            )
-            session.driver_observation["gone"] = not handoff.alive(
-                session.driver_observation["pid"]
-            )
-            observation.update(
-                chrome=session.chrome_row,
-                driver=session.driver_observation,
-                browser_pids=sorted(session.browser_pids),
-                owned_pids_gone=all(
-                    not handoff.alive(pid) for pid in session.browser_pids
-                ),
-                relay={
-                    "stopped": not thread.is_alive(),
-                    "idle": relay.idle(),
-                    "port_closed": closed_port(relay.server_address[1]),
-                    "model_routes": relay.model_requests,
-                    "errors": relay.errors,
-                },
-            )
-            contract.require(
-                all(
-                    observation["relay"][key]
-                    for key in ("stopped", "idle", "port_closed")
-                ),
-                "Host relay survives.",
-            )
-
-        attempts.call("host resource observation", observe)
-        attempts.call(
-            "installed cleanup request",
-            lambda: write_json(root / "runtime/control.json", {"action": "cleanup"}),
-        )
-        observation["cleanup_errors"], observation["cleanup_attempts"] = (
-            list(attempts.errors),
-            list(attempts.rows),
-        )
-        report["resources"].update(
-            browser_closed=observation.get("session", {}).get("browser_closed", False),
-            relay_closed=all(
-                observation.get("relay", {}).get(k) is True
-                for k in ("stopped", "idle", "port_closed")
-            ),
-            installed_process_stopped=primary is None,
-        )
-        attempts.call(
-            "host observation retention",
-            lambda: write_json(root / "out/host.json", observation),
-        )
-        attempts.call(
-            "unfinished workflow retention",
-            lambda: write_json(
-                output / "installed-workflow-browser.pending.json", report
-            ),
+        retain_host_result(
+            root,
+            output,
+            report,
+            observation,
+            attempts,
+            failure_trace,
+            completed=primary is None,
         )
         attempts.raise_first()
     return 0
@@ -1542,7 +1786,7 @@ def validate_fictional_storage(root, inputs, data_files):
 
 
 def validate_inventory(root, inputs):
-    """Close fixed evidence roles and bound only fresh fictional/private runtime data."""
+    """Close fixed evidence roles and bound fresh fictional/private runtime data."""
     from tools.installed_workflow_contract import workflow_artifact_paths
 
     source = {
