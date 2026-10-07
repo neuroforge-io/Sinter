@@ -7,6 +7,11 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Keep recovery-test CLI exports private and retain separate exact-byte evidence
+  copies after verified app shutdown. Refuse incomplete termination or cleanup
+  records and preserve the first failure. The earlier failed installed recovery
+  remains historical; this correction requires fresh installed qualification.
+
 - Describe saved reports using the actual storage backend. The browser edition
   now explains device-local storage and workspace backups; installed Sinter keeps
   its local-folder guidance. Both paths have focused rendering regressions.

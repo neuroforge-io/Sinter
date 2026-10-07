@@ -493,6 +493,166 @@ def validate_cli_stderr(operation, raw, exported):
         raise ValueError("Unknown supporting CLI diagnostic operation.")
 
 
+EXPORT_PRIVATE = "/tmp/sinter-rc4-cli-exports"
+EXPORT_PROOF_SCHEMA = "sinter-rc4-cli-export-proof/v1"
+EXPORT_METADATA = (
+    "st_dev",
+    "st_ino",
+    "st_uid",
+    "st_gid",
+    "st_mode",
+    "st_nlink",
+    "st_size",
+    "st_mtime_ns",
+    "st_ctime_ns",
+)
+
+
+class ExportDescriptors:
+    """Close every owned descriptor without replacing the first body exception."""
+
+    def __init__(self, outcomes: list[dict] | None = None):
+        self.outcomes = outcomes if outcomes is not None else []
+        self.callbacks = []
+
+    def __enter__(self):
+        return self
+
+    def callback(self, action, descriptor: int) -> None:
+        self.callbacks.append((action, descriptor))
+
+    def __exit__(self, kind, primary, traceback):
+        first_close = None
+        attempts = []
+        for action, descriptor in reversed(self.callbacks):
+            failure = None
+            try:
+                action(descriptor)
+            except BaseException as exc:
+                if first_close is None:
+                    first_close = exc
+                failure = exc
+            attempts.append((descriptor, failure))
+        # Attempt every close before rendering diagnostics. An exceptional
+        # __str__ or __bool__ must never interrupt cleanup or replace its cause.
+        for descriptor, failure in attempts:
+            details = None
+            if failure is not None:
+                try:
+                    message = str(failure)
+                except BaseException:
+                    message = "<exception message unavailable>"
+                details = {
+                    "type": type.__getattribute__(type(failure), "__name__"),
+                    "message": message,
+                }
+            self.outcomes.append(
+                {
+                    "fd": descriptor,
+                    "closed": failure is None,
+                    "failure": details,
+                }
+            )
+        first = primary if primary is not None else first_close
+        if first is not None:
+            # Get the BaseException dictionary directly, bypassing subclass
+            # attribute setters and properties on __dict__.
+            BaseException.__dict__["__dict__"].__get__(first)[
+                "cli_export_close_outcomes"
+            ] = list(self.outcomes)
+        if primary is None and first_close is not None:
+            raise first_close
+        return False
+
+
+def export_metadata(info: os.stat_result) -> dict[str, int]:
+    """Exclude access time, which an otherwise immutable read may advance."""
+    return {name: getattr(info, name) for name in EXPORT_METADATA}
+
+
+def validate_export_proof(value: dict, index: int, raw: bytes) -> None:
+    """Bind copied original bytes; the removed private container path is not read."""
+    require(
+        type(index) is int
+        and index in range(1, 5)
+        and type(value) is dict
+        and set(value)
+        == {
+            "schema",
+            "source_path",
+            "proof_path",
+            "source_before",
+            "source_after",
+            "proof_metadata",
+            "bytes",
+            "sha256",
+        }
+        and value["schema"] == EXPORT_PROOF_SCHEMA
+        and value["source_path"] == f"{EXPORT_PRIVATE}/run-{index}.cli-export.json"
+        and value["proof_path"]
+        == f"/out/evidence/scoped/process/run-{index}.cli-export.json",
+        "CLI export proof path or fields differ.",
+    )
+    require(
+        type(raw) is bytes and 0 < len(raw) <= MAX_FILE,
+        "CLI export proof exceeds its finite bound.",
+    )
+    for name, mode in (
+        ("source_before", 0o600),
+        ("source_after", 0o600),
+        ("proof_metadata", 0o444),
+    ):
+        row = value[name]
+        require(
+            type(row) is dict
+            and set(row) == set(EXPORT_METADATA)
+            and all(type(v) is int and v >= 0 for v in row.values())
+            and row["st_ino"] > 0
+            and row["st_uid"] == row["st_gid"] == 0
+            and row["st_mode"] == stat.S_IFREG | mode
+            and row["st_nlink"] == 1
+            and row["st_size"] == len(raw),
+            "CLI export proof metadata differs.",
+        )
+    require(
+        equal(value["source_before"], value["source_after"])
+        and (value["source_before"]["st_dev"], value["source_before"]["st_ino"])
+        != (value["proof_metadata"]["st_dev"], value["proof_metadata"]["st_ino"])
+        and type(value["bytes"]) is int
+        and value["bytes"] == len(raw)
+        and value["sha256"] == sha(raw),
+        "CLI private original or distinct proof bytes differ.",
+    )
+
+
+def read_export_proof(path: Path) -> tuple[bytes, dict[str, int]]:
+    """Read only a stable, nonlinked root-owned read-only proof file."""
+    before = export_metadata(path.lstat())
+    require(
+        before["st_mode"] == stat.S_IFREG | 0o444
+        and before["st_uid"] == before["st_gid"] == 0
+        and before["st_nlink"] == 1
+        and 0 < before["st_size"] <= MAX_FILE,
+        "CLI proof file ownership, mode or bound differs.",
+    )
+    with ExportDescriptors() as descriptors:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        descriptors.callback(os.close, descriptor)
+        require(
+            export_metadata(os.fstat(descriptor)) == before,
+            "CLI proof changed while opening.",
+        )
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            raw = stream.read(MAX_FILE + 1)
+        require(
+            len(raw) == before["st_size"]
+            and export_metadata(os.fstat(descriptor)) == before
+            and export_metadata(path.lstat()) == before,
+            "CLI proof changed while reading.",
+        )
+        return raw, before
+
+
 def validate_cli(data, index, snapshot, version):
     from tools.rc4_scoped_recovery_contract import TITLE, wrappers
 
@@ -505,7 +665,15 @@ def validate_cli(data, index, snapshot, version):
     stored = originals[0]
     rows = json_object(data[f"process/run-{index}.cli.json"])
     require(
-        set(rows) == {"before", "after", "operations", "reader_snapshots"}
+        set(rows)
+        == {
+            "before",
+            "after",
+            "operations",
+            "reader_snapshots",
+            "export_proof",
+            "export_cleanup",
+        }
         and equal(rows["before"], snapshot)
         and equal(rows["before"], rows["after"])
         and set(rows["operations"])
@@ -556,7 +724,7 @@ def validate_cli(data, index, snapshot, version):
                 "--directory",
                 workspace,
                 "-o",
-                f"/out/evidence/scoped/process/run-{index}.cli-export.json",
+                f"{EXPORT_PRIVATE}/run-{index}.cli-export.json",
                 "--machine",
             ]
             if op == "export"
@@ -592,7 +760,7 @@ def validate_cli(data, index, snapshot, version):
         validate_cli_stderr(
             op,
             data[prefix + ".stderr"],
-            f"/out/evidence/scoped/process/run-{index}.cli-export.json",
+            f"{EXPORT_PRIVATE}/run-{index}.cli-export.json",
         )
         require(
             envelope["ok"] is True
@@ -616,6 +784,31 @@ def validate_cli(data, index, snapshot, version):
                 ),
                 "CLI broadened scope.",
             )
+    cleanup = rows["export_cleanup"]
+    require(
+        type(cleanup) is dict and set(cleanup) == {"fresh", "publish"},
+        "CLI export descriptor cleanup is missing.",
+    )
+    for phase, count in (("fresh", 2), ("publish", 4)):
+        observations = cleanup[phase]
+        require(
+            type(observations) is list
+            and len(observations) == count
+            and all(
+                type(row) is dict
+                and set(row) == {"fd", "closed", "failure"}
+                and type(row["fd"]) is int
+                and row["fd"] >= 0
+                and row["closed"] is True
+                and row["failure"] is None
+                for row in observations
+            )
+            and len({row["fd"] for row in observations}) == count,
+            "CLI export descriptor close failed or was not observed.",
+        )
+    validate_export_proof(
+        rows["export_proof"], index, data[f"process/run-{index}.cli-export.json"]
+    )
     require(
         equal(
             json_object(data[f"process/run-{index}.cli-export.json"]),
@@ -991,6 +1184,7 @@ def profile_artifacts(folder):
         folder.is_dir() and not folder.is_symlink(), "Require a private profile bundle."
     )
     data, total, count, directories = {}, 0, 0, set()
+    exports = {}
     pending = [folder]
     while pending:
         parent = pending.pop()
@@ -1012,7 +1206,12 @@ def profile_artifacts(folder):
                 directories.add(relative.as_posix())
                 pending.append(p)
                 continue
-            raw = regular(p, MAX_FILE)
+            if relative.as_posix() in {
+                f"process/run-{n}.cli-export.json" for n in range(1, 5)
+            }:
+                raw, exports[relative.as_posix()] = read_export_proof(p)
+            else:
+                raw = regular(p, MAX_FILE)
             if p.suffix == ".png":
                 from tools.installed_workflow_qualification import validate_png
 
@@ -1030,6 +1229,14 @@ def profile_artifacts(folder):
         directories == expected_directories,
         "Unlisted empty profile directories refused.",
     )
+    for name, metadata in exports.items():
+        index = int(Path(name).name.split(".")[0].removeprefix("run-"))
+        row = json_object(data[f"process/run-{index}.cli.json"])["export_proof"]
+        validate_export_proof(row, index, data[name])
+        require(
+            equal(row["proof_metadata"], metadata),
+            "Actual CLI proof metadata differs from its original record.",
+        )
     return data
 
 

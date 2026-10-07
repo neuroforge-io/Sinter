@@ -37,6 +37,7 @@ SOURCE_FILE = "tools/rc4_installed_recovery.py"
 PROFILES = ("campaign", "scoped")
 MAX_RPC = 4 * 1024 * 1024
 RPC_LIMIT = 64
+CLI_EXPORT_PRIVATE = Path(contract.EXPORT_PRIVATE)
 
 
 def write_json(path, value):
@@ -45,6 +46,176 @@ def write_json(path, value):
     with temporary.open("xb") as stream:
         stream.write(raw)
     temporary.replace(path)
+
+
+def prepare_cli_export_directory() -> None:
+    """Create the one fixed, unmounted private directory; existing entries refuse."""
+    CLI_EXPORT_PRIVATE.mkdir(mode=0o700)
+    info = CLI_EXPORT_PRIVATE.lstat()
+    contract.require(
+        stat.S_ISDIR(info.st_mode)
+        and stat.S_IMODE(info.st_mode) == 0o700
+        and info.st_uid == os.geteuid()
+        and info.st_gid == os.getegid(),
+        "CLI export private directory differs.",
+    )
+
+
+def cli_export_paths(run: int, output: Path) -> tuple[Path, Path]:
+    """Only the four scoped original exports and their existing proof roles."""
+    contract.require(
+        type(run) is int and run in range(1, 5), "Unknown CLI export run refuses."
+    )
+    return (
+        CLI_EXPORT_PRIVATE / f"run-{run}.cli-export.json",
+        output / f"process/run-{run}.cli-export.json",
+    )
+
+
+def export_directory(
+    resources: contract.ExportDescriptors, path: Path, *, private: bool
+) -> int:
+    """Anchor owned directories without following redirects."""
+    before = contract.export_metadata(path.lstat())
+    contract.require(
+        stat.S_ISDIR(before["st_mode"])
+        and before["st_uid"] == os.geteuid()
+        and before["st_gid"] == os.getegid()
+        and (not private or stat.S_IMODE(before["st_mode"]) == 0o700),
+        "CLI export directory ownership or mode differs.",
+    )
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    resources.callback(os.close, fd)
+    contract.require(
+        contract.export_metadata(os.fstat(fd)) == before,
+        "CLI export directory changed while opening.",
+    )
+    return fd
+
+
+def fresh_cli_export(
+    run: int, output: Path, *, cleanup: list[dict] | None = None
+) -> None:
+    """Refuse any pre-existing private original or proof before the CLI starts."""
+    source, proof = cli_export_paths(run, output)
+    with contract.ExportDescriptors(cleanup) as resources:
+        for path, private in ((source, True), (proof, False)):
+            fd = export_directory(resources, path.parent, private=private)
+            try:
+                os.stat(path.name, dir_fd=fd, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            raise ValueError("CLI export original and proof must both be fresh.")
+
+
+def publish_cli_export(
+    run: int, output: Path, document: dict, *, cleanup: list[dict] | None = None
+) -> dict:
+    """Retain private source bytes and publish a distinct, read-only proof copy."""
+    source, proof = cli_export_paths(run, output)
+    with contract.ExportDescriptors(cleanup) as resources:
+        source_dir = export_directory(resources, source.parent, private=True)
+        proof_dir = export_directory(resources, proof.parent, private=False)
+        directories = [(source.parent, source_dir), (proof.parent, proof_dir)]
+        identities = [os.fstat(fd) for _, fd in directories]
+        before = contract.export_metadata(
+            os.stat(source.name, dir_fd=source_dir, follow_symlinks=False)
+        )
+        contract.require(
+            before["st_mode"] == stat.S_IFREG | 0o600
+            and before["st_uid"] == os.geteuid()
+            and before["st_gid"] == os.getegid()
+            and before["st_nlink"] == 1
+            and 0 < before["st_size"] <= MAX_RPC,
+            "CLI private export ownership, mode or bound differs.",
+        )
+        source_fd = os.open(
+            source.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=source_dir
+        )
+        resources.callback(os.close, source_fd)
+
+        def conserved_source() -> None:
+            contract.require(
+                contract.export_metadata(os.fstat(source_fd)) == before
+                and contract.export_metadata(
+                    os.stat(source.name, dir_fd=source_dir, follow_symlinks=False)
+                )
+                == before,
+                "CLI private original changed during proof publication.",
+            )
+
+        conserved_source()
+        with os.fdopen(source_fd, "rb", closefd=False) as stream:
+            raw = stream.read(MAX_RPC + 1)
+        conserved_source()
+        contract.require(
+            len(raw) == before["st_size"]
+            and contract.equal(contract.json_object(raw), document),
+            "CLI private export does not preserve full original input.",
+        )
+        proof_fd = os.open(
+            proof.name,
+            os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_NONBLOCK,
+            0o444,
+            dir_fd=proof_dir,
+        )
+        resources.callback(os.close, proof_fd)
+        # Only the new proof copy is made readable; the private original is untouched.
+        os.fchmod(proof_fd, 0o444)
+        remaining = memoryview(raw)
+        while remaining:
+            written = os.write(proof_fd, remaining)
+            contract.require(written > 0, "CLI proof write did not complete.")
+            remaining = remaining[written:]
+        os.fsync(proof_fd)
+        os.lseek(proof_fd, 0, os.SEEK_SET)
+        with os.fdopen(proof_fd, "rb", closefd=False) as stream:
+            copied = stream.read(MAX_RPC + 1)
+        metadata = contract.export_metadata(os.fstat(proof_fd))
+        contract.require(
+            copied == raw
+            and metadata["st_mode"] == stat.S_IFREG | 0o444
+            and metadata["st_uid"] == os.geteuid()
+            and metadata["st_gid"] == os.getegid()
+            and metadata["st_nlink"] == 1
+            and (metadata["st_dev"], metadata["st_ino"])
+            != (before["st_dev"], before["st_ino"])
+            and contract.export_metadata(
+                os.stat(proof.name, dir_fd=proof_dir, follow_symlinks=False)
+            )
+            == metadata,
+            "CLI proof copy bytes, permissions or identity differ.",
+        )
+        conserved_source()
+        os.lseek(source_fd, 0, os.SEEK_SET)
+        with os.fdopen(source_fd, "rb", closefd=False) as stream:
+            contract.require(
+                stream.read(MAX_RPC + 1) == raw,
+                "CLI private original bytes changed after copying.",
+            )
+        conserved_source()
+        for (path, fd), original in zip(directories, identities):
+            current = path.lstat()
+            contract.require(
+                all(
+                    getattr(current, k)
+                    == getattr(original, k)
+                    == getattr(os.fstat(fd), k)
+                    for k in ("st_dev", "st_ino", "st_uid", "st_gid", "st_mode")
+                ),
+                "CLI export directory identity changed during publication.",
+            )
+        os.fsync(proof_dir)
+        return {
+            "schema": contract.EXPORT_PROOF_SCHEMA,
+            "source_path": str(source),
+            "proof_path": str(proof),
+            "source_before": before,
+            "source_after": contract.export_metadata(os.fstat(source_fd)),
+            "proof_metadata": metadata,
+            "bytes": len(raw),
+            "sha256": contract.sha(raw),
+        }
 
 
 def read_json(path, limit=MAX_RPC):
@@ -643,6 +814,19 @@ class InstalledLifecycle:
                 )
                 before = self.admission(f"stopped-{run}")
                 if self.profile == "scoped":
+                    # A readable proof copy is permitted only after the app's
+                    # original stop, streams, port and snapshot are admitted.
+                    contract.require(
+                        not errors
+                        and type(row["returncode"]) is int
+                        and row["returncode"] == 0
+                        and row["port_closed"] is True
+                        and row.get("forced_cleanup") is False
+                        and row.get("owned_group_remaining") is False
+                        and contract.regular(self.paths["stderr"], 65536)
+                        == self.notice,
+                        "Scoped CLI export requires a known-normal stopped app.",
+                    )
                     self.cli_readers(run, before)
         except Exception as exc:
             errors.append("observation: " + str(exc))
@@ -695,8 +879,10 @@ class InstalledLifecycle:
             "after": None,
             "operations": {},
             "reader_snapshots": {},
+            "export_proof": None,
+            "export_cleanup": {"fresh": [], "publish": []},
         }
-        exported = self.output / f"process/run-{run}.cli-export.json"
+        exported, _ = cli_export_paths(run, self.output)
         env = environment(self.runtime / "home", self.runtime / "capture-browser")
         try:
             for operation in (
@@ -751,6 +937,10 @@ class InstalledLifecycle:
                 )
                 rows = []
                 try:
+                    if operation == "export":
+                        fresh_cli_export(
+                            run, self.output, cleanup=result["export_cleanup"]["fresh"]
+                        )
                     code, raw = menu.command(
                         argv,
                         rows,
@@ -798,6 +988,14 @@ class InstalledLifecycle:
                     contract.equal(before_op, after_op),
                     "Supporting installed CLI changed typed originals/settings.",
                 )
+                if operation == "export":
+                    result["export_proof"] = publish_cli_export(
+                        run,
+                        self.output,
+                        saved["document"],
+                        cleanup=result["export_cleanup"]["publish"],
+                    )
+                    write_json(self.output / f"process/run-{run}.cli.json", result)
             result["after"] = snapshot(self.runtime / "data")
             contract.require(
                 contract.equal(before, result["after"]),
@@ -1046,6 +1244,7 @@ def run_inner():
                 browser_notice((ROOT / "src/sinter/desktop.py").read_bytes())
             ).decode(),
         }
+        prepare_cli_export_directory()
         for profile in PROFILES:
             runtime, proof = Path("/out/runtime") / profile, output / profile
             runtime.mkdir(parents=True, mode=0o777)
@@ -1945,6 +2144,10 @@ def run(args):
         result = contract.validate(root, receipt, pins, config, _pending=True)
     except Exception as exc:
         receipt["failure"] = "verification: " + type(exc).__name__ + ": " + str(exc)
+        if "cli_export_close_outcomes" in exc.__dict__:
+            receipt["proof_exchange_close_outcomes"] = exc.__dict__[
+                "cli_export_close_outcomes"
+            ]
         write_json(root / "installed-recovery.json", receipt)
         raise
     receipt["installed_rehearsal_passed"] = True
@@ -2020,7 +2223,14 @@ def main(argv=None):
             return 0
         return run(args) and 0
     except Exception as exc:
-        parser.exit(1, type(exc).__name__ + ": " + str(exc) + "\n")
+        details = ""
+        if "cli_export_close_outcomes" in exc.__dict__:
+            details = (
+                "CLI proof descriptor outcomes: "
+                + contract.canonical(exc.__dict__["cli_export_close_outcomes"])
+                + "\n"
+            )
+        parser.exit(1, type(exc).__name__ + ": " + str(exc) + "\n" + details)
 
 
 if __name__ == "__main__":

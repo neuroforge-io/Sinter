@@ -1895,12 +1895,56 @@ def test_export_progress_binds_exact_utf8_output_and_line_boundary():
         contract.validate_cli_stderr("casebooks.get", "", exported)
 
 
-def source_cli_exchange(tmp_path, monkeypatch, mutate=None):
+def source_cli_exchange(tmp_path, monkeypatch, mutate=None, *, projection=False):
     """Inert complete CLI streams; no process or installed operation is executed."""
     from tools import installed_native_menu as menu
     from tools.rc4_scoped_recovery_contract import TITLE, wrappers
 
     lifecycle, before = scoped_lifecycle(tmp_path)
+    monkeypatch.setattr(producer, "CLI_EXPORT_PRIVATE", tmp_path / "private-exports")
+    # Actual descriptor tests remain POSIX-only. Pure Linux receipt projection
+    # keeps semantic/parser fixtures portable without claiming Windows modes.
+    producer.CLI_EXPORT_PRIVATE.mkdir(mode=0o700)
+    if projection or os.name != "posix":
+        # Pure Linux receipt projection only, not Windows descriptor/mode evidence.
+        def fresh(run, output, *, cleanup):
+            source, proof = producer.cli_export_paths(run, output)
+            assert not source.exists() and not proof.exists()
+            cleanup.extend({"fd": n, "closed": True, "failure": None} for n in (10, 11))
+
+        def publish(run, output, document, *, cleanup):
+            source, proof = producer.cli_export_paths(run, output)
+            raw = source.read_bytes()
+            assert contract.equal(contract.json_object(raw), document)
+            proof.write_bytes(raw)
+            original = {
+                "st_dev": 1,
+                "st_ino": 10,
+                "st_uid": 0,
+                "st_gid": 0,
+                "st_mode": 0o100600,
+                "st_nlink": 1,
+                "st_size": len(raw),
+                "st_mtime_ns": 20,
+                "st_ctime_ns": 30,
+            }
+            copied = dict(original, st_ino=11, st_mode=0o100444)
+            cleanup.extend(
+                {"fd": n, "closed": True, "failure": None} for n in (10, 11, 12, 13)
+            )
+            return {
+                "schema": contract.EXPORT_PROOF_SCHEMA,
+                "source_path": str(source),
+                "proof_path": str(proof),
+                "source_before": original,
+                "source_after": dict(original),
+                "proof_metadata": copied,
+                "bytes": len(raw),
+                "sha256": contract.sha(raw),
+            }
+
+        monkeypatch.setattr(producer, "fresh_cli_export", fresh)
+        monkeypatch.setattr(producer, "publish_cli_export", publish)
     stored = next(
         row
         for row in wrappers(before, "casebooks_scoped_v2")
@@ -1912,7 +1956,7 @@ def source_cli_exchange(tmp_path, monkeypatch, mutate=None):
         argv = list(map(str, argv))
         operation = "export" if argv[1] == "export" else argv[2]
         called.append(operation)
-        exported = lifecycle.output / "process/run-1.cli-export.json"
+        exported = producer.CLI_EXPORT_PRIVATE / "run-1.cli-export.json"
         result = {
             "casebooks.get": stored,
             "casebooks.validate": {"document": stored["document"]},
@@ -1947,7 +1991,9 @@ def source_cli_exchange(tmp_path, monkeypatch, mutate=None):
             path.write_bytes(raw if name == "stdout" else stderr)
             row[name + "_file"] = str(path)
         if operation == "export":
-            producer.write_json(exported, stored["document"])
+            from sinter.outputs import atomic_write_text
+
+            atomic_write_text(exported, contract.canonical(stored["document"]))
         return code, raw
 
     monkeypatch.setattr(menu, "command", command)
@@ -1972,24 +2018,47 @@ def final_cli_data(lifecycle):
             if Path(part).is_relative_to(lifecycle.output)
             else "/out/runtime/scoped/data"
             if part == str(lifecycle.runtime / "data")
+            else contract.EXPORT_PRIVATE + "/" + Path(part).name
+            if Path(part).is_relative_to(producer.CLI_EXPORT_PRIVATE)
             else part
             for part in row["argv"]
         ]
         if operation == "export":
             data[prefix + ".stderr"] = (
-                b"Saved: /out/evidence/scoped/process/run-1.cli-export.json\n"
+                b"Saved: /tmp/sinter-rc4-cli-exports/run-1.cli-export.json\n"
             )
             row["stderr"] = menu.stream_record(io.BytesIO(data[prefix + ".stderr"]))
         for name in ("stdout", "stderr"):
             row[name + "_file"] = "/out/evidence/scoped/" + prefix + "." + name
+    publication = receipt["export_proof"]
+    publication["source_path"] = contract.EXPORT_PRIVATE + "/run-1.cli-export.json"
+    publication["proof_path"] = "/out/evidence/scoped/process/run-1.cli-export.json"
+    # Explicit structural projection only; this fixture never claims container UID0.
+    for name in ("source_before", "source_after", "proof_metadata"):
+        publication[name]["st_uid"] = publication[name]["st_gid"] = 0
     data["process/run-1.cli.json"] = contract.canonical(receipt).encode("utf-8")
     return data
 
 
+@pytest.mark.parametrize(
+    "projection", [False, True], ids=["posix-descriptors", "inert-portable"]
+)
 def test_complete_source_cli_progress_and_export_pass_both_admission_boundaries(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, projection
 ):
-    lifecycle, before, called = source_cli_exchange(tmp_path, monkeypatch)
+    if os.name != "posix" and not projection:
+        pytest.skip("Actual Linux proof descriptors are not a Windows qualification.")
+    if projection:
+
+        def forbidden(*args, **kwargs):
+            raise AssertionError(
+                "Portable fixture must not open Linux proof descriptors."
+            )
+
+        monkeypatch.setattr(producer, "export_directory", forbidden)
+    lifecycle, before, called = source_cli_exchange(
+        tmp_path, monkeypatch, projection=projection
+    )
     lifecycle.cli_readers(1, before)
     assert called == [
         "casebooks.get",
@@ -2826,3 +2895,606 @@ def test_private_temp_independent_removals_preserve_first_exception(
         "message"
     ] == str(first)
     assert sorted(p.name for p in temporary.iterdir()) == names
+
+
+@pytest.fixture
+def private_cli_export(tmp_path, monkeypatch):
+    """Actual private atomic export, no CLI/app/container or provider invocation."""
+    from sinter.outputs import atomic_write_text
+
+    private = tmp_path / "container-private-exports"
+    monkeypatch.setattr(producer, "CLI_EXPORT_PRIVATE", private)
+    producer.prepare_cli_export_directory()
+    output = tmp_path / "evidence"
+    (output / "process").mkdir(parents=True)
+    document = {"schema": "fictional-source-control", "original": "café é 🐝"}
+
+    def create(run=1):
+        source, proof = producer.cli_export_paths(run, output)
+        producer.fresh_cli_export(run, output)
+        atomic_write_text(source, json.dumps(document, ensure_ascii=False) + "\n")
+        return source, proof
+
+    return output, document, create
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux proof descriptor boundary")
+@pytest.mark.parametrize("run", [1, 2, 3, 4])
+def test_private_cli_export_distinct_proof_preserves_full_bytes_and_0600(
+    private_cli_export, run
+):
+    output, document, create = private_cli_export
+    source, proof = create(run)
+    before = contract.export_metadata(source.lstat())
+    raw = source.read_bytes()
+    value = producer.publish_cli_export(run, output, document)
+    assert source.read_bytes() == proof.read_bytes() == raw
+    assert contract.export_metadata(source.lstat()) == before
+    assert source.stat().st_mode & 0o777 == 0o600
+    assert proof.stat().st_mode & 0o777 == 0o444
+    assert source.stat().st_ino != proof.stat().st_ino
+    assert value["source_before"] == value["source_after"] == before
+    assert value["proof_metadata"] == contract.export_metadata(proof.lstat())
+    assert value["bytes"] == len(raw) and value["sha256"] == contract.sha(raw)
+    with pytest.raises(ValueError, match="fresh"):
+        producer.fresh_cli_export(run, output)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux proof descriptor boundary")
+def test_private_cli_export_fixed_directory_and_index_refuse_unknown_reuse(
+    private_cli_export,
+):
+    output, _, _ = private_cli_export
+    with pytest.raises(FileExistsError):
+        producer.prepare_cli_export_directory()
+    for run in (False, 0, 5, -1, None, 1.0):
+        with pytest.raises(ValueError, match="Unknown"):
+            producer.cli_export_paths(run, output)
+    assert not list((output / "process").iterdir())
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux proof descriptor boundary")
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "symlink",
+        "hardlink",
+        "mode",
+        "oversize",
+        "wrong_document",
+        "private_directory",
+        "proof_exists",
+    ],
+)
+def test_private_cli_export_unsafe_original_or_destination_refuses(
+    private_cli_export, mutation
+):
+    output, document, create = private_cli_export
+    source, proof = create()
+    if mutation == "symlink":
+        old = source.with_name("retained-original")
+        source.rename(old)
+        source.symlink_to(old)
+    elif mutation == "hardlink":
+        os.link(source, source.with_name("second-link"))
+    elif mutation == "mode":
+        source.chmod(0o644)
+    elif mutation == "oversize":
+        with source.open("ab") as stream:
+            stream.write(b" " * producer.MAX_RPC)
+    elif mutation == "wrong_document":
+        source.write_bytes(b'{"other":"unrelated"}')
+    elif mutation == "private_directory":
+        source.parent.chmod(0o755)
+    else:
+        proof.write_bytes(b"existing proof must stay")
+    with pytest.raises((ValueError, FileExistsError)):
+        producer.publish_cli_export(1, output, document)
+    if mutation == "proof_exists":
+        assert proof.read_bytes() == b"existing proof must stay"
+    else:
+        assert not proof.exists()
+    assert source.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux proof descriptor boundary")
+def test_private_cli_export_foreign_directory_refuses_before_open(
+    private_cli_export, monkeypatch
+):
+    output, document, create = private_cli_export
+    _, proof = create()
+    actual = os.geteuid()
+    monkeypatch.setattr(producer.os, "geteuid", lambda: actual + 1)
+    with pytest.raises(ValueError, match="directory ownership"):
+        producer.publish_cli_export(1, output, document)
+    assert not proof.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux proof descriptor boundary")
+@pytest.mark.parametrize("mutation", ["source_bytes", "source_directory", "proof_path"])
+def test_private_cli_export_descriptor_and_named_path_races_refuse(
+    private_cli_export, monkeypatch, mutation
+):
+    output, document, create = private_cli_export
+    source, proof = create()
+    original_write = os.write
+    triggered = False
+
+    def write(fd, raw):
+        nonlocal triggered
+        result = original_write(fd, raw)
+        if not triggered:
+            triggered = True
+            if mutation == "source_bytes":
+                source.write_bytes(b"{}")
+            elif mutation == "source_directory":
+                source.parent.rename(source.parent.with_name("retained-private-root"))
+                source.parent.mkdir(mode=0o700)
+            else:
+                proof.rename(proof.with_name("retained-first-copy"))
+                proof.write_bytes(bytes(raw))
+                proof.chmod(0o444)
+        return result
+
+    monkeypatch.setattr(producer.os, "write", write)
+    with pytest.raises(ValueError, match="changed|identity"):
+        producer.publish_cli_export(1, output, document)
+    assert triggered
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux proof descriptor boundary")
+def test_private_cli_export_partial_write_retains_first_fault_and_private_original(
+    private_cli_export, monkeypatch
+):
+    output, document, create = private_cli_export
+    source, proof = create()
+    raw = source.read_bytes()
+    actual_write = os.write
+    writes = []
+
+    def write(fd, data):
+        writes.append(len(data))
+        if len(writes) == 1:
+            return actual_write(fd, data[:3])
+        raise OSError("first proof publication fault")
+
+    monkeypatch.setattr(producer.os, "write", write)
+    with pytest.raises(OSError, match="first proof publication fault"):
+        producer.publish_cli_export(1, output, document)
+    assert proof.read_bytes() == raw[:3]
+    assert source.read_bytes() == raw and source.stat().st_mode & 0o777 == 0o600
+    with pytest.raises(ValueError, match="fresh"):
+        producer.fresh_cli_export(1, output)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux proof descriptor boundary")
+def test_source_cli_export_publication_fault_preserves_capture_and_stops_run(
+    tmp_path, monkeypatch
+):
+    lifecycle, before, called = source_cli_exchange(tmp_path, monkeypatch)
+
+    def failed(*args, **kwargs):
+        raise OSError("first export proof fault")
+
+    monkeypatch.setattr(producer, "publish_cli_export", failed)
+    with pytest.raises(OSError, match="first export proof fault"):
+        lifecycle.cli_readers(1, before)
+    result = producer.read_json(lifecycle.output / "process/run-1.cli.json")
+    assert called == [
+        "casebooks.get",
+        "casebooks.validate",
+        "casebooks.build",
+        "export",
+    ]
+    assert result["export_proof"] is None and result["after"] is None
+    assert result["operations"]["export"]["streams_complete"] is True
+    assert contract.equal(
+        result["reader_snapshots"]["export"]["before"],
+        result["reader_snapshots"]["export"]["after"],
+    )
+    assert (
+        producer.CLI_EXPORT_PRIVATE / "run-1.cli-export.json"
+    ).stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "original_changed",
+        "same_inode",
+        "wrong_copy_hash",
+        "source_world_readable",
+        "copy_writable",
+        "unknown_path",
+        "bool_metadata",
+    ],
+)
+def test_final_cli_contract_rejects_export_proof_identity_or_content_mutation(
+    tmp_path, monkeypatch, mutation
+):
+    lifecycle, before, _ = source_cli_exchange(tmp_path, monkeypatch)
+    lifecycle.cli_readers(1, before)
+    data = final_cli_data(lifecycle)
+    receipt = contract.json_object(data["process/run-1.cli.json"])
+    proof = receipt["export_proof"]
+    if mutation == "original_changed":
+        proof["source_after"]["st_mtime_ns"] += 1
+    elif mutation == "same_inode":
+        proof["proof_metadata"]["st_ino"] = proof["source_before"]["st_ino"]
+        proof["proof_metadata"]["st_dev"] = proof["source_before"]["st_dev"]
+    elif mutation == "wrong_copy_hash":
+        proof["sha256"] = "0" * 64
+    elif mutation == "source_world_readable":
+        proof["source_before"]["st_mode"] = 0o100644
+    elif mutation == "copy_writable":
+        proof["proof_metadata"]["st_mode"] = 0o100644
+    elif mutation == "unknown_path":
+        proof["source_path"] = "/out/runtime/scoped/private-copy.json"
+    else:
+        proof["source_before"]["st_nlink"] = True
+    data["process/run-1.cli.json"] = contract.canonical(receipt).encode()
+    with pytest.raises(ValueError):
+        contract.validate_cli(data, 1, before, "fictional-version")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux proof descriptor boundary")
+@pytest.mark.parametrize("body_failure", [False, True])
+def test_cli_export_all_descriptor_closes_preserve_identical_first_fault(
+    private_cli_export, monkeypatch, body_failure
+):
+    output, document, create = private_cli_export
+    source, proof = create()
+    original = source.read_bytes()
+    primary = OSError("original proof write fault")
+    close_faults = [OSError("later close one"), OSError("later close two")]
+    real_close, real_write = os.close, os.write
+    closed, outcomes = [], []
+
+    def close(fd):
+        real_close(fd)
+        closed.append(fd)
+        if len(closed) <= 2:
+            raise close_faults[len(closed) - 1]
+
+    def write(fd, data):
+        if body_failure:
+            raise primary
+        return real_write(fd, data)
+
+    monkeypatch.setattr(producer.os, "close", close)
+    monkeypatch.setattr(producer.os, "write", write)
+    with pytest.raises(OSError) as caught:
+        producer.publish_cli_export(1, output, document, cleanup=outcomes)
+    assert caught.value is (primary if body_failure else close_faults[0])
+    assert len(closed) == len(outcomes) == 4 and len(set(closed)) == 4
+    assert [r["failure"]["message"] for r in outcomes if r["failure"]] == [
+        "later close one",
+        "later close two",
+    ]
+    assert caught.value.cli_export_close_outcomes == outcomes
+    assert source.read_bytes() == original and source.stat().st_mode & 0o777 == 0o600
+    assert proof.exists()  # Failed proof is retained; no publication success returned.
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux proof descriptor boundary")
+@pytest.mark.parametrize("body_failure", [False, True])
+def test_host_cli_proof_read_retains_primary_and_separate_close_fault(
+    tmp_path, monkeypatch, body_failure
+):
+    proof = tmp_path / "run-1.cli-export.json"
+    raw = b'{"original":"retained"}\n'
+    proof.write_bytes(raw)
+    proof.chmod(0o444)
+    real_metadata = contract.export_metadata
+    real_close = os.close
+    primary, close_fault = (
+        ValueError("original proof read fault"),
+        OSError("later read close"),
+    )
+    closed = []
+
+    def metadata(info):
+        row = real_metadata(info)
+        row["st_uid"] = row["st_gid"] = 0  # Explicit inert UID0 receipt projection.
+        return row
+
+    def close(fd):
+        real_close(fd)
+        closed.append(fd)
+        raise close_fault
+
+    class FailedRead:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, *args):
+            raise primary
+
+    monkeypatch.setattr(contract, "export_metadata", metadata)
+    monkeypatch.setattr(contract.os, "close", close)
+    if body_failure:
+        monkeypatch.setattr(contract.os, "fdopen", lambda *a, **k: FailedRead())
+    with pytest.raises((ValueError, OSError)) as caught:
+        contract.read_export_proof(proof)
+    assert caught.value is (primary if body_failure else close_fault)
+    assert len(closed) == 1
+    assert caught.value.cli_export_close_outcomes == [
+        {
+            "fd": closed[0],
+            "closed": False,
+            "failure": {"type": "OSError", "message": "later read close"},
+        }
+    ]
+    assert proof.read_bytes() == raw
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux proof descriptor boundary")
+def test_host_cli_proof_actual_copy_read_and_metadata_mismatch_refusal(
+    tmp_path, monkeypatch
+):
+    lifecycle, before, _ = source_cli_exchange(tmp_path, monkeypatch)
+    lifecycle.cli_readers(1, before)
+    data = final_cli_data(lifecycle)
+    original = contract.export_metadata
+
+    def metadata(info):
+        row = original(info)
+        row["st_uid"] = row["st_gid"] = (
+            0  # Structural source fixture, no root-run claim.
+        )
+        return row
+
+    monkeypatch.setattr(contract, "export_metadata", metadata)
+    proof = lifecycle.output / "process/run-1.cli-export.json"
+    raw, actual = contract.read_export_proof(proof)
+    receipt = contract.json_object(data["process/run-1.cli.json"])
+    assert raw == data["process/run-1.cli-export.json"]
+    assert actual == receipt["export_proof"]["proof_metadata"]
+    # This partial source fixture has no RPC traffic; remove only its known
+    # empty fixture directories before exercising the closed inventory reader.
+    for name in ("rpc", "inner-rpc"):
+        (lifecycle.output / name).rmdir()
+    # Exercise profile loading, not only the structural JSON validator.
+    (lifecycle.output / "process/run-1.cli.json").write_bytes(
+        data["process/run-1.cli.json"]
+    )
+    contract.profile_artifacts(lifecycle.output)
+    receipt["export_proof"]["proof_metadata"]["st_ctime_ns"] += 1
+    (lifecycle.output / "process/run-1.cli.json").write_text(
+        contract.canonical(receipt)
+    )
+    with pytest.raises(ValueError, match="Actual CLI proof metadata"):
+        contract.profile_artifacts(lifecycle.output)
+    proof.chmod(0o644)
+    with pytest.raises(ValueError, match="ownership, mode or bound"):
+        contract.read_export_proof(proof)
+
+
+@pytest.mark.parametrize("body_failure", [False, True])
+def test_export_descriptor_owner_preserves_false_unprintable_exception_and_closes_all(
+    body_failure,
+):
+    """Pure ownership/error fixture: no filesystem, OS modes or process claim."""
+
+    class CloseFault(BaseException):
+        def __bool__(self):
+            raise AssertionError("Cleanup must not ask exception truthiness.")
+
+        def __str__(self):
+            raise RuntimeError("Rendering cannot prevent another close.")
+
+        @property
+        def __dict__(self):
+            raise AssertionError("Cleanup must not inspect a subclass dictionary.")
+
+    primary = ValueError("first body error")
+    close_fault = CloseFault()
+    second_fault = OSError("second close error")
+    attempted, outcomes = [], []
+
+    def close(descriptor):
+        attempted.append(descriptor)
+        if descriptor == 13:
+            raise close_fault
+        if descriptor == 12:
+            raise second_fault
+
+    with pytest.raises((ValueError, CloseFault)) as caught:
+        with contract.ExportDescriptors(outcomes) as resources:
+            for descriptor in (10, 11, 12, 13):
+                resources.callback(close, descriptor)
+            if body_failure:
+                raise primary
+    assert caught.value is (primary if body_failure else close_fault)
+    assert attempted == [13, 12, 11, 10]
+    assert outcomes == [
+        {
+            "fd": 13,
+            "closed": False,
+            "failure": {
+                "type": "CloseFault",
+                "message": "<exception message unavailable>",
+            },
+        },
+        {
+            "fd": 12,
+            "closed": False,
+            "failure": {"type": "OSError", "message": "second close error"},
+        },
+        {"fd": 11, "closed": True, "failure": None},
+        {"fd": 10, "closed": True, "failure": None},
+    ]
+    assert (
+        BaseException.__dict__["__dict__"].__get__(caught.value)[
+            "cli_export_close_outcomes"
+        ]
+        == outcomes
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "missing",
+        "unknown_phase",
+        "missing_close",
+        "duplicate_fd",
+        "bool_fd",
+        "failed_close",
+        "unknown_field",
+        "missing_observation",
+    ],
+)
+def test_final_cli_contract_requires_complete_typed_export_cleanup(
+    tmp_path,
+    monkeypatch,
+    mutation,
+):
+    lifecycle, before, _ = source_cli_exchange(tmp_path, monkeypatch, projection=True)
+    lifecycle.cli_readers(1, before)
+    data = final_cli_data(lifecycle)
+    receipt = contract.json_object(data["process/run-1.cli.json"])
+    contract.validate_cli(data, 1, before, "fictional-version")
+    cleanup = receipt["export_cleanup"]
+    if mutation == "missing":
+        del receipt["export_cleanup"]
+    elif mutation == "unknown_phase":
+        cleanup["other"] = []
+    elif mutation == "missing_close":
+        cleanup["publish"].pop()
+    elif mutation == "duplicate_fd":
+        cleanup["publish"][1]["fd"] = cleanup["publish"][0]["fd"]
+    elif mutation == "bool_fd":
+        cleanup["fresh"][0]["fd"] = True
+    elif mutation == "failed_close":
+        cleanup["publish"][0].update(
+            closed=False, failure={"type": "OSError", "message": "close refused"}
+        )
+    elif mutation == "unknown_field":
+        cleanup["fresh"][0]["other"] = None
+    else:
+        del cleanup["fresh"][0]["closed"]
+    data["process/run-1.cli.json"] = contract.canonical(receipt).encode()
+    with pytest.raises(ValueError):
+        contract.validate_cli(data, 1, before, "fictional-version")
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "stop",
+        "stream",
+        "capture",
+        "nonzero",
+        "bool_exit",
+        "forced",
+        "group",
+        "port",
+        "notice",
+        "snapshot",
+        "missing_forced",
+        "missing_group",
+        "integer_forced",
+        "integer_group",
+    ],
+)
+def test_scoped_cli_export_requires_admitted_stopped_app_before_any_reader(
+    tmp_path,
+    monkeypatch,
+    fault,
+):
+    """Inert lifecycle: ownership failures cannot publish or replay exports."""
+    from tools import native_window_smoke as native
+    from tools import rc4_recovery_source as source
+
+    runtime, output = exchange(tmp_path, "scoped")
+    paths = {name: output / f"process/run-1.{name}" for name in ("stdout", "stderr")}
+    paths["stdout"].write_bytes(b"original stdout\n")
+    paths["stderr"].write_bytes(b"bad notice" if fault == "notice" else b"notice")
+    events = []
+    lifecycle = producer.InstalledLifecycle.__new__(producer.InstalledLifecycle)
+    lifecycle.runtime, lifecycle.output, lifecycle.profile = runtime, output, "scoped"
+    lifecycle.paths, lifecycle.notice = paths, b"notice"
+    lifecycle.rows = [{"run": 1, "pid": 4321, "stop_method": "interface_quit"}]
+    lifecycle.process = SimpleNamespace(
+        poll=lambda: 7 if fault == "nonzero" else False if fault == "bool_exit" else 0
+    )
+
+    class Stream:
+        def __init__(self, name):
+            self.name = name
+
+        def close(self):
+            events.append("close " + self.name)
+            if fault == "stream" and self.name == "stdout":
+                raise OSError("first stream fault")
+
+    class Probe:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def settimeout(self, value):
+            assert value == 1
+
+        def connect_ex(self, address):
+            return 0 if fault == "port" else 111
+
+    def stop(process, row):
+        events.append("stop")
+        row.update(
+            forced_cleanup=fault == "forced", owned_group_remaining=fault == "group"
+        )
+        if fault == "missing_forced":
+            del row["forced_cleanup"]
+        elif fault == "missing_group":
+            del row["owned_group_remaining"]
+        elif fault == "integer_forced":
+            row["forced_cleanup"] = 0
+        elif fault == "integer_group":
+            row["owned_group_remaining"] = 0
+        if fault == "stop":
+            raise OSError("first stop fault")
+
+    original_capture = source.capture_stream
+
+    def capture(path):
+        events.append("capture " + path.suffix[1:])
+        if fault == "capture" and path.suffix == ".stdout":
+            raise OSError("first capture fault")
+        return original_capture(path)
+
+    def snapshot(path):
+        events.append("snapshot")
+        if fault == "snapshot":
+            raise ValueError("first snapshot fault")
+        return {"unchanged": True}
+
+    lifecycle.streams = [Stream(name) for name in ("stdout", "stderr")]
+    lifecycle.inner = SimpleNamespace(port=1)
+    lifecycle.admission = lambda name: {"unchanged": True}
+    lifecycle.cli_readers = lambda *args: events.append("forbidden CLI")
+    monkeypatch.setattr(native, "stop_process", stop)
+    monkeypatch.setattr(producer.socket, "socket", Probe)
+    monkeypatch.setattr(source, "capture_stream", capture)
+    monkeypatch.setattr(producer, "fixed_snapshot", snapshot)
+    with pytest.raises(ValueError):
+        lifecycle.reap(1)
+    assert "forbidden CLI" not in events
+    assert events[:5] == [
+        "stop",
+        "close stdout",
+        "close stderr",
+        "capture stderr",
+        "capture stdout",
+    ]
+    row = producer.read_json(output / "process/run-1.json")
+    assert row["stderr"]["sha256"] == contract.sha(paths["stderr"].read_bytes())
+    assert paths["stdout"].read_bytes() == b"original stdout\n"
+    assert not (output / "process/run-1.cli.json").exists()
+    assert not (runtime / "state.json").exists()
