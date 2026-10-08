@@ -289,6 +289,7 @@ def _windows_selection_fixture(
     observation["selection_fixture"] = {
         "lane": lane, "path": list(map(str, path)), "py": py,
         "matrix_python": sys.executable, "matrix_version": list(sys.version_info),
+        "inherited_errorlevel": os.environ.get("ERRORLEVEL"),
         "expected_exit": (
             "nonzero" if lane == "broken-local"
             else 1 if lane == "no-runtime" else exit_code
@@ -336,12 +337,18 @@ def test_windows_selection_fallback_and_refusal(
 
 @pytest.mark.skipif(os.name != "nt", reason="Actual Windows single dispatch exit.")
 @pytest.mark.parametrize("lane", ["path-failure", "local-failure"])
+@pytest.mark.parametrize("inherited_errorlevel", [None, "0"])
 def test_windows_application_failure_keeps_exit_without_fallback(
-    tmp_path, monkeypatch, request, lane,
+    tmp_path, monkeypatch, request, lane, inherited_errorlevel,
 ):
+    if inherited_errorlevel is None:
+        monkeypatch.delenv("ERRORLEVEL", raising=False)
+    else:
+        monkeypatch.setenv("ERRORLEVEL", inherited_errorlevel)
     _windows_selection_fixture(
         tmp_path, monkeypatch, request, lane=lane, exit_code=7,
     )
+    assert os.environ.get("ERRORLEVEL") == inherited_errorlevel
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Actual batch parser and runtime probe.")
@@ -393,7 +400,8 @@ def test_windows_listing_helpers_preserve_paths_and_refuse_unknown_records(
     helpers = batch[batch.index("\n:listed_candidate\n") + 1:]
     driver = tmp_path / "parser-control.bat"
     driver.write_text(
-        "@echo off\nsetlocal EnableExtensions DisableDelayedExpansion\n"
+        '@echo off\nsetlocal EnableExtensions DisableDelayedExpansion\n'
+        'set "ERRORLEVEL="\n'
         'set "SINTER_PYTHON="\n'
         "call :listed_candidate\nif not defined SINTER_PYTHON exit /b 3\n"
         '"%SINTER_PYTHON%" "%SINTER_CASE_ENTRY%"\n'
@@ -463,6 +471,7 @@ def test_windows_runtime_admission_requires_exact_success(
     driver = tmp_path / "probe-exit-control.bat"
     driver.write_text(
         '@echo off\nsetlocal EnableExtensions DisableDelayedExpansion\n'
+        'set "ERRORLEVEL="\n'
         'set "SINTER_PYTHON="\n'
         '"%COMSPEC%" /d /c exit /b %SINTER_CASE_EXIT%\n'
         + admission + '\necho observed-probe-exit=%errorlevel%\n'

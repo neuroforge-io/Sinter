@@ -3025,3 +3025,15 @@ guard after real CMD exits 0, 1, -1 and -1073741819; it does not manufacture a
 Python crash. Those Windows controls and fresh hosted source checks remain pending.
 The follow-on local focused run passed 172 tests with 35 native Windows cases
 skipped in 3.29 seconds; it does not supply their execution evidence.
+
+Microsoft's [documented CMD behaviour](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/if)
+permits an inherited `ERRORLEVEL` variable
+to shadow the built-in process status. The launcher now removes that shadow
+inside its existing `setlocal` scope before discovery; `endlocal` restores the
+caller's environment. The existing real-wrapper exit-7 checks for both PATH and
+project-venv selection retain their plain cases and add inherited `ERRORLEVEL=0`
+cases, requiring exit 7 and exactly one entry with no fallback. The five-second
+bound and prior failures are unchanged; Windows execution remains pending.
+The local focused run passed 172 tests with all 37 native Windows cases skipped in
+3.36 seconds. The two exact-helper drivers retain the same local-shadow clearing
+entry condition; their checks do not replace the full-wrapper counterexamples.

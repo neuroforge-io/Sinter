@@ -1,5 +1,6 @@
 @echo off
 setlocal EnableExtensions DisableDelayedExpansion
+set "ERRORLEVEL="
 cd /d "%~dp0"
 if exist ".venv\Scripts\python.exe" (
   ".venv\Scripts\python.exe" start.py %*

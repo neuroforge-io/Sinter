@@ -10,7 +10,8 @@ original installed gates must pass before a separate Linux preview is admitted.
 - Prefer a working installed Python 3.10+ on PATH in the Windows source wrapper,
   after the authoritative project virtual environment. Use installed registered
   runtimes as an offline fallback, refuse unrecognised aliases and preserve the
-  application's exit code without a second launch. The original five-second
+  application's exit code without a second launch, including when the parent
+  environment has an `ERRORLEVEL` variable. The original five-second
   checks and failed Windows observations remain; fresh Windows CI is required.
 
 - Offer “Read full message” when campaign feedback exceeds the compact save bar.
