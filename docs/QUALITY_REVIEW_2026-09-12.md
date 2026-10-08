@@ -2920,3 +2920,44 @@ external browser requests or page errors, and the package-removal cleanup ran.
 A new source commit and fresh official run are required to prove the corrected
 check and the rest of the installed workflow. A stale expectation explains this
 failure; it does not prove the unexecuted steps passed.
+
+
+### 8 October: preserve literal CSV source spacing through every export
+
+A real source-only handover exposed silent trimming of CSV headers and cells:
+` Owner ` became `Owner`, `  Casey  ` became `Casey`, and an all-space field
+looked empty. The source snapshot stayed exact, but the presentation did not.
+CSV output now uses literal inline spans for boundary spaces, repeated spaces,
+tabs and other whitespace. A trailing backslash is separated from the closing
+span delimiter so it cannot consume the next column. Ordinary cells retain their
+existing markup; the generic document parser and Word exporter are unchanged.
+
+The actual browser run then caught a second defect: inline code preserved the
+DOM string but collapsed visible spaces. The document and standalone HTML
+styles now preserve those literal spans. The final offline browser exercise
+passed in 35.28 seconds, using production casebook construction with four complete
+fictional CSV sources. It checked desktop, 390-pixel mobile and print-media DOM,
+actual clipboard TSV, downloaded standalone HTML, Markdown, evidence JSON and
+break-aware Word cells. Multiline records and unnamed-column fallback preserve
+complete original CSV. Source identities, excerpts and all four originals stayed
+exact. Pending-edit export guards and campaign draft logging still passed.
+
+The final eight focused suites passed 255 tests, including the HTTP export case.
+All source pins stayed unchanged during both completed runs. The browser and its
+private local server closed normally; there were no browser errors, external
+requests or model operations. Seven downloaded Word/Markdown outputs remained
+byte-identical to the prior producer-fixed run. The two HTML outputs differed
+only by the declared literal-spacing style rule.
+
+Earlier navigation setup failure, the browser's visible-spacing failure, a
+newline expectation correction and a test run using the wrong Node runtime
+remain recorded as earlier failures. The passing runs do not reclassify them.
+The final run used the existing cached browser and bundled Node runtime, with no
+model download or hosted generation. The user's real Sinter app stayed closed.
+
+An independent passive review accepted this narrow source-fidelity fix. Empty
+fields retain the existing em-dash display while original emptiness is preserved
+in evidence. The mobile table still wraps and scrolls; these checks do not claim
+an aesthetic 10/10, physical print-dialog qualification, installed-release
+qualification or a new published browser bundle. The frozen candidate and older
+published previews are unchanged.

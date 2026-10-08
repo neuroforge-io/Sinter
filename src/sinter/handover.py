@@ -106,6 +106,23 @@ def _csv_rows(source: Source, excerpt: Excerpt):
     return rows
 
 
+def _csv_inline(value: str) -> str:
+    """Protect literal CSV spacing from table trimming and inline collapse."""
+    if (
+        value != value.strip()
+        or "  " in value
+        or any(char.isspace() and char != " " for char in value)
+    ):
+        rendered = _literal_code(value)
+        if value.endswith("\\"):
+            # Separate a trailing backslash from the closing delimiter: the
+            # pipe-table tokenizer treats backslash + backtick as an escape.
+            fence = rendered[: len(rendered) - len(rendered.lstrip("`"))]
+            return fence + " " + value + " " + fence
+        return rendered
+    return literal(value)
+
+
 def _csv_quote(rows: list[list[str]]) -> str:
     headers, records = rows[0], rows[1:]
     if any(
@@ -115,8 +132,8 @@ def _csv_quote(rows: list[list[str]]) -> str:
         for number, record in enumerate(records, 1):
             lines.extend([f"> **Source record {number}**", ">"])
             for label, cell in zip(headers, record):
-                value = literal(cell) if cell else "—"
-                prefix = "> **" + literal(label) + ":**"
+                value = _csv_inline(cell) if cell else "—"
+                prefix = "> **" + _csv_inline(label) + ":**"
                 if any(marker in cell for marker in _LINE_BREAKS):
                     lines.extend([prefix, ">", _literal_quote(cell)])
                 else:
@@ -125,11 +142,11 @@ def _csv_quote(rows: list[list[str]]) -> str:
             lines.append(">")
         return "\n".join(lines)
     table = [
-        "> | " + " | ".join(literal(cell) for cell in headers) + " |",
+        "> | " + " | ".join(_csv_inline(cell) for cell in headers) + " |",
         "> | " + " | ".join("---" for _ in headers) + " |",
     ]
     table.extend(
-        "> | " + " | ".join(literal(cell) if cell else "—" for cell in row) + " |"
+        "> | " + " | ".join(_csv_inline(cell) if cell else "—" for cell in row) + " |"
         for row in records
     )
     return "\n".join(table)

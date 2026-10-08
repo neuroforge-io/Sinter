@@ -12,6 +12,10 @@ original installed gates must pass before a separate Linux preview is admitted.
   preserve original wording, links, review status and ordinary table layout.
   Avoid repeated document parsing when a report contains many small tables.
 
+- Preserve literal CSV spaces and tabs in quoted handover headers and cells,
+  including clipboard, browser, print layout, HTML and Word exports. Keep
+  multiline and unnamed-column sources complete; retain original evidence.
+
 - Keep the installed first-run check aligned with the current save-and-quit
   guidance. Continue requiring that guidance to be visible before exercising
   the separate project/report saves, restart and interruption recovery.

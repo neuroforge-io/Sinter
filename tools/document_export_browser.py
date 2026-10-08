@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import sys
 import tempfile
@@ -15,21 +17,98 @@ from xml.etree import ElementTree
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "src")]
 
-from sinter import client  # noqa: E402
+from sinter import casebooks, client  # noqa: E402
 from sinter.server import make_server  # noqa: E402
 from tools._support import browser_arguments, launch_chromium  # noqa: E402
+
+W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+
+def word_paragraph_text(paragraph: ElementTree.Element) -> str:
+    """Read literal Word runs, including spaces, tabs and explicit line breaks."""
+    return "".join(
+        node.text or ""
+        if node.tag == f"{{{W}}}t"
+        else "\t"
+        if node.tag == f"{{{W}}}tab"
+        else "\n"
+        if node.tag == f"{{{W}}}br"
+        else ""
+        for node in paragraph.iter()
+    )
+
+
+def word_document(path: Path) -> ElementTree.Element:
+    with zipfile.ZipFile(path) as archive:
+        assert archive.testzip() is None
+        return ElementTree.fromstring(archive.read("word/document.xml"))
 
 
 def word_text(path: Path) -> str:
     """Read the wording from an actual downloaded Word document."""
-    with zipfile.ZipFile(path) as archive:
-        tree = ElementTree.fromstring(archive.read("word/document.xml"))
     return "\n".join(
-        "".join(node.itertext())
-        for node in tree.findall(
-            ".//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p"
-        )
+        word_paragraph_text(node) for node in word_document(path).iter(f"{{{W}}}p")
     )
+
+
+def csv_handover_fixture():
+    """Use complete admitted CSV sources, not hand-written display Markdown."""
+    headers = ["  Action  ", "\tOwner\t", " Notes|`literal` "]
+    owners = [
+        "  Casey  ",
+        "Casey  ",
+        "  Casey",
+        "   ",
+        "\t",
+        "Casey\tLee",
+        "\tCasey\t",
+        " Casey | Lee ",
+        "  ``Casey|Lee``  ",
+        " `Casey` ",
+        " Casey\\|`Lee` ",
+        "\u00a0Casey\u00a0",
+        "Casey  Lee",
+        " Casey\\",
+        "\t`Casey|Lee`\\",
+        "",
+    ]
+    rows = [headers] + [["Review tablemarker", owner, "Unknown"] for owner in owners]
+    second_rows = [["Action", "Owner", " Notes\\"], ["Review secondmarker", " ", " "]]
+    multiline = [
+        ["Action", "  Owner  ", "Notes"],
+        [
+            "Review multilinemarker",
+            "\tCasey|``Lee``\\",
+            "Not approved\nNo one accepted",
+        ],
+    ]
+    unnamed = [["Action", "Owner", "   "], ["Review unnamedmarker", "Casey", " "]]
+
+    def content(values):
+        stream = io.StringIO(newline="")
+        csv.writer(stream).writerows(values)
+        return stream.getvalue()
+
+    book = {
+        "title": "Fictional literal CSV handover",
+        "document_type": "handover",
+        "handover_evidence": "selected_appendix",
+        "questions": "tablemarker?\nsecondmarker?\nmultilinemarker?\nunnamedmarker?",
+        "documents": [
+            {"title": title + ".csv", "content": content(values)}
+            for title, values in (
+                ("Literal table", rows),
+                ("Backslash header", second_rows),
+                ("Multiline record", multiline),
+                ("Unnamed column", unnamed),
+            )
+        ],
+    }
+    expected = [
+        [[cell if cell else "—" for cell in row] for row in values]
+        for values in (rows, second_rows)
+    ]
+    return book, expected
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -43,6 +122,11 @@ def main(argv: list[str] | None = None) -> None:
     resources = {"browser_closed": False, "server_closed": False}
     source_paths = (
         "src/sinter/web/documents.js",
+        "src/sinter/web/documents.css",
+        "src/sinter/handover.py",
+        "src/sinter/document_markup.py",
+        "src/sinter/docx_export.py",
+        "tools/document_export_browser.py",
         "src/sinter/web/reports.js",
         "src/sinter/web/report-drafts.js",
         "src/sinter/web/campaign-letter.js",
@@ -88,6 +172,146 @@ def main(argv: list[str] | None = None) -> None:
             assert page.evaluate("navigator.clipboard.readText()") == (
                 "Fictional clipboard sentinel"
             )
+
+    def csv_handover_exports(page, context, controls):
+        """Read real DOM, clipboard and downloaded HTML/Word source cells."""
+        book, expected = csv_handover_fixture()
+        original = json.loads(json.dumps(book))
+        prepared = casebooks.build(book)
+        assert book == original
+        assert len(prepared["sources"]) == 4 and len(prepared["excerpts"]) == 4
+        by_title = {row["title"]: row["content"] for row in book["documents"]}
+        assert {row["title"]: row["content"] for row in prepared["sources"]} == by_title
+        (artifacts / "literal-csv-input.json").write_text(
+            json.dumps(book, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        (artifacts / "literal-csv-report.json").write_text(
+            json.dumps(prepared, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        page.evaluate(
+            """async report => {
+            const {renderReport} = await import('/static/reports.js');
+            document.getElementById('view').replaceChildren(renderReport(report));
+        }""",
+            prepared,
+        )
+        report = page.get_by_role("region", name="Your draft report")
+        paper = report.locator(".document-paper .document")
+        expect(paper.locator("table")).to_have_count(2)
+
+        def observe(document):
+            return document.evaluate(
+                """element => ({
+                tables: [...element.querySelectorAll('table')].map(table =>
+                    [...table.rows].map(row => [...row.cells].map(cell => ({
+                        text: cell.textContent, visible: cell.innerText,
+                        code: [...cell.querySelectorAll('code')].map(code => ({
+                            text: code.textContent,
+                            whitespace: getComputedStyle(code).whiteSpace
+                        }))
+                    })))),
+                paragraphs: [...element.querySelectorAll('p')].map(p => ({
+                    text: p.textContent, visible: p.innerText
+                })),
+                pre: [...element.querySelectorAll('pre')].map(pre => ({
+                    text: pre.textContent, visible: pre.innerText
+                }))
+            })"""
+            )
+
+        observed = {"screen": observe(paper)}
+        paper.locator(".table-scroll").first.screenshot(
+            path=str(artifacts / "literal-csv-screen.png")
+        )
+        page.emulate_media(media="print")
+        observed["print"] = observe(paper)
+        page.emulate_media(media="screen")
+        page.set_viewport_size({"width": 390, "height": 844})
+        observed["mobile"] = observe(paper)
+        paper.locator(".table-scroll").first.screenshot(
+            path=str(artifacts / "literal-csv-mobile.png")
+        )
+        page.set_viewport_size({"width": 1440, "height": 1000})
+        report.get_by_role("button", name=controls[0], exact=True).click()
+        copied = page.evaluate("navigator.clipboard.readText()")
+        (artifacts / "literal-csv-clipboard.txt").write_text(copied, encoding="utf-8")
+        word = download(page, report, controls[1], "literal-csv-handover.docx")
+        html = download(page, report, controls[2], "literal-csv-handover.html")
+        markdown = download(page, report, controls[3], "literal-csv-handover.md")
+        evidence = json.loads(
+            download(page, report, controls[4], "literal-csv-evidence.json").read_text()
+        )
+        assert evidence == prepared
+        assert markdown.read_text() == prepared["document_markdown"]
+        html_page = context.new_page()
+        try:
+            html_page.set_content(html.read_text())
+            html_document = html_page.locator(".document")
+            observed["downloaded_html"] = observe(html_document)
+            html_document.locator(".table-scroll").first.screenshot(
+                path=str(artifacts / "literal-csv-html.png")
+            )
+        finally:
+            html_page.close()
+        tree = word_document(word)
+        observed["word_tables"] = [
+            [
+                [
+                    "".join(word_paragraph_text(p) for p in cell.findall(f"{{{W}}}p"))
+                    for cell in row.findall(f"{{{W}}}tc")
+                ]
+                for row in table.findall(f"{{{W}}}tr")
+            ]
+            for table in tree.findall(f".//{{{W}}}tbl")
+        ]
+        observed["expected_tables"] = expected
+        (artifacts / "literal-csv-surfaces.json").write_text(
+            json.dumps(observed, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        for surface in ("screen", "print", "mobile", "downloaded_html"):
+            tables = observed[surface]["tables"]
+            assert [
+                [[cell["text"] for cell in row] for row in table] for table in tables
+            ] == expected, surface + " DOM source cells"
+            assert [
+                [[cell["visible"] for cell in row] for row in table] for table in tables
+            ] == expected, surface + " visible source cells"
+            assert all(
+                code["whitespace"] == "pre-wrap"
+                for table in tables
+                for row in table
+                for cell in row
+                for code in cell["code"]
+            ), surface + " literal code spacing"
+        assert observed["word_tables"] == expected
+        for table in expected:
+            stream = io.StringIO(newline="")
+            csv.writer(stream, delimiter="\t", lineterminator="\n").writerows(table)
+            assert stream.getvalue().rstrip("\n") in copied
+        multiline_text = "  Owner  : \tCasey|``Lee``\\"
+        for surface in ("screen", "print", "mobile", "downloaded_html"):
+            assert any(
+                row["text"] == row["visible"] == multiline_text
+                for row in observed[surface]["paragraphs"]
+            ), surface + " multiline record label and value"
+            assert any(
+                row["text"] == row["visible"] == "Not approved\nNo one accepted\n"
+                for row in observed[surface]["pre"]
+            ), surface + " multiline literal source"
+            unnamed_csv = by_title["Unnamed column.csv"].replace("\r\n", "\n")
+            assert any(
+                row["text"] == row["visible"] == unnamed_csv + "\n"
+                for row in observed[surface]["pre"]
+            ), surface + " complete unnamed-column literal fallback"
+        assert multiline_text in word_text(word) and multiline_text in copied
+        assert book == original
+        checks.append(
+            "Production source-only CSV handover preserves every literal header "
+            "and cell (spaces, tabs, empty/all-space, pipes, ticks and backslashes) "
+            "in desktop/mobile/print DOM, actual clipboard TSV, downloaded "
+            "self-contained HTML and raw break-aware Word cells. Multiline "
+            "records and all four unchanged source originals remain local."
+        )
 
     def campaign_letter_log(page, server, base, choice):
         """Exercise pending edits through the real campaign clarification flow."""
@@ -539,6 +763,7 @@ def main(argv: list[str] | None = None) -> None:
                                 workflow + " uses the same six guards; "
                                 "Apply preserves export/privacy/incomplete semantics."
                             )
+                        csv_handover_exports(page, context, controls)
                         for choice in ("apply", "cancel"):
                             campaign_letter_log(page, server, base, choice)
                         assert not errors and not external
