@@ -119,9 +119,57 @@ def main(argv: list[str] | None = None) -> None:
                         errors.append('Unexpected native decision: ' + dialog.type),
                         dialog.dismiss()))
                 page.get_by_role('button', name='Open project', exact=True).first.click()
+                # A prepared report is still session work until its own save.
+                # Operate the actual decision rather than leaving the editor
+                # locked behind it while the second-window conflict runs.
+                decision = page.get_by_role(
+                    'dialog', name='Replace this unsaved editor?', exact=True
+                )
+                expect(decision).to_be_visible()
+                expect(decision).to_contain_text(
+                    'Unsaved report edits stay in My workspace for this session'
+                )
+                expect(page.get_by_label(
+                    'Recipient or audience', exact=True
+                )).to_be_disabled()
+                page.screenshot(
+                    path=str(out / 'casebook-prepared-report-decision.png'),
+                    full_page=True,
+                )
+                decision.get_by_role('button', name='Cancel', exact=True).click()
+                expect(decision).to_have_count(0)
+                expect(page.get_by_label(
+                    'Recipient or audience', exact=True
+                )).to_be_enabled()
+                expect(page.get_by_role(
+                    'region', name='Your draft report'
+                )).to_be_visible()
+                page.get_by_role('button', name='Open project', exact=True).first.click()
+                decision.get_by_role(
+                    'button', name='Replace editor', exact=True
+                ).click()
+                expect(decision).to_have_count(0)
+                expect(page.get_by_label(
+                    'Recipient or audience', exact=True
+                )).to_be_enabled()
                 assert page.get_by_label('Project name', exact=True).input_value() == 'Fictional P&C community evening'
                 expect(page.get_by_label('Prepare a', exact=True)).to_have_value('handover')
                 expect(page.get_by_label('Recipient or audience', exact=True)).to_have_value('Fictional handover team')
+                page.get_by_role('link', name='My workspace', exact=True).click()
+                pending = page.get_by_role(
+                    'region', name='Unsaved document or form work', exact=True
+                )
+                expect(pending).to_be_visible()
+                pending.get_by_role(
+                    'button', name='Open unsaved draft', exact=True
+                ).last.click()
+                retained = page.get_by_role('region', name='Your draft report')
+                expect(retained).to_contain_text('Fictional handover team')
+                expect(retained).to_contain_text('Prepared locally; not saved')
+                page.get_by_role('link', name='Community casebooks', exact=True).click()
+                expect(page.get_by_label(
+                    'Recipient or audience', exact=True
+                )).to_be_enabled()
                 # Reopening a new browser window uses persisted project data,
                 # rather than the previous page's in-memory draft seed.
                 reopened = browser.new_page(viewport={'width': 1440, 'height': 1000})
@@ -201,6 +249,6 @@ def main(argv: list[str] | None = None) -> None:
                 browser.close()
         finally:
             server.shutdown(); server.app.close(); server.server_close(); thread.join(timeout=5)
-    print('PASS: source-only handover, exact originals/gaps, sender edit invalidation, format persistence, save/reopen, conflict preservation, backup restore, single-poll recovery without replay, activity retrieval and mobile layout. No model calls.')
+    print('PASS: source-only handover, exact originals/gaps, sender edit invalidation, format persistence, save/reopen, prepared-report cancel/replace decisions and session retention, conflict preservation, backup restore, single-poll recovery without replay, activity retrieval and mobile layout. No model calls.')
 
 if __name__ == '__main__': main()

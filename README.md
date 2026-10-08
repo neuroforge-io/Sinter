@@ -54,7 +54,7 @@ Source-only casebook reports also expose sources without a retained quotation
 and let you inspect hash-checked surrounding original text locally. The
 [evidence-view review](docs/CASEBOOK_EVIDENCE_CONTEXT_REVIEW_2026-10-01.md)
 explains what is preserved and what still needs manual review.
-Development source adds **Review an opening summary** to source-only volunteer
+Development source adds **Write handover opening** to source-only volunteer
 handovers. You enter the status and proposed next step, select exact retained
 wording, review the preview and approve replacement. Unapplied rows stay in the
 current browser session; apply them and **Save to My workspace** before quitting.

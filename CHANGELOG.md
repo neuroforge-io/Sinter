@@ -14,6 +14,16 @@ original installed gates must pass before a separate Linux preview is admitted.
   environment has an `ERRORLEVEL` variable. The original five-second
   checks and failed Windows observations remain; fresh Windows CI is required.
 
+- Explain richer-draft compatibility before a known native ERAIS request. Keep
+  the source-only report and exact context available, offer a short-source task
+  or explicit connection change, and preserve custom providers. Automatic
+  selection remains unresolved until discovery; it does not establish quality.
+
+- Make the offline garden walkthrough follow the actual controls: save project
+  inputs and report wording separately, export a real backup before restoring,
+  and review pending session copies before quitting. Browser journeys operate
+  the unsaved-work decision and evidence disclosure explicitly.
+
 - Make report saving explicit and truthful. Prepared and incomplete reports stay
   in unsaved work until a valid save acknowledgement. Retain newer wording,
   evidence and screening changes during a pending save; distinguish rejected,

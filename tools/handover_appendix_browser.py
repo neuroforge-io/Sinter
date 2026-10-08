@@ -188,6 +188,7 @@ def main(argv: list[str] | None = None) -> None:
                         ).click()
                         report = page.get_by_role("region", name="Your draft report")
                         expect(report).to_be_visible()
+                        page.get_by_text("Evidence coverage", exact=True).click()
                         expect(
                             page.get_by_text(
                                 "This prepared handover includes "

@@ -13,6 +13,7 @@ import {casebookSchema, explicitScopeClear, questionScopeIssue, questionScopeCon
 import {sourceFilterStates} from './casebook-source-filter.js';
 import {confirmAction} from './confirm-action.js';
 import {isReportDraftUnsaved} from './report-drafts.js';
+import {connectionTokenLimits, inferConnectionPreset} from './provider-connection.js';
 
 // Only this scope-aware caller opts in. A cached older page using the current
 // shared request helper must still be refused before it receives scoped work.
@@ -29,6 +30,9 @@ const example = () => ({schema: 'sinter-casebook/v1', title: 'Fictional P&C comm
 
 export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden} = {}) {
   const {settings} = await request('/api/settings');
+  const nativeDraftUnsupported = connectionTokenLimits(settings).effectiveMax === 128;
+  const automaticDraftUnresolved = inferConnectionPreset(settings) === 'neuroforge'
+    && String(settings.model || 'auto').trim() === 'auto';
   const sender = senderFields(seed.book || {}, settings);
   const recipient = field('Recipient or audience', 'text', seed.book?.recipient || '', '', {maxLength: 200});
   let savedId = seed.savedId || null, revision = seed.revision || null;
@@ -193,7 +197,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   }
   function lock(active) { busy = active; editor.disabled = active; setBusy?.(active); }
   async function perform(kind, fingerprint) {
-    if (busy) return;
+    if (busy || (kind === 'draft' && nativeDraftUnsupported)) return;
     lock(true); status.replaceChildren(notice('Saving your local project before starting...'));
     try {
       await save();
@@ -222,7 +226,12 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
       h('pre', {class: 'plain-wrap'}, JSON.stringify(casebookDraftContext(report), null, 2)));
     const consent = check('I approve sending the previewed context to my configured API and will review the draft.');
     const draftButton = button('Prepare an optional AI draft', () => perform('draft', report.casebook_fingerprint), 'quiet'); draftButton.disabled = true;
-    consent.input.addEventListener('change', () => draftButton.disabled = !consent.input.checked);
+    consent.input.disabled = nativeDraftUnsupported;
+    if (nativeDraftUnsupported) preview.append(notice('Your selected native ERAIS preview supports short source answers, up to 128 output tokens. This richer draft requires system instructions and cannot use that profile. Your source-only report and original evidence remain available.'),
+      h('p', {}, 'For a small selected-source task, use ', h('a', {href: '#explore'}, 'Explore AI → Multi-step templates → Short source answer'),
+        ', or choose an explicitly capable provider in ', h('a', {href: '#settings'}, 'Settings'), '. No draft request will be sent from this preview.'));
+    else if (automaticDraftUnresolved) preview.append(notice('Automatic NeuroForge model selection has not been resolved for this draft. If discovery selects the native ERAIS preview, this richer draft will be refused. Choose an explicit suitable model in Settings before drafting; discovery does not test answer quality.'));
+    consent.input.addEventListener('change', () => draftButton.disabled = nativeDraftUnsupported || !consent.input.checked);
     preview.append(consent.wrap, draftButton);
     const exportScope = handoverExportNotice(report);
     const questionsCount = report.question_index.length;

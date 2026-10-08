@@ -172,6 +172,136 @@ class ReadinessChecks(DeliverableChecks):
         ).to_be_visible()
         self.screenshot(page, "readiness-wrong-discovery-media")
 
+    def casebook_preview(self, page):
+        self.goto(page, "casebooks")
+        page.get_by_label("Project name", exact=True).fill(
+            "Fictional source-draft readiness"
+        )
+        page.get_by_label("What do you need to find out?", exact=True).fill(
+            "What approval does water access need?"
+        )
+        page.get_by_label("Source title", exact=True).fill("Fictional venue note")
+        page.get_by_label(
+            "Paste a note, policy or reference", exact=True
+        ).fill("Water access needs venue approval. No approval is recorded.")
+        page.get_by_role("button", name="Add this source", exact=True).click()
+        page.get_by_role(
+            "button", name="Prepare source-only report", exact=True
+        ).click()
+        summary = page.get_by_text(
+            "Optional: preview the exact context sent for a richer draft", exact=True
+        )
+        summary.wait_for()
+        summary.click()
+        preview = summary.locator("..")
+        packet = json.loads(preview.locator("pre").inner_text())
+        assert packet["questions"] == ["What approval does water access need?"]
+        assert any(
+            "Water access needs venue approval. No approval is recorded."
+            in row["text"]
+            for row in packet["excerpts"]
+        )
+        return preview
+
+    def casebook_native_draft_refusal(self, page):
+        from playwright.sync_api import expect
+
+        local_posts = []
+        page.on(
+            "request",
+            lambda request: local_posts.append(urlsplit(request.url).path)
+            if request.method == "POST"
+            else None,
+        )
+        for label, endpoint in (
+            ("canonical", client.BASE_URL),
+            ("alias", "https://NeUrOfOrGe.Io:443/v1/"),
+        ):
+            self.connection(endpoint, client.NATIVE_MODEL)
+            catalogue_before = len(self.gateway.requests)
+            preview = self.casebook_preview(page)
+            before = len(local_posts)
+            expect(
+                preview.get_by_text(
+                    "This richer draft requires system instructions", exact=False
+                )
+            ).to_be_visible()
+            consent = preview.get_by_role("checkbox")
+            draft = preview.get_by_role(
+                "button", name="Prepare an optional AI draft", exact=True
+            )
+            expect(consent).to_be_disabled()
+            expect(draft).to_be_disabled()
+            # Even a synthetic stale consent event cannot enable the refused task.
+            consent.evaluate(
+                "node => {node.checked = true; "
+                "node.dispatchEvent(new Event('change'));}"
+            )
+            expect(draft).to_be_disabled()
+            draft.evaluate("node => node.dispatchEvent(new MouseEvent('click'))")
+            assert len(local_posts) == before, local_posts[before:]
+            assert "/api/casebooks/draft" not in local_posts, local_posts
+            assert len(self.gateway.requests) == catalogue_before
+            preview.scroll_into_view_if_needed()
+            self.screenshot(
+                page, f"readiness-casebook-native-{label}-refusal-controls"
+            )
+            expect(
+                page.get_by_role("button", name="Edit draft", exact=True)
+            ).to_be_enabled()
+            save = page.get_by_role("button", name="Save to My workspace", exact=True)
+            save.click()
+            expect(
+                page.get_by_text("Saved locally in My workspace.", exact=True)
+            ).to_be_visible()
+            assert len(local_posts) == before + 1, local_posts[before:]
+            assert local_posts[-1] == "/api/reports", local_posts
+        self.screenshot(page, "readiness-casebook-native-local-save")
+
+    def casebook_automatic_unresolved(self, page):
+        from playwright.sync_api import expect
+
+        self.connection(client.BASE_URL, client.AUTO_MODEL)
+        before = len(self.gateway.requests)
+        preview = self.casebook_preview(page)
+        expect(
+            preview.get_by_text(
+                "Automatic NeuroForge model selection has not been resolved",
+                exact=False,
+            )
+        ).to_be_visible()
+        preview.get_by_role("checkbox").check()
+        expect(
+            preview.get_by_role(
+                "button", name="Prepare an optional AI draft", exact=True
+            )
+        ).to_be_enabled()
+        assert len(self.gateway.requests) == before
+        self.screenshot(page, "readiness-casebook-auto-unresolved")
+
+    def casebook_custom_native_name(self, page):
+        from playwright.sync_api import expect
+
+        self.connection(
+            "https://fictional-provider.example.invalid/v1", client.NATIVE_MODEL
+        )
+        before = len(self.gateway.requests)
+        preview = self.casebook_preview(page)
+        expect(
+            preview.get_by_text("cannot use that profile", exact=False)
+        ).to_have_count(0)
+        expect(
+            preview.get_by_text("has not been resolved", exact=False)
+        ).to_have_count(0)
+        preview.get_by_role("checkbox").check()
+        expect(
+            preview.get_by_role(
+                "button", name="Prepare an optional AI draft", exact=True
+            )
+        ).to_be_enabled()
+        assert len(self.gateway.requests) == before
+        self.screenshot(page, "readiness-casebook-custom-native-name")
+
 
 def main(argv=None):
     args = browser_arguments(__doc__, argv)
@@ -205,6 +335,12 @@ def main(argv=None):
                     ("custom-auto-refusal", checks.unsupported_custom_auto),
                     ("custom-model-health-label", checks.custom_model_label),
                     ("non-json-discovery-refusal", checks.reject_non_json_discovery),
+                    (
+                        "casebook-native-draft-refusal",
+                        checks.casebook_native_draft_refusal,
+                    ),
+                    ("casebook-auto-unresolved", checks.casebook_automatic_unresolved),
+                    ("casebook-custom-native-name", checks.casebook_custom_native_name),
                 ):
                     checks.check(name, action)
                 expected = [
@@ -249,7 +385,7 @@ def main(argv=None):
     if not receipt["passed"]:
         raise SystemExit("FAIL: inspect receipt.json")
     print(
-        "PASS: four fictional provider readiness user journeys; "
+        "PASS: seven fictional provider readiness user journeys; "
         "no inference or external app requests"
     )
 

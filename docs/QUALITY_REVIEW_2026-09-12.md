@@ -3155,3 +3155,64 @@ holds remain unchanged. No whole-product 10/10 claim follows from this pass.
 The first added source-quote capture assertion counted hidden Evidence-panel
 copies as well as the printed document. Its failure is retained; the final check
 requires exactly one matching original quotation within the explicit print target.
+
+
+### 9 October: integrated source gate caught unanswered browser decisions
+
+The original combined `171e65d` PR29 runs all finished naturally, without replay.
+The quality run remains failed: `casebook_browser.py` tried to edit a disabled
+recipient field after clicking Open project. Source inspection points to the
+newly protected prepared report entering the existing in-page replacement
+choice. The original hosted capture did not include that dialog, so the causal
+account is an inference from source and the disabled-field log, not an observed
+hosted dialog screenshot. Later browser steps were not executed by that job.
+
+Both original Windows source jobs passed 4,960 tests with 760 skips. Each ran
+all 37 genuine Windows wrapper cases, retaining the original five-second bounds,
+actual parent-exit observations and clean diagnostic results. This is source
+execution, not installed Windows qualification. All nine native packaging jobs
+and all three WebAssembly jobs passed; each WebAssembly job ran 48 source tests
+and its browser smoke. The aggregate quality failure is not erased by those
+passes, and no installed or published successor follows from them.
+
+The follow-on casebook journey now answers the real choice: Cancel returns to
+an enabled editor and preserves the prepared report; Replace also releases the
+editor and leaves the report accessible as unsaved session work in My workspace.
+It then exercises the unchanged two-window conflict, full backup, separate
+restore, single-poll recovery and phone checks. This actual local journey passed
+without a model operation. No production guard or timeout was weakened.
+
+Passive customer review also found walkthrough instructions that saved only
+project inputs before quitting, named a removed summary control and required
+unprovided fixture files. The guide now separately saves report wording, confirms
+Saved, reopens both project and report, and exports a real project backup before
+restoring it. It explains the actual pending-copy quit choice, uses Write handover
+opening and describes phone cards. Published RC3 labels and capability boundaries
+remain explicit; a report backup is not the complete original project history.
+
+Known NeuroForge-native selections now refuse a richer casebook draft before
+project-save or draft-job submission, using the existing destination-bound
+connection helper. The exact transfer packet and useful local report stay
+available. Automatic selection is explicitly unresolved and can still be refused
+after discovery; custom providers, including a reused native model name on a
+custom destination, are not reclassified. Seven fictional provider UI journeys
+and 22 focused Python checks passed, with no generation or external requests.
+The first fixture guessed the report-save route incorrectly; that failure is
+retained. The existing route was corrected in the fixture, not in production.
+The prior native-refusal screenshot demonstrates local saving, not visual review
+of the warning. Separate refusal-control captures are added for fresh CI; their
+future results are not assumed here.
+
+Additional local diagnostics initially gave Chromium an overly long temporary
+path. Its actual startup log reports Socket path too long and SIGABRT before
+Sinter UI work; later tools in that batch were never run. A separate short-path
+batch preserves that failure and passed save state, source context, historical
+question-to-evidence navigation and local decisions. It exposed a second stale
+fixture assumption: the selected-appendix notice is now inside Evidence coverage.
+The fixture opens that existing disclosure before checking it, preserving the
+actual complete Word-content checks. No source evidence was removed or shortened.
+
+Fresh full-source CI, exact-source Linux installed workflow/recovery/native/cold
+install/replacement gates and customer-device acceptance remain open. All prior
+source and frozen-owner failures stay historical. These source checks establish
+neither general hosted answer quality nor a whole-product 10/10 rating.
