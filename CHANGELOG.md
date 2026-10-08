@@ -7,6 +7,10 @@ a new installed release and does not change any published RC3 asset or receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Retain child output, startup stages and cleanup observations from the induced
+  launcher-stall tests in hosted test evidence. Keep startup admission and
+  shutdown time limits unchanged; a missing stage does not establish its cause.
+
 - Prefer a working installed Python 3.10+ on PATH in the Windows source wrapper,
   after the authoritative project virtual environment. Use installed registered
   runtimes as an offline fallback, refuse unrecognised aliases and preserve the

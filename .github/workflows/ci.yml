@@ -35,6 +35,8 @@ jobs:
       # Gate correctness errors now; broad style cleanup is a separate change.
       - run: python -m ruff check --select E9,F63,F7,F82 src tests tools
       - run: python -m pytest -q --durations=25 --junitxml=test-results/results.xml
+        env:
+          SINTER_STARTUP_DIAGNOSTICS_DIR: test-results/startup-diagnostics
       - name: Actual native Tk source workflow
         if: runner.os == 'Linux' && matrix.python == '3.13'
         run: >-

@@ -3216,3 +3216,53 @@ Fresh full-source CI, exact-source Linux installed workflow/recovery/native/cold
 install/replacement gates and customer-device acceptance remain open. All prior
 source and frozen-owner failures stay historical. These source checks establish
 neither general hosted answer quality nor a whole-product 10/10 rating.
+
+
+### 9 October: main source gate exposed missing startup diagnostics
+
+The original `6bc6d7f` PR29 source runs passed, including all 24 executed jobs
+and both groups of 37 actual Windows wrapper cases. The exact tree was then
+fast-forwarded onto main. Its distinct original main/push quality run
+`37817176164` finished with 10 successful jobs, one failed Windows 3.10 job and
+one skipped source-package job. The full Chromium and all three WebAssembly
+engines passed. Automatic release planning correctly skipped this RC version.
+
+The failed test was the deliberate `workbench_initialization_started` stall
+in `test_native_launcher_startup.py`. The child did not reach that stage within
+the existing five-second admission window. The completed pytest result was
+4,959 passed, 760 skipped and one failed in 926.98 seconds; this was not the
+20-minute job timeout. Both Windows jobs still passed all 37 wrapper cases.
+These results do not identify why the separate startup-stage check failed.
+
+The uploaded failure artifact contained only JUnit XML. Child stdout, stderr
+and the stage journal remained in the runner's temporary directory and were
+not uploaded; the original assertion's wording overstated retained evidence.
+Those absent diagnostics cannot be recovered or inferred from a later pass.
+The original run, failure log and independent HOLD review remain immutable.
+
+The follow-on repair targets that evidence gap. It must retain actual child
+streams, reached stages, admission timing and cleanup observations in the
+existing hosted test artifact, preserve the original failure if diagnostic or
+cleanup work also fails, and keep the five-second admission, 0.7-second stall
+wait, two-second reap and 20-minute job bounds. It does not claim a diagnosed
+startup cause, a performance repair, or a reproduced Windows failure. Fresh
+source and main/push acceptance remain required before installed qualification.
+
+No new qualification owner, source staging, native build or installed gate was
+started. The existing `6bc6d7f` data proposals stay unbound and historical;
+future source, assets and acceptance must be derived again from the final
+reviewed revision. Published previews and the user's closed app are unchanged.
+
+The focused Linux/Python 3.12 validation passed six tests in 6.92 seconds,
+including a real controlled exit-7 child, a pre-stage stall, and independent
+cleanup and artifact write/close faults. All six observations are present in
+JUnit; raw streams, stage journals and labelled snapshot manifests were read
+back. Only the induced script copy gets a two-second pre-stage trace; the
+original launcher script and its 10-second diagnostic/20-second harness are
+unchanged. These local observations do not reproduce or diagnose the Windows
+failure. Final formatting preserves the whole executed AST and string values;
+no later test execution is claimed for that formatting-only change.
+The focused JUnit run used xunit1. The hosted workflow keeps its existing
+default; actual hosted diagnostic retention is pending the new source run.
+The injected reporting fault covers artifact write and close, not an executed
+JUnit-publication fault. No broader reporting-failure experiment is claimed.
