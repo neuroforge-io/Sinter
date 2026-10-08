@@ -7,6 +7,12 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Run first-use interface controls from byte-identical source copies with an
+  explicit temporary JavaScript module boundary. Remove the experimental Node
+  option refused by the hosted macOS test runtime and retain the actual command
+  output. All seven controls execute on both tested Node 18 and Node 22 runtimes;
+  the original hosted failure stays recorded and needs fresh hosted checks.
+
 - Record wrapper-fixture startup stages before importing the fixture helpers.
   Retain bounded diagnostics and test both system discovery and a private virtual
   environment tied to the job interpreter. Request download refusal for both

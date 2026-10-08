@@ -2743,3 +2743,49 @@ These include ten Linux wrapper observations and thirty diagnostic controls.
 Adversarial source review accepted the exact two-file change, preserving product
 wrappers, startup bounds and the original failure. This is source evidence only;
 it neither explains the historical Windows timeout nor qualifies an installer.
+
+Hosted source run `37719780383`, at `e3f47d7e9da6acfb5f7c6d4b4a7825de29b7f14f`,
+failed its macOS Python 3.13 onboarding harness because the selected Node
+executable refused `--experimental-default-type=module` before any of the seven
+controls ran. Its captured Node version is unknown. This is a test-command
+compatibility failure, not an observed app failure. The corrected harness copies
+the unchanged web graph and test into an owned temporary module package and uses
+the standard test command without that experimental option. Actual Node 18.19.1
+and 22.23.1 each execute all seven controls with no skips. Three Python cases
+cover that actual execution and two inert source-copy/failure-retention controls;
+the inner seven cases overlap the Python wrapper and are not additive. Fresh
+exact-source hosted and installed checks remain required.
+
+The independently compiled private browser, bound to the same `e3f47d7` source,
+opened the garden handover, prepared its source-only report and inspected the
+actual Python-produced Evidence view. Saving, closing the tab and reopening
+retained all four input documents at revision two. An actual workspace export
+was restored through the interface; a second export preserved identical saved
+casebooks, campaigns, reports, watches and settings sections. This particular
+backup contained one casebook and no reports, campaigns or watches. It does not
+prove a full mixed-workspace restore. Both temporary tabs closed, the static
+server exited normally and its listener was closed. No model or search request
+was made. The three hosted browser engines also pass their existing source
+regressions and smoke flows; their archived exports do not contain the compiled
+payload or later generated report bodies.
+
+The actual three-row human-edited handover was subsequently rendered once with
+a private LibreOffice 24.2 headless profile. All four A4 pages were inspected:
+the three complete summary rows fit page one, unknown and unassigned owners stay
+distinct, proposed dates stay unconfirmed and the missing insurance answer stays
+unknown. No visible text clipping was found. The second summary quotation starts
+page two and a longer original excerpt continues on another page. Generated
+semicolons meet user-entered sentence periods, and literal quotes use light
+monospace styling; these remain presentation improvements for the next pass.
+Font-cache warnings remain in the captured renderer diagnostics. This is one
+LibreOffice layout observation, not Microsoft Word or native GUI qualification.
+The scoped first-use ratings remain UX 7.3, functionality 7.8 and aesthetics 7.4;
+new test totals and successful rendering do not imply whole-product 10/10.
+
+An independent document-only critic inspected those same four rendered pages and
+confirmed all 93 nonempty original Word paragraphs survive the PDF, along with
+both tables and internal passage anchors. Its narrower document scores are UX
+6.5, functionality 7 and aesthetics 6. The punctuation, faint summary quotes,
+split summary section and missing running page identity need another product
+polish pass. Those document scores are distinct from the earlier source-app
+first-use assessment; neither rating qualifies a release.
