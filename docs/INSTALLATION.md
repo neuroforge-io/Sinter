@@ -116,6 +116,14 @@ Checks install the package, start the installed executable, serve its assets and
 
 Choose **Try an example** for a fictional offline demonstration. Use **Settings** for reading size, theme, motion and connection choices.
 
+Current development source starts Overview and Getting started with **Open garden
+handover**. Inspect its four original sources, choose **Prepare source-only
+report**, check **Evidence** and edit the draft. **Save project** keeps inputs;
+**Save to My workspace** keeps the edited report. Wait for the Saved confirmation.
+On a narrow screen, use **Find a tool** to open My workspace or Community casebooks.
+Export project inputs and edited documents separately. This clearer guidance
+does not change the published installer or browser source pins.
+
 In the rc3 browser workbench, Overview and Getting started
 also offer **Open garden handover** and **Open garden campaign**. These open the
 complete bundled fictional project without a file picker. Saved projects stay

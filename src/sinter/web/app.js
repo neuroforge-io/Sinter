@@ -5,7 +5,7 @@ import {settingsPage, applyAppearance} from './settings.js';
 import {atlasPage} from './atlas.js';
 import {communityPage} from './community.js';
 import {home} from './home.js';
-import {h, button, notice, announce, safeLink} from './ui.js';
+import {h, button, notice, announce} from './ui.js';
 import {session, request} from './api.js';
 import {workbench} from './workbench.js';
 import {library, watches} from './library.js';
@@ -13,7 +13,8 @@ import {playground} from './playground.js';
 import {tools, buildNavigation, installToolFinder} from './navigation.js';
 import {rememberDraft, shouldWarnBeforeExit} from './draft-state.js';
 import {hasUnsavedReportDrafts, clearReportDrafts} from './report-drafts.js';
-import {gardenSeed, gardenCard, GARDEN_PRACTICE} from './garden-practice.js';
+import {gardenSeed, GARDEN_PRACTICE} from './garden-practice.js';
+import {helpPage} from './help.js';
 import {confirmAction} from './confirm-action.js';
 
 const view = document.getElementById('view');
@@ -46,38 +47,6 @@ async function openGarden(kind) {
     view.prepend(notice(message, 'error')); announce(message);
   }
   finally { setBusy(false); }
-}
-
-function help() {
-  if (globalThis.sinterBrowser) return h('div', {class:'stack'}, h('h2', {}, 'Start with one piece of work'), h('p', {}, 'Try the fictional garden example, or create a casebook or funding campaign with your own notes. Use Save project, then export your saved workspace above. Individual project backup JSON works in the installed app too.'), h('p', {}, 'Your documents stay in this browser unless you explicitly choose a search or approve model context. Optional public search provides snippets and citations, not verified answers. Read the originals. Nothing is submitted or sent as an official communication.'), h('p', {}, 'Imports are validated before they replace saved work. Whole-workspace imports start search watches paused. Unsaved editor inputs are not included in workspace backups; use the editor backup controls before closing.'), h('p', {}, 'The browser edition runs the actual Python source tools. Local speech, operating-system file paths, ChatGPT sign-in and RKC executable connections need installed Sinter. Use the What runs here? section above for details.'), gardenCard(openGarden));
-  const connection = h('div', {'aria-live': 'polite'});
-  return h('div', {class: 'stack'}, h('header', {class: 'page-intro'}, h('h2', {}, 'You do not need to be technical.'),
-    h('p', {}, 'Start with a fictional example, then bring one real piece of work.')),
-    h('div', {class: 'card'}, h('h3', {}, 'Three steps to a useful first draft'),
-      h('p', {}, '1. Choose funding, a brief or meeting minutes. Name your project and paste your notes.'),
-      h('p', {}, '2. Add actual reference text. A link alone is not evidence. Search is optional and sends only the query you enter.'),
-      h('p', {}, '3. Prepare the draft, check sources and unknowns, then download or save it. Nothing is sent automatically.'),
-      button('Open a local example', () => go('brief?example=1'), 'primary')),
-    gardenCard(openGarden),
-    h('div', {class: 'card'}, h('h3', {}, 'Privacy and trust'),
-      h('p', {}, 'The interface runs on your computer. Unsaved inputs live in this browser session; saved reports and watches live in ~/.sinter (or the configured data directory). Appearance and connection preferences are saved locally. API keys entered in Settings stay in memory for this session only.'),
-      h('p', {}, 'Search sends the exact query. Optional model ranking sends up to six excerpts and the project question. Explore AI sends conversation or template inputs. Atlas drafting sends selected excerpts and your question. Avoid private information in external requests.'),
-      h('p', {}, 'Quotes, hashes and links establish traceability, not truth. Selection can miss material. Review official guidance, deadlines, eligibility, names, voting and decisions.'),
-      h('p', {}, 'Use Save project for inputs and Save to My workspace for edited reports. Wait for the Saved confirmation, then choose Quit Sinter. Closing this browser tab does not stop an installed app. Unfinished jobs are not saved automatically. Source users can also stop the launcher with Ctrl+C.'),
-      h('p', {}, 'The full community workbench uses a local browser address. If your environment refuses that address, keep its protections in place. Linux packages with the native window also provide a Sinter native source workspace menu entry for the smaller offline interface.')),
-    h('div', {class: 'card'}, h('h3', {}, 'Meeting audio: optional, local, honest'),
-      h('p', {}, 'Import a transcript without extra installation. Core native installers do not bundle the speech engine. Audio transcription needs the optional speech package in a source installation and an explicitly authorised model download. From the Sinter source folder run:'),
-      h('pre', {class: 'help-code'}, 'python3 setup_speech.py\n# Windows: py setup_speech.py'),
-      h('p', {}, 'Audio is processed locally. Separate isolated microphone channels, listen back to individual passages and keep word timings in JSON. Mixed-room speaker diarization and voice identity are not inferred. Confirm names manually.'),
-      h('p', {}, 'Speech recognition can omit or invent words. Listen again to unclear passages, names, amounts and negation before correcting anything.')),
-    h('div', {class: 'card'}, h('h3', {}, 'Connection and help'),
-      button('Check public API connection', async () => {
-        connection.textContent = 'Checking...';
-        try { const status = await request('/api/health'); connection.replaceChildren(notice(status.message, status.ok ? 'success' : 'error')); }
-        catch (error) { connection.replaceChildren(notice(error.message + ' Local examples still work.', 'error')); }
-      }), connection,
-      h('p', {}, safeLink('https://github.com/neuroforge-io/Sinter', 'Source code and setup guide')),
-      h('p', {}, safeLink('https://neuroforge.io', 'About NeuroForge'))));
 }
 
 async function route() {
@@ -121,7 +90,7 @@ async function route() {
     else if (id === 'atlas') content = atlasPage(options);
     else if (id === 'tools') content = communityPage(options);
     else if (id === 'settings') content = await settingsPage();
-    else if (id === 'help') content = help();
+    else if (id === 'help') content = helpPage({go, openGarden, checkConnection: () => request('/api/health')});
     else content = home(go, drafts, (await request('/api/settings')).settings, openGarden);
     if (sequence !== routeSequence || appStopped) { content?.dispose?.(); return; }
     view.replaceChildren(content); document.getElementById('content').focus({preventScroll: true}); window.scrollTo(0, 0);

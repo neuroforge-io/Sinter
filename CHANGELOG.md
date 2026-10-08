@@ -7,6 +7,12 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Start Overview and Getting started with a concrete local garden handover.
+  Explain inspecting sources, reviewing the document and reopening the saved
+  copy before optional connections. Keep project inputs, edited reports and
+  workspace backups distinct. Detailed privacy and recovery guidance stays
+  accessible. Saved work and the published previews are unchanged.
+
 - Serialize the browser's Python source bundle in a stable key order. Reversing
   filesystem traversal now preserves source values, raw bundle bytes, build
   identity and asset hashes. Generate text as UTF-8 with LF line endings and use

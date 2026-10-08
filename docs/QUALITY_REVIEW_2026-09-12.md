@@ -2707,3 +2707,24 @@ required by the Pyodide filesystem. The fixture keeps its Unicode values and
 verifies that the two tested traversal sequences actually differ. Copied asset
 bytes are unchanged; checkout line endings can still affect those files. These
 source corrections do not establish universal cross-host artifact reproducibility.
+
+The next onboarding source pass makes the fictional garden handover the first
+local outcome in Overview and Getting started. Help rendering is separate from
+routing and saved state. The entry explains inspecting original sources, preparing
+a source-only document, reviewing evidence, saving project inputs separately from
+edited reports, reopening and exporting the right copy. Unsaved session work stays
+ahead of the practice card. Detailed privacy, restore and optional-connection
+guidance remains available without implying a connection check proves answer quality.
+
+A new human-operated source-app walkthrough used a private fictional workspace.
+It inspected all four original sources, prepared the handover, reviewed Evidence,
+entered three concise opening-summary rows and selected exact supporting sentences
+for the quote and guideline actions. The insurance row remained unknown without a
+citation. Applying and saving retained original evidence; the exported Word file
+contains the reviewed wording and source identities. After deliberately closing
+the test tab and stopping the source server, a fresh process and tab reopened the
+edited report. Its project-input backup restored as a new unsaved copy; saving
+under a new name preserved both original and restored projects at revision one.
+This is a source-app journey, not installed desktop or published-browser evidence.
+Word content and archive integrity were checked; Word rendering was not checked.
+Changed-source, stale-review and conflicting-edit human journeys remain open.

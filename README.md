@@ -61,6 +61,12 @@ current browser session; apply them and **Save to My workspace** before quitting
 The [garden walkthrough](examples/offline-garden/README.md) describes this optional
 local step. It is not part of the published RC3 installer; Word pagination and
 fresh installed qualification remain open.
+
+Development Overview and Getting started now lead with the local garden handover,
+its original sources and a short inspect, review, save and reopen guide. Saving
+project inputs and saving an edited report are separate actions. These onboarding
+changes still need fresh browser and installed qualification before publication.
+
 Current Linux menu builds open the full workbench and offer the native source
 window as a separate entry; the published RC3 menu behavior below is unchanged.
 
