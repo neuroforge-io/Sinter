@@ -2680,3 +2680,30 @@ process. Mocked permission-refusal and uncertain-exit cases exercise retention
 without replaying the failed hosted or installed operations. This result is
 source evidence only: corrected hosted checks and fresh exact-source installed
 qualification remain pending, and RC4 remains unpublished.
+
+The following hosted run, `37613724194`, against
+`0bac0aedea493ee44db84041d9cc48c26b254e39` failed one Windows Python 3.13
+wrapper case. Its zero-argument batch fixture exceeded the existing five-second
+bound before recording Python entry. The stalled stage and selected interpreter
+are unknown. Passing controls in that lane and Windows Python 3.10 selected
+Python 3.14.7 through system discovery; those controls do not establish the
+failed case's runtime. All other source jobs passed, while the source artifact
+job was skipped. This is a retained failure, not an established flaky test or
+an installed-app pass.
+
+Browser source packaging had a separate reproducibility issue: identical decoded
+source mappings could serialize in a different filesystem traversal order.
+The serializer now orders keys explicitly. A fully offline synthetic builder
+regression reverses traversal and checks complete output bytes, unchanged Unicode
+source values, the raw source digest and every asset hash. The regression fails
+against the old serializer and passes after the correction. This proves ordering
+independence for the tested inputs, not general cross-platform reproducibility
+or a new published browser artifact.
+
+Adversarial review found that the Unicode ordering regression also exposed host
+locale and path-separator dependence in the existing builder. Generated text now
+uses explicit UTF-8 and LF, and bundle and manifest paths use POSIX separators
+required by the Pyodide filesystem. The fixture keeps its Unicode values and
+verifies that the two tested traversal sequences actually differ. Copied asset
+bytes are unchanged; checkout line endings can still affect those files. These
+source corrections do not establish universal cross-host artifact reproducibility.

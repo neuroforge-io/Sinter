@@ -9,6 +9,12 @@ import urllib.request
 SOURCE = Path(__file__).resolve().parents[1]
 VENDOR_URL = 'https://cdn.jsdelivr.net/pyodide/v0.29.3/full/'
 
+
+def _write_utf8(path: Path, content: str) -> None:
+    """Keep generated text bytes independent of host locale and line endings."""
+    path.write_text(content, encoding='utf-8', newline='\n')
+
+
 def build(output, vendor=None):
     output.mkdir(parents=True, exist_ok=True)
     (output/'static').mkdir(exist_ok=True)
@@ -16,11 +22,11 @@ def build(output, vendor=None):
     for path in (package/'web').iterdir():
         if path.suffix in {'.js','.css','.svg','.json'}:
             shutil.copyfile(path,output/'static'/path.name)
-    files={str(path.relative_to(package.parent)):path.read_text() for path in package.rglob('*') if path.is_file() and (path.suffix=='.py' or path.name in {'offline-garden-casebook.json','offline-garden-campaign.json'})}
-    (output/'python-files.json').write_text(json.dumps(files,ensure_ascii=False,separators=(',',':')))
+    files={path.relative_to(package.parent).as_posix():path.read_text(encoding='utf-8') for path in package.rglob('*') if path.is_file() and (path.suffix=='.py' or path.name in {'offline-garden-casebook.json','offline-garden-campaign.json'})}
+    _write_utf8(output/'python-files.json',json.dumps(files,ensure_ascii=False,sort_keys=True,separators=(',',':')))
     for name in ('worker.js','main.js','browser.css'):
         shutil.copyfile(SOURCE/'browser'/name,output/name)
-    html=(package/'web/index.html').read_text().replace('/static/','./static/').replace('src="./static/app.js"','src="./main.js"').replace('Runs on your computer','Saved in this browser').replace('Enable it for this localhost page','Enable it for this webpage')
+    html=(package/'web/index.html').read_text(encoding='utf-8').replace('/static/','./static/').replace('src="./static/app.js"','src="./main.js"').replace('Runs on your computer','Saved in this browser').replace('Enable it for this localhost page','Enable it for this webpage')
     html=html.replace('</head>','  <link rel="stylesheet" href="./browser.css">\n</head>')
     html=html.replace('<main id="content"', '<section id="browser-controls" aria-label="Browser workspace and backups"></section>\n    <main id="content"')
     html=html.replace('lang="en"', 'lang="en-AU"').replace('href="#content"', 'href="#main"')
@@ -35,9 +41,9 @@ def build(output, vendor=None):
         renamed=asset.with_name(asset.stem+'.'+hashlib.sha256(asset.read_bytes()).hexdigest()[:12]+asset.suffix)
         shutil.copyfile(asset,renamed)
         html=html.replace('./'+asset.relative_to(output).as_posix(), './'+renamed.relative_to(output).as_posix())
-    (output/'index.html').write_text(html)
+    _write_utf8(output/'index.html',html)
     (output/'vendor').mkdir(exist_ok=True)
-    manifest=json.loads((SOURCE/'browser/vendor-sha256.json').read_text())
+    manifest=json.loads((SOURCE/'browser/vendor-sha256.json').read_text(encoding='utf-8'))
     for name,digest in manifest.items():
         local=vendor/name if vendor else output/'vendor'/name
         if not local.exists():
@@ -48,9 +54,9 @@ def build(output, vendor=None):
     shutil.copyfile(SOURCE/'LICENSE',output/'LICENSE.txt')
     shutil.copyfile(SOURCE/'browser/PYODIDE-LICENSE',output/'vendor/PYODIDE-LICENSE.txt')
     shutil.copyfile(SOURCE/'THIRD_PARTY_NOTICES.md',output/'THIRD_PARTY_NOTICES.txt')
-    (output/'build.json').write_text(json.dumps({'application':'Sinter browser','pyodide':'0.29.3','source_sha256':hashlib.sha256((output/'python-files.json').read_bytes()).hexdigest()},indent=2)+'\n')
-    manifest={str(path.relative_to(output)):{'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'bytes':path.stat().st_size} for path in sorted(output.rglob('*')) if path.is_file() and path.name!='asset-manifest.json'}
-    (output/'asset-manifest.json').write_text(json.dumps({'schema':'sinter-browser-assets/v1','files':manifest},sort_keys=True,separators=(',',':'))+'\n')
+    _write_utf8(output/'build.json',json.dumps({'application':'Sinter browser','pyodide':'0.29.3','source_sha256':hashlib.sha256((output/'python-files.json').read_bytes()).hexdigest()},indent=2)+'\n')
+    manifest={path.relative_to(output).as_posix():{'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'bytes':path.stat().st_size} for path in sorted(output.rglob('*')) if path.is_file() and path.name!='asset-manifest.json'}
+    _write_utf8(output/'asset-manifest.json',json.dumps({'schema':'sinter-browser-assets/v1','files':manifest},sort_keys=True,separators=(',',':'))+'\n')
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('output',type=Path);parser.add_argument('--vendor',type=Path)

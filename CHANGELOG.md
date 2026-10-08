@@ -7,6 +7,12 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Serialize the browser's Python source bundle in a stable key order. Reversing
+  filesystem traversal now preserves source values, raw bundle bytes, build
+  identity and asset hashes. Generate text as UTF-8 with LF line endings and use
+  slash-separated bundle and manifest paths for the browser runtime. Run this
+  offline regression in every browser CI lane.
+
 - Publish the installed test's captured launch address only after the complete
   file is written and closed. Keep exact local-URL admission, a bounded live
   startup wait and refusal of stale or incomplete captures. Report resources

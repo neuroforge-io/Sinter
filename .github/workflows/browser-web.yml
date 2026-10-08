@@ -2,9 +2,9 @@ name: Browser WebAssembly workbench
 on:
   push:
     branches: [main]
-    paths: ['browser/**', 'src/**', 'tests/test_browser_runtime.py', '.github/workflows/browser-web.yml']
+    paths: ['browser/**', 'src/**', 'tests/test_browser_runtime.py', 'tests/test_browser_build.py', '.github/workflows/browser-web.yml']
   pull_request:
-    paths: ['browser/**', 'src/**', 'tests/test_browser_runtime.py', '.github/workflows/browser-web.yml']
+    paths: ['browser/**', 'src/**', 'tests/test_browser_runtime.py', 'tests/test_browser_build.py', '.github/workflows/browser-web.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,7 +22,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install '.[dev,browser]'
       - run: python -m playwright install --with-deps ${{ matrix.browser }}
-      - run: python -m pytest -q tests/test_browser_runtime.py tests/test_document_copies.py tests/test_search_chat.py
+      - run: python -m pytest -q tests/test_browser_build.py tests/test_browser_runtime.py tests/test_document_copies.py tests/test_search_chat.py
       - run: python browser/build.py dist/browser/sinter
       - run: |
           python -m http.server 8877 --bind 127.0.0.1 --directory dist/browser > /tmp/sinter-http.log 2>&1 &
