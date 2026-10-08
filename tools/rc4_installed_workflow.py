@@ -118,6 +118,29 @@ def write_json(path, value):
     temporary.replace(path)
 
 
+def write_removal_acknowledgement(path: Path) -> None:
+    """Make only the fixed, non-sensitive handoff readable across container UIDs."""
+    path = Path(path)
+    value = {"action": "remove", "exec_reaped": True, "host_reaped": True}
+    raw = (contract.recovery.canonical(value) + "\n").encode("utf-8")
+    temporary = path.with_name(path.name + ".pending")
+    stream = temporary.open("xb")
+    try:
+        os.fchmod(stream.fileno(), 0o644)
+        contract.require(
+            stream.write(raw) == len(raw), "Incomplete fixed removal acknowledgement."
+        )
+    except BaseException as first:
+        try:
+            stream.close()
+        except BaseException as later:
+            raise first from later
+        raise
+    else:
+        stream.close()
+    temporary.replace(path)
+
+
 def serialized_receipt(value):
     # Valid Unicode matches the unchanged writer; surrogates remain reversible.
     return (contract.recovery.canonical(value) + "\n").encode(
@@ -2107,10 +2130,7 @@ def run(args):
             "Exact controller exec did not finish normally.",
         )
         value["exec_command"] = exec_rows[-1]
-        write_json(
-            root / "runtime/remove.json",
-            {"action": "remove", "exec_reaped": True, "host_reaped": True},
-        )
+        write_removal_acknowledgement(root / "runtime/remove.json")
         start_thread.join(timeout=90)
         contract.require(
             not start_thread.is_alive() and not start_errors,

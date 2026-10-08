@@ -21,6 +21,12 @@ original installed gates must pass before a separate Linux preview is admitted.
   Start Playwright only after Chromium's debugger is ready; retain early-abort
   output and cleanup failures. A new installed qualification remains required.
 
+- Publish the qualifier's fixed removal acknowledgement and native phase controls
+  with explicit read permission before atomic delivery, so its restricted
+  container can read them under a private host umask. Ordinary evidence stays
+  private. The failed installed run is retained; this source repair needs fresh
+  qualification.
+
 - Describe casebooks and letters by the report or draft they prepare. Keep local
   source compilation, human review and separately approved optional AI drafting
   clear; remove vague slogans and the aging casebook novelty label.

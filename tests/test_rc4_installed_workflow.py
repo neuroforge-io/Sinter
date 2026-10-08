@@ -13,10 +13,12 @@ import io
 import json
 import os
 import re
+import stat
 import sys
 import tempfile
 import types
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -25,6 +27,7 @@ from test_rc4_native_publication import envelope_owned_directory
 
 from tools import rc4_installed_workflow as producer
 from tools import rc4_installed_workflow_contract as contract
+from tools import rc4_native_handoff as native
 
 
 def input_fixture():
@@ -1538,6 +1541,342 @@ def test_failed_atomic_delivery_retains_temporary_bytes(tmp_path, monkeypatch):
     assert json.loads(final.with_name(final.name + ".pending").read_bytes()) == {
         "failure": "retained"
     }
+
+
+@pytest.fixture(params=["remove", "native-phase"])
+def public_protocol(request: pytest.FixtureRequest) -> SimpleNamespace:
+    if request.param == "remove":
+        return SimpleNamespace(
+            write=producer.write_removal_acknowledgement,
+            private=producer.write_json,
+            value={"action": "remove", "exec_reaped": True, "host_reaped": True},
+            raw=producer.serialized_receipt(
+                {"action": "remove", "exec_reaped": True, "host_reaped": True}
+            ),
+            temporary=lambda p: p.with_name(p.name + ".pending"),
+        )
+    return SimpleNamespace(
+        write=lambda p: native.write_phase_control(p, "native-no"),
+        private=native.write_json,
+        value={"phase": "native-no"},
+        raw=native.serialized_json({"phase": "native-no"}),
+        temporary=lambda p: p.with_suffix(p.suffix + ".tmp"),
+    )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux container UID handoff")
+@pytest.mark.parametrize("mask", [0o077, 0o027, 0o777])
+def test_fixed_protocol_is_readable_before_atomic_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mask: int,
+    public_protocol: SimpleNamespace,
+) -> None:
+    final = tmp_path / "remove.json"
+    pending = public_protocol.temporary(final)
+    expected = public_protocol.value
+    original_chmod, original_replace = os.fchmod, Path.replace
+    observations: list[os.stat_result] = []
+
+    def mode_before_write(descriptor: int, mode: int) -> None:
+        assert not final.exists()
+        assert os.fstat(descriptor).st_size == 0
+        original_chmod(descriptor, mode)
+        observations.append(os.fstat(descriptor))
+
+    def publish(candidate: Path, destination: Path) -> Path:
+        assert candidate == pending and destination == final
+        assert not final.exists()
+        assert stat.S_IMODE(candidate.stat().st_mode) == 0o644
+        assert candidate.stat().st_ino == observations[0].st_ino
+        assert json.loads(candidate.read_bytes()) == expected
+        return original_replace(candidate, destination)
+
+    monkeypatch.setattr(os, "fchmod", mode_before_write)
+    monkeypatch.setattr(Path, "replace", publish)
+    previous = os.umask(mask)
+    try:
+        public_protocol.write(final)
+    finally:
+        os.umask(previous)
+    assert len(observations) == 1
+    assert stat.S_IMODE(final.stat().st_mode) == 0o644
+    assert final.stat().st_ino == observations[0].st_ino
+    assert json.loads(final.read_bytes()) == expected and not pending.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux container UID handoff")
+@pytest.mark.parametrize("mask", [0o077, 0o777])
+def test_ordinary_json_stays_private_even_for_the_protocol_payload(
+    tmp_path: Path,
+    mask: int,
+    public_protocol: SimpleNamespace,
+) -> None:
+    final = tmp_path / "ordinary.json"
+    value = public_protocol.value
+    previous = os.umask(mask)
+    try:
+        public_protocol.private(final, value)
+    finally:
+        os.umask(previous)
+    assert stat.S_IMODE(final.stat().st_mode) == 0o666 & ~mask
+    # Restore owner access only in this disposable fixture to inspect mode000.
+    final.chmod(0o600)
+    assert json.loads(final.read_bytes()) == value
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux container UID handoff")
+def test_fixed_protocol_never_reuses_a_pending_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    public_protocol: SimpleNamespace,
+) -> None:
+    final = tmp_path / "remove.json"
+    pending = public_protocol.temporary(final)
+    final.write_bytes(b"prior final")
+    pending.write_bytes(b"prior incomplete handoff")
+
+    def forbidden(*args: object) -> None:
+        raise AssertionError("No mode change or rename after exclusive refusal")
+
+    monkeypatch.setattr(os, "fchmod", forbidden)
+    monkeypatch.setattr(Path, "replace", forbidden)
+    with pytest.raises(FileExistsError):
+        public_protocol.write(final)
+    assert final.read_bytes() == b"prior final"
+    assert pending.read_bytes() == b"prior incomplete handoff"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux container UID handoff")
+@pytest.mark.parametrize("permission_applied", [False, True])
+def test_fixed_protocol_permission_fault_keeps_original_error_and_pending(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    permission_applied: bool,
+    public_protocol: SimpleNamespace,
+) -> None:
+    final = tmp_path / "remove.json"
+    pending = public_protocol.temporary(final)
+    first = PermissionError("SOURCE handoff permission failed")
+    original_chmod = os.fchmod
+    final.write_bytes(b"prior final")
+
+    def refuse(descriptor: int, mode: int) -> None:
+        if permission_applied:
+            original_chmod(descriptor, mode)
+        raise first
+
+    monkeypatch.setattr(os, "fchmod", refuse)
+    previous = os.umask(0o077)
+    try:
+        with pytest.raises(PermissionError) as raised:
+            public_protocol.write(final)
+    finally:
+        os.umask(previous)
+    assert raised.value is first and final.read_bytes() == b"prior final"
+    assert pending.read_bytes() == b""
+    assert stat.S_IMODE(pending.stat().st_mode) == (
+        0o644 if permission_applied else 0o600
+    )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux container UID handoff")
+def test_fixed_protocol_write_fault_retains_partial_bytes_and_private_final(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    public_protocol: SimpleNamespace,
+) -> None:
+    final = tmp_path / "remove.json"
+    pending = public_protocol.temporary(final)
+    first = OSError("SOURCE handoff write interrupted")
+    original_open = Path.open
+    previous = os.umask(0o077)
+    try:
+        public_protocol.private(final, {"prior": "private evidence"})
+        original = final.read_bytes()
+
+        def failing_open(path: Path, *args: object, **kwargs: object) -> object:
+            stream = original_open(path, *args, **kwargs)
+            if path != pending or (args[0] if args else kwargs.get("mode")) != "xb":
+                return stream
+
+            class InterruptedWrite:
+                def close(self) -> None:
+                    stream.close()
+
+                def fileno(self) -> int:
+                    return stream.fileno()
+
+                def write(self, raw: bytes) -> int:
+                    stream.write(raw[:9])
+                    raise first
+
+            return InterruptedWrite()
+
+        monkeypatch.setattr(Path, "open", failing_open)
+        with pytest.raises(OSError) as raised:
+            public_protocol.write(final)
+    finally:
+        os.umask(previous)
+    assert raised.value is first and final.read_bytes() == original
+    assert stat.S_IMODE(final.stat().st_mode) == 0o600
+    assert stat.S_IMODE(pending.stat().st_mode) == 0o644
+    assert pending.read_bytes() == public_protocol.raw[:9]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux container UID handoff")
+@pytest.mark.parametrize("fault", ["mode", "write", "close", "short-write"])
+def test_fixed_protocol_compound_faults_never_publish_or_mask_the_first(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fault: str,
+    public_protocol: SimpleNamespace,
+) -> None:
+    final = tmp_path / "remove.json"
+    pending = public_protocol.temporary(final)
+    first = OSError("SOURCE first " + fault)
+    later = OSError("SOURCE later close")
+    original_open = Path.open
+    closes: list[bool] = []
+    previous = os.umask(0o077)
+    try:
+        public_protocol.private(final, {"prior": "private evidence"})
+        original = final.read_bytes()
+
+        def failing_open(path: Path, *args: object, **kwargs: object) -> object:
+            stream = original_open(path, *args, **kwargs)
+            if path != pending or (args[0] if args else kwargs.get("mode")) != "xb":
+                return stream
+
+            class FaultStream:
+                def fileno(self) -> int:
+                    return stream.fileno()
+
+                def write(self, raw: bytes) -> int:
+                    if fault in ("write", "short-write"):
+                        stream.write(raw[:9])
+                        if fault == "write":
+                            raise first
+                        return 9
+                    return stream.write(raw)
+
+                def close(self) -> None:
+                    stream.close()
+                    closes.append(True)
+                    raise first if fault == "close" else later
+
+            return FaultStream()
+
+        def mode_failure(*args: object) -> None:
+            raise first
+
+        monkeypatch.setattr(Path, "open", failing_open)
+        if fault == "mode":
+            monkeypatch.setattr(os, "fchmod", mode_failure)
+        with pytest.raises((OSError, ValueError)) as raised:
+            public_protocol.write(final)
+    finally:
+        os.umask(previous)
+    assert closes == [True]
+    assert final.read_bytes() == original
+    assert stat.S_IMODE(final.stat().st_mode) == 0o600
+    expected_pending = {
+        "mode": b"",
+        "write": public_protocol.raw[:9],
+        "short-write": public_protocol.raw[:9],
+        "close": public_protocol.raw,
+    }
+    assert pending.read_bytes() == expected_pending[fault]
+    assert stat.S_IMODE(pending.stat().st_mode) == (
+        0o600 if fault == "mode" else 0o644
+    )
+    if fault == "short-write":
+        assert isinstance(raised.value, ValueError)
+        assert "Incomplete fixed" in str(raised.value)
+    else:
+        assert raised.value is first
+    assert raised.value.__cause__ is (None if fault == "close" else later)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux container UID handoff")
+def test_fixed_protocol_rename_fault_retains_public_pending_and_private_final(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    public_protocol: SimpleNamespace,
+) -> None:
+    final = tmp_path / "remove.json"
+    pending = public_protocol.temporary(final)
+    first = OSError("SOURCE handoff rename refused")
+    previous = os.umask(0o077)
+    try:
+        public_protocol.private(final, {"prior": "private evidence"})
+        original = final.read_bytes()
+
+        def refuse(*args: object) -> None:
+            raise first
+
+        monkeypatch.setattr(Path, "replace", refuse)
+        with pytest.raises(OSError) as raised:
+            public_protocol.write(final)
+    finally:
+        os.umask(previous)
+    assert raised.value is first and final.read_bytes() == original
+    assert stat.S_IMODE(final.stat().st_mode) == 0o600
+    assert stat.S_IMODE(pending.stat().st_mode) == 0o644
+    assert json.loads(pending.read_bytes()) == public_protocol.value
+
+
+@pytest.mark.parametrize("phase", ["unknown", "private credentials", None, {}, True])
+def test_native_public_control_refuses_unknown_payloads(
+    tmp_path: Path,
+    phase: object,
+) -> None:
+    with pytest.raises(ValueError, match="Unknown fixed native control phase"):
+        native.write_phase_control(tmp_path / "control.json", phase)
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux container UID handoff")
+@pytest.mark.parametrize(
+    "phase",
+    [
+        "native-no",
+        "hold-request",
+        "close-keep",
+        "cancel-keep",
+        "close-timeout",
+        "inspect-timeout",
+        "release-request",
+        "interrupt-request",
+        "close-final",
+    ],
+)
+def test_each_required_native_phase_keeps_the_exact_wait_protocol(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    phase: str,
+) -> None:
+    returned = object()
+    calls: list[Path] = []
+
+    def wait(
+        path: Path, predicate: Callable[[dict[str, str]], bool], timeout: int
+    ) -> object:
+        calls.append(path)
+        assert path == tmp_path / "state.json" and timeout == 35
+        assert predicate({"phase": phase}) and not predicate({"phase": "unknown"})
+        control = tmp_path / "control.json"
+        assert stat.S_IMODE(control.stat().st_mode) == 0o644
+        assert json.loads(control.read_bytes()) == {"phase": phase}
+        return returned
+
+    monkeypatch.setattr(native, "wait_file", wait)
+    previous = os.umask(0o077)
+    try:
+        assert native.control(tmp_path, phase) is returned
+    finally:
+        os.umask(previous)
+    assert calls == [tmp_path / "state.json"]
 
 
 def test_unreadable_directory_is_not_silently_omitted_from_original_inventory(

@@ -1,5 +1,25 @@
 # Sinter user-testing closeout — 12 September 2026
 
+## 9 October RC4 removal handoff follow-up
+
+The once-only installed workflow at source `3133402` completed 21 main UI checks,
+two normal user quits and exports, then failed reading its removal acknowledgement.
+The host's private umask created that fixed handoff with mode 0600; container UID 0,
+with all capabilities dropped, could not read the host UID 1000 file. That run
+remains failed and held. The four later installed gates were never run.
+
+Dedicated writers now grant mode 0644 on the exclusive temporary descriptor
+before atomically publishing only the fixed, non-sensitive removal acknowledgement
+or bounded native phase control. Native phase controls cross the same UID boundary;
+workflow cleanup and recovery RPC/control files have same-UID readers and stay
+private. The qualification inherited umask 077 from its root caller; the closed
+argument/environment vectors did not set or relax that policy.
+Ordinary JSON evidence, root directory permissions, dropped capabilities, network
+policy and timeouts are unchanged. Focused source regressions cover restrictive
+umasks, atomic publication and retained permission/write/close/rename failures.
+This does not qualify a successor installer; fresh exact-source checks and
+installed qualification remain pending.
+
 ## 2 October RC4 source portability follow-up
 
 Actual main3fe344a and funding review7dd1272 each had the same seven Windows

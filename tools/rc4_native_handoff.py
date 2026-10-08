@@ -61,6 +61,30 @@ def write_json(path, value):
     temporary.replace(path)
 
 
+def write_phase_control(path: Path, phase: str) -> None:
+    """Publish only a fixed, non-sensitive phase across the container UID boundary."""
+    old.require(
+        type(phase) is str and phase in contract.PHASES + contract.COMMANDS,
+        "Unknown fixed native control phase.",
+    )
+    path = Path(path)
+    raw = serialized_json({"phase": phase})
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    stream = temporary.open("xb")
+    try:
+        os.fchmod(stream.fileno(), 0o644)
+        old.require(stream.write(raw) == len(raw), "Incomplete fixed native phase.")
+    except BaseException as first:
+        try:
+            stream.close()
+        except BaseException as later:
+            raise first from later
+        raise
+    else:
+        stream.close()
+    temporary.replace(path)
+
+
 def diagnostic_failures(error):
     """Retain write/close context only from this source-fixed writer activation."""
     failures, seen = [error], {id(error)}
@@ -980,7 +1004,7 @@ def inside(args):
 
 
 def control(root, phase):
-    write_json(root / "control.json", {"phase": phase})
+    write_phase_control(root / "control.json", phase)
     return wait_file(root / "state.json", lambda state: state.get("phase") == phase, 35)
 
 
