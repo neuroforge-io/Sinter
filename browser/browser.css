@@ -1,4 +1,6 @@
-#browser-controls{margin:1rem 2rem 0;padding:1rem 1.25rem;border:1px solid var(--border,#45515c);border-radius:14px;background:var(--surface,#152026)}
+#browser-controls{margin:1rem 2rem 0;padding:.75rem 1rem;border:1px solid var(--line,#45515c);border-radius:14px;background:var(--surface,#152026)}
 .browser-heading{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}.browser-heading a{color:inherit}
-#browser-controls>p{margin:.6rem 0}#browser-controls details{margin-top:.6rem}#browser-controls summary{cursor:pointer}#browser-controls .button-row{flex-wrap:wrap}
-@media(max-width:700px){#browser-controls{margin:1rem .75rem 0;padding:.85rem}.top-actions{flex-wrap:wrap}.button-row .button{white-space:normal}input,textarea,select{max-width:100%}body{overflow-wrap:anywhere}}
+.browser-operation{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem}.browser-operation>p{flex:1 1 16rem;min-width:0;margin:0;overflow-wrap:anywhere}.browser-operation>.button{flex:0 0 auto;max-width:100%}
+#browser-controls details{margin-top:.5rem}#browser-controls>.browser-backups{padding:.35rem 0 0}#browser-controls summary{cursor:pointer;min-height:44px;align-content:center}#browser-controls .button-row{flex-wrap:wrap}#browser-controls .browser-heading{margin:.75rem 0}
+.casebooks-page>.page-intro{margin-bottom:0}.browser-project-details>summary{min-height:44px;align-content:center}.browser-project-details>p{color:var(--muted)}
+@media(max-width:700px){#browser-controls{margin:.75rem .75rem 0;padding:.7rem .85rem}.top-actions{flex-wrap:wrap}.button-row .button{white-space:normal}.browser-operation>.button{width:100%}input,textarea,select{max-width:100%}body{overflow-wrap:anywhere}}

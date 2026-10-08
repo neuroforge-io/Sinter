@@ -2,12 +2,15 @@ import {h, button, notice, download} from './static/ui.js';
 const controls=document.getElementById('browser-controls');
 const status=h('p',{role:'status','aria-live':'polite'},'Opening your browser workspace…');
 const actions=h('div',{class:'button-row'});
-controls.append(h('div',{class:'browser-heading'},h('a',{href:'/sinter/'},'About Sinter & downloads'),h('strong',{},'Sinter · browser edition')),status,
-  h('p',{class:'fine'},'Your projects stay in this browser on this device. Nothing is uploaded automatically. Use Save in the editor, then export a backup. Browser clearing, private browsing or device loss can erase local work. Backups are unencrypted.'),actions);
+const localNotice='Local to this browser. Use Save, then export a backup.';
 let worker, ready=false, counter=0, pending=new Map(), active=0;
 let releaseLock, ownsLock=false;
+function reflectActivity() {
+  stopButton.hidden=!ready||!active;
+  stopButton.disabled=!ready||!active;
+}
 function failed(error) {
-  ready=false; status.textContent=error.message||String(error);status.className='notice error';
+  ready=false;reflectActivity(); status.textContent=error.message||String(error);status.className='notice error';
   for(const item of pending.values()) {clearTimeout(item.timer);item.reject(error);} pending.clear();
 }
 function rpc(kind,payload,signal) {
@@ -23,7 +26,7 @@ function rpc(kind,payload,signal) {
 }
 async function request(path,options={}) {
   if(!ready)throw new Error('The workspace is not ready. Reload to continue.');
-  active++;
+  active++;reflectActivity();
   let errorStatus = null;
   status.textContent='Preparing your request… Search and AI send only the inputs you choose.';
   try {
@@ -33,11 +36,11 @@ async function request(path,options={}) {
       const r=response.result; return new Blob([r.content_base64?Uint8Array.from(atob(r.content_base64),c=>c.charCodeAt(0)):r.content],{type:r.content_type});
     }
     return response.result;
-  } catch(error) {errorStatus=error.message;throw error;} finally {active--;if(errorStatus){status.className='notice error';status.textContent=errorStatus;}else if(ready){status.className='';status.textContent=active?'Working locally…':'Browser storage ready. Use Save for project changes; export a backup to keep a separate copy.';}}
+  } catch(error) {errorStatus=error.message;throw error;} finally {active--;reflectActivity();if(errorStatus){status.className='notice error';status.textContent=errorStatus;}else if(ready){status.className='';status.textContent=active?'Working locally…':localNotice;}}
 }
 async function start(recovery=false) {
   if(!ownsLock)throw new Error('Close the other Sinter tab and reload here before recovering data.');
-  ready=false;
+  ready=false;reflectActivity();
   worker?.terminate();
   for(const item of pending.values()) {clearTimeout(item.timer);item.reject(new Error('The browser engine was restarted. No request was replayed.'));}
   pending.clear();
@@ -49,7 +52,7 @@ async function start(recovery=false) {
     if(data.error){const error=new Error(data.error);error.recovery=data.recovery;item.reject(error);} else item.resolve(data.result);
   };
   worker.onerror=()=>failed(new Error('The local Python engine could not start. Your saved data was not changed. Reload or export recovery data.'));
-  await rpc('init',{recovery}); ready=true;status.textContent='Browser storage ready. Nothing has been sent to a model.';
+  await rpc('init',{recovery}); ready=true;reflectActivity();status.textContent=localNotice;
 }
 const exportButton=button('Export saved workspace',async()=>{
   exportButton.disabled=true;
@@ -78,13 +81,18 @@ const stopButton=button('Stop current operation',()=>{
   if(!active)return;
   if(confirm('Stop the browser engine? Saved work is preserved. Unfinished results are discarded; you will need to reload.')) {worker.terminate();failed(new Error('Stopped. Saved work is preserved. Reload to continue. No request was replayed.'));}
 },'quiet');
-actions.append(exportButton,importButton,file,recoverButton,stopButton);
+stopButton.hidden=true;stopButton.disabled=true;
+actions.append(exportButton,importButton,file,recoverButton);
 const details=h('details',{},h('summary',{},'What runs here?'),
   h('p',{},'This is Sinter’s real Python workbench running locally with WebAssembly: casebooks, funding campaigns, research, source-only briefs, transcript minutes, document comparisons, action plans, reports and Word/JSON/CSV/calendar exports. Saved projects reload from IndexedDB. Project JSON formats match the installed app.'),
   h('p',{},'Optional search uses the capacity-limited NeuroForge public search API. Empty results are not a verified absence of information. Optional AI uses the currently available public model; it may reject longer contexts and is not qualified for general assistant quality.'),
   h('p',{},'Operating-system features require installed Sinter: local speech transcription, ChatGPT sign-in, custom provider keys, RKC executable/server connections and saving to an arbitrary filesystem path. Existing transcripts and RKC atlases can be imported. Use downloads to keep files.'),
   h('p',{},'Only one tab can edit a browser workspace at a time. Search watches run while this page is open and active; browser sleep can delay them. Local jobs run serially; Stop current operation discards unfinished work without replay.'));
-controls.append(details);
+const backups=h('details',{class:'browser-backups'},
+  h('summary',{},'Backups, privacy & browser details'),
+  h('div',{class:'browser-heading'},h('a',{href:'/sinter/'},'About Sinter & downloads'),h('strong',{},'Sinter · browser edition')),
+  h('p',{class:'fine'},'Your projects stay in this browser on this device. Nothing is uploaded automatically. Use Save in the editor, then export a backup. Browser clearing, private browsing or device loss can erase local work. Backups are unencrypted.'),actions,details);
+controls.append(h('div',{class:'browser-operation'},status,stopButton),backups);
 globalThis.sinterBrowser={request};
 async function boot() {
   if(!navigator.locks || !globalThis.indexedDB || !globalThis.Worker || !globalThis.WebAssembly)throw new Error('This browser needs WebAssembly, IndexedDB and Web Locks. Use a current Chrome, Edge, Firefox or Safari browser, or install Sinter.');
