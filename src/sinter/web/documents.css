@@ -2,6 +2,9 @@
 .report-area{margin-top:20px;scroll-margin-top:18px;max-width:1080px}
 .report-heading{margin:0 0 18px}.report-heading h2{font-size:clamp(1.35rem,2.2vw,2rem);line-height:1.25;margin:8px 0}.report-heading p{font-size:.86rem;margin:0}
 .document-toolbar{margin:0 0 16px}.document-toolbar>.button-row{gap:8px;align-items:start}.document-toolbar .button{font-size:.8rem;min-height:42px;padding:10px 14px}
+.document-save-state{margin:0 0 10px;font-size:.83rem;color:var(--muted);overflow-wrap:anywhere}
+.document-save-state[data-state=saved]{color:var(--success)}
+.document-save-state[data-state=prepared],.document-save-state[data-state=pending],.document-save-state[data-state=not-sent],.document-save-state[data-state=rejected],.document-save-state[data-state=unconfirmed]{color:var(--text);border-left:3px solid var(--accent);padding-left:10px}
 .document-feedback:empty{display:none}.copy-confirmation{color:var(--success);font-size:.85rem;margin:0 0 16px}
 .export-menu{position:relative;margin:0;border:0;padding:0}.export-menu>summary{list-style:none;display:flex;gap:10px;min-height:42px}.export-menu>summary:after{content:'⌄';color:var(--muted)}
 .export-menu>summary::-webkit-details-marker{display:none}.export-options{position:absolute;right:0;top:calc(100% + 6px);z-index:12;min-width:230px;padding:8px;display:grid;gap:4px;border:1px solid var(--edge);border-radius:12px;box-shadow:0 15px 40px #0003;background:var(--surface)}
@@ -49,8 +52,65 @@
 .casebook-question-evidence{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin:0 0 24px;min-width:0}.casebook-question-evidence>p,.casebook-question-evidence>h3{margin:0}.question-evidence-row{min-width:0;padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow-wrap:anywhere}.question-evidence-row h4{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:0 0 8px}.question-evidence-question{white-space:pre-wrap;margin:8px 0;font-weight:600}.question-evidence-state{font-size:.76rem;font-weight:500;color:var(--muted);padding:3px 8px;border:1px solid var(--line);border-radius:5px}.question-evidence-quote{min-width:0;margin:12px 0 0;padding:12px 0 0;border-top:1px solid var(--line);overflow-wrap:anywhere}.question-evidence-quote summary{cursor:pointer;min-height:32px;font-size:.86rem}.question-evidence-quote pre{margin:12px 0;white-space:pre-wrap;overflow-wrap:anywhere}.question-evidence-quote .button{white-space:normal;text-align:left;max-width:100%}
 
 /* Summary controls and narrow-screen reading are local to this handover feature. */
+.report-area>.handover-summary,.document-word-save-options{margin:0 0 10px;padding:8px 0;border:0;border-bottom:1px solid var(--line);border-radius:0}
+.handover-summary>summary,.document-word-save-options>summary{min-height:36px;cursor:pointer;font-size:.85rem;font-weight:650}
+.handover-summary[open]>summary{margin-bottom:12px}
 .handover-summary-item{min-width:0;border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--surface)}
 .handover-summary-item>summary{overflow-wrap:anywhere}.summary-item-heading,.summary-item-detail{display:block}
 .summary-item-detail{margin-top:4px;color:var(--muted);font-size:.8rem;font-weight:400}
 .handover-summary-review-actions{margin-top:12px}.handover-summary-scroll-hint{display:none}
+.handover-responsibility,.handover-question-start{padding:10px 0;border:0;border-top:1px solid var(--line);border-radius:0;background:transparent}
+.handover-responsibility>summary,.handover-question-start>summary{cursor:pointer;font-size:.82rem;color:var(--muted);overflow-wrap:anywhere}
+.handover-responsibility[open],.handover-question-start[open]{display:grid;gap:12px}
+.handover-cell-label{display:none}
 @media screen and (max-width:650px){.handover-summary-scroll-hint{display:block;padding:0 20px}.handover-summary-document .table-scroll{overflow-x:auto}.handover-summary-document table{min-width:680px}.handover-summary-document th,.handover-summary-document td{overflow-wrap:normal;word-break:normal}}
+@media screen and (max-width:650px){
+  .handover-summary-document .handover-opening-scroll{overflow:visible;border:0}
+  .handover-summary-document .handover-opening-table{display:block;min-width:0}
+  .handover-opening-table thead{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .handover-opening-table tbody{display:grid;gap:12px}
+  .handover-opening-table tr{display:grid;border:1px solid var(--line);border-radius:8px;padding:4px 0;min-width:0;background:var(--surface)}
+  .handover-summary-document .handover-opening-table td{display:flex;flex-direction:column;min-width:0;padding:10px 12px;overflow-wrap:anywhere;word-break:normal}
+  .handover-opening-table td:last-child{border-bottom:0}
+  .handover-opening-table .handover-cell-label{display:block;order:-1;margin-bottom:4px;font-size:.7rem;font-weight:650;color:var(--muted)}
+  .handover-opening-table td:nth-child(1){grid-row:1}
+  .handover-opening-table td:nth-child(3){grid-row:2}
+  .handover-opening-table td:nth-child(2){grid-row:3}
+  .handover-opening-table td:nth-child(4){grid-row:4}
+}
+
+/* Condense only an unchanged generated cover; keep actual review wording visible. */
+.handover-reading-report .report-heading{margin-bottom:8px}
+.handover-reading-report .report-tabs{margin:8px 0 14px}
+.handover-reading-report .document-toolbar{margin-bottom:8px}
+.handover-reading-report .document-word-save-options{padding:0;margin-bottom:6px}
+.handover-reading-report .paper-label{display:none}
+.handover-reading-report .document-paper>.document{padding:22px 28px}
+.document .handover-reading-opening>h2{margin:8px 0 6px}
+.document .handover-reading-opening>p{font-size:.82rem;line-height:1.5;margin:0 0 12px}
+.document .handover-reading-opening>.handover-source-label{font:650 .65rem/1.5 ui-sans-serif,system-ui,sans-serif;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.handover-context-toggle{align-self:start;margin:2px 0 12px;font-size:.78rem}
+.handover-context-content{padding:16px 0;border-top:1px solid var(--line)}
+.handover-inline-editor{min-width:0;padding:0;border:0;margin:0}
+.handover-inline-editor>summary{list-style:none;cursor:pointer}
+.handover-inline-editor>summary::-webkit-details-marker{display:none}
+.handover-inline-editor>summary:after{content:'⌄';margin-left:8px;color:var(--muted)}
+.handover-inline-editor[open]{flex-basis:100%;width:100%}
+.handover-inline-editor[open]>summary{margin-bottom:12px}
+@media screen{.handover-reading-opening{display:flex;flex-direction:column}.handover-context-toggle{order:1}.handover-context-content{order:2}}
+@media screen and (max-width:650px){.handover-reading-report .document-paper>.document{padding:16px 20px 24px}.handover-inline-editor[open]{grid-column:1/-1}.handover-inline-editor>summary{width:100%;min-height:40px;font-size:.72rem;padding:9px 10px}}
+@media print{.handover-context-content[hidden]{display:block!important}.handover-context-content{padding:0;border:0}.handover-reading-opening{display:block}.handover-reading-report .document-paper>.document{padding:0}.document .handover-reading-opening>p{font:inherit}.handover-reading-report .paper-label{display:none}.handover-reading-document .handover-opening-table th{background:white;color:black}}
+
+/* Print the report document once, even while its evidence tab is selected. */
+.document-review-warning{margin:0;padding:14px 28px;border-bottom:1px solid var(--line);font-size:.86rem;font-weight:650;line-height:1.5}
+@media(max-width:650px){.document-review-warning{padding:14px 20px}}
+@media print{
+  .report-print-target{--raised:#fff;--muted:#444}
+  body:has(.report-print-target) *:not(.report-print-target):not(.report-print-target *):not(:has(.report-print-target)){display:none!important}
+  .report-print-target[hidden]{display:block!important}
+  .report-print-target>:not(.document-paper){display:none!important}
+  .report-print-target .paper-label{display:block!important;padding:0 0 12pt;color:#444;letter-spacing:.08em}
+  .handover-reading-report .report-print-target .paper-label{display:none!important}
+  .report-print-target .document .citation-link{color:black}
+  .document-review-warning{padding:0 0 12pt;margin:0 0 12pt;font:600 11pt/1.5 sans-serif}
+}

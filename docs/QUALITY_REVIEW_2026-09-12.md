@@ -3037,3 +3037,121 @@ bound and prior failures are unchanged; Windows execution remains pending.
 The local focused run passed 172 tests with all 37 native Windows cases skipped in
 3.36 seconds. The two exact-helper drivers retain the same local-shadow clearing
 entry condition; their checks do not replace the full-wrapper counterexamples.
+
+### 9 October: truthful report saves and an action-ready handover opening
+
+The isolated `codex/handover-readiness` source pass follows `44712ec` and
+`072e7b9`; it does not qualify or replace a published preview. Prepared reports,
+including partial model text, now remain in the existing unsaved-work guard
+until their exact submitted payload receives a valid report-save acknowledgement.
+Focused cases cover not-sent, rejected and uncertain outcomes, malformed success
+responses, newer edits and metadata during a save, reopened pending drafts and
+view/callback failures after a known save. Requests are not automatically replayed.
+
+Matched screenshots of the same fictional reviewed handover at `072e7b9` showed
+that duplicate title, audience and save feedback pushed the first useful action
+below the opening view. The revised renderer moves only an exact generated
+source-only cover into an explicit audience/context disclosure. It checks the
+retained title and every supplied document-detail paragraph; arbitrary edited or
+restored-baseline warnings remain visible. Model, incomplete and fictional flags
+cannot receive the compact source-only presentation. The full review caution and
+stale warning stay above the summary; the evidence tab, unchanged checklist,
+original source snapshots and backups remain available.
+
+In the actual 1440×1000 and 390×844 report-top views, the first complete proposed
+action is now visible. Phone cards put the proposal before the longer recorded
+status, retaining the original four-column table and accessibility-tree order.
+Unknown and unassigned owners remain distinct, acceptance stays unconfirmed and
+the practice target remains explicitly unconfirmed rather than a funder deadline.
+The actual browser journey checks keyboard disclosure operation, four associated
+table headers, twelve cells, citation links and an added human preamble that must
+not collapse. These are bounded browser observations, not acceptance across every
+assistive technology or screen size.
+
+Print media and the captured PDF include the closed disclosure's original title,
+audience and organisation before the opening, with all review qualifiers, source
+quotations and historical wording retained. The opening's print header uses a
+white background and black text. Raw Markdown and the summary compiler are
+unchanged; the downloaded Word file is byte-identical to the `072e7b9` capture.
+The generic whole-page Print/PDF still includes some project-editor chrome and
+repeated skip-link text. This inherited output debt is explicit; a physical print
+dialog and installed package have not been qualified by this pass.
+
+The final focused checks passed 93 Node tests, 54 Python tests, 16 actual garden
+browser journeys and 15 report-recovery journeys, with no model operations or
+external browser requests. The initial layout-capture attempt failed on a new
+measurement's variable ordering; its output is retained alongside the later
+passing evidence. An independent passive review rated this demonstrated opening
+8/10 for usability, functionality and appearance. Those scores concern this
+bounded local workflow, not the whole product, live providers or any installer.
+The original platform qualification failures and release holds remain unchanged.
+
+
+### 9 October: print the document without workspace controls
+
+The separate source follow-on to `3b56d29` repairs the actual Print/PDF output
+debt recorded above. The existing Document panel is an explicit print target;
+print-only styles retain that panel and its ancestor layout while hiding project
+forms, shelves, navigation and unrelated report controls. The Document prints
+once when Evidence is selected, without changing the selected screen view.
+Existing fictional, model-generated and incomplete classifications remain
+prominent even when a user-edited body removes its original preamble. Source-only
+handovers retain the complete original title, audience and review caution.
+Stale warnings, literal quotations, unknown/unassigned owners, unconfirmed dates
+and original source references remain intact. The print action and its existing
+pending-edit guard are unchanged.
+
+The final source checks passed 93 Node tests, 54 Python tests, 22 garden browser
+journeys and 15 report-recovery journeys. The browser produced complete actual
+Document and Evidence-tab PDFs with identical content, plus edited model,
+incomplete, fictional and stale-review captures. Passive inspection and full PDF
+text extraction verified the omitted controls and retained qualifications and
+four original passage identities; no pages or evidence were truncated. The
+downloaded Word file stayed byte-identical to the earlier `072e7b9` capture.
+The classification fixtures are local synthetic failure/status cases, not model
+outputs. There were no external requests, model operations or browser errors.
+
+This admission covers the current single-report workbench in the tested cached
+Chromium runtime, whose print selectors support `:has`. It does not establish
+every browser's print behaviour, a physical print-dialog result, assistive
+technology acceptance or installed-release qualification. Two tool line-length
+checks were corrected before the final run. A first PDF extraction check
+interleaved table columns in layout mode; complete layout and raw extractions
+are retained with the corrected cell-content review. Earlier source/platform
+failures and qualification holds remain unchanged.
+
+
+### 9 October: actual print review caught quotation contrast and stale-status gaps
+
+Passing source and browser assertions at `e94134b` did not establish a readable
+printout. Independent image review and the implementer's direct review both
+found black source-quotation text against the inherited dark raised background.
+The retained intermediate captures explicitly record that Print was blocked
+despite its passing checks. The narrow repair supplies white raised backgrounds
+and readable muted captions only within the print target, preserving ordinary
+screen styling, source wording and document structure. Actual screenshots now
+show the complete stale warning at the top and readable original quotations;
+computed print checks cover both summary and original-source quote backgrounds.
+
+The earlier stale fixture proved that an existing body warning survived Print.
+It did not prove visibility after that warning was edited away. The renderer now
+adds a separate notice inside the existing document paper only when the report's
+recorded `review_status` is `stale`. Editing document wording does not clear this
+metadata. Five local status fixtures check its visibility on screen and in Print:
+edited model, incomplete and fictional bodies retain both classifications;
+stale documents retain their original full warning, or still show the status
+after body-warning removal. Original body warnings remain historical evidence.
+Raw stored text, source snapshots, compiler, schema and Word export are unchanged.
+
+The final browser journey passes 23 checks with no external requests, model
+operations or browser errors. The existing 93 focused Node and 54 Python checks
+and 15 recovery journeys also pass for the repaired renderer. Complete actual
+PDFs and screen/print images are retained; the Word download remains byte-identical
+to `072e7b9`. Timing and resource receipts describe each expanded suite run, not a
+controlled app-speed comparison. The first-action viewport measurement concerns
+the demonstrated non-stale report; stale warnings take priority over compactness.
+Modern Chromium/single-report source scope and all installed/platform release
+holds remain unchanged. No whole-product 10/10 claim follows from this pass.
+The first added source-quote capture assertion counted hidden Evidence-panel
+copies as well as the printed document. Its failure is retained; the final check
+requires exactly one matching original quotation within the explicit print target.

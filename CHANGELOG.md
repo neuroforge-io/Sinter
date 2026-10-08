@@ -14,6 +14,35 @@ original installed gates must pass before a separate Linux preview is admitted.
   environment has an `ERRORLEVEL` variable. The original five-second
   checks and failed Windows observations remain; fresh Windows CI is required.
 
+- Make report saving explicit and truthful. Prepared and incomplete reports stay
+  in unsaved work until a valid save acknowledgement. Retain newer wording,
+  evidence and screening changes during a pending save; distinguish rejected,
+  not-sent and uncertain requests without replaying them. Reopening a pending
+  draft shares the same save state. A later view-refresh failure does not undo
+  an acknowledged save.
+
+- Put the reviewed handover opening before an unchanged generated audience
+  cover, with that cover available through “Audience and document context”.
+  Keep full review cautions visible, preserve unknown owners and unconfirmed
+  dates, and show the proposed next step earlier on phones. Print includes the
+  original cover even when closed; edited, fictional, model and incomplete
+  covers keep their original presentation. Markdown, evidence and Word content
+  are unchanged. Source-only tests do not qualify an installed release.
+
+- Print the reviewed document without project forms, saved-project shelves or
+  navigation text. Print the complete Document once when Evidence is selected,
+  retain source context and stale warnings, and keep fictional, model-generated
+  and incomplete labels prominent even after edits remove a draft preamble.
+  Pending edits still require an explicit apply/cancel choice before Print.
+  Qualified here in the cached Chromium source workflow, not every browser or
+  an installed package.
+
+- Keep stale review status visible on screen and in Print independently of
+  editable document wording, alongside model, incomplete or fictional labels.
+  Preserve historical body warnings. Give retained print quotations, table
+  headers and source captions readable contrast without changing raw document
+  text, evidence, the compiler or Word output.
+
 - Offer “Read full message” when campaign feedback exceeds the compact save bar.
   Keep complete wording in a scrollable reader and restore keyboard focus when
   closed. Reading the message does not save, retry or send a request.

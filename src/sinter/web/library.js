@@ -21,7 +21,7 @@ export async function library({onEditProject} = {}) {
     list.replaceChildren(...reports.map(report => h('article', {class: 'card'},
       h('h3', {}, report.title), h('p', {class: 'muted'}, 'Saved ' + dateTime(report.created_at)),
       h('div', {class: 'button-row'}, button('Open draft', async () => {
-        try { const document = await request(`/api/reports/${report.id}`); opened.replaceChildren(...[document.input_snapshot && onEditProject ? h('div', {class: 'button-row non-print'}, button('Edit project inputs', () => onEditProject(document.input_snapshot))) : null, renderReport(document, {onSaved: () => refresh().catch(error => feedback.replaceChildren(notice('The draft was saved, but refreshing the list failed: ' + error.message, 'error')))} )].filter(Boolean)); opened.scrollIntoView({block: 'start'}); }
+        try { const document = await request(`/api/reports/${report.id}`); opened.replaceChildren(...[document.input_snapshot && onEditProject ? h('div', {class: 'button-row non-print'}, button('Edit project inputs', () => onEditProject(document.input_snapshot))) : null, renderReport(document, {saved: true, onSaved: () => refresh().catch(error => feedback.replaceChildren(notice('The draft was saved, but refreshing the list failed: ' + error.message, 'error')))} )].filter(Boolean)); opened.scrollIntoView({block: 'start'}); }
         catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
       }), button('Delete saved copy', async () => {
         if (!window.confirm(`Delete the saved copy of "${report.title}"? Downloaded copies are not deleted.`)) return;
