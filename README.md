@@ -107,6 +107,15 @@ silently replay a request. Funding campaigns keep opportunities, quotes and next
 actions in a revisioned local record. Readable drafts can be edited and exported
 to Word while their original sources remain in the evidence pack.
 
+In the development browser workbench, choose a route and **Make focused campaign…**
+to work on a smaller case. Preview the complete included and omitted material,
+and choose explicitly whether to include shared work, linked products and other
+sources. Historical answers, communications and source snapshots retain their
+recorded status. Opening creates an unsaved copy; **Save campaign** creates a
+separate record. The original is unchanged. Export the original snapshot first
+if it has edits you want to keep. A selection that exceeds the existing limits
+is refused without cutting its text.
+
 Current development shows compact quoted-cost rows and opens the next missing
 price or reference. Open and closed cost rows stay as left when moving between
 pages in the same browser session. Quoted subtotals retain original amounts, unknowns and GST

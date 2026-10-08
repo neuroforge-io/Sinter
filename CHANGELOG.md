@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Make a separate focused campaign in the browser workbench. Preview included
+  and omitted material, choose shared work and linked products explicitly, and
+  retain source identities, old quotes, recorded statuses and correspondence.
+  The original stays unchanged; the copy remains unsaved until an explicit Save.
+- Keep the requested route selected when earlier linked dependencies are retained.
+  A fictional source journey checks cancellation, unsaved-parent protection,
+  a readable 390px preview and one new-record save with a lost acknowledgement.
+  These checks do not qualify a new installed release or real funding campaign.
+
 ## 0.5.4rc4 - candidate source, installed qualification pending
 
 This candidate source follows the frozen RC3 release. It is not yet qualified as
