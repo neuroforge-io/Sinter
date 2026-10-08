@@ -41,12 +41,12 @@ endlocal & exit /b %SINTER_EXIT%
 if defined SINTER_PYTHON exit /b 0
 rem Admit complete ordinary CPython tags, not headers or arbitrary commands.
 set SINTER_LIST_TAG| "%SystemRoot%\System32\findstr.exe" /r /x /c:"SINTER_LIST_TAG=-V:3\.[0-9][0-9]*[-0-9]*" /c:"SINTER_LIST_TAG=-3\.[0-9][0-9]*[-0-9]*" >nul
-if errorlevel 1 exit /b 0
+if not "%errorlevel%"=="0" exit /b 0
 rem Before expansion, admit no quotes or exactly one complete outer quote pair.
 set SINTER_CANDIDATE| "%SystemRoot%\System32\findstr.exe" /r /x ^
   /c:"SINTER_CANDIDATE=[^\"]*" /c:"SINTER_CANDIDATE=\"[^\"]*\"" ^
   /c:"SINTER_CANDIDATE=\* [^\"]*" /c:"SINTER_CANDIDATE=\* \"[^\"]*\"" >nul
-if errorlevel 1 exit /b 0
+if not "%errorlevel%"=="0" exit /b 0
 set "SINTER_CANDIDATE=%SINTER_CANDIDATE:"=%"
 for /f "tokens=1,*" %%P in ("%SINTER_CANDIDATE%") do (
   if "%%P"=="*" set "SINTER_CANDIDATE=%%Q"
@@ -70,5 +70,5 @@ for %%P in ("%SINTER_CANDIDATE%") do (
 )
 if not defined SINTER_RUNTIME_PRESENT exit /b 0
 "%SINTER_CANDIDATE%" -I -S -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
-if not errorlevel 1 set "SINTER_PYTHON=%SINTER_CANDIDATE%"
+if "%errorlevel%"=="0" set "SINTER_PYTHON=%SINTER_CANDIDATE%"
 exit /b 0

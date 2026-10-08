@@ -441,3 +441,44 @@ def test_isolated_runtime_probe_admits_supported_versions_only(version, admitted
             "__import__": import_sys, "SystemExit": SystemExit,
         }})
     assert result.value.code == (0 if admitted else 1)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Actual CMD signed exit admission.")
+@pytest.mark.parametrize("probe_exit", [0, 1, -1, -1073741819])
+def test_windows_runtime_admission_requires_exact_success(
+    tmp_path, monkeypatch, request, probe_exit,
+):
+    """Run the exact production guard after a controlled real CMD exit.
+
+    Negative codes exercise signed Windows failures; this does not manufacture
+    an interpreter crash or qualify runtime discovery.
+    """
+    batch = (Path(fixtures.__file__).parents[1] / "Start-Sinter.bat").read_text()
+    admission = next(
+        line for line in batch.splitlines()
+        if 'set "SINTER_PYTHON=%SINTER_CANDIDATE%"' in line
+    )
+    monkeypatch.setenv("SINTER_CASE_EXIT", str(probe_exit))
+    monkeypatch.setenv("SINTER_CANDIDATE", sys.executable)
+    driver = tmp_path / "probe-exit-control.bat"
+    driver.write_text(
+        '@echo off\nsetlocal EnableExtensions DisableDelayedExpansion\n'
+        'set "SINTER_PYTHON="\n'
+        '"%COMSPEC%" /d /c exit /b %SINTER_CASE_EXIT%\n'
+        + admission + '\necho observed-probe-exit=%errorlevel%\n'
+        'if defined SINTER_PYTHON exit /b 0\nexit /b 3\n',
+        encoding="utf-8", newline="\r\n",
+    )
+    shell = subprocess.list2cmdline([os.environ["COMSPEC"]])
+    invocation = subprocess.list2cmdline([str(driver)])
+    observation, stdout = fixtures.observe_wrapper(
+        f'{shell} /d /s /c "{invocation}"', tmp_path,
+        tmp_path / "no-application-marker.json", timeout=5,
+    )
+    observation["requested_probe_exit"] = probe_exit
+    raw = json.dumps(observation, sort_keys=True, separators=(",", ":"))
+    request.node.user_properties.append(("sinter_wrapper_diagnostics", raw))
+    assert not observation["timed_out"] and observation["parent_exited"], raw
+    assert observation["cleanup_errors"] == [], raw
+    assert observation["returncode"] == (0 if probe_exit == 0 else 3), raw
+    assert stdout.strip() == f"observed-probe-exit={probe_exit}".encode(), raw

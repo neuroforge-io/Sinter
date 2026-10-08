@@ -2990,7 +2990,8 @@ The original PR27 head `44712ec` passed its native jobs, but its full source gat
 is held. Two unchanged Windows Python 3.10 system-discovery fixtures timed out
 at the existing five-second limit. The help fixture's launcher diagnostics selected
 registered Python 3.14.7 despite Python 3.10.11 being available on PATH; no first
-Python-entry marker was observed. That is a selection mismatch, not proof that
+Python-entry marker was observed. The old policy deliberately preferred `py`;
+this selected a different runtime from the matrix/PATH choice, not proof that
 Python 3.14, Defender or scheduling caused the stall. The original failure remains
 recorded and is not relabelled as a passing run.
 
@@ -3016,3 +3017,11 @@ pending on Windows. The first local run's five failures came from a new import
 stub with the wrong call signature; its output is retained separately from the
 corrected run. No deadline, installed operator, hosted failure or published asset
 was changed, and this pass did not launch Sinter or a model.
+
+A subsequent independent source review found that CMD's `if not errorlevel 1`
+also admits negative process statuses. Runtime and listing admission now require
+exact exit zero. A focused native Windows control executes the production runtime
+guard after real CMD exits 0, 1, -1 and -1073741819; it does not manufacture a
+Python crash. Those Windows controls and fresh hosted source checks remain pending.
+The follow-on local focused run passed 172 tests with 35 native Windows cases
+skipped in 3.29 seconds; it does not supply their execution evidence.
