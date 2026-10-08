@@ -281,6 +281,32 @@ def browser_setup(folder, monkeypatch, primary, *, later_read=None):
     monkeypatch.setitem(sys.modules, "playwright.sync_api", inert)
     monkeypatch.setattr(native, "wait_file", lambda *_: {})
     monkeypatch.setattr(native.contract, "preflight_browser_temporary", lambda: None)
+
+    def forbidden_socket(*_args, **_kwargs):
+        pytest.fail("Inert publication controls must not access real sockets.")
+
+    monkeypatch.setattr(native.socket, "socket", forbidden_socket)
+    monkeypatch.setattr(native.socket, "create_connection", forbidden_socket)
+    relay = SimpleNamespace(
+        server_address=("127.0.0.1", 32124),
+        model_requests=0,
+        errors=0,
+        serve_forever=lambda: None,
+        idle=lambda: True,
+        shutdown=lambda: None,
+        server_close=lambda: None,
+    )
+    thread = SimpleNamespace(
+        start=lambda: None, join=lambda **_: None, is_alive=lambda: False
+    )
+
+    def inert_closed_port(port):
+        assert port in {32124, 32125}
+        return True
+
+    monkeypatch.setattr(native.transport, "Relay", lambda *_: relay)
+    monkeypatch.setattr(native.threading, "Thread", lambda **_: thread)
+    monkeypatch.setattr(native, "port_closed", inert_closed_port)
     private = root.parent.parent / "client/controlled-browser-temp"
 
     def create(record):
