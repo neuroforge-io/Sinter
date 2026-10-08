@@ -7,6 +7,12 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Make reviewed handover Word exports easier to read: plain summary quotations
+  use body typography, short quotation groups stay together, and pages carry the
+  supplied title and a review-only page count. Bound layout hints to the generated
+  opening; preserve literal evidence and generic export behaviour. Newly compiled
+  summaries use clearer separators. Existing saved wording is never rewritten.
+
 - Run first-use interface controls from byte-identical source copies with an
   explicit temporary JavaScript module boundary. Remove the experimental Node
   option refused by the hosted macOS test runtime and retain the actual command

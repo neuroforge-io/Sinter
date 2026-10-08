@@ -101,7 +101,7 @@ export async function compileHandoverSummary(report, rows) {
     const responsibility = owner(row, references), date = target(row.targetDate);
     const evidence = row.evidence === null ? null : await handoverSummaryQuote(original, row.evidence);
     if (evidence) quotations.push({item, position: entries.length + 1, ...evidence});
-    const state = `${row.period === 'historical' ? 'Historical wording' : 'As recorded'}: ${status}; ${responsibility}; ${date}`;
+    const state = `${row.period === 'historical' ? 'Historical wording' : 'As recorded'}: ${status} · ${responsibility} · ${date}`;
     entries.push(`| ${literal(item)} | ${literal(state)} | ${literal(action)} | ${evidence ? evidence.label : 'Missing supporting record; answer remains unknown'} |`);
   }
   const lines = ['## At a glance',

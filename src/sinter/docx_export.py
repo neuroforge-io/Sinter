@@ -53,6 +53,21 @@ _HANDOVER_SUMMARY_HEADERS = (
     "Evidence",
 )
 _HANDOVER_SUMMARY_WIDTHS = (1560, 4200, 2280, 1320)
+_HANDOVER_SUBTITLE = "Source-only handover checklist — review before using."
+_HANDOVER_CHECKLIST_INTRO = (
+    "Review each question against its related wording, then record the confirmed "
+    "response and who will follow it up. A wording match is not an answer; "
+    "no owner or target date is assigned by this checklist."
+)
+_HANDOVER_SUMMARY_COVERAGE = (
+    "**Evidence coverage:** this opening uses selected wording from this saved "
+    "report. The unchanged checklist and selected evidence follow. This is not "
+    "full supplied history; request the matching original project backup for "
+    "unselected text. Later project or campaign changes are not included."
+)
+_MAX_SUMMARY_QUOTE_GROUP_CHARS = 800
+_MAX_SUMMARY_QUOTE_GROUP_LINES = 12
+_MAX_SUMMARY_QUOTE_GROUP_COUNT = 3
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 REL = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -215,6 +230,148 @@ def _handover_summary_table_widths(
     ):
         return {}
     return {position: _HANDOVER_SUMMARY_WIDTHS}
+
+
+def _raw_block_index(
+    markdown: str, blocks: tuple[Block, ...], line: str, expected: Block
+) -> tuple[int, re.Match[str]] | None:
+    """Match one top-level literal block; typed layout is not verified evidence."""
+    matches = list(re.finditer(r"(?m)^" + re.escape(line) + "$", markdown))
+    if len(matches) != 1:
+        return None
+    prefix = parse(markdown[: matches[0].end()])
+    index = len(prefix) - 1
+    if index < 0 or index >= len(blocks) or prefix[-1] != expected:
+        return None
+    if blocks[index] != expected or blocks[: index + 1] != prefix:
+        return None
+    return index, matches[0]
+
+
+def _short_summary_quote_group(blocks: tuple[Block, ...]) -> bool:
+    """Bound a small layout hint, never promise that arbitrary text fits a page."""
+    text = ["".join(span.text for span in block.spans) for block in blocks]
+    lines = sum(
+        max(1, (len(line.expandtabs(4)) + 59) // 60)
+        for value in text
+        for line in value.split("\n")
+    )
+    return (
+        sum(map(len, text)) <= _MAX_SUMMARY_QUOTE_GROUP_CHARS
+        and lines <= _MAX_SUMMARY_QUOTE_GROUP_LINES
+    )
+
+
+def _handover_summary_presentation(
+    markdown: str,
+    blocks: tuple[Block, ...],
+    widths: dict[int, tuple[int, ...]],
+) -> tuple[bool, frozenset[int], frozenset[int]]:
+    """Style exact generated opening shapes only, without certifying their text.
+
+    An exact typed copy has the same shape. No source, answer, approval or review
+    state is validated by this presentation adapter; its footer stays review-only.
+    """
+    refused = False, frozenset(), frozenset()
+    if not widths or len(blocks) < 2:
+        return refused
+    title = blocks[0]
+    normalized = markdown.replace("\r\n", "\n").replace("\r", "\n")
+    if (
+        not normalized.startswith("# ")
+        or not isinstance(title, Paragraph)
+        or title.heading != 1
+        or title.quote
+        or title.code
+        or title.list_id
+        or blocks[1] != Paragraph((Span(_HANDOVER_SUBTITLE),))
+    ):
+        return refused
+    coverage = _raw_block_index(
+        normalized,
+        blocks,
+        _HANDOVER_SUMMARY_COVERAGE,
+        parse(_HANDOVER_SUMMARY_COVERAGE)[0],
+    )
+    checklist = _raw_block_index(
+        normalized,
+        blocks,
+        "## Handover next steps",
+        Paragraph((Span("Handover next steps"),), heading=2),
+    )
+    table_at = next(iter(widths))
+    if (
+        coverage is None
+        or coverage[0] != table_at + 1
+        or checklist is None
+        or checklist[0] <= coverage[0]
+        or checklist[0] + 1 >= len(blocks)
+        or blocks[checklist[0] + 1] != Paragraph((Span(_HANDOVER_CHECKLIST_INTRO),))
+    ):
+        return refused
+    section = normalized[coverage[1].end() : checklist[1].start()].strip("\n")
+    if not section:
+        return True, frozenset(), frozenset()
+    heading = "### Wording selected for this summary"
+    raw = [part for part in section.split("\n\n") if part]
+    selected = blocks[coverage[0] + 1 : checklist[0]]
+    table = blocks[table_at]
+    if (
+        raw[0] != heading
+        or len(raw) < 3
+        or len(raw) % 2 != 1
+        or len(selected) != len(raw)
+        or parse(section) != selected
+        or selected[0]
+        != Paragraph((Span("Wording selected for this summary"),), heading=3)
+        or len(table.rows) > 13
+    ):
+        return refused
+    quotes, keep, previous = set(), set(), 0
+    first = coverage[0] + 1
+    for offset in range(1, len(raw), 2):
+        caption = re.fullmatch(
+            r"\*\*Summary item ([1-9][0-9]*): (.+)\*\* — (Passage [1-9][0-9]*)",
+            raw[offset],
+        )
+        if caption is None or len(caption[1]) > 2:
+            return refused
+        number = int(caption[1])
+        if not previous < number < len(table.rows):
+            return refused
+        previous = number
+        item = "".join(span.text for span in table.rows[number][0])
+        if selected[offset] != Paragraph(
+            (
+                Span(f"Summary item {number}: {item}", bold=True),
+                Span(" — " + caption[3]),
+            )
+        ) or table.rows[number][3] != (Span(caption[3]),):
+            return refused
+        lines = raw[offset + 1].split("\n")
+        fence = re.fullmatch(r"> (`{3,})text", lines[0])
+        if (
+            fence is None
+            or len(lines) < 3
+            or lines[-1] != "> " + fence[1]
+            or any(not line.startswith("> ") for line in lines[1:-1])
+        ):
+            return refused
+        wording = "\n".join(line[2:] for line in lines[1:-1])
+        longest = max((len(run) for run in re.findall(r"`+", wording)), default=0)
+        if len(fence[1]) != max(3, longest + 1) or selected[offset + 1] != Paragraph(
+            (Span(wording, code=True),), quote=True, code=True
+        ):
+            return refused
+        quotes.add(first + offset + 1)
+        if _short_summary_quote_group(selected[offset : offset + 2]):
+            keep.add(first + offset)
+    if len(quotes) <= _MAX_SUMMARY_QUOTE_GROUP_COUNT and _short_summary_quote_group(
+        selected
+    ):
+        # End on the last quotation, never on the original checklist or evidence.
+        keep.update(range(first, checklist[0] - 1))
+    return True, frozenset(quotes), frozenset(keep)
 
 
 def _reference_key_spacing(markdown: str, blocks: tuple[Block, ...]) -> frozenset[int]:
@@ -461,6 +618,8 @@ class _Package:
         parent: ET.Element,
         spans: tuple[Span, ...],
         internal_links: tuple[tuple[int, int, str], ...] = (),
+        *,
+        summary_quote: bool = False,
     ) -> None:
         offset = 0
         fragments = []
@@ -511,7 +670,15 @@ class _Package:
             properties = _element(run, "rPr")
             if span.href or anchor:
                 _element(properties, "rStyle", val="Hyperlink")
-            if span.code:
+            sensitive_quote = summary_quote and (
+                span.text != span.text.strip()
+                or len(span.text) > _MAX_SUMMARY_QUOTE_GROUP_CHARS
+                or any(
+                    marker in span.text
+                    for marker in ("\n", "\t", "  ", "`", "{", "}", "<", ">", "\\")
+                )
+            )
+            if span.code and (not summary_quote or sensitive_quote):
                 _element(
                     properties,
                     "rFonts",
@@ -523,8 +690,8 @@ class _Package:
                 _element(properties, "b")
             if span.italic:
                 _element(properties, "i")
-            if span.code:
-                _element(properties, "sz", val=20)
+            if span.code and (not summary_quote or sensitive_quote):
+                _element(properties, "sz", val=22 if summary_quote else 20)
             for part in re.split(r"([\n\t])", span.text):
                 if part == "\n":
                     _element(run, "br")
@@ -576,6 +743,7 @@ class _Package:
         compact_reference: bool = False,
         bookmark: str | None = None,
         internal_links: tuple[tuple[int, int, str], ...] = (),
+        summary_quote: bool = False,
     ) -> None:
         node = _element(parent, "p")
         properties = _element(node, "pPr")
@@ -585,11 +753,15 @@ class _Package:
                 "pStyle",
                 val="Title" if title else f"Heading{paragraph.heading}",
             )
+        elif summary_quote:
+            _element(properties, "pStyle", val="SummaryQuote")
         elif paragraph.code:
             _element(properties, "pStyle", val="Code")
         elif paragraph.quote:
             _element(properties, "pStyle", val="Quote")
-        if paragraph.quote:
+        if paragraph.quote and (
+            not summary_quote or _short_summary_quote_group((paragraph,))
+        ):
             # A source/reference paragraph is one unit. Keep its identity and
             # range together when it fits on a page; do not chain other notes.
             _element(properties, "keepLines")
@@ -612,7 +784,7 @@ class _Package:
             identifier = self.bookmark_count
             self.bookmark_count += 1
             _element(node, "bookmarkStart", id=identifier, name=bookmark)
-        self.runs(node, paragraph.spans, internal_links)
+        self.runs(node, paragraph.spans, internal_links, summary_quote=summary_quote)
         if bookmark:
             _element(node, "bookmarkEnd", id=identifier)
 
@@ -662,7 +834,53 @@ class _Package:
         _element(_element(node, "r"), "br", type="page")
 
 
-def _styles() -> ET.Element:
+def _review_page_identity(
+    package: _Package, section: ET.Element, title: str
+) -> dict[str, ET.Element]:
+    """Repeat a bounded supplied title and review-only dynamic page identity."""
+    header = ET.Element(f"{{{W}}}hdr")
+    footer = ET.Element(f"{{{W}}}ftr")
+    short_title = title if len(title) <= 80 else title[:79] + "…"
+    for node, wording in ((header, short_title), (footer, "Review before use")):
+        paragraph = _element(node, "p")
+        properties = _element(paragraph, "pPr")
+        if node is footer:
+            tabs = _element(properties, "tabs")
+            _element(tabs, "tab", val="right", pos=9360)
+        _element(properties, "spacing", after=0, line=220, lineRule="auto")
+        run_properties = _element(properties, "rPr")
+        _element(run_properties, "color", val="475569")
+        _element(run_properties, "sz", val=18)
+        package.runs(paragraph, (Span(wording),))
+    paragraph = footer.find(f"{{{W}}}p")
+    package.runs(paragraph, (Span("\tPage "),))
+    for position, field in enumerate(("PAGE", "NUMPAGES")):
+        if position:
+            package.runs(paragraph, (Span(" of "),))
+        native = _element(paragraph, "fldSimple", instr=field, dirty="true")
+        package.runs(native, (Span("1"),))
+    for node in (header, footer):
+        for run in node.iter(f"{{{W}}}r"):
+            props = run.find(f"{{{W}}}rPr")
+            _element(props, "color", val="475569")
+            _element(props, "sz", val=18)
+    for kind in ("header", "footer"):
+        ET.SubElement(
+            package.relationships,
+            f"{{{REL}}}Relationship",
+            Id=kind,
+            Type=f"{R}/{kind}",
+            Target=f"{kind}1.xml",
+        )
+        ET.SubElement(
+            section,
+            f"{{{W}}}{kind}Reference",
+            {f"{{{W}}}type": "default", f"{{{R}}}id": kind},
+        )
+    return {"word/header1.xml": header, "word/footer1.xml": footer}
+
+
+def _styles(*, summary_quotes: bool = False) -> ET.Element:
     styles = ET.Element(f"{{{W}}}styles")
     defaults = _element(styles, "docDefaults")
     run_defaults = _element(_element(defaults, "rPrDefault"), "rPr")
@@ -709,6 +927,18 @@ def _styles() -> ET.Element:
         else:
             _element(properties, "shd", val="clear", fill="F3F4F5")
         _element(properties, "ind", left=300, right=200)
+    if summary_quotes:
+        style = _element(styles, "style", type="paragraph", styleId="SummaryQuote")
+        _element(style, "name", val="Summary quotation")
+        _element(style, "basedOn", val="Normal")
+        properties = _element(style, "pPr")
+        border = _element(properties, "pBdr")
+        _element(border, "left", val="single", sz=12, space=10, color="B7A774")
+        _element(properties, "spacing", before=80, after=160, line=276, lineRule="auto")
+        _element(properties, "ind", left=300, right=200)
+        run = _element(style, "rPr")
+        _element(run, "color", val="172C40")
+        _element(run, "sz", val=22)
     hyperlink = _element(styles, "style", type="character", styleId="Hyperlink")
     _element(hyperlink, "name", val="Hyperlink")
     properties = _element(hyperlink, "rPr")
@@ -726,7 +956,10 @@ def export_docx(payload: object) -> WordDocument:
     package = _Package()
     blocks = parse(markdown)
     summary_widths = _handover_summary_table_widths(markdown, blocks)
-    keep_next = _source_note_keep_next(blocks)
+    qualified, summary_quotes, summary_keep = _handover_summary_presentation(
+        markdown, blocks, summary_widths
+    )
+    keep_next = _source_note_keep_next(blocks) | summary_keep
     compact_references = _reference_key_spacing(markdown, blocks)
     bookmarks, internal_links = _passage_navigation(
         markdown, blocks, compact_references
@@ -745,9 +978,11 @@ def export_docx(payload: object) -> WordDocument:
                 compact_reference=index in compact_references,
                 bookmark=bookmarks.get(index),
                 internal_links=internal_links.get(index, ()),
+                summary_quote=index in summary_quotes,
             )
     package.numbering.extend(package.numbers)
     section = _element(package.body, "sectPr")
+    identity_parts = _review_page_identity(package, section, title) if qualified else {}
     _element(section, "pgSz", w=11906, h=16838)
     _element(
         section,
@@ -809,14 +1044,26 @@ def export_docx(payload: object) -> WordDocument:
         ET.SubElement(
             types, f"{{{CT}}}Override", PartName="/" + part, ContentType=content_type
         )
+    for part in identity_parts:
+        kind = "header" if "/header" in part else "footer"
+        ET.SubElement(
+            types,
+            f"{{{CT}}}Override",
+            PartName="/" + part,
+            ContentType=(
+                "application/vnd.openxmlformats-officedocument."
+                f"wordprocessingml.{kind}+xml"
+            ),
+        )
     parts = {
         "[Content_Types].xml": types,
         "_rels/.rels": relationships,
         "word/document.xml": package.document,
-        "word/styles.xml": _styles(),
+        "word/styles.xml": _styles(summary_quotes=bool(summary_quotes)),
         "word/numbering.xml": package.numbering,
         "word/_rels/document.xml.rels": package.relationships,
         "docProps/core.xml": core,
+        **identity_parts,
     }
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:

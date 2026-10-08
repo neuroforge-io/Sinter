@@ -2789,3 +2789,32 @@ both tables and internal passage anchors. Its narrower document scores are UX
 split summary section and missing running page identity need another product
 polish pass. Those document scores are distinct from the earlier source-app
 first-use assessment; neither rating qualifies a release.
+
+The following finite Word polish passed 233 relevant Python cases and 27 Node
+summary controls, plus lint and formatting. Independent source review confirmed
+that layout admission does not validate evidence, grouping remains bounded and
+the full maximum-size source tail stays literal. Generic exports retain their
+existing behaviour. Newly compiled summaries use middle-dot separators; historical
+saved text is not rewritten. The actual interface export of the historical report
+exactly matches the independently checked derived copy, including its old punctuation.
+
+A fresh private human-operated journey explicitly compiled the same three rows,
+applied the reviewed replacement and saved an additional report before downloading
+Word. All unresolved owners, missing evidence and unconfirmed dates remain visible.
+The original project, earlier report and retained evidence stay available. The new
+actual export rendered once in LibreOffice 24.2, normally in 2.75 seconds with no
+renderer diagnostics. All four A4 pages were inspected: all summary rows fit page
+one, both selected quotations stay together on page two, and every page carries the
+supplied title and a review-only page count. Source-table pagination still spans
+pages three and four. This is a LibreOffice presentation observation, not a
+Microsoft Word or installed-app pass. The private test tab and server closed
+normally, and the listener was closed. No model request was made.
+
+Hosted run `37722150398`, on exact pre-polish source
+`7b6b0efb1be3076dac7c44f73a1910a8f18ca8ec`, completed successfully in all twelve
+jobs. Its six Python matrix jobs executed all seven onboarding controls. Windows
+system discovery used Python 3.14.7; the private environment controls used the
+selected job's Python 3.10.11 or 3.13.15. Original failures remain recorded, and
+unobserved launcher policy and descendants remain unknown. That green source run
+does not admit the subsequent Word change or an installed release; fresh exact-source
+hosted and original installed checks remain required.

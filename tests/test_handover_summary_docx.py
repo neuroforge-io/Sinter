@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 from copy import deepcopy
 from unittest.mock import patch
 from xml.etree import ElementTree as ET
@@ -11,7 +12,14 @@ from zipfile import ZipFile
 import pytest
 
 from sinter.document_markup import parse
-from sinter.docx_export import W, _handover_summary_table_widths, export_docx
+from sinter.docx_export import (
+    MAX_MARKDOWN,
+    REL,
+    R,
+    W,
+    _handover_summary_table_widths,
+    export_docx,
+)
 
 NS = {"w": W}
 INTRO = (
@@ -170,7 +178,8 @@ def test_exact_optional_stale_notice_and_windows_newlines_keep_scoped_layout(sta
         OPENING.replace("Recorded status — user-entered", "Status"),
         OPENING.replace(
             HEADER,
-            "| Evidence | Item | Recorded status — user-entered | Next step — proposed |",
+            "| Evidence | Item | Recorded status — user-entered | "
+            "Next step — proposed |",
         ),
         OPENING.replace("Evidence |", "Evidence | Extra |", 1),
         OPENING.replace(INTRO + "\n\n", INTRO + "\n\nAn intervening paragraph.\n\n"),
@@ -193,7 +202,8 @@ def test_changed_quoted_nested_or_ambiguous_openings_retain_exact_generic_output
 def test_large_user_wording_and_many_rows_are_complete_without_page_fit_guarantee():
     wording = ("Long supplied café 🌿 é and escaped \\| pipe — " * 20).rstrip()
     rows = "\n".join(
-        f"| Item {number} | {wording} | Proposed action — no accepted commitment | Missing answer; no quotation |"
+        f"| Item {number} | {wording} | Proposed action — no accepted commitment "
+        "| Missing answer; no quotation |"
         for number in range(12)
     )
     body = (
@@ -213,3 +223,258 @@ def test_large_user_wording_and_many_rows_are_complete_without_page_fit_guarante
         row.find("w:trPr/w:cantSplit", NS) is not None
         for row in table.findall("w:tr", NS)
     )
+
+
+COVERAGE = (
+    "**Evidence coverage:** this opening uses selected wording from this saved "
+    "report. The unchanged checklist and selected evidence follow. This is not "
+    "full supplied history; request the matching original project backup for "
+    "unselected text. Later project or campaign changes are not included."
+)
+CHECKLIST = (
+    "## Handover next steps\n\n"
+    "Review each question against its related wording, then record the confirmed "
+    "response and who will follow it up. A wording match is not an answer; "
+    "no owner or target date is assigned by this checklist."
+)
+
+
+def qualified_body(quotes=("The quote has not arrived. café 🌿", "Answer unknown.")):
+    """A literal generated shape is layout input, never verified source evidence."""
+    rows, pairs = [], []
+    for number, quote in enumerate(quotes, 1):
+        rows.append(
+            f"| Item {number} | As recorded: unknown.; Unassigned; target not supplied "
+            "| Ask, without committing. | Passage 1 |"
+        )
+        longest = max((len(run) for run in re.findall(r"`+", quote)), default=0)
+        fence = "`" * max(3, longest + 1)
+        pairs.append(
+            f"**Summary item {number}: Item {number}** — Passage 1\n\n"
+            f"> {fence}text\n> " + quote.replace("\n", "\n> ") + f"\n> {fence}"
+        )
+    return (
+        "# Fictional handover\n\n"
+        "Source-only handover checklist — review before using.\n\n"
+        "## At a glance\n\n"
+        + INTRO
+        + "\n\n"
+        + HEADER
+        + "\n| --- | --- | --- | --- |\n"
+        + "\n".join(rows)
+        + "\n\n"
+        + COVERAGE
+        + "\n\n### Wording selected for this summary\n\n"
+        + "\n\n".join(pairs)
+        + "\n\n"
+        + CHECKLIST
+        + APPENDIX
+    )
+
+
+def unpolished_parts(body):
+    with patch(
+        "sinter.docx_export._handover_summary_presentation",
+        return_value=(False, frozenset(), frozenset()),
+    ):
+        return parts(body)
+
+
+def wording(node):
+    return "".join(
+        (child.text or "")
+        if child.tag == f"{{{W}}}t"
+        else "\n"
+        if child.tag == f"{{{W}}}br"
+        else "\t"
+        if child.tag == f"{{{W}}}tab"
+        else ""
+        for child in node.iter()
+    )
+
+
+def test_short_summary_quote_section_stays_together_without_chaining_the_checklist():
+    body = qualified_body()
+    before, after = unpolished_parts(body), parts(body)
+    old, new = document(before), document(after)
+    assert [wording(p) for p in old.findall(".//w:p", NS)] == [
+        wording(p) for p in new.findall(".//w:p", NS)
+    ]
+    # Stored historical edited punctuation is literal; the exporter cannot fix it.
+    assert wording(new).count("unknown.;") == 2
+    paragraphs = new.findall("w:body/w:p", NS)
+    start = next(
+        i
+        for i, p in enumerate(paragraphs)
+        if wording(p) == "Wording selected for this summary"
+    )
+    group = paragraphs[start : start + 5]
+    assert all(p.find("w:pPr/w:keepNext", NS) is not None for p in group[:-1])
+    assert group[-1].find("w:pPr/w:keepNext", NS) is None
+    for quote in (group[2], group[4]):
+        assert quote.find("w:pPr/w:pStyle", NS).get(f"{{{W}}}val") == "SummaryQuote"
+        assert quote.find("w:pPr/w:keepLines", NS) is not None
+        assert quote.find("w:r/w:rPr/w:rFonts", NS) is None
+    old_tail = list(old.find("w:body", NS))
+    new_tail = list(new.find("w:body", NS))
+    first = next(
+        i for i, block in enumerate(new_tail) if wording(block) == "Handover next steps"
+    )
+    assert [ET.tostring(block) for block in old_tail[first:-1]] == [
+        ET.tostring(block) for block in new_tail[first:-1]
+    ]
+    assert ET.tostring(old.findall("w:body/w:tbl", NS)[0]) == ET.tostring(
+        new.findall("w:body/w:tbl", NS)[0]
+    )
+    styles = ET.fromstring(after["word/styles.xml"])
+    summary_style = styles.find("w:style[@w:styleId='SummaryQuote']", NS)
+    assert summary_style.find("w:rPr/w:sz", NS).get(f"{{{W}}}val") == "22"
+    assert summary_style.find("w:rPr/w:color", NS).get(f"{{{W}}}val") == "172C40"
+    assert summary_style.find("w:pPr/w:shd", NS) is None
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "  retained leading and repeated  spaces  ",
+        "return `café|🐝` if <flag> else {value} \\",
+        "\tif <flag>:\n    return `café|🐝`  # **literal**\n\nlast line",
+    ],
+)
+def test_sensitive_summary_quotes_keep_literal_code_whitespace_and_generic_code(quote):
+    body = qualified_body((quote,)) + "\n\n```python\n  raw_code()\n```"
+    old, new = document(unpolished_parts(body)), document(parts(body))
+    assert wording(old) == wording(new)
+    paragraph = next(p for p in new.findall("w:body/w:p", NS) if wording(p) == quote)
+    assert (
+        paragraph.find("w:r/w:rPr/w:rFonts", NS).get(f"{{{W}}}ascii") == "Courier New"
+    )
+    assert paragraph.find("w:r/w:rPr/w:sz", NS).get(f"{{{W}}}val") == "22"
+    raw_before = next(
+        p for p in old.findall("w:body/w:p", NS) if wording(p) == "  raw_code()"
+    )
+    raw_after = next(
+        p for p in new.findall("w:body/w:p", NS) if wording(p) == "  raw_code()"
+    )
+    assert ET.tostring(raw_before) == ET.tostring(raw_after)
+
+
+@pytest.mark.parametrize(
+    "quotes",
+    [
+        ("x" * 801,),
+        ("\n".join("line" for _ in range(13)),),
+        tuple("Long literal quote. " * 100 for _ in range(8)),
+    ],
+)
+def test_large_summary_quotes_flow_without_unbounded_keep_groups(quotes):
+    output = document(parts(qualified_body(quotes)))
+    paragraphs = output.findall("w:body/w:p", NS)
+    for quote in quotes:
+        found = [p for p in paragraphs if wording(p) == quote]
+        assert found
+        assert all(p.find("w:pPr/w:keepLines", NS) is None for p in found)
+        assert all(p.find("w:pPr/w:keepNext", NS) is None for p in found)
+    captions = [p for p in paragraphs if wording(p).startswith("Summary item ")]
+    assert all(p.find("w:pPr/w:keepNext", NS) is None for p in captions)
+
+
+def test_more_than_three_short_quotes_stop_each_keep_group_at_its_quote():
+    quotes = tuple(f"Short wording {number}." for number in range(4))
+    output = document(parts(qualified_body(quotes)))
+    paragraphs = output.findall("w:body/w:p", NS)
+    for quote in quotes:
+        position = next(i for i, p in enumerate(paragraphs) if wording(p) == quote)
+        assert paragraphs[position - 1].find("w:pPr/w:keepNext", NS) is not None
+        assert paragraphs[position].find("w:pPr/w:keepNext", NS) is None
+    checklist = next(p for p in paragraphs if wording(p) == "Handover next steps")
+    assert checklist.find("w:pPr/w:pageBreakBefore", NS) is None
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda b: b.replace(
+            "Source-only handover checklist — review before using.", "Dear committee,"
+        ),
+        lambda b: b.replace(COVERAGE, "An edited coverage claim."),
+        lambda b: b.replace(CHECKLIST, CHECKLIST + "\n\n" + CHECKLIST),
+        lambda b: b.replace("### Wording selected", "### Edited wording selected"),
+        lambda b: b.replace(
+            "**Summary item 1: Item 1** — Passage 1",
+            "**Summary item 1: Item 1** — Passage 2",
+        ),
+        lambda b: b.replace("> ```text", "> ```python", 1),
+        lambda b: b.replace(
+            "### Wording selected for this summary",
+            "Unrelated paragraph.\n\n### Wording selected for this summary",
+        ),
+        lambda b: "\n".join("> " + line for line in b.splitlines()),
+        lambda b: "```text\n" + b + "\n```",
+    ],
+)
+def test_edited_nested_ambiguous_or_code_lookalikes_keep_the_generic_export(change):
+    body = change(qualified_body())
+    assert parts(body) == unpolished_parts(body)
+
+
+def test_review_only_running_identity_has_native_fields_valid_parts_and_bounded_title():
+    title = "Fictional café 🐝 " * 10
+    payload = {"title": title, "markdown": qualified_body()}
+    original = deepcopy(payload)
+    result = export_docx(payload)
+    assert payload == original
+    assert result.content == export_docx(payload).content
+    with ZipFile(io.BytesIO(result.content)) as archive:
+        output = {
+            name: ET.fromstring(archive.read(name)) for name in archive.namelist()
+        }
+    assert len(wording(output["word/header1.xml"])) == 80
+    assert wording(output["word/header1.xml"]).endswith("…")
+    assert "Review before use" in wording(output["word/footer1.xml"])
+    assert [
+        node.get(f"{{{W}}}instr")
+        for node in output["word/footer1.xml"].iter(f"{{{W}}}fldSimple")
+    ] == ["PAGE", "NUMPAGES"]
+    assert all(
+        node.get(f"{{{W}}}dirty") == "true"
+        for node in output["word/footer1.xml"].iter(f"{{{W}}}fldSimple")
+    )
+    relationships = output["word/_rels/document.xml.rels"]
+    for kind in ("header", "footer"):
+        relation = next(
+            item for item in relationships if item.get("Type") == f"{R}/{kind}"
+        )
+        assert relation.get("Target") == f"{kind}1.xml"
+        assert relation.get("TargetMode") is None
+    section = output["word/document.xml"].find("w:body/w:sectPr", NS)
+    assert [node.tag for node in list(section)[:2]] == [
+        f"{{{W}}}headerReference",
+        f"{{{W}}}footerReference",
+    ]
+    assert REL in ET.tostring(relationships).decode()
+
+
+def test_polish_keeps_stale_notice_line_endings_and_full_500k_boundary():
+    body = qualified_body().replace(INTRO, INTRO + "\n\n" + STALE)
+    before, after = document(unpolished_parts(body)), document(parts(body))
+    assert wording(before) == wording(after)
+    assert "Review status: stale." in wording(after)
+    assert wording(document(parts(body.replace("\n", "\r\n")))) == wording(after)
+    exact = body + "\n\n" + "x" * (MAX_MARKDOWN - len(body) - 2)
+    payload = {"title": "Fictional handover", "markdown": exact}
+    original = deepcopy(payload)
+    assert len(exact) == MAX_MARKDOWN
+    output = export_docx(payload)
+    assert output.content and payload == original
+    with ZipFile(io.BytesIO(output.content)) as archive:
+        full = ET.fromstring(archive.read("word/document.xml"))
+    tail = full.findall("w:body/w:p", NS)[-1]
+    assert wording(tail) == "x" * (MAX_MARKDOWN - len(body) - 2)
+    assert tail.find("w:pPr/w:keepNext", NS) is None
+    assert tail.find("w:pPr/w:keepLines", NS) is None
+    assert tail.find("w:pPr/w:pageBreakBefore", NS) is None
+    assert tail.find(".//w:br[@w:type='page']", NS) is None
+    with pytest.raises(ValueError, match="500,000"):
+        export_docx({**payload, "markdown": exact + "x"})
+    assert payload == original

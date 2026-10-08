@@ -69,6 +69,20 @@ if (process.argv.includes('--sample-json')) {
     assert.doesNotMatch(result.openingMarkdown, /\|[^\n]*\n\n\|/);
   });
 
+  test('generated status separators preserve entered punctuation and leave source evidence and row inputs unchanged', async () => {
+    const report = fixture(), before = structuredClone(report);
+    const entered = [row({status: 'Not received.  Keep café 🐝 & <wording>| exactly.',
+      evidence: selection(report, 'The equipment quote has not been received.')})];
+    const originalRows = structuredClone(entered);
+    const result = await compileHandoverSummary(report, entered);
+    assert.match(result.openingMarkdown, /Not received\.  Keep café 🐝 &amp; &lt;wording&gt;\\\| exactly\. · Owner type unknown; acceptance unconfirmed · Proposed target not supplied/);
+    assert.doesNotMatch(result.openingMarkdown, /exactly\.;/);
+    assert.deepEqual(entered, originalRows);
+    assert.deepEqual(report, before);
+    assert.equal(result.quotations[0].quote, entered[0].evidence.quote);
+    assert.ok(result.markdown.endsWith(before.document_markdown.slice(before.document_markdown.indexOf('## Handover next steps\n'))));
+  });
+
   test('Unicode literal selection binds code points, exact quote and admitted Passage alias', async () => {
     const report = fixture('unscoped_golden'), quote = 'No supplier quote, approval or availability was received. 🐝';
     const evidence = selection(report, quote);
