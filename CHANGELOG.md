@@ -7,6 +7,21 @@ a new installed release and does not change any published RC3 asset or receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Make report saving explicit and truthful. Prepared and incomplete reports stay
+  in unsaved work until a valid save acknowledgement. Retain newer wording,
+  evidence and screening changes during a pending save; distinguish rejected,
+  not-sent and uncertain requests without replaying them. Reopening a pending
+  draft shares the same save state. A later view-refresh failure does not undo
+  an acknowledged save.
+
+- Put the reviewed handover opening before an unchanged generated audience
+  cover, with that cover available through “Audience and document context”.
+  Keep full review cautions visible, preserve unknown owners and unconfirmed
+  dates, and show the proposed next step earlier on phones. Print includes the
+  original cover even when closed; edited, fictional, model and incomplete
+  covers keep their original presentation. Markdown, evidence and Word content
+  are unchanged. Source-only tests do not qualify an installed release.
+
 - Offer “Read full message” when campaign feedback exceeds the compact save bar.
   Keep complete wording in a scrollable reader and restore keyboard focus when
   closed. Reading the message does not save, retry or send a request.

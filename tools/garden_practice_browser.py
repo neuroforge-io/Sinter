@@ -231,7 +231,8 @@ def main(argv: list[str] | None = None) -> None:
                             """(node, quote) => {
                             const start = node.value.indexOf(quote);
                             if (start < 0) throw new Error('Original wording missing');
-                            node.focus(); node.setSelectionRange(start, start + quote.length);
+                            node.focus();
+                            node.setSelectionRange(start, start + quote.length);
                         }""",
                             quote,
                         )
@@ -306,6 +307,12 @@ def main(argv: list[str] | None = None) -> None:
                     )
                     page.evaluate("document.activeElement.blur()")
                     report.evaluate("node => node.scrollIntoView({block: 'start'})")
+                    first_action = (
+                        opening.locator("tbody tr").first.locator("td").nth(2)
+                    )
+                    desktop_action = first_action.bounding_box()
+                    assert desktop_action and desktop_action["y"] >= 0
+                    assert desktop_action["y"] + desktop_action["height"] <= 1000
                     page.screenshot(
                         path=str(out / "garden-handover-opening-desktop.png")
                     )
@@ -333,18 +340,36 @@ def main(argv: list[str] | None = None) -> None:
                         accessible
                     )
                     report.evaluate("node => node.scrollIntoView({block: 'start'})")
+                    phone_action = first_action.bounding_box()
+                    assert phone_action and phone_action["y"] >= 0
+                    assert phone_action["y"] + phone_action["height"] <= 844
+                    (out / "garden-handover-first-action-layout.json").write_text(
+                        json.dumps(
+                            {
+                                "desktop": desktop_action,
+                                "phone390": phone_action,
+                                "desktop_viewport": [1440, 1000],
+                                "phone_viewport": [390, 844],
+                            },
+                            indent=2,
+                        )
+                    )
                     page.screenshot(path=str(out / "garden-handover-opening-390.png"))
                     opening.evaluate("node => node.scrollIntoView({block: 'start'})")
                     page.evaluate("document.activeElement.blur()")
                     page.screenshot(path=str(out / "garden-handover-reading-390.png"))
                     (out / "garden-handover-reading-390-state.json").write_text(
                         json.dumps(
-                            page.evaluate("""() => ({
-                            activeElement: document.activeElement.tagName,
-                            skipLinkFocused: document.querySelector('.skip-link').matches(':focus'),
-                            skipLinkTop: getComputedStyle(document.querySelector('.skip-link')).top,
-                            horizontalOverflow: document.documentElement.scrollWidth > innerWidth
-                        })"""),
+                            page.evaluate("""() => {
+                            const skip = document.querySelector('.skip-link');
+                            return {
+                                activeElement: document.activeElement.tagName,
+                                skipLinkFocused: skip.matches(':focus'),
+                                skipLinkTop: getComputedStyle(skip).top,
+                                horizontalOverflow:
+                                    document.documentElement.scrollWidth > innerWidth
+                            };
+                        }"""),
                             indent=2,
                         )
                     )
@@ -355,10 +380,68 @@ def main(argv: list[str] | None = None) -> None:
                         document.locator("table:not(.handover-opening-table)")
                     ).to_contain_text("Proposed target date (unconfirmed)")
                     page.set_viewport_size({"width": 1440, "height": 1000})
+                    context_control = document.get_by_role(
+                        "button", name="Audience and document context", exact=True
+                    )
+                    context_control.focus()
+                    context_control.press("Space")
+                    expect(context_control).to_have_attribute("aria-expanded", "true")
+                    context_body = document.locator(".handover-context-content")
+                    expect(context_body).to_be_visible()
+                    expect(context_body).to_contain_text(
+                        "Prepared for: Fictional incoming team"
+                    )
+                    expect(context_body).to_contain_text(
+                        bundle["casebook"]["organisation"]
+                    )
+                    context_control.press("Space")
+                    expect(context_control).to_have_attribute("aria-expanded", "false")
+                    expect(context_body).to_be_hidden()
+                    page.emulate_media(media="print")
+                    expect(context_body).to_be_visible()
+                    expect(context_body.get_by_role("heading", level=1)).to_be_visible()
+                    assert (
+                        context_body.bounding_box()["y"] < opening.bounding_box()["y"]
+                    )
+                    assert (
+                        opening.evaluate("node => getComputedStyle(node).display")
+                        == "table"
+                    )
+                    assert opening.get_by_role("columnheader").first.evaluate(
+                        "node => getComputedStyle(node).backgroundColor"
+                    ) == "rgb(255, 255, 255)"
+                    assert opening.get_by_role("columnheader").first.evaluate(
+                        "node => getComputedStyle(node).color"
+                    ) == "rgb(0, 0, 0)"
+                    for phrase in (
+                        "Source-only handover checklist — review before using.",
+                        "proposals, not accepted commitments",
+                        "not independent verification",
+                        "Owner type unknown; acceptance unconfirmed",
+                        "Unassigned",
+                        "2026-10-09 (unconfirmed; not a funder deadline)",
+                    ):
+                        expect(document).to_contain_text(phrase)
+                    document.evaluate("node => node.scrollIntoView({block: 'start'})")
+                    page.screenshot(path=str(out / "garden-handover-print-media.png"))
+                    page.pdf(
+                        path=str(out / "garden-handover-print.pdf"),
+                        print_background=True,
+                    )
+                    page.emulate_media(media="screen")
+                    expect(context_body).to_be_hidden()
+                    expect(context_control).to_have_attribute("aria-expanded", "false")
                     checks.append(
-                        "explicit three-row opening has actionable proposals, exact quotations, "
+                        "first proposal fits initial desktop and390 viewport; "
+                        "keyboard context disclosure retains audience; "
+                        "print includes closed context in original heading order"
+                    )
+                    checks.append(
+                        "explicit three-row opening has actionable proposals, "
+                        "exact quotations, "
                         "distinct unknown/unassigned owners and an unconfirmed date; "
-                        "390px cards retain every column without changing the original table"
+                        "390px cards retain every column without changing "
+                        "the original table"
                     )
                     with page.expect_download() as word_download:
                         report.get_by_role(
@@ -405,6 +488,36 @@ def main(argv: list[str] | None = None) -> None:
                     checks.append(
                         "actual Word download contains table, negation, "
                         "unconfirmed date and unknown answer"
+                    )
+                    report.get_by_role("button", name="Edit draft", exact=True).click()
+                    text_editor = report.get_by_label("Edit your draft", exact=True)
+                    exact_reviewed = text_editor.input_value()
+                    text_editor.fill(
+                        exact_reviewed.replace(
+                            "## At a glance",
+                            "Keep this additional human warning visible.\n\n"
+                            "## At a glance",
+                            1,
+                        )
+                    )
+                    report.get_by_role("button", name="Apply edits", exact=True).click()
+                    expect(
+                        document.get_by_text(
+                            "Keep this additional human warning visible.", exact=True
+                        )
+                    ).to_be_visible()
+                    expect(document.locator(".handover-context-content")).to_have_count(
+                        0
+                    )
+                    report.get_by_role("button", name="Edit draft", exact=True).click()
+                    text_editor.fill(exact_reviewed)
+                    report.get_by_role("button", name="Apply edits", exact=True).click()
+                    expect(document.locator(".handover-context-content")).to_have_count(
+                        1
+                    )
+                    checks.append(
+                        "additional human preamble stays visible; "
+                        "only explicit restoration restores compact cover"
                     )
                     report.get_by_role("tab", name="Evidence", exact=True).click()
                     expect(report).to_contain_text("No wording match")

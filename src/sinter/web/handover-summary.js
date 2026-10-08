@@ -10,6 +10,7 @@ const MAX_ROWS = 12;
 const FORM = 'handover-summary';
 const MAX_TEXT = 1000;
 const MARKER = '## Handover next steps\n';
+let contextSequence = 0;
 const OWNER_LABELS = {
   unknown: 'Owner type unknown; acceptance unconfirmed',
   unassigned: 'Unassigned; no owner has been recorded',
@@ -133,7 +134,7 @@ export async function applyHandoverSummary(report, compiled, {currentMarkdown, c
 }
 
 /** Presentation only: a bounded, exact opening table; quoted source tables stay literal. */
-export function presentHandoverSummaryTable(article) {
+export function presentHandoverSummaryTable(article, {report, currentMarkdown} = {}) {
   const children = [...article.children];
   const headings = children.filter(node => node.tagName === 'H2' && node.textContent === 'At a glance');
   if (headings.length !== 1) return false;
@@ -161,6 +162,46 @@ export function presentHandoverSummaryTable(article) {
       cell.setAttribute('role', 'cell');
       cell.append(h('span', {class: 'handover-cell-label', 'aria-hidden': 'true'}, labels[index]));
     });
+  }
+  const prefix = report?.document_markdown?.split(MARKER)[0];
+  const preamble = children.slice(0, children.indexOf(headings[0]));
+  const cover = [report?.document_title || report?.title,
+    'Source-only handover checklist — review before using.'];
+  const details = report?.document_details;
+  let knownCover = details && typeof details === 'object' && !Array.isArray(details);
+  for (const [key, label] of [['recipient', 'Prepared for: '], ['signatory', 'Prepared by: '],
+    ['sender_role', 'Role: '], ['organisation', ''], ['contact_details', 'Contact details: ']]) {
+    const value = details?.[key];
+    if (typeof value !== 'string' || /[\r\n\v\f\x85\u2028\u2029]/u.test(value)) knownCover = false;
+    else if (value) cover.push(label + value);
+  }
+  // Only the exact retained generated cover is condensed. A user's added or
+  // changed preamble, extra warning, quote, heading or source table stays visible.
+  if (handoverSummaryAvailable(report) && !report.demo
+      && knownCover && preamble.length === cover.length
+      && preamble.every((node, index) => node.textContent === cover[index])
+      && typeof prefix === 'string' && typeof currentMarkdown === 'string'
+      && currentMarkdown.startsWith(prefix + '## At a glance\n')
+      && preamble[0].tagName === 'H1'
+      && preamble[1].tagName === 'P'
+      && preamble.slice(1).every(node => node.tagName === 'P')) {
+    const id = `handover-context-${++contextSequence}`;
+    const context = h('div', {id, class: 'handover-context-content', hidden: true,
+      role: 'region', 'aria-label': 'Audience and document context'});
+    const toggle = button('Audience and document context', () => {
+      context.hidden = !context.hidden;
+      toggle.setAttribute('aria-expanded', String(!context.hidden));
+    }, 'quiet handover-context-toggle non-print');
+    toggle.setAttribute('aria-controls', id); toggle.setAttribute('aria-expanded', 'false');
+    const opening = h('section', {class: 'handover-reading-opening', 'aria-label': 'Reviewed handover opening'});
+    article.insertBefore(opening, preamble[0]);
+    for (const node of preamble) { node.remove(); context.append(node); }
+    opening.append(context, h('p', {class: 'handover-source-label non-print'},
+      'Source-only handover · review before using'));
+    for (const node of [headings[0], ...section.slice(0, section.indexOf(wrapper) + 1)]) {
+      node.remove(); opening.append(node);
+    }
+    opening.append(toggle); article.classList.add('handover-reading-document');
   }
   return true;
 }
@@ -322,7 +363,7 @@ export function handoverSummaryEditor(report, {actions, onDraftChange = () => {}
         },
         apply: actions.applyMarkdown,
       });
-      if (applied) { feedback.replaceChildren(notice('Opening summary applied. Save to My workspace to keep it. Original evidence and historical wording are retained.', 'success')); panel.open = false; clearReportForm(report, FORM); invalidate(); onDraftChange(); }
+      if (applied) { feedback.replaceChildren(notice('Opening summary applied. Save to My workspace to keep it. Original evidence and historical wording are retained.', 'success')); panel.open = false; clearReportForm(report, FORM); invalidate(); actions.feedback?.replaceChildren(); onDraftChange(); }
       else feedback.append(notice('Your existing edited draft is kept. Summary rows remain in this editor.'));
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
     finally { busy = false; apply.disabled = preview.disabled = false; add.disabled = rows.length >= MAX_ROWS; }

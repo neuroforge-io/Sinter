@@ -2983,3 +2983,52 @@ in evidence. The mobile table still wraps and scrolls; these checks do not claim
 an aesthetic 10/10, physical print-dialog qualification, installed-release
 qualification or a new published browser bundle. The frozen candidate and older
 published previews are unchanged.
+
+
+### 9 October: truthful report saves and an action-ready handover opening
+
+The isolated `codex/handover-readiness` source pass follows `44712ec` and
+`072e7b9`; it does not qualify or replace a published preview. Prepared reports,
+including partial model text, now remain in the existing unsaved-work guard
+until their exact submitted payload receives a valid report-save acknowledgement.
+Focused cases cover not-sent, rejected and uncertain outcomes, malformed success
+responses, newer edits and metadata during a save, reopened pending drafts and
+view/callback failures after a known save. Requests are not automatically replayed.
+
+Matched screenshots of the same fictional reviewed handover at `072e7b9` showed
+that duplicate title, audience and save feedback pushed the first useful action
+below the opening view. The revised renderer moves only an exact generated
+source-only cover into an explicit audience/context disclosure. It checks the
+retained title and every supplied document-detail paragraph; arbitrary edited or
+restored-baseline warnings remain visible. Model, incomplete and fictional flags
+cannot receive the compact source-only presentation. The full review caution and
+stale warning stay above the summary; the evidence tab, unchanged checklist,
+original source snapshots and backups remain available.
+
+In the actual 1440×1000 and 390×844 report-top views, the first complete proposed
+action is now visible. Phone cards put the proposal before the longer recorded
+status, retaining the original four-column table and accessibility-tree order.
+Unknown and unassigned owners remain distinct, acceptance stays unconfirmed and
+the practice target remains explicitly unconfirmed rather than a funder deadline.
+The actual browser journey checks keyboard disclosure operation, four associated
+table headers, twelve cells, citation links and an added human preamble that must
+not collapse. These are bounded browser observations, not acceptance across every
+assistive technology or screen size.
+
+Print media and the captured PDF include the closed disclosure's original title,
+audience and organisation before the opening, with all review qualifiers, source
+quotations and historical wording retained. The opening's print header uses a
+white background and black text. Raw Markdown and the summary compiler are
+unchanged; the downloaded Word file is byte-identical to the `072e7b9` capture.
+The generic whole-page Print/PDF still includes some project-editor chrome and
+repeated skip-link text. This inherited output debt is explicit; a physical print
+dialog and installed package have not been qualified by this pass.
+
+The final focused checks passed 93 Node tests, 54 Python tests, 16 actual garden
+browser journeys and 15 report-recovery journeys, with no model operations or
+external browser requests. The initial layout-capture attempt failed on a new
+measurement's variable ordering; its output is retained alongside the later
+passing evidence. An independent passive review rated this demonstrated opening
+8/10 for usability, functionality and appearance. Those scores concern this
+bounded local workflow, not the whole product, live providers or any installer.
+The original platform qualification failures and release holds remain unchanged.

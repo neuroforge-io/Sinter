@@ -129,7 +129,17 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     const article = markdown(documentMarkdown(report));
     if (isCampaign) article.classList.add('campaign-decision-document');
     const hasSummary = handoverSummaryAvailable(report) && documentMarkdown(report).includes('## At a glance\n');
-    const responsiveSummary = hasSummary && presentHandoverSummaryTable(article);
+    const responsiveSummary = hasSummary && presentHandoverSummaryTable(article,
+      {report, currentMarkdown: documentMarkdown(report)});
+    const compactReading = article.className.split(' ').includes('handover-reading-document');
+    result.classList.toggle('handover-reading-report', compactReading);
+    guidance.hidden = compactReading;
+    if (summaryEditor) {
+      summaryEditor.classList.toggle('handover-inline-editor', compactReading);
+      summaryEditor.querySelector('summary').classList.toggle('button', compactReading);
+      if (compactReading) actions.controls.querySelector('.button-row').append(summaryEditor);
+      else result.insertBefore(summaryEditor, tabs);
+    }
     if (hasSummary) article.classList.add('handover-summary-document');
     connectCitations(article, report, sources, () => select('evidence'), true);
     paper.replaceChildren(h('div', {class: 'paper-label'}, report.workflow === 'campaign'
@@ -162,11 +172,12 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     onChange: () => { trackReportEdits(report, documentMarkdown(report)); updateDocument(); select('document'); }});
   const summaryEditor = handoverSummaryEditor(report, {actions, onDraftChange: refreshSaveState});
   const missing = report.missing_fields || [];
+  const guidance = h('p', {class: 'muted'}, isCampaign
+    ? 'Review the decision and privacy before sharing. The full audit trail and source notes are in Audit & evidence.'
+    : 'Review the wording, make it yours, then copy or download.');
   result.append(...[recovered ? notice('Recovered draft from an earlier preparation. It retains the original inputs and evidence; later project changes are not included. Check the current saved project before using this draft.', 'warning') : null,
     h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'CAMPAIGN PREVIEW' : 'YOUR DOCUMENT'),
-    h('h2', {}, isCampaign ? 'Decision brief' : (report.document_title || report.title)), h('p', {class: 'muted'}, isCampaign
-      ? 'Review the decision and privacy before sharing. The full audit trail and source notes are in Audit & evidence.'
-      : 'Review the wording, make it yours, then copy or download.'))),
+    h('h2', {}, isCampaign ? 'Decision brief' : (report.document_title || report.title)), guidance)),
     missing.length ? completion : null,
     saveState, actions.controls, campaignLog, message, actions.feedback, actions.editor, summaryEditor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel].filter(Boolean));
   select('document'); updateDocument();

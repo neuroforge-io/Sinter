@@ -73,4 +73,30 @@
   .handover-summary-document .handover-opening-table td{display:flex;flex-direction:column;min-width:0;padding:10px 12px;overflow-wrap:anywhere;word-break:normal}
   .handover-opening-table td:last-child{border-bottom:0}
   .handover-opening-table .handover-cell-label{display:block;order:-1;margin-bottom:4px;font-size:.7rem;font-weight:650;color:var(--muted)}
+  .handover-opening-table td:nth-child(1){grid-row:1}
+  .handover-opening-table td:nth-child(3){grid-row:2}
+  .handover-opening-table td:nth-child(2){grid-row:3}
+  .handover-opening-table td:nth-child(4){grid-row:4}
 }
+
+/* Condense only an unchanged generated cover; keep actual review wording visible. */
+.handover-reading-report .report-heading{margin-bottom:8px}
+.handover-reading-report .report-tabs{margin:8px 0 14px}
+.handover-reading-report .document-toolbar{margin-bottom:8px}
+.handover-reading-report .document-word-save-options{padding:0;margin-bottom:6px}
+.handover-reading-report .paper-label{display:none}
+.handover-reading-report .document-paper>.document{padding:22px 28px}
+.document .handover-reading-opening>h2{margin:8px 0 6px}
+.document .handover-reading-opening>p{font-size:.82rem;line-height:1.5;margin:0 0 12px}
+.document .handover-reading-opening>.handover-source-label{font:650 .65rem/1.5 ui-sans-serif,system-ui,sans-serif;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.handover-context-toggle{align-self:start;margin:2px 0 12px;font-size:.78rem}
+.handover-context-content{padding:16px 0;border-top:1px solid var(--line)}
+.handover-inline-editor{min-width:0;padding:0;border:0;margin:0}
+.handover-inline-editor>summary{list-style:none;cursor:pointer}
+.handover-inline-editor>summary::-webkit-details-marker{display:none}
+.handover-inline-editor>summary:after{content:'⌄';margin-left:8px;color:var(--muted)}
+.handover-inline-editor[open]{flex-basis:100%;width:100%}
+.handover-inline-editor[open]>summary{margin-bottom:12px}
+@media screen{.handover-reading-opening{display:flex;flex-direction:column}.handover-context-toggle{order:1}.handover-context-content{order:2}}
+@media screen and (max-width:650px){.handover-reading-report .document-paper>.document{padding:16px 20px 24px}.handover-inline-editor[open]{grid-column:1/-1}.handover-inline-editor>summary{width:100%;min-height:40px;font-size:.72rem;padding:9px 10px}}
+@media print{.handover-context-content[hidden]{display:block!important}.handover-context-content{padding:0;border:0}.handover-reading-opening{display:block}.handover-reading-report .document-paper>.document{padding:0}.document .handover-reading-opening>p{font:inherit}.handover-reading-report .paper-label{display:none}.handover-reading-document .handover-opening-table th{background:white;color:black}}

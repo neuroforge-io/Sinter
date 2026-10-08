@@ -263,6 +263,7 @@ if (process.argv.includes('--sample-json')) {
       set textContent(value) { this._text = String(value); this.children = []; }
       get textContent() { return this._text + this.children.map(child => child.textContent).join(''); }
       append(...children) { for (const child of children) { this.children.push(child); child.parentElement = this; } }
+      insertBefore(child, before) { const at = this.children.indexOf(before); this.children.splice(at < 0 ? this.children.length : at, 0, child); child.parentElement = this; }
       replaceChildren(...children) { this.children = []; this._text = ''; this.append(...children); }
       setAttribute(key, value) { this[key] = value; }
       addEventListener(type, fn) { if (!this.listeners.has(type)) this.listeners.set(type, []); this.listeners.get(type).push(fn); }
@@ -500,6 +501,90 @@ if (process.argv.includes('--sample-json')) {
         const article = markdown(changed), before = article.textContent;
         assert.equal(presentHandoverSummaryTable(article), false);
         assert.equal(article.textContent, before);
+      }
+    } finally {dom.restore();}
+  });
+
+  test('unchanged generated cover moves to explicit context without changing source wording or export input', async () => {
+    const dom = inertDOM();
+    try {
+      const {markdown} = await import('../src/sinter/web/markdown.js');
+      const report = fixture(), before = structuredClone(report);
+      const compiled = await compileHandoverSummary(report, [row()]);
+      const article = markdown(compiled.markdown);
+      const preamble = article.children.slice(0, article.children.findIndex(node => node.tagName === 'H2'));
+      const wording = preamble.map(node => node.textContent);
+      assert.equal(presentHandoverSummaryTable(article, {report, currentMarkdown: compiled.markdown}), true);
+      const context = dom.all(article, 'div').find(node => node.className === 'handover-context-content');
+      assert.ok(context); assert.equal(context.hidden, true);
+      assert.deepEqual(context.children.map(node => node.textContent), wording);
+      const toggle = dom.button(article, 'Audience and document context');
+      assert.equal(toggle['aria-expanded'], 'false'); assert.equal(toggle['aria-controls'], context.id);
+      await toggle.fire('click'); assert.equal(context.hidden, false); assert.equal(toggle['aria-expanded'], 'true');
+      await toggle.fire('click'); assert.equal(context.hidden, true);
+      const opening = dom.all(article, 'section').find(node => node.className === 'handover-reading-opening');
+      const caution = opening.children.find(node => node.tagName === 'P' && node.textContent.startsWith('Statuses and next steps'));
+      assert.match(caution.textContent, /proposals, not accepted commitments/);
+      assert.match(caution.textContent, /not independent verification/);
+      assert.equal(caution.hidden, false); assert.equal(dom.all(article, 'table').length, 2);
+      assert.deepEqual(report, before); assert.equal(compiled.markdown.includes('handover-context'), false);
+    } finally {dom.restore();}
+  });
+
+  test('arbitrary edited warnings and generated covers with different titles never collapse', async () => {
+    const dom = inertDOM();
+    try {
+      const {markdown} = await import('../src/sinter/web/markdown.js');
+      for (const kind of ['warning', 'changed-cover', 'title', 'baseline-warning', 'detail-mismatch']) {
+        const report = fixture();
+        if (kind === 'baseline-warning') report.document_markdown = report.document_markdown.replace(
+          '## Handover next steps', 'Keep this added human warning visible.\n\n## Handover next steps');
+        const compiled = await compileHandoverSummary(report, [row()]);
+        let current = compiled.markdown;
+        if (kind === 'warning') current = current.replace('## At a glance', 'Keep this added human warning visible.\n\n## At a glance');
+        if (kind === 'changed-cover') current = current.replace('Source-only handover checklist — review before using.', 'My human-edited introduction.');
+        if (kind === 'title') report.document_title = 'A different current title';
+        if (kind === 'detail-mismatch') report.document_details.recipient = 'A changed audience';
+        const article = markdown(current);
+        assert.equal(presentHandoverSummaryTable(article, {report, currentMarkdown: current}), true);
+        assert.ok(!article.className.includes('handover-reading-document'));
+        assert.equal(dom.all(article, 'div').filter(node => node.className === 'handover-context-content').length, 0);
+        assert.equal(article.children[0].tagName, 'H1');
+        if (kind === 'warning' || kind === 'baseline-warning') assert.match(article.textContent, /Keep this added human warning visible/);
+        if (kind === 'changed-cover') assert.match(article.textContent, /My human-edited introduction/);
+      }
+    } finally {dom.restore();}
+  });
+
+  test('stale review caution remains visible ahead of the opening, outside collapsed context', async () => {
+    const dom = inertDOM();
+    try {
+      const {markdown} = await import('../src/sinter/web/markdown.js');
+      const report = fixture(); report.review_status = 'stale';
+      const compiled = await compileHandoverSummary(report, [row()]), article = markdown(compiled.markdown);
+      presentHandoverSummaryTable(article, {report, currentMarkdown: compiled.markdown});
+      const opening = dom.all(article, 'section').find(node => node.className === 'handover-reading-opening');
+      const warning = opening.children.find(node => node.tagName === 'P' && node.textContent.startsWith('Review status: stale.'));
+      assert.ok(warning); assert.equal(warning.hidden, false);
+      assert.ok(opening.children.indexOf(warning) < opening.children.findIndex(node => node.className.includes('table-scroll')));
+      assert.equal(report.review_status, 'stale'); assert.match(warning.textContent, /no current source was substituted/);
+    } finally {dom.restore();}
+  });
+
+  test('model, incomplete and fictional flags retain the original cover and prominent report classification', async () => {
+    const dom = inertDOM();
+    try {
+      const {markdown} = await import('../src/sinter/web/markdown.js');
+      for (const flag of ['model_draft', 'incomplete', 'demo']) {
+        const report = fixture(), compiled = await compileHandoverSummary(report, [row()]);
+        report[flag] = true;
+        const article = markdown(compiled.markdown), before = article.children[0];
+        assert.equal(presentHandoverSummaryTable(article, {report, currentMarkdown: compiled.markdown}), true);
+        assert.equal(article.children[0], before);
+        assert.ok(!article.className.includes('handover-reading-document'));
+        assert.equal(dom.all(article, 'div').filter(node => node.className === 'handover-context-content').length, 0);
+        assert.equal(dom.all(article, 'p').filter(node => node.className === 'handover-source-label non-print').length, 0);
+        assert.equal(report[flag], true);
       }
     } finally {dom.restore();}
   });
