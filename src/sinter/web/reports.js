@@ -145,6 +145,8 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     paper.replaceChildren(h('div', {class: 'paper-label'}, report.workflow === 'campaign'
       ? 'CAMPAIGN DECISION RECORD'
       : report.incomplete ? 'INCOMPLETE MODEL DRAFT' : report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'),
+      ...(report.review_status === 'stale' ? [h('p', {class: 'document-review-warning', role: 'note'},
+        'Review status: stale. Check this saved record before current use; editing its wording does not confirm the original evidence.')] : []),
       ...(hasSummary && !responsiveSummary ? [h('p', {class: 'handover-summary-scroll-hint fine'}, 'On a small screen, scroll the summary table sideways to review every column.')] : []), article);
     completion.replaceChildren(h('div', {}, h('strong', {}, report.document_edits ? 'Check these details' : 'Finish the details'),
       h('p', {}, (report.document_edits ? 'Originally missing: ' : '') + (report.missing_fields || []).map(item => item.label).join(' · '))),

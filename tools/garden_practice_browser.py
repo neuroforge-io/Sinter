@@ -403,6 +403,12 @@ def main(argv: list[str] | None = None) -> None:
                     assert page.locator("input:visible,textarea:visible").count() == 0
                     assert page.locator(".document-panel:visible").count() == 1
                     expect(context_body).to_be_visible()
+                    assert document.locator("blockquote").first.evaluate(
+                        "node => getComputedStyle(node).backgroundColor"
+                    ) == "rgb(255, 255, 255)"
+                    assert document.locator("blockquote").first.evaluate(
+                        "node => getComputedStyle(node).color"
+                    ) == "rgb(0, 0, 0)"
                     expect(context_body.get_by_role("heading", level=1)).to_be_visible()
                     assert (
                         context_body.bounding_box()["y"] < opening.bounding_box()["y"]
@@ -768,6 +774,7 @@ def main(argv: list[str] | None = None) -> None:
                         ("incomplete", True, "INCOMPLETE MODEL DRAFT"),
                         ("demo", True, "FICTIONAL EXAMPLE"),
                         ("review_status", "stale", "EDITED DRAFT"),
+                        ("stale_body_removed", None, "EDITED DRAFT"),
                     ):
                         title = "Print classification fixture - " + flag
                         body = "# " + title + "\n\n" + (
@@ -789,7 +796,8 @@ def main(argv: list[str] | None = None) -> None:
                             **print_report,
                             "title": title,
                             "document_title": title,
-                            flag: value,
+                            **({flag: value} if flag != "stale_body_removed" else {}),
+                            "review_status": "stale",
                             "document_edits": {
                                 "markdown": body,
                                 "author": "user",
@@ -808,10 +816,24 @@ def main(argv: list[str] | None = None) -> None:
                         flag_report = flag_page.get_by_role(
                             "region", name="Your draft report", exact=True
                         )
+                        review_notice = flag_report.locator(".document-review-warning")
+                        expect(review_notice).to_be_visible()
+                        expect(review_notice).to_have_text(
+                            "Review status: stale. Check this saved record before "
+                            "current use; editing its wording does not confirm "
+                            "the original evidence."
+                        )
+                        flag_report.evaluate(
+                            "node => node.scrollIntoView({block: 'start'})"
+                        )
+                        flag_page.screenshot(
+                            path=str(out / ("print-" + flag + "-screen.png"))
+                        )
                         flag_report.get_by_role(
                             "tab", name="Evidence", exact=True
                         ).click()
                         flag_page.emulate_media(media="print")
+                        expect(review_notice).to_be_visible()
                         expect(flag_report.locator(".paper-label")).to_be_visible()
                         expect(flag_report.locator(".paper-label")).to_have_text(label)
                         expect(flag_page.locator(".skip-link")).to_be_hidden()
@@ -837,17 +859,45 @@ def main(argv: list[str] | None = None) -> None:
                                 expect(
                                     flag_report.locator(".document").first
                                 ).to_contain_text(phrase)
+                            assert flag_report.locator("blockquote").first.evaluate(
+                                "node => getComputedStyle(node).backgroundColor"
+                            ) == "rgb(255, 255, 255)"
+                            assert flag_report.get_by_role(
+                                "columnheader"
+                            ).first.evaluate(
+                                "node => getComputedStyle(node).backgroundColor"
+                            ) == "rgb(255, 255, 255)"
+                        flag_page.evaluate("window.scrollTo(0, 0)")
                         flag_page.screenshot(path=str(out / ("print-" + flag + ".png")))
                         flag_page.pdf(
                             path=str(out / ("print-" + flag + ".pdf")),
                             print_background=True,
                         )
+                        if flag == "review_status":
+                            source_quote = flag_report.locator(
+                                ".report-print-target blockquote"
+                            ).filter(
+                                has_text="No person has accepted the actions."
+                            )
+                            expect(source_quote).to_have_count(1)
+                            assert source_quote.evaluate(
+                                "node => getComputedStyle(node).backgroundColor"
+                            ) == "rgb(255, 255, 255)"
+                            assert source_quote.evaluate(
+                                "node => getComputedStyle(node).color"
+                            ) == "rgb(0, 0, 0)"
+                            source_quote.evaluate(
+                                "node => node.scrollIntoView({block: 'start'})"
+                            )
+                            flag_page.screenshot(
+                                path=str(out / "print-retained-quotation.png")
+                            )
                         flag_page.close()
                         checks.append(
                             "stale review prints complete warning, proposals and "
                             "original evidence" if flag == "review_status" else
-                            flag + " print classification stays prominent after "
-                            "an edited body removes its preamble"
+                            flag + " keeps stale notice on screen/Print and "
+                            "print classification after edited-body removal"
                         )
                     assert not errors, errors
                     assert not external, external

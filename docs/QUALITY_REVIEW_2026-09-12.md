@@ -3066,3 +3066,39 @@ checks were corrected before the final run. A first PDF extraction check
 interleaved table columns in layout mode; complete layout and raw extractions
 are retained with the corrected cell-content review. Earlier source/platform
 failures and qualification holds remain unchanged.
+
+
+### 9 October: actual print review caught quotation contrast and stale-status gaps
+
+Passing source and browser assertions at `e94134b` did not establish a readable
+printout. Independent image review and the implementer's direct review both
+found black source-quotation text against the inherited dark raised background.
+The retained intermediate captures explicitly record that Print was blocked
+despite its passing checks. The narrow repair supplies white raised backgrounds
+and readable muted captions only within the print target, preserving ordinary
+screen styling, source wording and document structure. Actual screenshots now
+show the complete stale warning at the top and readable original quotations;
+computed print checks cover both summary and original-source quote backgrounds.
+
+The earlier stale fixture proved that an existing body warning survived Print.
+It did not prove visibility after that warning was edited away. The renderer now
+adds a separate notice inside the existing document paper only when the report's
+recorded `review_status` is `stale`. Editing document wording does not clear this
+metadata. Five local status fixtures check its visibility on screen and in Print:
+edited model, incomplete and fictional bodies retain both classifications;
+stale documents retain their original full warning, or still show the status
+after body-warning removal. Original body warnings remain historical evidence.
+Raw stored text, source snapshots, compiler, schema and Word export are unchanged.
+
+The final browser journey passes 23 checks with no external requests, model
+operations or browser errors. The existing 93 focused Node and 54 Python checks
+and 15 recovery journeys also pass for the repaired renderer. Complete actual
+PDFs and screen/print images are retained; the Word download remains byte-identical
+to `072e7b9`. Timing and resource receipts describe each expanded suite run, not a
+controlled app-speed comparison. The first-action viewport measurement concerns
+the demonstrated non-stale report; stale warnings take priority over compactness.
+Modern Chromium/single-report source scope and all installed/platform release
+holds remain unchanged. No whole-product 10/10 claim follows from this pass.
+The first added source-quote capture assertion counted hidden Evidence-panel
+copies as well as the printed document. Its failure is retained; the final check
+requires exactly one matching original quotation within the explicit print target.

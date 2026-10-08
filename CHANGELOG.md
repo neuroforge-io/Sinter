@@ -30,6 +30,12 @@ original installed gates must pass before a separate Linux preview is admitted.
   Qualified here in the cached Chromium source workflow, not every browser or
   an installed package.
 
+- Keep stale review status visible on screen and in Print independently of
+  editable document wording, alongside model, incomplete or fictional labels.
+  Preserve historical body warnings. Give retained print quotations, table
+  headers and source captions readable contrast without changing raw document
+  text, evidence, the compiler or Word output.
+
 - Offer “Read full message” when campaign feedback exceeds the compact save bar.
   Keep complete wording in a scrollable reader and restore keyboard focus when
   closed. Reading the message does not save, retry or send a request.

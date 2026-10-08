@@ -102,11 +102,15 @@
 @media print{.handover-context-content[hidden]{display:block!important}.handover-context-content{padding:0;border:0}.handover-reading-opening{display:block}.handover-reading-report .document-paper>.document{padding:0}.document .handover-reading-opening>p{font:inherit}.handover-reading-report .paper-label{display:none}.handover-reading-document .handover-opening-table th{background:white;color:black}}
 
 /* Print the report document once, even while its evidence tab is selected. */
+.document-review-warning{margin:0;padding:14px 28px;border-bottom:1px solid var(--line);font-size:.86rem;font-weight:650;line-height:1.5}
+@media(max-width:650px){.document-review-warning{padding:14px 20px}}
 @media print{
+  .report-print-target{--raised:#fff;--muted:#444}
   body:has(.report-print-target) *:not(.report-print-target):not(.report-print-target *):not(:has(.report-print-target)){display:none!important}
   .report-print-target[hidden]{display:block!important}
   .report-print-target>:not(.document-paper){display:none!important}
   .report-print-target .paper-label{display:block!important;padding:0 0 12pt;color:#444;letter-spacing:.08em}
   .handover-reading-report .report-print-target .paper-label{display:none!important}
   .report-print-target .document .citation-link{color:black}
+  .document-review-warning{padding:0 0 12pt;margin:0 0 12pt;font:600 11pt/1.5 sans-serif}
 }
