@@ -27,4 +27,8 @@ summary{cursor:pointer;min-height:2.75rem;align-content:center}
 .casebook-stats>div{padding:1.2rem;border:1px solid var(--line);border-radius:1rem;background:var(--surface)}
 .casebook-stats strong{display:block;font-size:2rem;color:var(--accent);font-variant-numeric:tabular-nums}
 .casebook-stats span{font-size:.8rem}
+.casebook-coverage-summary{margin:0;font-size:.86rem;line-height:1.5}
+.casebook-coverage-details{padding:8px 0;border:0;border-bottom:1px solid var(--line);border-radius:0}
+.casebook-coverage-details>summary{cursor:pointer;min-height:32px;font-size:.82rem;font-weight:600}
+.casebook-coverage-details[open] .casebook-stats{margin-top:12px}
 .casebooks-page pre{max-height:28rem;overflow:auto}

@@ -291,7 +291,7 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
     return false;
   }
   input.input.addEventListener('input', () => { onEditorChange(input.input.value, true); refreshLocalCopy(); });
-  const edit = button(isCampaign ? 'Edit decision brief' : 'Edit draft', () => { if (editor.hidden) input.input.value = documentMarkdown(report); editor.hidden = false; input.input.focus(); }, 'quiet');
+  const edit = button(isCampaign ? 'Edit decision brief' : 'Edit draft', () => { exports.open = false; if (editor.hidden) input.input.value = documentMarkdown(report); editor.hidden = false; input.input.focus(); }, 'quiet');
   const apply = button('Apply edits', () => {
     try { applyMarkdown(input.input.value); }
     catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
@@ -349,20 +349,20 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
       button(isCampaign ? 'Download decision brief' : 'Download document', () => { if (canUseDocument()) downloadDocument(report); }),
       button(isCampaign ? 'Download Markdown brief' : 'Download Markdown', () => { if (canUseDocument()) download(reportName(report.title) + '.md', documentMarkdown(report), 'text/markdown;charset=utf-8'); }),
       evidencePack,
-      button('Print / save PDF', () => { if (canUseDocument()) window.print(); }), edit));
+      button('Print / save PDF', () => { if (canUseDocument()) window.print(); })));
   exports.addEventListener('click', event => { if (event.target.closest('button')) exports.open = false; });
   exports.addEventListener('keydown', event => {
     if (event.key === 'Escape' && exports.open) { event.preventDefault(); exports.open = false; exports.querySelector('summary').focus(); }
   });
   const controls = h('div', {class: 'document-toolbar non-print'},
-    h('div', {class: 'button-row'}, button(isCampaign ? 'Copy decision brief' : 'Copy draft text', async () => {
+    h('div', {class: 'button-row'}, save || null, edit, button(isCampaign ? 'Copy decision brief' : 'Copy draft text', async () => {
       if (!canUseDocument()) return;
       try { await navigator.clipboard.writeText(plainDocument(documentMarkdown(report))); feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, isCampaign
         ? 'Copied. Review the internal decision brief for accuracy and privacy before sharing.'
         : report.incomplete ? 'Incomplete draft copied. Review the partial text before using it.'
           : 'Copied. Ready to paste into your email or document.')); announce(isCampaign ? 'Decision brief copied.' : report.incomplete ? 'Incomplete draft text copied.' : 'Draft text copied.'); }
       catch { feedback.replaceChildren(notice('Clipboard access is unavailable. Download the document instead.', 'error')); }
-    }, 'primary'), word, save || null, exports), wordSaveOptions);
+    }, 'quiet'), word, exports), wordSaveOptions);
   function applyMarkdown(text) {
     applyDocumentEdit(report, text);
     editor.hidden = true; onChange(); refreshLocalCopy();

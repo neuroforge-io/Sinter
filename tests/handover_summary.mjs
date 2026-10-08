@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash, webcrypto} from 'node:crypto';
-import {compileHandoverSummary, handoverSummaryQuote, applyHandoverSummary, handoverSummaryAvailable, handoverSummaryEditor} from '../src/sinter/web/handover-summary.js';
+import {compileHandoverSummary, handoverSummaryQuote, applyHandoverSummary, handoverSummaryAvailable, handoverSummaryEditor, presentHandoverSummaryTable} from '../src/sinter/web/handover-summary.js';
 import {applyDocumentEdit, documentMarkdown} from '../src/sinter/web/documents.js';
 import {registerReportDraft, trackReportEdits, trackReportEditor, markReportSaved, isReportDraftUnsaved, clearReportDrafts, trackReportForm, reportFormDraft, clearReportForm, hasUnsavedReportDrafts, unsavedReportDrafts, reportDraftNotice} from '../src/sinter/web/report-drafts.js';
 if (!globalThis.crypto) Object.defineProperty(globalThis, 'crypto', {configurable: true, value: webcrypto});
@@ -286,7 +286,7 @@ if (process.argv.includes('--sample-json')) {
       const actions = {canUseDocument: () => true, currentMarkdown: () => documentMarkdown(report),
         applyMarkdown: text => {applyDocumentEdit(report, text); trackReportEdits(report, text);}};
       const first = handoverSummaryEditor(report, {actions});
-      assert.equal(hasUnsavedReportDrafts(), false);
+      assert.equal(hasUnsavedReportDrafts(), true); // The prepared report itself still needs saving.
       const inputs = dom.all(first, 'input').filter(input => input.type !== 'checkbox');
       inputs[0].value = 'Insurance excess'; inputs[1].value = 'x'.repeat(1001); inputs[2].value = 'Ask for the policy';
       await first.fire('input'); assert.equal(hasUnsavedReportDrafts(), true);
@@ -340,7 +340,7 @@ if (process.argv.includes('--sample-json')) {
       assert.equal(reportFormDraft(report, 'handover-summary').rows[0].item, 'Second item retained');
       assert.deepEqual(report, before); assert.equal(hasUnsavedReportDrafts(), true);
       await dom.button(editor, 'Remove this summary item').fire('click');
-      assert.equal(reportFormDraft(report, 'handover-summary'), undefined); assert.equal(hasUnsavedReportDrafts(), false);
+      assert.equal(reportFormDraft(report, 'handover-summary'), undefined); assert.equal(hasUnsavedReportDrafts(), true);
       assert.equal(dom.all(editor, 'fieldset').length, 1); assert.deepEqual(report, before);
     } finally {dom.restore(); clearReportDrafts();}
   });
@@ -379,7 +379,8 @@ if (process.argv.includes('--sample-json')) {
       const report = fixture(); registerReportDraft(report, documentMarkdown(report));
       const editor = handoverSummaryEditor(report, {actions: {canUseDocument: () => true, currentMarkdown: () => documentMarkdown(report), applyMarkdown() {}}});
       const panel = dom.all(editor, 'details').find(node => node.className === 'handover-summary-item');
-      const caption = dom.all(panel, 'summary')[0], source = dom.all(panel, 'select')[2];
+      const caption = dom.all(panel, 'summary')[0], source = dom.all(panel, 'select').find(input =>
+        input.parentElement.children.some(child => child.tagName === 'LABEL' && child.textContent === 'Supporting wording from this saved report'));
       assert.match(caption.textContent, /No supporting record; no citation/);
       source.value = source.children[1].value; await source.fire('change');
       assert.match(caption.textContent, /Exact wording still needed/);
@@ -411,7 +412,7 @@ if (process.argv.includes('--sample-json')) {
   });
 
   test('pending messages distinguish summary forms, text editors and applied unsaved edits after an exact save', () => {
-    clearReportDrafts(); const report = fixture(); registerReportDraft(report, documentMarkdown(report));
+    clearReportDrafts(); const report = fixture(); registerReportDraft(report, documentMarkdown(report), {saved: true});
     trackReportForm(report, 'handover-summary', {rows: [row()], open: true});
     assert.equal(reportDraftNotice(report), 'Summary rows have not been applied; they are kept in this session only.');
     markReportSaved(report, documentMarkdown(report));
@@ -436,6 +437,71 @@ if (process.argv.includes('--sample-json')) {
     assert.deepEqual(report, before);
     const current = fixture(); current.review_status = 'draft';
     assert.doesNotMatch((await compileHandoverSummary(current, [row()])).openingMarkdown, /Review status: stale/);
+  });
+
+  test('using a retained question copies only explicit item wording, leaves facts blank and refuses to replace typed work', async () => {
+    const dom = inertDOM(); clearReportDrafts();
+    try {
+      const report = fixture(), before = structuredClone(report); registerReportDraft(report, documentMarkdown(report));
+      let changes = 0;
+      const editor = handoverSummaryEditor(report, {actions: {canUseDocument: () => true,
+        currentMarkdown: () => documentMarkdown(report), applyMarkdown() {}}, onDraftChange: () => {changes++;}});
+      const question = dom.all(editor, 'select')[0], inputs = dom.all(editor, 'input');
+      question.value = '1';
+      await dom.button(editor, 'Use question as item').fire('click');
+      assert.equal(inputs[0].value, report.question_index[0].question);
+      assert.equal(inputs[1].value, ''); assert.equal(inputs[2].value, '');
+      const captured = reportFormDraft(report, 'handover-summary').rows[0];
+      assert.equal(captured.ownerType, 'unknown'); assert.equal(captured.targetDate, ''); assert.equal(captured.evidence, null);
+      assert.equal(changes, 1); assert.equal(document.activeElement, inputs[1]);
+      inputs[0].value = 'Human-written item retained'; await editor.fire('input');
+      question.value = '2'; await dom.button(editor, 'Use question as item').fire('click');
+      assert.equal(inputs[0].value, 'Human-written item retained');
+      assert.match(editor.textContent, /Clear it explicitly/); assert.deepEqual(report, before);
+    } finally {dom.restore(); clearReportDrafts();}
+  });
+
+  test('opening table phone labels preserve cells and leave the quoted source table untouched', async () => {
+    const dom = inertDOM();
+    try {
+      const {markdown} = await import('../src/sinter/web/markdown.js');
+      const compiled = await compileHandoverSummary(fixture(), [row()]);
+      const article = markdown(compiled.markdown), tables = dom.all(article, 'table');
+      assert.equal(tables.length, 2);
+      const opening = dom.all(tables[0], 'td'), values = opening.map(cell => cell.textContent);
+      const quoted = tables[1].textContent;
+      assert.equal(presentHandoverSummaryTable(article), true);
+      const decorated = article.textContent;
+      assert.equal(presentHandoverSummaryTable(article), true);
+      assert.equal(article.textContent, decorated);
+      assert.ok(tables[0].className.includes('handover-opening-table'));
+      assert.ok(!tables[1].className.includes('handover-opening-table'));
+      opening.forEach((cell, index) => {
+        const label = cell.children.at(-1);
+        assert.equal(label['aria-hidden'], 'true');
+        assert.equal(cell.textContent.slice(0, -label.textContent.length), values[index]);
+      });
+      assert.equal(tables[1].textContent, quoted);
+      assert.equal(compiled.markdown.includes('handover-cell-label'), false);
+    } finally {dom.restore();}
+  });
+
+  test('ambiguous or edited table shapes keep their literal table rather than gain a phone interpretation', async () => {
+    const dom = inertDOM();
+    try {
+      const {markdown} = await import('../src/sinter/web/markdown.js');
+      const compiled = await compileHandoverSummary(fixture(), [row()]);
+      for (const changed of [
+        compiled.markdown.replace('| Evidence |', '| Verified facts |'),
+        compiled.markdown.replace('## At a glance', '### At a glance'),
+        compiled.markdown + '\n\n## At a glance\n\nAnother user section.',
+        compiled.markdown.replace('| Missing supporting record; answer remains unknown |', '| Missing supporting record; answer remains unknown | Extra literal cell |'),
+      ]) {
+        const article = markdown(changed), before = article.textContent;
+        assert.equal(presentHandoverSummaryTable(article), false);
+        assert.equal(article.textContent, before);
+      }
+    } finally {dom.restore();}
   });
 
 }

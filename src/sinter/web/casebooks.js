@@ -225,8 +225,15 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     consent.input.addEventListener('change', () => draftButton.disabled = !consent.input.checked);
     preview.append(consent.wrap, draftButton);
     const exportScope = handoverExportNotice(report);
-    output.replaceChildren(stats, gaps, ...(exportScope
-      ? [notice(exportScope)] : []), renderReport(report));
+    const questionsCount = report.question_index.length;
+    const noMatch = coverage.questions_without_wording_matches;
+    const coverageSummary = h('p', {class: 'casebook-coverage-summary'},
+      `${questionsCount} question${questionsCount === 1 ? ' needs' : 's need'} review · ${coverage.documents_supplied} supplied source${coverage.documents_supplied === 1 ? '' : 's'} · ${noMatch} without a wording match.`,
+      h('span', {class: 'fine'}, ' Related wording is not an answer.'));
+    const coverageDetails = h('details', {class: 'casebook-coverage-details non-print'},
+      h('summary', {}, 'Evidence coverage'), stats, gaps,
+      ...(exportScope ? [notice(exportScope)] : []));
+    output.replaceChildren(coverageSummary, coverageDetails, renderReport(report));
     if (report.excerpts.length && !report.model_draft) output.append(preview);
   }
   title.input.addEventListener('input', changed);

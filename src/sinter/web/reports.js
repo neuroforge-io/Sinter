@@ -5,36 +5,75 @@ import {campaignCommunicationFromDraft, campaignDraftLogBlockReason} from './cam
 import {campaignActionOwnerState} from './campaign-owner.js';
 import {campaignActionPhaseLabel} from './campaign-plan.js';
 import {registerReportDraft, trackReportEdits, trackReportEditor, reportEditorDraft,
-  markReportSaved, isReportDraftUnsaved, reportDraftNotice} from './report-drafts.js';
+  markReportSaved, markReportSaving, markReportSaveFailed, reportSaveState, observeReportSaveState,
+  isReportDraftUnsaved, reportDraftNotice} from './report-drafts.js';
 import {reportCitationIndex, reportCitationMatcher} from './report-citations.js';
 import {casebookQuestionEvidence} from './casebook-question-evidence.js';
 import {retainedCasebookSource, retainedQuestionContext} from './casebook-retained-context.js';
-import {handoverSummaryEditor, handoverSummaryAvailable} from './handover-summary.js';
+import {handoverSummaryEditor, handoverSummaryAvailable, presentHandoverSummaryTable} from './handover-summary.js';
 
 /** The document is the default view; provenance remains one click away. */
-export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated, onSaved, recovered = false} = {}) {
-  registerReportDraft(report, documentMarkdown(report));
+export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated, onSaved, recovered = false, saved = false} = {}) {
+  registerReportDraft(report, documentMarkdown(report), {saved});
   const result = h('section', {class: 'report-area', 'aria-label': 'Your draft report'});
   const message = h('div', {class: 'non-print', 'aria-live': 'polite'});
+  const saveState = h('p', {class: 'document-save-state non-print', role: 'status', 'aria-label': 'Document save state'});
+  let savePending = false;
+  function refreshSaveState() {
+    const state = reportSaveState(report);
+    saveState.textContent = state.message; saveState.dataset.state = state.kind;
+    save.disabled = savePending || state.kind === 'saving' || state.kind === 'saved';
+  }
   const campaignLog = report.campaign_link ? campaignDraftLog(report, message,
-    onCampaignUpdated, () => actions.canUseDocument('saving to the campaign log')) : null;
+    onCampaignUpdated, () => actions.canUseDocument('saving to the campaign log'),
+    () => { trackReportEdits(report, documentMarkdown(report)); refreshSaveState(); }) : null;
   const save = button('Save to My workspace', async () => {
     if (!actions.canUseDocument('saving')) return;
-    save.disabled = true;
+    if (savePending || reportSaveState(report).kind === 'saving') return;
+    let snapshot, submittedMarkdown;
+    try { snapshot = structuredClone(report); submittedMarkdown = documentMarkdown(snapshot); }
+    catch (error) {
+      markReportSaveFailed(report, {requestState: {outcome: 'not-sent'}});
+      message.replaceChildren(notice(error.message, 'error')); refreshSaveState(); return;
+    }
+    savePending = true; markReportSaving(report);
+    let failure, viewFailures = [];
     try {
-      const snapshot = structuredClone(report);
-      await request('/api/reports', {data: {report: snapshot}});
-      markReportSaved(report, documentMarkdown(snapshot));
+      refreshSaveState();
+    } catch (error) {
+      savePending = false; markReportSaveFailed(report, {requestState: {outcome: 'not-sent'}});
+      message.replaceChildren(notice('Save was not sent because the view could not be updated: ' + error.message, 'error')); return;
+    }
+    try {
+      await request('/api/reports', {data: {report: snapshot}, acceptResponse: result => {
+        if (!result || Array.isArray(result) || typeof result.id !== 'string'
+            || !/^[a-f0-9]{32}$/.test(result.id)) throw new Error('The app did not return a valid saved-document acknowledgement.');
+        return result;
+      }});
+      viewFailures = markReportSaved(report, submittedMarkdown, snapshot) || [];
+    } catch (error) {
+      markReportSaveFailed(report, error); failure = error;
+    } finally { savePending = false; }
+    // Persistence has been acknowledged. A later view/callback failure cannot
+    // turn that known save into an uncertain write or trigger a replay.
+    try {
+      refreshSaveState();
+      if (failure) { message.replaceChildren(notice(failure.message, 'error')); return; }
+      if (viewFailures.length) throw viewFailures[0];
       const newerEdits = isReportDraftUnsaved(report);
-      save.disabled = !newerEdits;
       if (!newerEdits) actions.feedback.replaceChildren();
       message.replaceChildren(notice(newerEdits
         ? 'The submitted document was saved in My workspace. ' + reportDraftNotice(report)
         : 'Saved in My workspace, including your edits and original evidence.', newerEdits ? 'warning' : 'success'));
       announce('Report saved to My workspace.');
-      onSaved?.();
-    } catch (error) { message.replaceChildren(notice(error.message, 'error')); save.disabled = false; }
-  }, 'quiet');
+      await onSaved?.();
+    } catch (error) {
+      refreshSaveState();
+      message.replaceChildren(notice(failure
+        ? 'The save failed and refreshing the view also failed: ' + error.message
+        : 'The submitted document was saved, but refreshing the view failed: ' + error.message, 'warning'));
+    }
+  }, 'primary');
   const paper = h('div', {class: 'document-paper'});
   const isCampaign = report.workflow === 'campaign';
   const isAssistant = report.workflow === 'assistant';
@@ -90,16 +129,17 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     const article = markdown(documentMarkdown(report));
     if (isCampaign) article.classList.add('campaign-decision-document');
     const hasSummary = handoverSummaryAvailable(report) && documentMarkdown(report).includes('## At a glance\n');
+    const responsiveSummary = hasSummary && presentHandoverSummaryTable(article);
     if (hasSummary) article.classList.add('handover-summary-document');
     connectCitations(article, report, sources, () => select('evidence'), true);
     paper.replaceChildren(h('div', {class: 'paper-label'}, report.workflow === 'campaign'
       ? 'CAMPAIGN DECISION RECORD'
       : report.incomplete ? 'INCOMPLETE MODEL DRAFT' : report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'),
-      ...(hasSummary ? [h('p', {class: 'handover-summary-scroll-hint fine'}, 'On a small screen, scroll the summary table sideways to review every column.')] : []), article);
+      ...(hasSummary && !responsiveSummary ? [h('p', {class: 'handover-summary-scroll-hint fine'}, 'On a small screen, scroll the summary table sideways to review every column.')] : []), article);
     completion.replaceChildren(h('div', {}, h('strong', {}, report.document_edits ? 'Check these details' : 'Finish the details'),
       h('p', {}, (report.document_edits ? 'Originally missing: ' : '') + (report.missing_fields || []).map(item => item.label).join(' · '))),
-      onEditInputs ? button('Add missing details', onEditInputs) : h('span', {class: 'fine'}, 'Use More options → Edit draft to complete these.'));
-    save.disabled = false;
+      onEditInputs ? button('Add missing details', onEditInputs) : h('span', {class: 'fine'}, 'Use Edit draft to complete these.'));
+    refreshSaveState();
   }
   let evidenceArticle = markdown(report.markdown);
   connectCitations(evidenceArticle, report, sources);
@@ -118,9 +158,9 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     (report.warnings || []).length ? h('details', {class: 'report-notes'}, h('summary', {}, 'Source limits and review notes'), h('ul', {}, report.warnings.map(item => h('li', {}, item)))) : null,
     h('div', {class: 'report-layout'}, evidenceArticle, sources)].filter(Boolean));
   const actions = documentActions(report, {save, editorSeed: reportEditorDraft(report),
-    onEditorChange: (text, open) => trackReportEditor(report, text, open),
+    onEditorChange: (text, open) => { trackReportEditor(report, text, open); refreshSaveState(); },
     onChange: () => { trackReportEdits(report, documentMarkdown(report)); updateDocument(); select('document'); }});
-  const summaryEditor = handoverSummaryEditor(report, {actions});
+  const summaryEditor = handoverSummaryEditor(report, {actions, onDraftChange: refreshSaveState});
   const missing = report.missing_fields || [];
   result.append(...[recovered ? notice('Recovered draft from an earlier preparation. It retains the original inputs and evidence; later project changes are not included. Check the current saved project before using this draft.', 'warning') : null,
     h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'CAMPAIGN PREVIEW' : 'YOUR DOCUMENT'),
@@ -128,7 +168,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       ? 'Review the decision and privacy before sharing. The full audit trail and source notes are in Audit & evidence.'
       : 'Review the wording, make it yours, then copy or download.'))),
     missing.length ? completion : null,
-    actions.controls, campaignLog, message, actions.feedback, actions.editor, summaryEditor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel].filter(Boolean));
+    saveState, actions.controls, campaignLog, message, actions.feedback, actions.editor, summaryEditor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel].filter(Boolean));
   select('document'); updateDocument();
   if (report.workflow === 'grants' && report.sources?.length) {
     documentPanel.append(grantChecks(report, () => {
@@ -142,6 +182,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     }));
   }
   if (onCorrect && report.segments?.length) documentPanel.append(correctionForm(report, onCorrect));
+  observeReportSaveState(report, refreshSaveState, () => result.isConnected);
   return result;
 }
 
@@ -314,7 +355,7 @@ export function campaignEvidenceCounts(campaign) {
     excerpts: excerpts.filter(value => typeof value === 'string' && value.trim()).length};
 }
 
-function campaignDraftLog(report, feedback, onCampaignUpdated, canSave) {
+function campaignDraftLog(report, feedback, onCampaignUpdated, canSave, onChange) {
   const channel = selectField('Draft channel for the campaign log', [
     ['email', 'Email'], ['letter', 'Letter'], ['portal', 'Application portal'], ['other', 'Other'],
   ], 'email');
@@ -343,6 +384,7 @@ function campaignDraftLog(report, feedback, onCampaignUpdated, canSave) {
       }});
       onCampaignUpdated?.(saved);
       report.campaign_link = {...link, revision: saved.revision, logged: true};
+      onChange();
       control.textContent = 'Saved as a draft · not sent';
       feedback.replaceChildren(notice('Saved to this computer in the campaign communications log as a draft. It has not been sent.', 'success'));
       announce('Campaign draft saved locally and marked not sent.');

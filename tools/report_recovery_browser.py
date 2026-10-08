@@ -8,6 +8,7 @@ import re
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -23,6 +24,7 @@ from tools._support import browser_arguments, launch_chromium  # noqa: E402
 def main(argv: list[str] | None = None) -> None:
     """Exercise the real local save service and recover edits without a model."""
     args = browser_arguments(__doc__, argv)
+    started = time.perf_counter()
     from playwright.sync_api import expect, sync_playwright
 
     out = ROOT / "browser-artifacts"
@@ -145,6 +147,27 @@ def main(argv: list[str] | None = None) -> None:
                     assert page.evaluate(
                         "document.activeElement.id === 'casebook-output'"
                     )
+                    expect(report.get_by_label("Document save state")).to_contain_text(
+                        "Prepared locally; not saved"
+                    )
+                    assert page.evaluate(warn)
+                    page.get_by_role("link", name="My workspace", exact=True).click()
+                    page.get_by_role(
+                        "button", name="Open unsaved draft", exact=True
+                    ).click()
+                    report = page.get_by_role("region", name="Your draft report")
+                    expect(report.get_by_label("Document save state")).to_contain_text(
+                        "Prepared locally; not saved"
+                    )
+                    assert page.evaluate(warn)
+                    checks.append(
+                        "unedited prepared report survives navigation under exit protection"
+                    )
+                    page.get_by_role(
+                        "link", name="Community casebooks", exact=True
+                    ).click()
+                    report = page.get_by_role("region", name="Your draft report")
+                    expect(report).to_be_visible()
                     report.get_by_role("tab", name="Evidence", exact=True).click()
                     citation = report.get_by_role(
                         "button", name=re.compile(r"^Show source:")
@@ -212,11 +235,75 @@ def main(argv: list[str] | None = None) -> None:
                             route.continue_()
 
                     page.route("**/api/reports", fail_once)
+                    rejections = []
+
+                    def reject_once(route):
+                        if route.request.method == "POST" and not rejections:
+                            rejections.append(True)
+                            route.fulfill(
+                                status=400,
+                                content_type="application/json",
+                                body=json.dumps({"error": "Fictional rejected save."}),
+                            )
+                        else:
+                            route.fallback()
+
+                    page.route("**/api/reports", reject_once)
+                    report.get_by_role(
+                        "button", name="Save to My workspace", exact=True
+                    ).click()
+                    expect(report.get_by_label("Document save state")).to_contain_text(
+                        "The app rejected this save"
+                    )
+                    expect(
+                        report.get_by_label("Document save state")
+                    ).not_to_contain_text("Save not confirmed")
+                    assert page.evaluate(warn)
+                    assert not server.app.store.reports()
+                    page.unroute("**/api/reports", reject_once)
+                    checks.append(
+                        "observed rejection retains local draft without claiming an unknown write"
+                    )
+                    malformed_requests = []
+                    for malformed in (None, {}, {"id": "not-a-saved-document-id"}):
+
+                        def malformed_ack(route):
+                            if route.request.method == "POST":
+                                malformed_requests.append(route.request.post_data_json)
+                                route.fulfill(
+                                    status=201,
+                                    content_type="application/json",
+                                    body=json.dumps(malformed),
+                                )
+                            else:
+                                route.fallback()
+
+                        page.route("**/api/reports", malformed_ack)
+                        count = len(malformed_requests)
+                        report.get_by_role(
+                            "button", name="Save to My workspace", exact=True
+                        ).click()
+                        expect(
+                            report.get_by_label("Document save state")
+                        ).to_contain_text("Save not confirmed")
+                        expect(report.get_by_role("alert")).to_contain_text(
+                            "valid saved-document acknowledgement"
+                        )
+                        assert len(malformed_requests) == count + 1
+                        assert page.evaluate(warn)
+                        assert not server.app.store.reports()
+                        page.unroute("**/api/reports", malformed_ack)
+                    checks.append(
+                        "null, absent and invalid saved IDs remain unconfirmed after one POST each"
+                    )
                     report.get_by_role(
                         "button", name="Save to My workspace", exact=True
                     ).click()
                     expect(report.get_by_role("alert")).to_contain_text(
                         "Fictional local save failure"
+                    )
+                    expect(report.get_by_label("Document save state")).to_contain_text(
+                        "Save not confirmed"
                     )
                     assert page.evaluate(warn)
                     assert not server.app.store.reports()
@@ -224,6 +311,14 @@ def main(argv: list[str] | None = None) -> None:
                         "button", name="Save to My workspace", exact=True
                     ).click()
                     expect(report).to_contain_text("Saved in My workspace")
+                    expect(report.get_by_label("Document save state")).to_have_text(
+                        "Saved locally in My workspace."
+                    )
+                    expect(
+                        report.get_by_role(
+                            "button", name="Save to My workspace", exact=True
+                        )
+                    ).to_be_disabled()
                     expect(report).not_to_contain_text(
                         "Edits applied. Save this draft to keep them."
                     )
@@ -293,21 +388,41 @@ def main(argv: list[str] | None = None) -> None:
                     ).click()
                     page.wait_for_timeout(100)
                     assert len(held) == 1
+                    expect(report.get_by_label("Document save state")).to_have_text(
+                        "Saving to My workspace…"
+                    )
+                    expect(
+                        report.get_by_role(
+                            "button", name="Save to My workspace", exact=True
+                        )
+                    ).to_be_disabled()
                     assert (
                         held[0].request.post_data_json["report"]["document_edits"][
                             "markdown"
                         ]
                         == "First version sent to save."
                     )
+                    page.get_by_role("link", name="Overview", exact=True).click()
+                    page.get_by_role("link", name="My workspace", exact=True).click()
+                    page.get_by_role(
+                        "button", name="Open unsaved draft", exact=True
+                    ).click()
+                    report = page.get_by_role("region", name="Your draft report")
+                    expect(report.get_by_label("Document save state")).to_have_text(
+                        "Saving to My workspace…"
+                    )
+                    save = report.get_by_role(
+                        "button", name="Save to My workspace", exact=True
+                    )
+                    expect(save).to_be_disabled()
+                    save.evaluate("node => {node.disabled = false; node.click();}")
+                    page.wait_for_timeout(100)
+                    assert len(held) == 1
                     apply_text("Newer version edited while saving.")
                     held[0].continue_()
-                    expect(
-                        report.get_by_text(
-                            "The submitted document was saved in My workspace. "
-                            "Applied document edits have not been saved.",
-                            exact=True,
-                        )
-                    ).to_be_visible()
+                    expect(report.get_by_label("Document save state")).to_have_text(
+                        "Applied document edits have not been saved."
+                    )
                     document = report.get_by_role(
                         "tabpanel", name="Document", exact=True
                     )
@@ -331,9 +446,91 @@ def main(argv: list[str] | None = None) -> None:
                         "a delayed save records its exact snapshot "
                         "and leaves newer edits protected"
                     )
+                    checks.append(
+                        "reopened pending view prevents a second POST and refreshes when the first settles"
+                    )
                     page.screenshot(
                         path=str(out / "report-recovery-unsaved-newer-edit.png"),
                         full_page=True,
+                    )
+                    page.unroute("**/api/reports")
+                    page.evaluate("""async () => {
+                        const drafts = await import('/static/report-drafts.js');
+                        const reports = await import('/static/reports.js');
+                        const report = drafts.unsavedReportDrafts()[0].report;
+                        document.querySelector('.report-area').replaceWith(reports.renderReport(
+                            report, {onSaved: async () => {throw new Error('Fictional refresh failure.');}}
+                        ));
+                    }""")
+                    report = page.get_by_role("region", name="Your draft report")
+                    report.get_by_role(
+                        "button", name="Save to My workspace", exact=True
+                    ).click()
+                    expect(
+                        report.get_by_role("note").filter(
+                            has_text="Fictional refresh failure"
+                        )
+                    ).to_contain_text(
+                        "The submitted document was saved, but refreshing the view failed"
+                    )
+                    expect(report.get_by_label("Document save state")).to_have_text(
+                        "Saved locally in My workspace."
+                    )
+                    assert not page.evaluate(warn)
+                    assert (
+                        server.app.store.report(server.app.store.reports()[0]["id"])[
+                            "document_edits"
+                        ]["markdown"]
+                        == "Newer version edited while saving."
+                    )
+                    checks.append(
+                        "throwing refresh callback cannot relabel acknowledged persistence or replay a save"
+                    )
+                    page.evaluate("""async () => {
+                        const drafts = await import('/static/report-drafts.js');
+                        const reports = await import('/static/reports.js');
+                        const old = document.querySelector('.report-area');
+                        const report = {title: 'Fictional post-ack UI failure',
+                            markdown: 'A complete locally entered finding.',
+                            document_markdown: 'A complete locally entered finding.', sources: []};
+                        old.replaceWith(reports.renderReport(report));
+                        const status = document.querySelector('.document-save-state');
+                        const descriptor = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+                        let failed = false;
+                        Object.defineProperty(status, 'textContent', {configurable: true,
+                            get() {return descriptor.get.call(this);},
+                            set(value) {
+                                if (!failed && value === 'Saved locally in My workspace.') {
+                                    failed = true; throw new Error('Fictional first post-ack refresh failure.');
+                                }
+                                descriptor.set.call(this, value);
+                            }
+                        });
+                    }""")
+                    report = page.get_by_role("region", name="Your draft report")
+                    writes = []
+
+                    def count_write(route):
+                        if route.request.method == "POST":
+                            writes.append(route.request.post_data_json)
+                        route.continue_()
+
+                    page.route("**/api/reports", count_write)
+                    report.get_by_role(
+                        "button", name="Save to My workspace", exact=True
+                    ).click()
+                    expect(
+                        report.get_by_role("note").filter(
+                            has_text="Fictional first post-ack refresh failure"
+                        )
+                    ).to_contain_text("Fictional first post-ack refresh failure")
+                    expect(report.get_by_label("Document save state")).to_have_text(
+                        "Saved locally in My workspace."
+                    )
+                    assert len(writes) == 1
+                    assert not page.evaluate(warn)
+                    checks.append(
+                        "first post-ack view failure keeps confirmed save state and sends exactly one POST"
                     )
                     assert not errors, errors
                     assert not external, external
@@ -352,6 +549,7 @@ def main(argv: list[str] | None = None) -> None:
                 "checks": checks,
                 "external_requests": external,
                 "browser_errors": errors,
+                "elapsed_seconds": round(time.perf_counter() - started, 3),
                 "file_sha256": {
                     name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
                     for name in [

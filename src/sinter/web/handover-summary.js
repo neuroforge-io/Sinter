@@ -132,10 +132,43 @@ export async function applyHandoverSummary(report, compiled, {currentMarkdown, c
   return true;
 }
 
+/** Presentation only: a bounded, exact opening table; quoted source tables stay literal. */
+export function presentHandoverSummaryTable(article) {
+  const children = [...article.children];
+  const headings = children.filter(node => node.tagName === 'H2' && node.textContent === 'At a glance');
+  if (headings.length !== 1) return false;
+  const following = children.slice(children.indexOf(headings[0]) + 1);
+  const boundary = following.findIndex(node => /^H[1-6]$/.test(node.tagName));
+  const section = boundary === -1 ? following : following.slice(0, boundary);
+  const wrappers = section.filter(node => node.className.split(' ').includes('table-scroll'));
+  if (wrappers.length !== 1) return false;
+  const wrapper = wrappers[0], table = wrapper.children[0];
+  if (table?.tagName !== 'TABLE') return false;
+  const head = [...table.children].find(node => node.tagName === 'THEAD');
+  const body = [...table.children].find(node => node.tagName === 'TBODY');
+  const labels = ['Item', 'Recorded status — user-entered', 'Next step — proposed', 'Evidence'];
+  if (head?.children.length !== 1 || head.children[0].children.length !== labels.length
+      || !labels.every((label, index) => head.children[0].children[index].textContent === label)
+      || !body || body.children.length < 1 || body.children.length > MAX_ROWS
+      || ![...body.children].every(row => row.tagName === 'TR' && row.children.length === labels.length
+        && [...row.children].every(cell => cell.tagName === 'TD'))) return false;
+  if (table.className.split(' ').includes('handover-opening-table')) return true;
+  table.classList.add('handover-opening-table'); table.setAttribute('role', 'table');
+  wrapper.classList.add('handover-opening-scroll');
+  for (const row of body.children) {
+    row.setAttribute('role', 'row');
+    [...row.children].forEach((cell, index) => {
+      cell.setAttribute('role', 'cell');
+      cell.append(h('span', {class: 'handover-cell-label', 'aria-hidden': 'true'}, labels[index]));
+    });
+  }
+  return true;
+}
+
 /** No source extraction, auto-answer, provider call or persistent schema extension. */
-export function handoverSummaryEditor(report, {actions}) {
+export function handoverSummaryEditor(report, {actions, onDraftChange = () => {}}) {
   if (!handoverSummaryAvailable(report)) return null;
-  const panel = h('details', {class: 'handover-summary non-print'}, h('summary', {}, 'Review an opening summary'));
+  const panel = h('details', {class: 'handover-summary non-print'}, h('summary', {}, 'Write handover opening'));
   const instructions = h('p', {class: 'fine'}, 'Enter the recorded status and a proposed next step. Select literal supporting wording below; missing answers stay unknown. Applying replaces the edited document only after your approval. Save to My workspace afterward. Unapplied rows stay in this browser session’s unsaved drafts and trigger the existing quit warning. After applying, rows become ordinary editable document text; they are not a separate saved form.');
   const cards = h('div', {class: 'stack'}), feedback = h('div', {'aria-live': 'polite'});
   const rows = [], evidenceRows = casebookQuestionEvidence(report);
@@ -151,7 +184,7 @@ export function handoverSummaryEditor(report, {actions}) {
   }
   let busy = false, reviewed, reviewedRows;
   const seed = reportFormDraft(report, FORM);
-  const remember = () => trackReportForm(report, FORM, {rows: rows.map(row => row.capture()), open: panel.open});
+  const remember = () => { trackReportForm(report, FORM, {rows: rows.map(row => row.capture()), open: panel.open}); onDraftChange(); };
   const invalidate = () => { reviewed = undefined; reviewedRows = undefined; apply.hidden = true; };
   const changed = () => { rows.forEach(row => row.refresh()); invalidate(); remember(); };
   const short = value => Array.from(value.trim()).length > 100 ? Array.from(value.trim()).slice(0, 100).join('') + '…' : value.trim();
@@ -163,6 +196,23 @@ export function handoverSummaryEditor(report, {actions}) {
       h('summary', {}, heading, detail));
     const fields = h('fieldset', {class: 'stack'}, legend);
     const item = field('Item', 'text', saved.item || '', '', {maxLength: MAX_TEXT});
+    const fromQuestion = selectField('Retained question', [['', 'Choose a question'],
+      ...evidenceRows.filter(question => question.questionAvailable)
+        .map(question => [String(question.position), question.question])]);
+    fromQuestion.input.addEventListener('change', event => event.stopPropagation());
+    const questionFeedback = h('p', {class: 'fine', role: 'status'});
+    const useQuestion = button('Use question as item', () => {
+      const question = evidenceRows.find(row => String(row.position) === fromQuestion.input.value && row.questionAvailable);
+      if (!question) { questionFeedback.textContent = 'Choose a retained question first.'; return; }
+      if (item.input.value) { questionFeedback.textContent = 'Your Item wording is kept. Clear it explicitly before using a question.'; item.input.focus(); return; }
+      try {
+        text(question.question, 'the item', reportCitationIndex(report).references);
+        item.input.value = question.question; changed(); status.input.focus();
+        questionFeedback.textContent = 'Exact question copied. Enter the recorded status and proposed next step yourself.';
+      } catch (error) { questionFeedback.textContent = error.message; }
+    }, 'quiet');
+    const questionStart = h('details', {class: 'handover-question-start'}, h('summary', {}, 'Start from a question'),
+      fromQuestion.wrap, useQuestion, questionFeedback);
     const status = field('Recorded status or missing detail — your wording', 'text', saved.status || '', '', {maxLength: MAX_TEXT});
     const action = field('Next step — proposed, not accepted', 'text', saved.proposedAction || '', '', {maxLength: MAX_TEXT});
     const period = selectField('When this wording applies', [['as_recorded', 'As recorded — current status not independently verified'], ['historical', 'Historical wording — retain without making it current']], saved.period || 'as_recorded');
@@ -220,10 +270,18 @@ export function handoverSummaryEditor(report, {actions}) {
       rows.splice(rows.indexOf(entry), 1); row.remove();
       rows.forEach((item, index) => { item.legend.textContent = `Summary item ${index + 1}`; item.refresh(); });
       if (rows.length) changed();
-      else { addRow({}, false); clearReportForm(report, FORM); invalidate(); }
+      else { addRow({}, false); clearReportForm(report, FORM); invalidate(); onDraftChange(); }
     }, 'quiet');
-    fields.append(item.wrap, status.wrap, action.wrap, period.wrap, ownerType.wrap, ownerName.wrap, accepted.wrap, date.wrap,
-      source.wrap, original.wrap, pick, selected, quoteStatus, remove);
+    const responsibilityCaption = h('summary');
+    const responsibility = h('details', {class: 'handover-responsibility'}, responsibilityCaption,
+      period.wrap, ownerType.wrap, ownerName.wrap, accepted.wrap, date.wrap);
+    const refreshResponsibility = () => {
+      responsibilityCaption.textContent = `${OWNER_LABELS[ownerType.input.value] || 'Review owner type'} · ${date.input.value ? 'Proposed target ' + date.input.value + ' (unconfirmed)' : 'Target not supplied'}`;
+    };
+    responsibility.addEventListener('input', refreshResponsibility);
+    responsibility.addEventListener('change', refreshResponsibility); refreshResponsibility();
+    fields.append(item.wrap, questionStart, status.wrap, action.wrap,
+      source.wrap, original.wrap, pick, selected, quoteStatus, responsibility, remove);
     row.append(fields); cards.append(row); refresh();
     row.addEventListener('toggle', () => { if (reportFormDraft(report, FORM)) remember(); });
     add.disabled = rows.length >= MAX_ROWS;
@@ -242,8 +300,9 @@ export function handoverSummaryEditor(report, {actions}) {
       if (before !== snapshot(rows.map(row => row.read()))) throw new Error('The summary changed during preparation. Review your current wording again.');
       reviewed = compiled; reviewedRows = before;
       const document = markdown(compiled.openingMarkdown); document.classList.add('handover-summary-document');
+      const responsive = presentHandoverSummaryTable(document);
       feedback.replaceChildren(h('h3', {}, 'Opening summary preview'),
-        h('p', {class: 'handover-summary-scroll-hint fine'}, 'On a small screen, scroll the summary table sideways to review every column.'), document);
+        ...(responsive ? [] : [h('p', {class: 'handover-summary-scroll-hint fine'}, 'On a small screen, scroll the summary table sideways to review every column.')]), document);
       apply.hidden = false;
     } catch (error) { invalidate(); feedback.replaceChildren(notice(error.message, 'error')); }
     finally { busy = false; preview.disabled = false; add.disabled = rows.length >= MAX_ROWS; }
@@ -263,7 +322,7 @@ export function handoverSummaryEditor(report, {actions}) {
         },
         apply: actions.applyMarkdown,
       });
-      if (applied) { feedback.replaceChildren(notice('Opening summary applied. Save to My workspace to keep it. Original evidence and historical wording are retained.', 'success')); panel.open = false; clearReportForm(report, FORM); invalidate(); }
+      if (applied) { feedback.replaceChildren(notice('Opening summary applied. Save to My workspace to keep it. Original evidence and historical wording are retained.', 'success')); panel.open = false; clearReportForm(report, FORM); invalidate(); onDraftChange(); }
       else feedback.append(notice('Your existing edited draft is kept. Summary rows remain in this editor.'));
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
     finally { busy = false; apply.disabled = preview.disabled = false; add.disabled = rows.length >= MAX_ROWS; }
@@ -279,7 +338,7 @@ export function handoverSummaryEditor(report, {actions}) {
       if (!approved) return;
       if (before !== snapshot(reportFormDraft(report, FORM))) throw new Error('The summary changed while the decision was open. Your rows are kept.');
       clearReportForm(report, FORM); rows.length = 0; cards.replaceChildren(); invalidate(); busy = false;
-      addRow({}, false); feedback.replaceChildren(notice('Unapplied summary rows discarded. Your applied draft is unchanged.'));
+      addRow({}, false); onDraftChange(); feedback.replaceChildren(notice('Unapplied summary rows discarded. Your applied draft is unchanged.'));
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
     finally { busy = false; }
   }, 'quiet');

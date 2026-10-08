@@ -8,6 +8,7 @@ import re
 import sys
 import tempfile
 import threading
+import time
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
@@ -23,6 +24,7 @@ from tools._support import browser_arguments, launch_chromium  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> None:
+    started = time.perf_counter()
     args = browser_arguments(__doc__, argv)
     from playwright.sync_api import expect, sync_playwright
 
@@ -36,6 +38,13 @@ def main(argv: list[str] | None = None) -> None:
         "src/sinter/handover.py",
         "src/sinter/web/report-citations.js",
         "src/sinter/web/reports.js",
+        "src/sinter/web/report-drafts.js",
+        "src/sinter/web/documents.js",
+        "src/sinter/web/documents.css",
+        "src/sinter/web/handover-summary.js",
+        "src/sinter/web/casebooks.js",
+        "src/sinter/web/desktop.css",
+        "src/sinter/web/library.js",
     )
     implementation = {
         name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
@@ -172,6 +181,185 @@ def main(argv: list[str] | None = None) -> None:
                         "handover lays out question-specific checks and quoted "
                         "table; document citations open exact original wording"
                     )
+                    report.get_by_role("tab", name="Document", exact=True).click()
+                    expect(report.get_by_label("Document save state")).to_contain_text(
+                        "Prepared locally; not saved"
+                    )
+                    assert page.evaluate("""() => {
+                        const event = new Event('beforeunload', {cancelable: true});
+                        window.dispatchEvent(event); return event.defaultPrevented;
+                    }""")
+                    report.evaluate("node => node.scrollIntoView({block: 'start'})")
+                    page.screenshot(
+                        path=str(out / "garden-handover-prepared-desktop.png")
+                    )
+                    report.get_by_text("Write handover opening", exact=True).click()
+                    summary = report.locator(".handover-summary")
+
+                    def summary_item(index, item, status, action):
+                        row = summary.locator(".handover-summary-item").nth(index)
+                        row.get_by_label("Item", exact=True).fill(item)
+                        row.get_by_label(
+                            "Recorded status or missing detail — your wording",
+                            exact=True,
+                        ).fill(status)
+                        row.get_by_label(
+                            "Next step — proposed, not accepted", exact=True
+                        ).fill(action)
+                        return row
+
+                    def select_note(row, quote):
+                        source = row.get_by_label(
+                            "Supporting wording from this saved report", exact=True
+                        )
+                        choice = (
+                            source.locator("option")
+                            .filter(
+                                has_text="Review note - fictional practice conditions"
+                            )
+                            .first.get_attribute("value")
+                        )
+                        assert choice
+                        source.select_option(choice)
+                        passage = row.get_by_label(
+                            "Retained passage — select literal wording to use",
+                            exact=True,
+                        )
+                        expect(passage).to_be_visible()
+                        expect(passage).to_have_value(re.compile(re.escape(quote)))
+                        passage.evaluate(
+                            """(node, quote) => {
+                            const start = node.value.indexOf(quote);
+                            if (start < 0) throw new Error('Original wording missing');
+                            node.focus(); node.setSelectionRange(start, start + quote.length);
+                        }""",
+                            quote,
+                        )
+                        row.get_by_role(
+                            "button", name="Use selected wording", exact=True
+                        ).click()
+
+                    equipment = summary_item(
+                        0,
+                        "Equipment quote",
+                        "Not received in the retained practice note.",
+                        "Request the quote before proposing a purchase.",
+                    )
+                    select_note(equipment, "The equipment quote has not been received.")
+                    equipment.locator(".handover-responsibility > summary").click()
+                    equipment.get_by_label(
+                        "Recorded owner type", exact=True
+                    ).select_option("role")
+                    equipment.get_by_label(
+                        "Named person or suggested role", exact=True
+                    ).fill("Fictional treasurer")
+                    equipment.get_by_label(
+                        "Proposed target date — unconfirmed", exact=True
+                    ).fill("2026-10-09")
+                    summary.get_by_role(
+                        "button", name="Add summary item", exact=True
+                    ).click()
+                    summary_item(
+                        1,
+                        "Insurance excess",
+                        "Unknown: no supporting record supplied.",
+                        "Ask for the current insurance schedule.",
+                    )
+                    summary.get_by_role(
+                        "button", name="Add summary item", exact=True
+                    ).click()
+                    guidance = summary_item(
+                        2,
+                        "Current funding guidance",
+                        "No assigned owner in the practice note.",
+                        "Nominate a volunteer to check the current funder guidance.",
+                    )
+                    select_note(
+                        guidance, "The guideline-checking action has no assigned owner."
+                    )
+                    guidance.locator(".handover-responsibility > summary").click()
+                    guidance.get_by_label(
+                        "Recorded owner type", exact=True
+                    ).select_option("unassigned")
+                    summary.get_by_role(
+                        "button", name="Preview opening summary", exact=True
+                    ).click()
+                    summary.get_by_role(
+                        "button", name="Apply reviewed opening summary", exact=True
+                    ).click()
+                    opening = document.locator(".handover-opening-table")
+                    expect(summary).not_to_have_attribute("open", "")
+                    expect(opening).to_have_count(1)
+                    for phrase in (
+                        "Equipment quote",
+                        "Insurance excess",
+                        "Current funding guidance",
+                        "Owner type unknown; acceptance unconfirmed",
+                        "Unassigned",
+                        "acceptance unconfirmed",
+                        "2026-10-09 (unconfirmed; not a funder deadline)",
+                        "Missing supporting record; answer remains unknown",
+                    ):
+                        expect(opening).to_contain_text(phrase)
+                    expect(report.get_by_label("Document save state")).to_contain_text(
+                        "Applied document edits have not been saved"
+                    )
+                    page.evaluate("document.activeElement.blur()")
+                    report.evaluate("node => node.scrollIntoView({block: 'start'})")
+                    page.screenshot(
+                        path=str(out / "garden-handover-opening-desktop.png")
+                    )
+                    page.set_viewport_size({"width": 390, "height": 844})
+                    assert page.evaluate(
+                        "document.documentElement.scrollWidth <= innerWidth"
+                    )
+                    assert opening.evaluate(
+                        "node => node.scrollWidth <= node.clientWidth"
+                    )
+                    expect(opening.get_by_role("row")).to_have_count(4)
+                    expect(opening.get_by_role("columnheader")).to_have_count(4)
+                    expect(opening.get_by_role("cell")).to_have_count(12)
+                    accessible = opening.aria_snapshot()
+                    for phrase in (
+                        "table",
+                        "Item",
+                        "Recorded status — user-entered",
+                        "Next step — proposed",
+                        "Evidence",
+                        "Insurance excess",
+                    ):
+                        assert phrase in accessible, accessible
+                    (out / "garden-handover-opening-390-aria.txt").write_text(
+                        accessible
+                    )
+                    report.evaluate("node => node.scrollIntoView({block: 'start'})")
+                    page.screenshot(path=str(out / "garden-handover-opening-390.png"))
+                    opening.evaluate("node => node.scrollIntoView({block: 'start'})")
+                    page.evaluate("document.activeElement.blur()")
+                    page.screenshot(path=str(out / "garden-handover-reading-390.png"))
+                    (out / "garden-handover-reading-390-state.json").write_text(
+                        json.dumps(
+                            page.evaluate("""() => ({
+                            activeElement: document.activeElement.tagName,
+                            skipLinkFocused: document.querySelector('.skip-link').matches(':focus'),
+                            skipLinkTop: getComputedStyle(document.querySelector('.skip-link')).top,
+                            horizontalOverflow: document.documentElement.scrollWidth > innerWidth
+                        })"""),
+                            indent=2,
+                        )
+                    )
+                    opening.screenshot(
+                        path=str(out / "garden-handover-opening-cards-390.png")
+                    )
+                    expect(
+                        document.locator("table:not(.handover-opening-table)")
+                    ).to_contain_text("Proposed target date (unconfirmed)")
+                    page.set_viewport_size({"width": 1440, "height": 1000})
+                    checks.append(
+                        "explicit three-row opening has actionable proposals, exact quotations, "
+                        "distinct unknown/unassigned owners and an unconfirmed date; "
+                        "390px cards retain every column without changing the original table"
+                    )
                     with page.expect_download() as word_download:
                         report.get_by_role(
                             "button", name="Download Word (.docx)", exact=True
@@ -209,6 +397,9 @@ def main(argv: list[str] | None = None) -> None:
                         "No person has accepted the actions.",
                         "not a confirmed deadline or grant closing date",
                         "The real-world answer remains unknown",
+                        "Insurance excess",
+                        "Missing supporting record; answer remains unknown",
+                        "Request the quote before proposing a purchase.",
                     ):
                         assert phrase in word_text, phrase
                     checks.append(
@@ -436,6 +627,7 @@ def main(argv: list[str] | None = None) -> None:
                 "external_requests": external,
                 "implementation_sha256": implementation,
                 "word_download": retained_word,
+                "elapsed_seconds": round(time.perf_counter() - started, 3),
             },
             indent=2,
         )
