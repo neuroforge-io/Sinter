@@ -7,6 +7,10 @@ a new installed release and does not change any published RC3 asset or receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Describe casebooks and letters by the report or draft they prepare. Keep local
+  source compilation, human review and separately approved optional AI drafting
+  clear; remove vague slogans and the aging casebook novelty label.
+
 - Keep short quoted source tables with their passage label and caption in Word
   handovers. Use compact, readable cells only for the bounded source group;
   preserve original wording, links, review status and ordinary table layout.

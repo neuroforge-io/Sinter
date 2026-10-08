@@ -5,7 +5,7 @@ import {audioForm} from './audio.js';
 import {senderFields} from './profile.js';
 import {campaignLetterReviewCopy} from './campaign-letter.js';
 
-const titles = {research: 'Research a topic.', grants: 'Find funding for good ideas.', brief: 'Write a letter that is ready to use.', meeting: 'Prepare a clear meeting record.'};
+const titles = {research: 'Research a topic.', grants: 'Find funding for good ideas.', brief: 'Prepare a letter for review.', meeting: 'Prepare a clear meeting record.'};
 const descriptions = {
   research: 'Explore a topic through source highlights, citations and gaps to investigate. Keep the original wording within reach.',
   grants: 'Discover opportunities, then check actual requirements. No invented deadlines or automatic eligibility decisions.',

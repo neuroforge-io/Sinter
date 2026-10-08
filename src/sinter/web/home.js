@@ -27,7 +27,7 @@ export function home(go, drafts, settings = {}, openGarden) {
       h('div', {class: 'button-row'}, button('Start a casebook', () => go('casebooks'), 'quiet'),
         button('Try an example', () => go('brief?example=1'), 'quiet'), button('Getting started', () => go('help'), 'quiet'))),
     h('div', {class: 'section-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, 'START WITH A REAL TASK'),
-      h('h2', {}, 'What would you like to get done?')), h('span', {class: 'muted'}, 'No clever prompting needed.')),
+      h('h2', {}, 'What would you like to get done?')), h('span', {class: 'muted'}, 'Review each draft before using it.')),
     h('div', {class: 'card-grid task-grid'}, cards.map(([id, index, category, title, description, label, outcome], position) =>
       h('article', {class: 'card workflow-card'}, h('span', {class: 'card-index', 'aria-hidden': 'true'}, String(position + 1).padStart(2, '0')),
         h('span', {class: 'eyebrow'}, category), h('h3', {}, title), h('p', {}, description), h('small', {class: 'outcome'}, outcome),
@@ -35,7 +35,7 @@ export function home(go, drafts, settings = {}, openGarden) {
     h('section', {class: 'card secondary-tools'}, h('span', {class: 'eyebrow'}, 'FUNDING CAMPAIGNS'), h('h3', {}, 'Keep the whole application together.'),
       h('p', {}, 'Compare opportunities, prepare answers, record quotes and turn missing checks into next actions. Saved on this computer, with the original guidance beside the work.'),
       button('Open funding campaigns', () => go('campaigns'), 'primary')),
-    h('section', {class: 'card secondary-tools'}, h('span', {class: 'eyebrow'}, 'NEW / COMMUNITY CASEBOOKS'), h('h3', {}, 'Scattered information. Connected work.'),
+    h('section', {class: 'card secondary-tools'}, h('span', {class: 'eyebrow'}, 'COMMUNITY CASEBOOKS'), h('h3', {}, 'Prepare a report from your notes.'),
       h('p', {}, 'Bring notes, replies, policies and handovers together. Save a project, ask your questions, and prepare a source-only briefing with the gaps still visible.'),
       button('Open community casebooks', () => go('casebooks'), 'primary')),
     h('div', {class: 'card-grid secondary-tools'},

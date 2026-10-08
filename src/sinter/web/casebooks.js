@@ -309,8 +309,8 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
           confirmLabel: 'Clear pending source'}), clearPending), 'quiet'), pendingNotice, upload.wrap);
   updateSaveState(); drawSources(); await refresh();
   if (preparedReport) drawReport(preparedReport);
-  return h('div', {class: 'stack casebooks-page'}, h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'LESS CHASING. MORE CONTEXT.'),
-    h('h2', {}, 'All the bits. One useful picture.'), h('p', {}, 'Gather scattered notes, replies, policies and past decisions. Find the original wording behind each question and keep the gaps visible.')),
+  return h('div', {class: 'stack casebooks-page'}, h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'COMMUNITY CASEBOOKS'),
+    h('h2', {}, 'Prepare a report from your notes.'), h('p', {}, 'Add notes and questions. Prepare a local report with related source passages and visible gaps, then review the originals. Optional AI drafting uses your configured connection after you approve the context preview.')),
     h('section', {class: 'card'}, h('h3', {}, 'Your saved projects'), catalogue),
     practiceGuide, notice('Local by default. Sources are not fetched or uploaded automatically. Save deliberately, export backups, and review before sharing.'), editor, status, stop, output);
 }
