@@ -32,11 +32,11 @@ def raw_json(path, value):
 
 
 def catalogue_alignment_runtime(count=None):
-    """Actual source catalogue or its exact legacy profile without funding."""
+    """Actual source catalogue or its exact legacy/funding profile."""
     raw = (release.ROOT / "src/sinter/runtime.py").read_bytes()
-    if count is None or count == 54:
+    if count is None or count == 55:
         return raw
-    assert count == 53
+    assert count in {53, 54}
     tree = ast.parse(raw)
     entries = next(
         node.value
@@ -50,7 +50,8 @@ def catalogue_alignment_runtime(count=None):
     entries.elts = [
         entry
         for entry in entries.elts
-        if entry.args[0].value != "campaigns.funding_summary"
+        if entry.args[0].value != "campaigns.focus"
+        and (count == 54 or entry.args[0].value != "campaigns.funding_summary")
     ]
     return ast.unparse(tree).encode()
 
@@ -801,7 +802,7 @@ def test_original_authorization_refuses_pre_temp_browser_schema(tmp_path, monkey
     )
 
 
-@pytest.mark.parametrize("count", [53, 54])
+@pytest.mark.parametrize("count", [53, 54, 55])
 def test_catalogue_alignment_binds_actual_source_count(tmp_path, monkeypatch, count):
     context, pins, source, _events, _results, _modules = orchestration_controls(
         tmp_path, monkeypatch, catalogue_count=count
@@ -809,8 +810,9 @@ def test_catalogue_alignment_binds_actual_source_count(tmp_path, monkeypatch, co
     operations = source_operations(source)
     assert len(operations) == count
     assert ("campaigns.funding_summary" in {row["id"] for row in operations}) is (
-        count == 54
+        count >= 54
     )
+    assert ("campaigns.focus" in {row["id"] for row in operations}) is (count == 55)
     result = release.verify_original(context, pins)
     assert result["gates"]["workflow"]["operations_catalogue"] == count
     assert result["new_installed_execution"] is False
@@ -871,9 +873,9 @@ def test_public_notes_record_pinned_source_count_and_reject_other_profile(
         release.inspect_public(manifest, manifest_sha256=digest, pins=pins)
 
 
-@pytest.mark.parametrize("count", [52, 55, 53.0, True, "54"])
+@pytest.mark.parametrize("count", [52, 56, 53.0, 55.0, True, "54"])
 def test_release_note_count_has_only_the_closed_typed_profiles(count):
-    with pytest.raises(ValueError, match="source-declared 53 or 54"):
+    with pytest.raises(ValueError, match="source-declared 53, 54 or 55"):
         release.release_notes(COMMIT, operations_catalogue=count)
 
 

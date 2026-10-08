@@ -768,10 +768,11 @@ def source_operations(source: dict[str, bytes]) -> list[dict]:
         raise ValueError(
             "The candidate has no admitted operation catalogue."
         ) from error
-    if len(result) not in {53, 54} or len({entry["id"] for entry in result}) != len(result):
+    if len(result) not in {53, 54, 55} or len({entry["id"] for entry in result}) != len(result):
         raise ValueError(
             "The installed workflow requires 53 legacy operations or the "
-            "recognized 54-operation funding extension, with unique IDs."
+            "recognized 54-operation funding or 55-operation focused-copy "
+            "extension, with unique IDs."
         )
     funding = next(
         (entry for entry in result if entry["id"] == "campaigns.funding_summary"),
@@ -782,15 +783,31 @@ def source_operations(source: dict[str, bytes]) -> list[dict]:
             "The legacy 53-operation source contract cannot include the "
             "funding extension in place of an existing operation."
         )
-    if len(result) == 54 and (
+    if len(result) in {54, 55} and (
         funding is None
         or (funding["method"], funding["route"], funding["effect"]) != (
             "POST", "/api/campaigns/funding-summary", "local",
         )
     ):
         raise ValueError(
-            "The 54-operation source contract requires the exact local "
+            "The funding source contract requires the exact local "
             "campaigns.funding_summary POST /api/campaigns/funding-summary operation."
+        )
+    focus = next((entry for entry in result if entry["id"] == "campaigns.focus"), None)
+    if len(result) < 55 and focus is not None:
+        raise ValueError(
+            "The 53/54-operation source contracts cannot replace an existing "
+            "operation with the focused-copy extension."
+        )
+    if len(result) == 55 and (
+        focus is None
+        or (focus["method"], focus["route"], focus["effect"]) != (
+            "POST", "/api/campaigns/focus", "local",
+        )
+    ):
+        raise ValueError(
+            "The 55-operation source contract requires the exact local "
+            "campaigns.focus POST /api/campaigns/focus operation."
         )
     save = next((entry for entry in result if entry["id"] == "documents.docx.save"), {})
     if (save.get("method"), save.get("route"), save.get("effect")) != (

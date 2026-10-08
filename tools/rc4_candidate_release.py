@@ -654,11 +654,12 @@ def release_notes(commit, *, operations_catalogue=None):
     require(
         operations_catalogue is None
         or type(operations_catalogue) is int
-        and operations_catalogue in {53, 54},
-        "Only the source-declared 53 or 54 operation catalogue is supported.",
+        and operations_catalogue in {53, 54, 55},
+        "Only the source-declared 53, 54 or 55 operation catalogue is supported.",
     )
     catalogue = (
-        "the exact source-declared 53-entry legacy or recognized 54-entry funding catalogue"
+        "the exact source-declared 53-entry legacy, recognized 54-entry funding "
+        "or 55-entry focused-copy catalogue"
         if operations_catalogue is None
         else f"the exact {operations_catalogue}-entry source-declared operation catalogue"
     )
