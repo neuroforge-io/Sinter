@@ -20,6 +20,7 @@ import secrets
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -169,6 +170,79 @@ def start_playwright(factory, environment):
     finally:
         os.environ.clear()
         os.environ.update(previous)
+
+
+def create_browser_temporary(record):
+    """Create one exclusive short root, independently of retained output paths."""
+    parent = contract.preflight_browser_temporary()
+    path = Path(tempfile.mkdtemp(prefix=contract.BROWSER_TEMP_PREFIX, dir=parent))
+    record["path"] = str(path)
+    observed = path.lstat()
+    record["identity_before"] = {
+        field: getattr(observed, field) for field in contract.BROWSER_TEMP_IDENTITY
+    }
+    old.require(
+        path.parent == parent
+        and path.resolve(strict=True) == path
+        and len(os.fsencode(path)) <= contract.BROWSER_TEMP_MAX_BYTES
+        and observed.st_mode == (stat.S_IFDIR | 0o700)
+        and observed.st_uid == os.geteuid()
+        and observed.st_gid == os.getegid(),
+        "Exclusive browser temporary ownership differs.",
+    )
+
+
+def remove_browser_temporary(record):
+    """Never follow or remove a redirected/replaced owned root."""
+    path = Path(record["path"])
+    old.require(
+        path.parent == contract.BROWSER_TEMP_PARENT
+        and re.fullmatch(r"sinter-native-[a-z0-9_]{8}", path.name)
+        and len(os.fsencode(path)) <= contract.BROWSER_TEMP_MAX_BYTES,
+        "Owned browser temporary cleanup path differs.",
+    )
+    observed = path.lstat()
+    record["identity_after"] = {
+        field: getattr(observed, field) for field in contract.BROWSER_TEMP_IDENTITY
+    }
+    old.exact(
+        record["identity_after"],
+        record["identity_before"],
+        "Browser temporary root was replaced before cleanup.",
+    )
+    old.require(
+        observed.st_mode == (stat.S_IFDIR | 0o700)
+        and observed.st_uid == os.geteuid()
+        and observed.st_gid == os.getegid()
+        and shutil.rmtree.avoids_symlink_attacks,
+        "Browser temporary removal is not owned and descriptor-safe.",
+    )
+    shutil.rmtree(path)
+    record["removed"] = not os.path.lexists(path)
+    old.require(record["removed"], "Owned browser temporary root remains.")
+
+
+def wait_chromium_debugger(process, home, timeout=10):
+    """Admit Chromium startup before allocating the Playwright driver."""
+    deadline = time.monotonic() + timeout
+    active_file = home / "profile/DevToolsActivePort"
+    while time.monotonic() < deadline:
+        old.require(
+            process.poll() is None,
+            "Owned Chromium exited before its private debugger appeared.",
+        )
+        if active_file.is_file():
+            active = menu.regular_bytes(active_file, 1024).decode("ascii").splitlines()
+            if (
+                len(active) == 2
+                and re.fullmatch(r"[0-9]{1,5}", active[0])
+                and re.fullmatch(r"/devtools/browser/[0-9a-f-]+", active[1])
+            ):
+                port = int(active[0])
+                old.require(0 < port <= 65535, "Debugger port is invalid.")
+                return port
+        time.sleep(0.025)
+    raise TimeoutError("Owned Chromium debugger did not appear.")
 
 
 def read_json(path, limit=2 * 1024 * 1024):
@@ -930,9 +1004,8 @@ def children():
 def browser(root, executable):
     from playwright.sync_api import expect, sync_playwright
 
-    wait_file(root / "state.json", lambda v: v.get("phase") == "ready", 90)
     proof = {
-        "schema": "sinter-rc4-native-handoff-browser/v2",
+        "schema": "sinter-rc4-native-handoff-browser/v3",
         "page_errors": [],
         "external_requests": 0,
         "quit_posts": 0,
@@ -952,13 +1025,22 @@ def browser(root, executable):
     playwright = None
     chrome_process = None
     chrome_streams = {}
+    temporary = None
     try:
+        contract.preflight_browser_temporary()
+        wait_file(root / "state.json", lambda v: v.get("phase") == "ready", 90)
+        temporary = proof["temporary_directory"] = {
+            "path": None,
+            "identity_before": None,
+            "identity_after": None,
+            "removed": False,
+        }
+        create_browser_temporary(temporary)
+        browser_tmp = Path(temporary["path"])
         browser_home.mkdir(mode=0o700)
-        (browser_home / "tmp").mkdir(mode=0o700)
-        os.environ["TMPDIR"] = str(browser_home / "tmp")
-        previous_children = children()
+        os.environ["TMPDIR"] = str(browser_tmp)
         for name in ("stdout", "stderr"):
-            chrome_streams[name] = tempfile.TemporaryFile()
+            chrome_streams[name] = tempfile.TemporaryFile(dir=browser_tmp)
         relay = transport.Relay(root)
         thread = threading.Thread(target=relay.serve_forever, daemon=True)
         thread.start()
@@ -967,10 +1049,24 @@ def browser(root, executable):
         browser_environment = {
             "PATH": os.defpath,
             "HOME": str(browser_home),
-            "TMPDIR": str(browser_home / "tmp"),
+            "TMPDIR": str(browser_tmp),
             "LANG": "C.UTF-8",
             "LC_ALL": "C.UTF-8",
         }
+        chrome_row = proof["chromium_process"] = {
+            "argv": contract.chromium_argv(browser_home)
+        }
+        chrome_process = subprocess.Popen(
+            chrome_row["argv"],
+            stdin=subprocess.DEVNULL,
+            stdout=chrome_streams["stdout"],
+            stderr=chrome_streams["stderr"],
+            start_new_session=True,
+            env=browser_environment,
+        )
+        chrome_row["pid"] = chrome_process.pid
+        proof["debug_port"] = wait_chromium_debugger(chrome_process, browser_home)
+        previous_children = children()
         playwright = start_playwright(sync_playwright, browser_environment)
         new_children = children() - previous_children
         old.require(
@@ -995,42 +1091,6 @@ def browser(root, executable):
             "sha256": native.binary_digest(driver_path),
             "sha256_after": None,
         }
-        chrome_row = proof["chromium_process"] = {
-            "argv": contract.chromium_argv(browser_home)
-        }
-        chrome_process = subprocess.Popen(
-            chrome_row["argv"],
-            stdin=subprocess.DEVNULL,
-            stdout=chrome_streams["stdout"],
-            stderr=chrome_streams["stderr"],
-            start_new_session=True,
-            env=browser_environment,
-        )
-        chrome_row["pid"] = chrome_process.pid
-        deadline = time.monotonic() + 10
-        active_file = browser_home / "profile/DevToolsActivePort"
-        while time.monotonic() < deadline:
-            old.require(
-                chrome_process.poll() is None,
-                "Owned Chromium exited before its private debugger appeared.",
-            )
-            if active_file.is_file():
-                active = (
-                    menu.regular_bytes(active_file, 1024).decode("ascii").splitlines()
-                )
-                if (
-                    len(active) == 2
-                    and re.fullmatch(r"[0-9]{1,5}", active[0])
-                    and re.fullmatch(r"/devtools/browser/[0-9a-f-]+", active[1])
-                ):
-                    proof["debug_port"] = int(active[0])
-                    old.require(
-                        0 < proof["debug_port"] <= 65535, "Debugger port is invalid."
-                    )
-                    break
-            time.sleep(0.025)
-        else:
-            raise TimeoutError("Owned Chromium debugger did not appear.")
         chrome = playwright.chromium.connect_over_cdp(
             f"http://127.0.0.1:{proof['debug_port']}"
         )
@@ -1311,6 +1371,23 @@ def browser(root, executable):
                 "observe-driver-after",
                 lambda: native.binary_digest(Path(proof["driver_process"]["path"])),
             )
+        if temporary is not None and temporary["path"] is not None:
+            def remove_temporary():
+                old.require(
+                    chrome_process is None
+                    or proof["chromium_process"].get("owned_group_remaining") is False,
+                    "Temporary cleanup refused while Chromium remains owned.",
+                )
+                old.require(
+                    playwright is None or proof["cleanup"]["owned_driver_gone"] is True,
+                    "Temporary cleanup refused while the browser driver remains.",
+                )
+                remove_browser_temporary(temporary)
+
+            clean(
+                "browser-temporary.remove",
+                remove_temporary,
+            )
         if cleanup.errors:
             proof["cleanup_errors"] = cleanup.errors
         publication = diagnostic_publisher(
@@ -1585,6 +1662,7 @@ def observe_handoff_outer(
 
 def run(args):
     old.require(platform.system() == "Linux", "Only the Linux host route is supported.")
+    contract.preflight_browser_temporary()
     old.require(not os.path.lexists(args.output), "Use a new private output root.")
     output = args.output.resolve()
     for path in (

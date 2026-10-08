@@ -90,6 +90,21 @@ The transport conditions are labelled fixtures, not model/service outages.
 The test does not claim to demonstrate arbitrary job cancellation, model quality,
 physical menu activation, live accounts, upgrades or other operating systems.
 
+The browser profile remains in the owned evidence tree. Its temporary files use
+a separate exclusive `0700` directory in the fixed canonical `/tmp` namespace,
+with a 55-byte UTF-8 path budget checked before any installed resource is acquired.
+Long or Unicode evidence paths therefore do not lengthen Chromium's Unix socket.
+The v3 browser receipt binds that directory's device, inode, permissions and
+executor ownership before and after use, and requires complete removal. Existing
+evidence-tree entry rules, native process checks and input conservation stay intact.
+
+Chromium must expose its actual loopback debugger before Playwright starts. An
+early browser abort retains its original PID, exit and complete output streams,
+then attempts every owned cleanup. It does not start an unnecessary driver or
+suppress startup/cleanup diagnostics. An aborted rehearsal remains failed; old
+v2 receipts do not qualify under the new source and contract. Focused source or
+cached-browser startup tests do not establish installed handoff acceptance.
+
 ## Running and checking exact identities
 
 Only use a new private output root outside the repository and candidate inputs.

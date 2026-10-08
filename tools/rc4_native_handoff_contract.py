@@ -15,7 +15,7 @@ import re
 import shutil
 import stat
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -35,6 +35,72 @@ FILES = (
     "tests/test_rc4_native_handoff.py",
     "docs/RC4_NATIVE_HANDOFF.md",
 )
+BROWSER_TEMP_PARENT = Path("/tmp")
+BROWSER_TEMP_PREFIX = "sinter-native-"
+BROWSER_TEMP_MAX_BYTES = 55
+BROWSER_TEMP_IDENTITY = ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid")
+
+
+def preflight_browser_temporary():
+    """Admit the fixed short namespace before acquiring any owned resource."""
+    parent = BROWSER_TEMP_PARENT
+    old.require(
+        str(parent) == "/tmp"
+        and parent.resolve(strict=True) == parent
+        and stat.S_ISDIR(parent.lstat().st_mode),
+        "Use the canonical fixed browser temporary parent.",
+    )
+    observed = parent.lstat()
+    old.require(
+        observed.st_uid in {0, os.geteuid()}
+        and (not observed.st_mode & 0o022 or observed.st_mode & stat.S_ISVTX),
+        "The fixed browser temporary parent is not safe for exclusive creation.",
+    )
+    old.require(
+        BROWSER_TEMP_PREFIX == "sinter-native-"
+        and len(os.fsencode(parent / (BROWSER_TEMP_PREFIX + "a" * 8)))
+        <= BROWSER_TEMP_MAX_BYTES,
+        "Browser temporary UTF-8 socket paths exceed the finite budget.",
+    )
+    old.require(
+        shutil.rmtree.avoids_symlink_attacks,
+        "Owned browser cleanup requires descriptor-safe removal.",
+    )
+    return parent
+
+
+def validate_browser_temporary(value):
+    """Require exact private ownership, unchanged inode and completed removal."""
+    old.require(
+        type(value) is dict
+        and set(value) == {"path", "identity_before", "identity_after", "removed"},
+        "Browser temporary ownership fields differ.",
+    )
+    path = value["path"]
+    old.require(
+        type(path) is str
+        and len(path.encode("utf-8")) <= BROWSER_TEMP_MAX_BYTES
+        and re.fullmatch(r"/tmp/sinter-native-[a-z0-9_]{8}", path)
+        and PurePosixPath(path).parent == PurePosixPath("/tmp"),
+        "Browser temporary path is outside its finite fixed namespace.",
+    )
+    before = value["identity_before"]
+    old.require(
+        type(before) is dict
+        and set(before) == set(BROWSER_TEMP_IDENTITY)
+        and all(type(before[k]) is int and before[k] >= 0 for k in before)
+        and before["st_ino"] > 0
+        and before["st_mode"] == (stat.S_IFDIR | 0o700)
+        and before["st_uid"] == getattr(os, "geteuid", lambda: 0)()
+        and before["st_gid"] == getattr(os, "getegid", lambda: 0)(),
+        "Browser temporary root is not one exclusively owned private directory.",
+    )
+    exact(value["identity_after"], before, "Browser temporary root was replaced.")
+    exact(value["removed"], True, "Browser temporary root remains.")
+    old.require(
+        not os.path.lexists(path), "Observed browser temporary root still exists."
+    )
+
 PHASES = (
     "refuse-scoped",
     "open-browser",
@@ -1147,15 +1213,17 @@ def validate_browser(value, inner):
                 "chromium_process",
                 "debug_port",
                 "confirmed_ack",
+                "temporary_directory",
             }
         ),
         "Browser evidence fields differ.",
     )
     exact(
         value["schema"],
-        "sinter-rc4-native-handoff-browser/v2",
+        "sinter-rc4-native-handoff-browser/v3",
         "Unknown actual browser observation schema.",
     )
+    validate_browser_temporary(value["temporary_directory"])
     chromium = value["chromium"]
     old.require(
         type(chromium) is dict

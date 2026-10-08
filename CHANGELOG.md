@@ -7,6 +7,11 @@ a new installed release and does not change any published RC3 asset or receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Fix the qualifier's observed Chromium socket-path abort with a separate short
+  owned temporary directory and strict path, ownership and removal evidence.
+  Start Playwright only after Chromium's debugger is ready; retain early-abort
+  output and cleanup failures. A new installed qualification remains required.
+
 - Describe casebooks and letters by the report or draft they prepare. Keep local
   source compilation, human review and separately approved optional AI drafting
   clear; remove vague slogans and the aging casebook novelty label.

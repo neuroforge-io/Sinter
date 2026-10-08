@@ -10,6 +10,7 @@ import copy
 import json
 import os
 import socket
+import stat
 import subprocess
 import sys
 import threading
@@ -694,7 +695,25 @@ def test_canonical_unicode_json_writer_and_fixed_fixture_keep_originals(tmp_path
 def browser_fixture(inner):
     scoped = json.loads(old.stream_bytes(inner["seed"][1]["stdout"]))["result"]
     return {
-        "schema": "sinter-rc4-native-handoff-browser/v2",
+        "schema": "sinter-rc4-native-handoff-browser/v3",
+        "temporary_directory": {
+            "path": "/tmp/sinter-native-fixturea",
+            "identity_before": {
+                "st_dev": 1,
+                "st_ino": 2,
+                "st_mode": stat.S_IFDIR | 0o700,
+                "st_uid": getattr(os, "geteuid", lambda: 0)(),
+                "st_gid": getattr(os, "getegid", lambda: 0)(),
+            },
+            "identity_after": {
+                "st_dev": 1,
+                "st_ino": 2,
+                "st_mode": stat.S_IFDIR | 0o700,
+                "st_uid": getattr(os, "geteuid", lambda: 0)(),
+                "st_gid": getattr(os, "getegid", lambda: 0)(),
+            },
+            "removed": True,
+        },
         "origin": "http://127.0.0.1:32124",
         "relay_port": 32124,
         "debug_port": 32125,
@@ -806,6 +825,12 @@ def test_complete_synthetic_browser_parser_control_has_no_release_admission(synt
         "final_ack_502",
         "final_ack_bool",
         "final_ack_body",
+        "old_browser_schema",
+        "temporary_owner",
+        "temporary_inode",
+        "temporary_mode",
+        "temporary_unremoved",
+        "temporary_unicode_path",
     ],
 )
 def test_browser_refuses_resealed_uncertain_replay_wrong_content_or_resource_claims(
@@ -873,6 +898,20 @@ def test_browser_refuses_resealed_uncertain_replay_wrong_content_or_resource_cla
         value["confirmed_ack"]["body"] = producer.original(
             output({"error": "not accepted"})
         )
+    elif attack == "old_browser_schema":
+        value["schema"] = "sinter-rc4-native-handoff-browser/v2"
+    elif attack == "temporary_owner":
+        value["temporary_directory"]["identity_before"]["st_uid"] += 1
+        value["temporary_directory"]["identity_after"]["st_uid"] += 1
+    elif attack == "temporary_inode":
+        value["temporary_directory"]["identity_after"]["st_ino"] += 1
+    elif attack == "temporary_mode":
+        value["temporary_directory"]["identity_before"]["st_mode"] |= 0o022
+        value["temporary_directory"]["identity_after"]["st_mode"] |= 0o022
+    elif attack == "temporary_unremoved":
+        value["temporary_directory"]["removed"] = False
+    elif attack == "temporary_unicode_path":
+        value["temporary_directory"]["path"] = "/tmp/sinter-native-" + "資料🧭" * 12
     with pytest.raises((ValueError, TypeError, KeyError)):
         contract.validate_browser(value, inner)
 
@@ -1145,6 +1184,19 @@ def test_browser_body_failure_survives_every_secondary_close_and_retains_proof(
     root = tmp_path / "handoff-container/out/handoff"
     root.mkdir(parents=True)
     (root.parent.parent / "client").mkdir()
+    monkeypatch.setattr(contract, "preflight_browser_temporary", lambda: None)
+    private = root.parent.parent / "client/controlled-browser-temp"
+
+    def create(record):
+        private.mkdir()
+        record.update(path=str(private), identity_before={"controlled": True})
+
+    def remove(record):
+        private.rmdir()
+        record.update(identity_after=record["identity_before"], removed=True)
+
+    monkeypatch.setattr(producer, "create_browser_temporary", create)
+    monkeypatch.setattr(producer, "remove_browser_temporary", remove)
     primary = RuntimeError("original visible UI body failed")
     observed = []
 

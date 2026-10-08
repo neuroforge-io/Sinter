@@ -617,8 +617,8 @@ def verify_original(context, pins):
         validate_host_pair(raw["host"])
     handoff = strict_json(regular(context.native / "handoff-container/browser.json"))
     require(
-        handoff.get("schema") == "sinter-rc4-native-handoff-browser/v2",
-        "The native handoff lacks mandatory actual after fingerprints.",
+        handoff.get("schema") == "sinter-rc4-native-handoff-browser/v3",
+        "The native handoff lacks actual after fingerprints and owned temp evidence.",
     )
     require(
         _inventories(context) == before,

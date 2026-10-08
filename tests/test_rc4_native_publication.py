@@ -186,6 +186,7 @@ def owner_args(tmp_path, monkeypatch):
         return observed
 
     monkeypatch.setattr(native.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(native.contract, "preflight_browser_temporary", lambda: None)
     monkeypatch.setattr(native.os, "geteuid", lambda: 1000, raising=False)
     monkeypatch.setattr(Path, "stat", stat)
     monkeypatch.setattr(native.contract, "HOST_CHROMIUM", chromium)
@@ -279,6 +280,31 @@ def browser_setup(folder, monkeypatch, primary, *, later_read=None):
     monkeypatch.setitem(sys.modules, "playwright", SimpleNamespace())
     monkeypatch.setitem(sys.modules, "playwright.sync_api", inert)
     monkeypatch.setattr(native, "wait_file", lambda *_: {})
+    monkeypatch.setattr(native.contract, "preflight_browser_temporary", lambda: None)
+    private = root.parent.parent / "client/controlled-browser-temp"
+
+    def create(record):
+        private.mkdir()
+        record.update(path=str(private), identity_before={"controlled": True})
+
+    def remove(record):
+        private.rmdir()
+        record.update(identity_after=record["identity_before"], removed=True)
+
+    monkeypatch.setattr(native, "create_browser_temporary", create)
+    monkeypatch.setattr(native, "remove_browser_temporary", remove)
+    monkeypatch.setattr(
+        native.subprocess,
+        "Popen",
+        lambda *_a, **_k: SimpleNamespace(pid=999999999, poll=lambda: 0, returncode=0),
+    )
+    monkeypatch.setattr(native, "wait_chromium_debugger", lambda *_: 32125)
+    monkeypatch.setattr(
+        native.native,
+        "stop_process",
+        lambda _process, row: row.update(exit_code=0, owned_group_remaining=False),
+    )
+    monkeypatch.setattr(native, "children", lambda: fail(primary))
     digests = iter(["a" * 64, later_read or "a" * 64])
 
     def digest(*_):
@@ -286,7 +312,6 @@ def browser_setup(folder, monkeypatch, primary, *, later_read=None):
         return fail(value) if isinstance(value, BaseException) else value
 
     monkeypatch.setattr(native.native, "binary_digest", digest)
-    monkeypatch.setattr(native, "children", lambda: fail(primary))
     return root
 
 
