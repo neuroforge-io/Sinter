@@ -7,6 +7,11 @@ a new installed release and does not change any published RC3 asset or receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Keep short quoted source tables with their passage label and caption in Word
+  handovers. Use compact, readable cells only for the bounded source group;
+  preserve original wording, links, review status and ordinary table layout.
+  Avoid repeated document parsing when a report contains many small tables.
+
 - Prepare only the evidence folders used by each installed recovery profile.
   Keep the verifier's strict rejection of unexpected empty folders. The original
   recovery exercise completed its ten app lifetimes but failed qualification on

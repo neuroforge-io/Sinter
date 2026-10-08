@@ -2858,3 +2858,40 @@ regressions were then independently checked once using an explicit private pytes
 temporary root: five passed, 329 deselected, in 0.36 seconds, with empty stderr.
 That narrow current-source result does not override the broader timeout or qualify
 the failed installed run. Fresh hosted and installed checks remain required.
+
+### 8 October: readable source tables without an extra Word page
+
+The corrected recovery source at `d179469729a5031885c6e29fa1ca4330134e50a4`
+passed all twelve jobs in hosted Quality run `37731365331`, attempt 1. This is
+source evidence only. The fresh package and installed gates remain held while
+system-drive capacity is insufficiently established; published previews and
+the earlier installed failure are unchanged.
+
+Separate development improves a specific Word handover defect observed in the
+saved fictional garden walkthrough. Its small source table originally split
+across pages 3 and 4, separating the second row from its passage label. The first
+grouping draft preserved context but created a fifth page with only two reference
+records. That rendered result was rejected. Compact cells now keep the passage
+label, source caption, disclaimer and both rows together on page 3; the complete
+reference key fits page 4 again. All four rendered A4 pages were independently
+reviewed using LibreOffice 24.2, without starting Sinter or using a model.
+
+The change uses 10-point cells, single line spacing and smaller padding only for
+the admitted short source group. Large, generic and ambiguous tables retain
+normal flow. All 95 original paragraphs, 22 internal links and eight bookmarks
+are unchanged. Source identities, unknown owners, unconfirmed dates and review
+status are not inferred or rewritten. Three focused export suites pass 159 cases;
+lint, formatting and whitespace checks pass.
+
+Whole-export profiling caught another rejected draft: a 406,213-character report
+with 64 small tables rose from about 0.09 seconds to 2.5 seconds because of
+repeated prefix parsing. Once-built indexes remove that repeated work. The final
+paired measurements are about 0.015 seconds for the saved 7,183-character
+handover and 0.10–0.11 seconds for the large report. These are local observations,
+not a general performance guarantee. Structural regressions bound parsing to one
+full document and one small parse per admitted group.
+
+The adversarial review rates this handover's UX 7.6, functionality 8.1 and
+aesthetics 7.4. Dense guidance and prominent technical identifiers remain
+improvement opportunities. This is bounded source and document polish, not new
+installed-platform qualification or a whole-product 10/10 assessment.

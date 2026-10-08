@@ -262,6 +262,197 @@ def test_tables_are_editable_keep_all_cells_and_repeat_header():
     ] == ["center", "right", "left"]
 
 
+SOURCE_TABLE = (
+    "### Passage 3\n\n"
+    "> Original source: Action table — fictional café\n\n"
+    "Quoted source table. Blank cells are shown as —; entries do not confirm "
+    "assignments or dates.\n\n"
+    "> | Action | Scope | Owner | Proposed target date (unconfirmed) | Status |\n"
+    "> | --- | --- | --- | --- | --- |\n"
+    "> | Check current funder guidelines | — | — | — | not\\_started |\n"
+    "> | Obtain equipment quote | — | Fictional treasurer | 2026-10-09 | "
+    "[in\\_progress](https://example.invalid/status) |\n\n"
+)
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        "",
+        "> Source link (supplied): https://example.invalid/source\n"
+        "> Date label (supplied): Not confirmed\n\n",
+    ],
+)
+def test_short_quoted_source_table_keeps_caption_and_rows_without_chaining_tail(
+    metadata,
+):
+    body = (
+        SOURCE_TABLE.replace("Quoted source table.", metadata + "Quoted source table.")
+        + "### Passage 4\n\nOwner acceptance and dates remain unconfirmed.\n\n"
+        "> Excerpt ID: `Eexample3`; source ID: `Sexample3`; range: 0–178."
+    )
+    original = body
+    _, parts = package(body)
+    with patch(
+        "sinter.docx_export._source_table_groups",
+        return_value=(frozenset(), frozenset()),
+        create=True,
+    ):
+        _, generic = package(body)
+    document = parts["word/document.xml"]
+    children = list(document.find("w:body", NS))
+    table_at = 4 if metadata else 3
+    assert all(p.find("w:pPr/w:keepNext", NS) is not None for p in children[:table_at])
+    table = children[table_at]
+    assert table.tag == f"{{{W}}}tbl"
+    rows = table.findall("w:tr", NS)
+    assert all(row.find("w:trPr/w:cantSplit", NS) is not None for row in rows)
+    assert rows[0].find("w:trPr/w:tblHeader", NS) is not None
+    for row in rows[:-1]:
+        assert len(row.findall("w:tc/w:p/w:pPr/w:keepNext", NS)) == 5
+    assert not rows[-1].findall(".//w:keepNext", NS)
+    assert not any(p.findall(".//w:keepNext", NS) for p in children[table_at + 1 :])
+    style = parts["word/styles.xml"].find('w:style[@w:styleId="SourceTableCell"]', NS)
+    assert style is not None
+    assert style.find("w:rPr/w:sz", NS).get(f"{{{W}}}val") == "20"
+    assert style.find("w:pPr/w:spacing", NS).attrib == {
+        f"{{{W}}}before": "0",
+        f"{{{W}}}after": "0",
+        f"{{{W}}}line": "240",
+        f"{{{W}}}lineRule": "auto",
+    }
+    parts["word/styles.xml"].remove(style)
+    for cell in table.findall("w:tr/w:tc/w:p", NS):
+        properties = cell.find("w:pPr", NS)
+        cell_style = properties.find("w:pStyle", NS)
+        assert cell_style.get(f"{{{W}}}val") == "SourceTableCell"
+        properties.remove(cell_style)
+    for margin in table.findall("w:tblPr/w:tblCellMar/*", NS):
+        assert margin.get(f"{{{W}}}w") == "60"
+        margin.set(f"{{{W}}}w", "100")
+    # Removing only declared layout properties restores all original XML parts.
+    for properties in document.findall(".//w:pPr", NS):
+        for hint in properties.findall("w:keepNext", NS):
+            properties.remove(hint)
+    assert {name: ET.tostring(node) for name, node in parts.items()} == {
+        name: ET.tostring(node) for name, node in generic.items()
+    }
+    assert body == original
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        SOURCE_TABLE.replace("fictional café", "fictional  café"),
+        SOURCE_TABLE.replace("fictional café", "fictional\tcafé"),
+        SOURCE_TABLE.replace("fictional café", "fictional café\n> extra caption"),
+        SOURCE_TABLE.replace("fictional café", "wide 漢字 title"),
+        SOURCE_TABLE.replace("Check current funder guidelines", "wide 漢字 action"),
+        SOURCE_TABLE.replace("Check current funder guidelines", "emoji 🌿 action"),
+        SOURCE_TABLE.replace("Check current funder guidelines", "long " * 100),
+        SOURCE_TABLE.replace(
+            "https://example.invalid/status", "https://example.invalid/" + "x" * 100
+        ),
+        SOURCE_TABLE.replace("not\\_started", "`not_started`"),
+        SOURCE_TABLE.rstrip() + "\n> | Another action | — | — | — | unknown |\n\n",
+        SOURCE_TABLE.partition("> | Action")[0]
+        + "> | A | B | C | D | E | F |\n> | --- | --- | --- | --- | --- | --- |\n"
+        "> | one | two | three | four | five | six |\n\n",
+        SOURCE_TABLE.replace("entries do not confirm", "entries might confirm"),
+        SOURCE_TABLE.replace("\n\n> | Action", "\n\nIntervening note.\n\n> | Action"),
+        SOURCE_TABLE.replace(
+            "\n\n> | Action", "\n\n" + PAGE_BREAK_MARKER + "\n\n> | Action"
+        ),
+        "```text\n" + SOURCE_TABLE + "```",
+        "\n".join("> " + line for line in SOURCE_TABLE.splitlines()),
+        "- Nested source\n\n"
+        + "\n".join("  " + line for line in SOURCE_TABLE.splitlines()),
+        SOURCE_TABLE.replace("> |", "|"),
+        SOURCE_TABLE + SOURCE_TABLE,
+        SOURCE_TABLE + SOURCE_TABLE.replace("### Passage 3", "### **Passage 3**"),
+        SOURCE_TABLE.replace("### Passage 3", "### \\Passage 3"),
+        "```text\n"
+        + SOURCE_TABLE
+        + "```\n\n"
+        + "\n".join("   " + line for line in SOURCE_TABLE.splitlines()),
+        "```text\n"
+        + SOURCE_TABLE
+        + "```\n\n- List intro\n\n"
+        + "\n".join("  " + line for line in SOURCE_TABLE.splitlines()),
+    ],
+)
+def test_source_table_pagination_refuses_ambiguous_or_unbounded_material(body):
+    result, _ = package(body)
+    with patch(
+        "sinter.docx_export._source_table_groups",
+        return_value=(frozenset(), frozenset()),
+        create=True,
+    ):
+        generic, _ = package(body)
+    assert result.content == generic.content
+
+
+def test_adjacent_short_source_tables_end_their_keep_chain_at_each_final_row():
+    _, parts = package(SOURCE_TABLE + SOURCE_TABLE.replace("Passage 3", "Passage 4"))
+    tables = parts["word/document.xml"].findall("w:body/w:tbl", NS)
+    assert len(tables) == 2
+    for table in tables:
+        rows = table.findall("w:tr", NS)
+        assert rows[0].findall(".//w:keepNext", NS)
+        assert not rows[-1].findall(".//w:keepNext", NS)
+
+
+def test_compact_source_table_does_not_change_adjacent_generic_table_or_code():
+    body = (
+        SOURCE_TABLE
+        + "| Task | Owner |\n| --- | --- |\n| Longer ordinary record | Unknown |\n\n"
+        "```text\n  literal source spacing\n\nretained code\n```"
+    )
+    _, parts = package(body)
+    with patch(
+        "sinter.docx_export._source_table_groups",
+        return_value=(frozenset(), frozenset()),
+    ):
+        _, generic = package(body)
+    tables = parts["word/document.xml"].findall("w:body/w:tbl", NS)
+    ordinary = generic["word/document.xml"].findall("w:body/w:tbl", NS)
+    assert len(tables) == len(ordinary) == 2
+    assert ET.tostring(tables[1]) == ET.tostring(ordinary[1])
+    assert not tables[1].findall(".//w:keepNext", NS)
+    assert not tables[1].findall("w:tr/w:tc/w:p/w:pPr/w:pStyle", NS)
+    code_parts = []
+    for document in (parts["word/document.xml"], generic["word/document.xml"]):
+        found = [
+            node
+            for node in document.findall("w:body/w:p", NS)
+            if node.find('w:pPr/w:pStyle[@w:val="Code"]', NS) is not None
+        ]
+        assert len(found) == 1
+        code_parts.append(ET.tostring(found[0]))
+    assert code_parts[0] == code_parts[1]
+
+
+def test_source_table_grouping_parses_document_once_and_only_small_groups_afterward():
+    body = (
+        "Retained source words. " * 5000
+        + "\n\n"
+        + "".join(
+            SOURCE_TABLE.replace("Passage 3", f"Passage {number}")
+            for number in range(1, 65)
+        )
+    )
+    with patch("sinter.docx_export.parse", wraps=parse) as parser:
+        _, parts = package(body)
+    calls = [call.args[0] for call in parser.call_args_list]
+    assert calls[0] == body
+    assert len(calls) == 65
+    assert all(len(fragment) <= 800 for fragment in calls[1:])
+    tables = parts["word/document.xml"].findall("w:body/w:tbl", NS)
+    assert len(tables) == 64
+    assert all(table.findall(".//w:keepNext", NS) for table in tables)
+    assert text(parts["word/document.xml"]).startswith("Retained source words. " * 5000)
+
+
 def test_quoted_reference_paragraph_keeps_identity_and_range_on_one_page():
     _, parts = package(
         "## Passage reference key\n\n"

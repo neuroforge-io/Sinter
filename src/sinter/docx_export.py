@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import io
 import re
+import textwrap
+import unicodedata
 import zipfile
 from copy import deepcopy
 from dataclasses import dataclass, replace
@@ -20,6 +22,12 @@ MAX_MARKDOWN = 500_000
 # Keep one bounded source note together, never an arbitrary quote dossier.
 _MAX_SOURCE_NOTE_GROUP_CHARS = 2400
 _MAX_SOURCE_NOTE_GROUP_LINES = 20
+_MAX_SOURCE_TABLE_GROUP_CHARS = 800
+_MAX_SOURCE_TABLE_GROUP_LINES = 16
+_SOURCE_TABLE_DISCLAIMER = (
+    "Quoted source table. Blank cells are shown as —; entries do not confirm "
+    "assignments or dates."
+)
 _MAX_PASSAGE_NAVIGATION_RECORDS = 64
 _REFERENCE_KEY_HEADING = "Passage reference key"
 _REFERENCE_KEY_INTRO = (
@@ -172,6 +180,95 @@ def _source_note_keep_next(blocks: tuple[Block, ...]) -> frozenset[int]:
             # Stop at the note: the following passage/key cannot be chained.
             keep.update(range(index, end))
     return frozenset(keep)
+
+
+def _source_table_groups(
+    markdown: str, blocks: tuple[Block, ...]
+) -> tuple[frozenset[int], frozenset[int]]:
+    """Group one short supplied table, never verify its source or join its tail."""
+    pattern = (
+        r"^### (?P<label>Passage [1-9][0-9]*)\n\n"
+        r"> Original source: [^\n]+\n\n"
+        r"(?:> Source link \(supplied\): [^\n]+\n"
+        r"> Date label \(supplied\): [^\n]+\n\n)?"
+        + re.escape(_SOURCE_TABLE_DISCLAIMER)
+        + r"\n\n(?:> \|[^\n]*\|\n){3,4}(?=\n|$)"
+    )
+    normalized = markdown.replace("\r\n", "\n").replace("\r", "\n")
+    matches = list(re.finditer(pattern, normalized, re.M))
+    if len(matches) > _MAX_PASSAGE_NAVIGATION_RECORDS:
+        return frozenset(), frozenset()
+    raw_headings: dict[str, int] = {}
+    for heading in re.finditer(
+        r"(?m)^[^\n]*### (Passage [1-9][0-9]*)[ \t]*$", normalized
+    ):
+        label = heading[1]
+        raw_headings[label] = raw_headings.get(label, 0) + 1
+    parsed_headings: dict[str, list[int]] = {}
+    for index, block in enumerate(blocks):
+        if isinstance(block, Paragraph) and block.heading == 3:
+            label = "".join(span.text for span in block.spans)
+            if re.fullmatch(r"Passage [1-9][0-9]*", label):
+                parsed_headings.setdefault(label, []).append(index)
+
+    def wrapped_lines(
+        spans: tuple[Span, ...], width: int, *, metadata: bool = False
+    ) -> int:
+        text = "".join(span.text for span in spans)
+        if (
+            any(span.code or (span.href and len(span.href) > 96) for span in spans)
+            or text != text.strip()
+            or "  " in text
+            or any(len(word) > 96 for word in text.split())
+            or any(
+                char.isspace() and char not in (" ", "\n" if metadata else " ")
+                for char in text
+            )
+            # Wide glyphs need a different wrap estimate; preserve normal flow.
+            or any(unicodedata.east_asian_width(char) in "WF" for char in text)
+        ):
+            return _MAX_SOURCE_TABLE_GROUP_LINES + 1
+        return sum(
+            max(1, len(textwrap.wrap(line, width, break_on_hyphens=False)))
+            for line in text.split("\n")
+        )
+
+    keep, tables = set(), set()
+    for match in matches:
+        if (
+            len(match[0]) > _MAX_SOURCE_TABLE_GROUP_CHARS
+            or "  " in match[0]
+            or raw_headings.get(match["label"]) != 1
+            or len(parsed_headings.get(match["label"], ())) != 1
+        ):
+            continue
+        group = parse(match[0])
+        if not group or not isinstance(group[-1], Table):
+            continue
+        table = group[-1]
+        if not (2 <= len(table.rows) <= 3 and 2 <= len(table.alignments) <= 5):
+            continue
+        width = 9360 // len(table.alignments) // 120 - 2
+        lines = sum(
+            wrapped_lines(block.spans, 72, metadata=len(group) == 5 and at == 2)
+            for at, block in enumerate(group[:-1])
+        )
+        lines += sum(
+            max(wrapped_lines(cell, width) for cell in row) for row in table.rows
+        )
+        if lines > _MAX_SOURCE_TABLE_GROUP_LINES:
+            continue
+        # Tables lose quote-depth provenance. Unique raw and parsed headings
+        # bind this top-level shape to the same plain parsed block sequence.
+        # Count nested/decorated duplicates too, rather than pairing a fenced
+        # literal copy with another live heading. Never reparse long prefixes.
+        start = parsed_headings[match["label"]][0]
+        end = start + len(group)
+        if blocks[start:end] != group:
+            continue
+        keep.update(range(start, end - 1))
+        tables.add(end - 1)
+    return frozenset(keep), frozenset(tables)
 
 
 def _handover_summary_table_widths(
@@ -744,6 +841,7 @@ class _Package:
         bookmark: str | None = None,
         internal_links: tuple[tuple[int, int, str], ...] = (),
         summary_quote: bool = False,
+        paragraph_style: str | None = None,
     ) -> None:
         node = _element(parent, "p")
         properties = _element(node, "pPr")
@@ -759,6 +857,8 @@ class _Package:
             _element(properties, "pStyle", val="Code")
         elif paragraph.quote:
             _element(properties, "pStyle", val="Quote")
+        elif paragraph_style:
+            _element(properties, "pStyle", val=paragraph_style)
         if paragraph.quote and (
             not summary_quote or _short_summary_quote_group((paragraph,))
         ):
@@ -788,7 +888,13 @@ class _Package:
         if bookmark:
             _element(node, "bookmarkEnd", id=identifier)
 
-    def table(self, table: Table, column_widths: tuple[int, ...] | None = None) -> None:
+    def table(
+        self,
+        table: Table,
+        column_widths: tuple[int, ...] | None = None,
+        *,
+        compact_source_table: bool = False,
+    ) -> None:
         node = _element(self.body, "tbl")
         properties = _element(node, "tblPr")
         if column_widths is None:
@@ -801,7 +907,7 @@ class _Package:
             _element(borders, edge, val="single", sz=4, color="D1D5DB")
         margins = _element(properties, "tblCellMar")
         for edge in ("top", "left", "bottom", "right"):
-            _element(margins, edge, w=100, type="dxa")
+            _element(margins, edge, w=60 if compact_source_table else 100, type="dxa")
         grid = _element(node, "tblGrid")
         width = 9360 // len(table.alignments)
         widths = column_widths or (width,) * len(table.alignments)
@@ -823,7 +929,13 @@ class _Package:
                         Span(span.text, True, span.italic, span.code, span.href)
                         for span in spans
                     )
-                self.paragraph(cell, Paragraph(spans), align=table.alignments[at])
+                self.paragraph(
+                    cell,
+                    Paragraph(spans),
+                    align=table.alignments[at],
+                    keep_next=compact_source_table and index < len(table.rows) - 1,
+                    paragraph_style="SourceTableCell" if compact_source_table else None,
+                )
         self.paragraph(self.body, Paragraph(()))
 
     def page_break(self) -> None:
@@ -880,7 +992,7 @@ def _review_page_identity(
     return {"word/header1.xml": header, "word/footer1.xml": footer}
 
 
-def _styles(*, summary_quotes: bool = False) -> ET.Element:
+def _styles(*, summary_quotes: bool = False, source_tables: bool = False) -> ET.Element:
     styles = ET.Element(f"{{{W}}}styles")
     defaults = _element(styles, "docDefaults")
     run_defaults = _element(_element(defaults, "rPrDefault"), "rPr")
@@ -939,6 +1051,13 @@ def _styles(*, summary_quotes: bool = False) -> ET.Element:
         run = _element(style, "rPr")
         _element(run, "color", val="172C40")
         _element(run, "sz", val=22)
+    if source_tables:
+        style = _element(styles, "style", type="paragraph", styleId="SourceTableCell")
+        _element(style, "name", val="Source table cell")
+        _element(style, "basedOn", val="Normal")
+        properties = _element(style, "pPr")
+        _element(properties, "spacing", before=0, after=0, line=240, lineRule="auto")
+        _element(_element(style, "rPr"), "sz", val=20)
     hyperlink = _element(styles, "style", type="character", styleId="Hyperlink")
     _element(hyperlink, "name", val="Hyperlink")
     properties = _element(hyperlink, "rPr")
@@ -959,7 +1078,8 @@ def export_docx(payload: object) -> WordDocument:
     qualified, summary_quotes, summary_keep = _handover_summary_presentation(
         markdown, blocks, summary_widths
     )
-    keep_next = _source_note_keep_next(blocks) | summary_keep
+    source_keep, source_tables = _source_table_groups(markdown, blocks)
+    keep_next = _source_note_keep_next(blocks) | summary_keep | source_keep
     compact_references = _reference_key_spacing(markdown, blocks)
     bookmarks, internal_links = _passage_navigation(
         markdown, blocks, compact_references
@@ -968,7 +1088,11 @@ def export_docx(payload: object) -> WordDocument:
         if isinstance(block, PageBreak):
             package.page_break()
         elif isinstance(block, Table):
-            package.table(block, summary_widths.get(index))
+            package.table(
+                block,
+                summary_widths.get(index),
+                compact_source_table=index in source_tables,
+            )
         else:
             package.paragraph(
                 package.body,
@@ -1059,7 +1183,9 @@ def export_docx(payload: object) -> WordDocument:
         "[Content_Types].xml": types,
         "_rels/.rels": relationships,
         "word/document.xml": package.document,
-        "word/styles.xml": _styles(summary_quotes=bool(summary_quotes)),
+        "word/styles.xml": _styles(
+            summary_quotes=bool(summary_quotes), source_tables=bool(source_tables)
+        ),
         "word/numbering.xml": package.numbering,
         "word/_rels/document.xml.rels": package.relationships,
         "docProps/core.xml": core,
