@@ -135,11 +135,15 @@ existing installations do not update themselves.
 
 ### Choose your optional assistant
 
-Settings offers NeuroForge's keyless preview, ChatGPT account access, Anthropic,
-OpenAI API keys, Gemini and compatible local or remote model servers. Load the
-model list before saving, or enter an exact model identifier. A successful model
-check confirms discovery; it does not claim that generation has been tested.
+In installed Sinter, Settings offers NeuroForge's keyless preview, ChatGPT account
+access, Anthropic, OpenAI API keys, Gemini and compatible local or remote model
+servers. Load the model list before saving, or enter an exact model identifier.
+A successful model check confirms discovery; it does not claim that generation
+has been tested.
 Search continues through NeuroForge when another model provider is selected.
+
+The [browser edition](docs/BROWSER_WEB.md) uses the same-origin NeuroForge API.
+ChatGPT sign-in and custom provider credentials require installed Sinter.
 
 ChatGPT plan access uses OpenAI's documented sign-in flow for eligible users and
 qualifying open-source local applications. Source installations need the optional
@@ -297,7 +301,7 @@ Model assistance works **beside** RKC: Sinter sends a bounded, approved excerpt 
 | Operation | Where data goes |
 | --- | --- |
 | Local examples, deterministic reports, plans, comparisons and atlas imports | Your computer |
-| Explicitly saved reports, watches and preferences | `~/.sinter`, or `SINTER_DATA_DIR`; not encrypted |
+| Explicitly saved reports, watches and preferences | Installed app: configured local workspace (normally `~/.sinter`; `--directory` or `SINTER_DATA_DIR` can select another folder). Browser edition: device-local IndexedDB; export workspace backups. Both are unencrypted. |
 | Search and recurring search watches | The exact query goes to NeuroForge’s search API |
 | Optional ranking, generative templates, chat or atlas drafting | The selected question/context goes to your configured API |
 | Optional speech recognition | Audio remains local; authorised model downloads contact the model host |
