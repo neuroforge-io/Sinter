@@ -104,6 +104,10 @@ jobs:
           node --experimental-default-type=module tests/campaign_opportunity_view.mjs
       - run: python tools/campaign_budget_browser.py
       - run: python tools/campaign_action_bar_browser.py
+      - name: Read complete campaign recovery messages without replay
+        run: python tools/campaign_feedback_browser.py
+        env:
+          TMPDIR: ${{ github.workspace }}/browser-artifacts
       - run: python tools/communication_view_browser.py
       - run: python tools/quality_browser.py
       - run: python tools/community_recovery_browser.py

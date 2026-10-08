@@ -22,6 +22,7 @@ import {campaignSourceOptions, matchingCampaignSources}
 import {selectRequirementSource} from './campaign-requirement-source.js';
 import {selectWindowSource} from './campaign-window-source.js';
 import {campaignBackupControls, resetCampaignBackupControls} from './campaign-backup.js';
+import {campaignFeedback} from './campaign-feedback.js';
 import {CEILING_CURRENCY_OPTIONS, campaignCeilingCurrency,
   campaignFundingAmount, campaignCurrencyComparisonNote} from './campaign-currency.js';
 import {createFundingSummaryState, fundingTrackingEditor,
@@ -203,7 +204,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   let pendingFocus = null;
   let pendingActionFocus = null;
   const root = h('div', {class: 'campaign-page'}), shelf = h('div', {class: 'campaign-shelf'});
-  const feedback = h('div', {class: 'campaign-save-feedback', 'aria-live': 'polite', tabindex: 0}), status = h('span', {class: 'campaign-save-state', role: 'status'});
+  const feedbackView = campaignFeedback(() => saveButton), {feedback} = feedbackView;
+  const status = h('span', {class: 'campaign-save-state', role: 'status'});
   const summary = h('div', {class: 'campaign-summary'}), editor = h('div', {class: 'campaign-editor'}), output = h('div', {id: 'campaign-output', class: 'campaign-output'});
   const sectionNavigation = h('nav', {class: 'campaign-section-navigation non-print', 'aria-label': 'Campaign sections navigation'});
   const capacity = h('p', {class: 'fine', 'aria-label': 'Campaign capacity'});
@@ -291,8 +293,10 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   // A native toggle event may still be queued when the container is removed.
   root.dispose = () => {
+    feedbackView.dispose();
     fundingState.close();
     toolbarObserver?.disconnect();
+    window.removeEventListener('resize', updateCampaignClearance);
     if (toolbarObserverFrame !== null) cancelAnimationFrame(toolbarObserverFrame);
     captureBudgetDisclosures();
     rememberCampaign();
@@ -2159,7 +2163,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'CAMPAIGNS'), h('h2', {}, 'Keep the whole application together.'),
     h('p', {}, 'Compare opportunities, map products and IP questions to funding routes, prepare answers and turn missing details into next actions. Saved locally, with your sources beside the work.')),
     h('div', {class: 'campaign-save-bar non-print', role: 'region', 'aria-label': 'Campaign save and preview'},
-      h('div', {class: 'button-row'}, saveButton, prepareButton), status, feedback),
+      h('div', {class: 'button-row'}, saveButton, prepareButton), status, feedbackView.panel),
     practiceGuide, sectionNavigation, decisionCard, savedPanel, shelf, summary, fundingPanel, capacity, editor, transfers, output);
   status.textContent = dirty ? 'Unsaved changes' : savedId ? 'Saved on this computer' : 'Not saved yet';
   renderEditor(); renderSummary(); renderFunding();
@@ -2176,9 +2180,17 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   toolbarObserverFrame = requestAnimationFrame(() => {
     toolbarObserverFrame = null;
     if (!root.isConnected) return;
-    toolbarObserver = new ResizeObserver(updateCampaignClearance);
-    toolbarObserver.observe(root.querySelector('.campaign-save-bar'));
-    toolbarObserver.observe(sectionNavigation);
+    if (typeof ResizeObserver === 'function') {
+      toolbarObserver = new ResizeObserver(updateCampaignClearance);
+      toolbarObserver.observe(root.querySelector('.campaign-save-bar'));
+      toolbarObserver.observe(sectionNavigation);
+    } else {
+      toolbarObserver = new MutationObserver(updateCampaignClearance);
+      const changes = {childList: true, characterData: true, attributes: true, subtree: true};
+      toolbarObserver.observe(root.querySelector('.campaign-save-bar'), changes);
+      toolbarObserver.observe(sectionNavigation, changes);
+      window.addEventListener('resize', updateCampaignClearance);
+    }
     revealSelectedCampaignTab();
     updateCampaignClearance();
   });

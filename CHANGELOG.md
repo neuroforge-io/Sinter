@@ -7,6 +7,10 @@ a new installed release and does not change any published RC3 asset or receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Offer “Read full message” when campaign feedback exceeds the compact save bar.
+  Keep complete wording in a scrollable reader and restore keyboard focus when
+  closed. Reading the message does not save, retry or send a request.
+
 - Describe casebooks and letters by the report or draft they prepare. Keep local
   source compilation, human review and separately approved optional AI drafting
   clear; remove vague slogans and the aging casebook novelty label.
