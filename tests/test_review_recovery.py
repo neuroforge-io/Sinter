@@ -5,12 +5,13 @@ import runpy
 import shutil
 import subprocess
 import sys
+import venv
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from wrapper_diagnostics import observe_wrapper
+from wrapper_diagnostics import MAX_SAMPLE_BYTES, _snapshot, observe_wrapper
 
 from sinter import cli, client, review, review_checkpoints
 
@@ -671,30 +672,171 @@ def test_source_launcher_preserves_other_commands(monkeypatch, capsys):
     assert 'OK: Fictional connection' in capsys.readouterr().out
 
 
-@pytest.mark.parametrize('wrapper', ['start-sinter.sh', 'Start-Sinter.command', 'Start-Sinter.bat'])
-@pytest.mark.parametrize('arguments', [
-    [], ['--help'], ['--version'], ['serve', '--no-browser', '--port', '9000'],
-    ['review', 'notes with spaces.txt', '--offline'],
-])
-def test_platform_wrappers_preserve_arguments_from_another_directory(
-    tmp_path, wrapper, arguments, request,
-):
+def _wrapper_entry_source(marker: Path, stages: Path) -> str:
+    """Keep the first Python instruction observable before fixture imports.
+
+    Args:
+        marker: Final structured runtime marker belonging to this fixture.
+        stages: Fresh append-only file containing closed raw stage observations.
+
+    Returns:
+        A zero-work fixture script. It imports no Sinter product code.
+    """
+    def stage(value: str) -> str:
+        return (
+            f"with open({str(stages)!r}, 'ab', buffering=0) as retained:\n"
+            f"    retained.write({(value + chr(10)).encode()!r})\n"
+        )
+
+    return (
+        stage('python_entered')
+        + 'import sys\n'
+        + stage('sys_imported')
+        + f"with open({str(stages)!r}, 'ab', buffering=0) as retained:\n"
+        + "    retained.write(('runtime=' + repr((sys.executable, sys.version, "
+        "sys.argv)) + '\\n').encode('utf-8'))\n"
+        + 'import os\n'
+        + stage('os_imported')
+        + 'import json\n'
+        + stage('json_imported')
+        + 'from pathlib import Path\n'
+        + stage('pathlib_imported')
+        + 'observation = {"executable": sys.executable, "version": sys.version, '
+        '"version_info": list(sys.version_info[:3]), "argv": sys.argv, '
+        '"cwd": os.getcwd(), "pid": os.getpid(), "prefix": sys.prefix, '
+        '"base_prefix": sys.base_prefix}\n'
+        + f'Path({str(marker)!r}).write_text(json.dumps(observation), '
+        'encoding="utf-8")\n'
+        + stage('marker_written')
+        + 'print(json.dumps({"arguments": sys.argv[1:], "cwd": os.getcwd()}))\n'
+    )
+
+
+def _wrapper_stage_observation(stages: Path) -> dict:
+    """Read a bounded snapshot without claiming final descendant evidence.
+
+    Args:
+        stages: Owned raw stage file, which may be absent or incomplete.
+
+    Returns:
+        Actual bounded bytes and decoded lines when complete. Missing evidence
+        leaves Python entry unknown rather than claiming absence or success.
+    """
+    value, raw = _snapshot(stages, limit=MAX_SAMPLE_BYTES)
+    value['python_entered'] = None
+    if raw is not None:
+        try:
+            value['lines'] = raw.decode('utf-8').splitlines()
+            if raw.startswith(b'python_entered\n'):
+                value['python_entered'] = True
+        except UnicodeError as error:
+            value['decode_error'] = f'{type(error).__name__}: {error}'
+    return value
+
+
+def _wrapper_selection_satisfied(selection: dict, runtime: object) -> bool | None:
+    """Check only the explicitly configured fixture selection.
+
+    Args:
+        selection: Intended fixture lane and its explicit selection constraints.
+        runtime: Actual final runtime marker, never inferred from parent exit.
+
+    Returns:
+        None for system discovery, or whether the requested selection occurred.
+    """
+    if selection['lane'] == 'system-discovery':
+        return None
+    if not isinstance(runtime, dict):
+        return False
+    version = runtime.get('version_info')
+    if not (
+        isinstance(version, list)
+        and len(version) == 3
+        and all(type(part) is int for part in version)
+        and version[:2] == selection['expected_version']
+        and isinstance(runtime.get('executable'), str)
+    ):
+        return False
+    expected = selection.get('expected_executable')
+    return expected is None or Path(runtime['executable']).resolve() == Path(
+        expected
+    ).resolve()
+
+
+def _exercise_wrapper_fixture(
+    tmp_path: Path, wrapper: str, arguments: list[str],
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, *,
+    lane: str = 'system-discovery',
+) -> None:
+    """Exercise one unchanged native wrapper with honest runtime diagnostics.
+
+    Args:
+        tmp_path: Fresh private fixture directory belonging to this test.
+        wrapper: Exact source wrapper copied without instrumentation or edits.
+        arguments: Original arguments whose forwarding the test checks.
+        request: Pytest request retaining diagnostics even when assertions fail.
+        monkeypatch: Scoped environment changes undone after the test.
+        lane: System discovery or a real local venv from the test interpreter.
+    """
     windows = wrapper.endswith('.bat')
-    if windows != (os.name == 'nt'):
-        pytest.skip('Execute each wrapper on its native CI platform.')
     directory = tmp_path / 'source folder with spaces'
     directory.mkdir()
     launcher = directory / wrapper
     shutil.copyfile(Path(__file__).parents[1] / wrapper, launcher)
-    marker = tmp_path / 'wrapper-marker.json'
+    marker, stages = tmp_path / 'wrapper-marker.json', tmp_path / 'wrapper-stages.bin'
+    selection = {
+        'lane': lane,
+        'fixture_interpreter': sys.executable,
+        'fixture_version': list(sys.version_info[:3]),
+        'expected_version': (
+            list(sys.version_info[:2]) if lane != 'system-discovery' else None
+        ),
+        'expected_executable': None,
+        'py_candidate': shutil.which('py') if windows else None,
+        'python_candidate': shutil.which('python'),
+        'local_venv_present': False,
+        'launcher_debug_requested': windows,
+        'launcher_family': 'unknown' if windows else 'not-applicable',
+        'requested_launcher_environment': {},
+        'launcher_policy_effective': None,
+    }
+    if windows:
+        # Launcher families have different controls. Request both debug channels
+        # and request no automatic runtime installs before any fixture launch.
+        # Administrative manager overrides may supersede environment settings;
+        # the requested policy is not proof of effective policy or family.
+        policy = {
+            'PYLAUNCHER_DEBUG': '1',
+            'PYLAUNCHER_ALLOW_INSTALL': None,
+            'PYLAUNCHER_ALWAYS_INSTALL': None,
+            'PYMANAGER_DEBUG': '1',
+            'PYTHON_MANAGER_AUTOMATIC_INSTALL': 'false',
+        }
+        for key, value in policy.items():
+            if value is None:
+                monkeypatch.delenv(key, raising=False)
+            else:
+                monkeypatch.setenv(key, value)
+        selection['requested_launcher_environment'] = {
+            key: os.environ.get(key) for key in policy
+        }
+        selection['launcher_policy_boundary'] = (
+            'Administrator configuration may override requested environment.'
+        )
+    if lane == 'configured-local-venv':
+        venv.EnvBuilder(with_pip=False, symlinks=False).create(directory / '.venv')
+        executable = directory / '.venv' / (
+            'Scripts/python.exe' if windows else 'bin/python'
+        )
+        assert executable.is_file(), 'The actual fixture venv executable is missing.'
+        selection.update(local_venv_present=True, expected_executable=str(executable))
+    else:
+        assert lane == 'system-discovery', 'Unknown wrapper fixture lane.'
+    selection['legacy_minor_selector'] = (
+        os.environ.get('PY_PYTHON3') if windows else None
+    )
     (directory / 'start.py').write_text(
-        'import json, os, sys\n'
-        'from pathlib import Path\n'
-        'observation = {"executable": sys.executable, "version": sys.version, '
-        '"argv": sys.argv, "cwd": os.getcwd(), "pid": os.getpid()}\n'
-        f'Path({str(marker)!r}).write_text(json.dumps(observation), encoding="utf-8")\n'
-        'print(json.dumps({"arguments": sys.argv[1:], "cwd": os.getcwd()}))\n',
-        encoding='utf-8',
+        _wrapper_entry_source(marker, stages), encoding='utf-8', newline='\n',
     )
     if windows:
         # cmd /s removes one outer quote pair. Keep the quoted batch path and
@@ -705,9 +847,11 @@ def test_platform_wrappers_preserve_arguments_from_another_directory(
     else:
         command = ['sh', str(launcher), *arguments]
     observation, stdout = observe_wrapper(command, tmp_path, marker, timeout=5)
+    observation['startup_stages'] = _wrapper_stage_observation(stages)
+    runtime = observation['marker'].get('value', {})
+    selection['satisfied'] = _wrapper_selection_satisfied(selection, runtime)
+    observation['interpreter_selection'] = selection
     diagnostics = json.dumps(observation, sort_keys=True, separators=(',', ':'))
-    # JUnit retains this property even when the assertions below fail. CI already
-    # uploads test-results/results.xml; no ephemeral-temp artifact is required.
     request.node.user_properties.append(('sinter_wrapper_diagnostics', diagnostics))
     assert not observation['timed_out'], diagnostics
     assert observation['parent_exited'], diagnostics
@@ -716,11 +860,47 @@ def test_platform_wrappers_preserve_arguments_from_another_directory(
     assert stdout is not None, diagnostics
     assert observation['stderr'].get('metadata_stable_snapshot'), diagnostics
     assert 'value' in observation['marker'], diagnostics
+    assert observation['startup_stages']['python_entered'] is True, diagnostics
+    assert 'marker_written' in observation['startup_stages'].get(
+        'lines', []
+    ), diagnostics
+    if lane != 'system-discovery':
+        assert selection['satisfied'] is True, diagnostics
     recorded = json.loads(stdout)
     assert recorded['arguments'] == arguments
     assert Path(recorded['cwd']) == directory
-    assert observation['marker']['value']['argv'][1:] == arguments, diagnostics
-    assert Path(observation['marker']['value']['cwd']) == directory, diagnostics
+    assert runtime['argv'][1:] == arguments, diagnostics
+    assert Path(runtime['cwd']) == directory, diagnostics
+
+
+@pytest.mark.parametrize(
+    'wrapper', ['start-sinter.sh', 'Start-Sinter.command', 'Start-Sinter.bat'],
+)
+@pytest.mark.parametrize('arguments', [
+    [], ['--help'], ['--version'], ['serve', '--no-browser', '--port', '9000'],
+    ['review', 'notes with spaces.txt', '--offline'],
+])
+def test_platform_wrappers_preserve_arguments_from_another_directory(
+    tmp_path, wrapper, arguments, request, monkeypatch,
+):
+    windows = wrapper.endswith('.bat')
+    if windows != (os.name == 'nt'):
+        pytest.skip('Execute each wrapper on its native CI platform.')
+    _exercise_wrapper_fixture(tmp_path, wrapper, arguments, request, monkeypatch)
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Real Windows wrapper selection lanes.')
+@pytest.mark.parametrize('arguments', [
+    [], ['--help'], ['--version'], ['serve', '--no-browser', '--port', '9000'],
+    ['review', 'notes with spaces.txt', '--offline'],
+])
+def test_windows_wrapper_configured_interpreter_lanes(
+    tmp_path, arguments, request, monkeypatch,
+):
+    _exercise_wrapper_fixture(
+        tmp_path, 'Start-Sinter.bat', arguments, request, monkeypatch,
+        lane='configured-local-venv',
+    )
 
 
 def test_research_cli_dispatches_research_questions(tmp_path):

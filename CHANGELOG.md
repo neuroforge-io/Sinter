@@ -7,6 +7,13 @@ qualification and does not change any published RC3 asset or historical receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
 
+- Record wrapper-fixture startup stages before importing the fixture helpers.
+  Retain bounded diagnostics and test both system discovery and a private virtual
+  environment tied to the job interpreter. Request download refusal for both
+  Windows launcher families while keeping effective policy and unobserved stages
+  unknown. Product launchers and timeouts are unchanged; earlier failures remain
+  recorded and native Windows cases require hosted execution.
+
 - Start Overview and Getting started with a concrete local garden handover.
   Explain inspecting sources, reviewing the document and reopening the saved
   copy before optional connections. Keep project inputs, edited reports and

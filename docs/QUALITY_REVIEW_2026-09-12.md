@@ -2728,3 +2728,18 @@ under a new name preserved both original and restored projects at revision one.
 This is a source-app journey, not installed desktop or published-browser evidence.
 Word content and archive integrity were checked; Word rendering was not checked.
 Changed-source, stale-review and conflicting-edit human journeys remain open.
+
+Wrapper-fixture diagnostics now write a closed, append-only Python-entry marker
+before importing their helpers and retain bounded raw stage bytes. An absent or
+incomplete marker remains unknown; interpreter startup and site processing happen
+before this observation. Existing system-discovery cases remain, alongside a
+private virtual environment tied to the selected CI interpreter. Requested
+download-refusal settings cover both Windows launcher families; actual family,
+effective configuration and administrator overrides remain unobserved. Matching
+runtime observations do not prove which selector caused that choice.
+
+The focused local suites pass 40 cases with ten actual Windows cases skipped.
+These include ten Linux wrapper observations and thirty diagnostic controls.
+Adversarial source review accepted the exact two-file change, preserving product
+wrappers, startup bounds and the original failure. This is source evidence only;
+it neither explains the historical Windows timeout nor qualifies an installer.
