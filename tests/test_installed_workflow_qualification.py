@@ -746,7 +746,8 @@ def test_current_word_requires_exact_catalog_saved_bytes_and_conservation(
 
 
 @pytest.mark.parametrize(
-    "mutation", ["missing_word", "duplicate", "effect", "route", "extra", "different_version"]
+    "mutation",
+    ["missing_word", "duplicate", "effect", "route", "extra", "different_version"],
 )
 def test_resealed_current_catalog_forgery_fails(current_word_evidence, mutation):
     folder = current_word_evidence[0]
@@ -827,7 +828,8 @@ def test_resealed_cli_envelope_identity_is_required(current_word_evidence, mutat
         value["result"] = []
     write_json(path, value)
     refresh_artifacts(folder)
-    with pytest.raises(ValueError, match="exact 54-operation"):
+    count = len(workflow.source_operations(current_word_evidence[1]))
+    with pytest.raises(ValueError, match=f"exact {count}-operation"):
         verify_current_word(current_word_evidence)
 
 
@@ -996,6 +998,7 @@ def test_source_catalogue_itself_cannot_downgrade_current_capability(
 
 def catalogue_contract_fixture(current_word_evidence, count=54):
     """Copy source declarations in memory; retained archives stay unchanged."""
+    assert count in {53, 54, 55}
     source = dict(current_word_evidence[1])
     tree = ast.parse(source["src/sinter/runtime.py"])
     entries = next(
@@ -1011,14 +1014,17 @@ def catalogue_contract_fixture(current_word_evidence, count=54):
         (current_word_evidence[0] / "installed-workflow/operations-catalog.json")
         .read_text(encoding="utf-8")
     )
+    omitted = {"campaigns.focus"} if count < 55 else set()
     if count == 53:
+        omitted.add("campaigns.funding_summary")
+    if omitted:
         entries.elts = [
             entry for entry in entries.elts
-            if entry.args[0].value != "campaigns.funding_summary"
+            if entry.args[0].value not in omitted
         ]
         envelope["result"]["operations"] = [
             entry for entry in envelope["result"]["operations"]
-            if entry["id"] != "campaigns.funding_summary"
+            if entry["id"] not in omitted
         ]
     assert len(entries.elts) == count
     assert len(envelope["result"]["operations"]) == count
@@ -1026,20 +1032,28 @@ def catalogue_contract_fixture(current_word_evidence, count=54):
     return source, envelope, tree, entries
 
 
-@pytest.mark.parametrize("count", [53, 54])
+@pytest.mark.parametrize("count", [53, 54, 55])
 def test_legacy_and_current_source_catalogues_bind_the_complete_cli_envelope(
     current_word_evidence, count
 ):
+    original_source = dict(current_word_evidence[1])
+    catalogue_path = (
+        current_word_evidence[0] / "installed-workflow/operations-catalog.json"
+    )
+    original_catalogue = catalogue_path.read_bytes()
     source, envelope, _, _ = catalogue_contract_fixture(current_word_evidence, count)
     before = dict(source)
     operations = workflow.source_operations(source)
     assert operations == envelope["result"]["operations"]
     assert len(operations) == len({row["id"] for row in operations}) == count
     assert ("campaigns.funding_summary" in {row["id"] for row in operations}) == (
-        count == 54
+        count >= 54
     )
+    assert ("campaigns.focus" in {row["id"] for row in operations}) == (count == 55)
     workflow.validate_operations_catalog(envelope, source, VERSION)
     assert source == before
+    assert current_word_evidence[1] == original_source
+    assert catalogue_path.read_bytes() == original_catalogue
 
 
 @pytest.mark.parametrize(
@@ -1093,6 +1107,50 @@ def test_current_funding_envelope_remains_bound_to_every_source_declared_field(
     )
     funding[field] = "fictional unapproved replacement"
     with pytest.raises(ValueError, match="exact 54-operation source contract"):
+        workflow.validate_operations_catalog(envelope, source, VERSION)
+
+
+@pytest.mark.parametrize("operation", ["campaigns.focus", "campaigns.funding_summary"])
+@pytest.mark.parametrize(
+    "mutation", ["missing", "duplicate", "method", "route", "effect"]
+)
+def test_focused_source_profile_requires_both_exact_local_definitions(
+    current_word_evidence, operation, mutation
+):
+    source, _, tree, entries = catalogue_contract_fixture(current_word_evidence, 55)
+    index = next(
+        i for i, entry in enumerate(entries.elts)
+        if entry.args[0].value == operation
+    )
+    entry = entries.elts[index]
+    if mutation == "missing":
+        entry.args[0] = ast.Constant("campaigns.unapproved_replacement")
+    elif mutation == "duplicate":
+        entries.elts[0] = copy.deepcopy(entry)
+    elif mutation == "method":
+        entry.args[1] = ast.Constant("GET")
+    elif mutation == "route":
+        entry.args[2] = ast.Constant("/api/campaigns/unapproved")
+    else:
+        entry.args = entry.args[:5] + [ast.Constant("provider")]
+    source["src/sinter/runtime.py"] = ast.unparse(tree).encode("utf-8")
+    with pytest.raises(ValueError):
+        workflow.source_operations(source)
+
+
+@pytest.mark.parametrize(
+    "field", ["id", "method", "route", "effect", "summary", "input"]
+)
+def test_focused_envelope_remains_bound_to_every_source_declared_field(
+    current_word_evidence, field
+):
+    source, envelope, _, _ = catalogue_contract_fixture(current_word_evidence, 55)
+    focus = next(
+        entry for entry in envelope["result"]["operations"]
+        if entry["id"] == "campaigns.focus"
+    )
+    focus[field] = "fictional unapproved replacement"
+    with pytest.raises(ValueError, match="exact 55-operation source contract"):
         workflow.validate_operations_catalog(envelope, source, VERSION)
 
 
