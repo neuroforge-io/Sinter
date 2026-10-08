@@ -345,10 +345,10 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   const localNotice = notice('Local by default. Sources are not fetched or uploaded automatically. Save deliberately, export backups, and review before sharing.');
   if (globalThis.sinterBrowser) {
     browserGuidance = h('details', {class: 'browser-project-details', open: !seed.book},
-      h('summary', {}, 'Saved projects and project guidance'), explanation, shelf, practiceGuide);
+      h('summary', {}, 'Saved projects and project guidance'), localNotice, explanation, shelf, practiceGuide);
     // A current editor comes first. Opening the catalogue shows saved projects.
     const work = seed.book ? [editor, browserGuidance] : [browserGuidance, editor];
-    return h('div', {class: 'stack casebooks-page'}, intro, localNotice, ...work, status, stop, output);
+    return h('div', {class: 'stack casebooks-page'}, intro, ...work, status, stop, output);
   }
   intro.append(explanation);
   return h('div', {class: 'stack casebooks-page'}, intro, shelf,

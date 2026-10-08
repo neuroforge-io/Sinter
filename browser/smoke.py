@@ -6,6 +6,55 @@ from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
 
 
+def phone_geometry(page):
+    """Keep complete DOM geometry and ancestry without copying editor values."""
+    return page.evaluate("""() => {
+      const viewport = {width: innerWidth, height: innerHeight, scrollX, scrollY,
+        rootClientWidth: document.documentElement.clientWidth,
+        rootScrollWidth: document.documentElement.scrollWidth,
+        bodyClientWidth: document.body.clientWidth, bodyScrollWidth: document.body.scrollWidth,
+        devicePixelRatio};
+      const nodes = [...document.querySelectorAll('*')];
+      const indices = new Map(nodes.map((element, index) => [element, index]));
+      const closedDetails = [...document.querySelectorAll('details:not([open])')];
+      const describe = element => {
+        const rect = element.getBoundingClientRect(), style = getComputedStyle(element);
+        return {index: indices.get(element),
+          parentIndex: indices.get(element.parentElement) ?? null,
+          tag: element.tagName.toLowerCase(),
+          id: element.id, classes: [...element.classList], role: element.getAttribute('role'),
+          type: element.getAttribute('type'), hidden: element.hidden, inert: element.inert,
+          rect: {x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+            top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left},
+          scrollWidth: element.scrollWidth, clientWidth: element.clientWidth,
+          offsetWidth: element.offsetWidth, scrollHeight: element.scrollHeight,
+          clientHeight: element.clientHeight,
+          style: {display: style.display, visibility: style.visibility,
+            position: style.position, width: style.width, minWidth: style.minWidth,
+            maxWidth: style.maxWidth, boxSizing: style.boxSizing,
+            overflowX: style.overflowX, overflowY: style.overflowY,
+            whiteSpace: style.whiteSpace, overflowWrap: style.overflowWrap,
+            wordBreak: style.wordBreak, flexBasis: style.flexBasis,
+            gridTemplateColumns: style.gridTemplateColumns},
+          closedDetailAncestors: closedDetails
+            .filter(parent => parent !== element && parent.contains(element))
+            .map(parent => indices.get(parent))};
+      };
+      const geometry = nodes.map(describe);
+      return {viewport, nodeCount: nodes.length, nodes: geometry,
+        overflowing: geometry.filter(item => item.rect.right > innerWidth
+          || item.rect.left < 0 || item.scrollWidth > item.clientWidth),
+        controls: [...document.querySelectorAll('input, textarea, select, button')]
+          .map(element => ({...describe(element),
+            optionCount: element.tagName === 'SELECT' ? element.options.length : null})),
+        details: [...document.querySelectorAll('details')].map(element => ({
+          ...describe(element), open: element.open,
+          summary: element.querySelector(':scope > summary')
+            ? describe(element.querySelector(':scope > summary')) : null,
+          directChildren: [...element.children].map(describe)}))};
+    }""")
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--url', default='http://127.0.0.1:8877/sinter/')
@@ -55,14 +104,19 @@ def main():
         assert opened_project.input_value()=='Fictional garden project - volunteer handover'
         page.screenshot(path=str(args.output/'saved-project-open-390-viewport.png'))
         opened_box=opened_project.bounding_box()
+        opened_question=page.get_by_label('What do you need to find out?',exact=True).bounding_box()
         opened_layout={'project_input':opened_box,'scroll_y':page.evaluate('scrollY'),
+            'first_question_input':opened_question,
             'guidance_open':project_details.evaluate('(element)=>element.open'),
             'editor_precedes_guidance':project_details.evaluate('(element)=>element.previousElementSibling.matches(".casebook-editor")'),
             'input_focused':opened_project.evaluate('(element)=>document.activeElement===element')}
         (args.output/'saved-project-open-layout.json').write_text(json.dumps(opened_layout,indent=2)+'\n')
+        (args.output/'saved-project-open-390-geometry.json').write_text(
+            json.dumps(phone_geometry(page),indent=2)+'\n')
         assert opened_box and 0 <= opened_box['y'] < opened_box['y']+opened_box['height'] <= 844
         assert opened_layout['scroll_y']==0 and opened_layout['editor_precedes_guidance']
         assert opened_layout['input_focused'] and opened_project.is_enabled()
+        assert opened_question and 0 <= opened_question['y'] < opened_question['y']+opened_question['height'] <= 844
         assert not project_details.evaluate('(element)=>element.open')
         page.set_viewport_size({'width':1440,'height':1000})
         saved=page.evaluate("async()=>await sinterBrowser.request('/api/browser/export')")
@@ -135,8 +189,9 @@ def main():
         page.set_viewport_size({'width':390,'height':844})
         page.goto(args.url+'#home')
         page.get_by_role('heading',name='Your next piece of work starts here.').wait_for(timeout=90000)
-        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2')
         page.screenshot(path=str(args.output/'mobile.png'),full_page=True)
+        (args.output/'home-390-geometry.json').write_text(json.dumps(phone_geometry(page),indent=2)+'\n')
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2')
         page.get_by_role('button',name='Open garden handover',exact=True).click()
         project=page.get_by_label('Project name',exact=True)
         project.wait_for(timeout=30000)
@@ -151,20 +206,25 @@ def main():
             page.screenshot(path=str(args.output/f'garden-{theme}-390-viewport.png'))
             heading=page.get_by_role('heading',name='Prepare a report from your notes.',exact=True).bounding_box()
             field=project.bounding_box()
+            first_question=page.get_by_label('What do you need to find out?',exact=True).bounding_box()
             layout={'theme':theme,'controls':page.locator('#browser-controls').bounding_box(),
-                    'heading':heading,'project_input':field,
+                    'heading':heading,'project_input':field,'first_question_input':first_question,
                     'scroll_width':page.evaluate('document.documentElement.scrollWidth'),
                     'viewport_width':390,'viewport_height':844}
             layouts.append(layout)
             (args.output/'phone-layouts.json').write_text(json.dumps(layouts,indent=2)+'\n')
+            (args.output/f'garden-{theme}-390-geometry.json').write_text(
+                json.dumps(phone_geometry(page),indent=2)+'\n')
             assert heading and 0 <= heading['y'] < heading['y']+heading['height'] <= 844
             assert field and 0 <= field['y'] < field['y']+field['height'] <= 844
             assert layout['scroll_width'] <= 392
+            assert first_question and 0 <= first_question['y'] < first_question['y']+first_question['height'] <= 844
             assert not backups.evaluate('(element)=>element.open')
             assert not page.locator('.browser-project-details').evaluate('(element)=>element.open')
         project_details=page.locator('.browser-project-details')
         project_summary=project_details.locator(':scope>summary')
         project_summary.focus();page.keyboard.press('Enter')
+        page.get_by_text('Local by default. Sources are not fetched or uploaded automatically.',exact=False).wait_for()
         page.get_by_text('The insurance answer remains unknown.',exact=False).wait_for()
         page.get_by_role('button',name='Open garden campaign',exact=True).wait_for()
         project_summary.focus();page.keyboard.press('Space')
