@@ -195,6 +195,25 @@ or `Start-Sinter.bat`; macOS can use `Start-Sinter.command`, and Linux can use
 `./start-sinter.sh`. The platform wrappers prefer `.venv` when present and pass
 arguments through, including paths containing spaces.
 
+On Windows, `Start-Sinter.bat` uses the project's `.venv` first. Otherwise it
+prefers a working Python 3.10+ executable on PATH, so an activated environment or
+your PATH choice takes precedence over the registered latest minor version.
+It checks an installed runtime layout before probing it; Store and install-manager
+aliases are not launched as Python. If needed, it reads `py -0p` and directly
+uses a working installed runtime from an ordinary CPython listing. Discovery does
+not request a runtime download. An error after Sinter starts preserves its exit
+code and never triggers a second launch.
+
+Nonstandard shims, custom registered executable arguments and unrecognised listing
+formats are not selected automatically. For those configurations, invoke your
+chosen interpreter explicitly with `start.py`. An existing but broken project
+`.venv` remains authoritative; repair it or choose an explicit interpreter rather
+than expecting the wrapper to switch silently. Runtime selection does not establish
+Tk availability or qualify Windows installed packages.
+Registered fallback follows the admitted listing order; it does not reproduce
+every `PY_PYTHON3` or `py.ini` minor-version preference. Use an explicit interpreter
+when that preference is essential.
+
 Current source and rc3 packages default to a native Tcl/Tk source workspace.
 It requires a working display and Python's Tk support; it gives a clear error
 when these are unavailable. Use `python3 start.py app --mode browser` for the

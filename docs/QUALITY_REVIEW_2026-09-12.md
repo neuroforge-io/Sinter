@@ -2983,3 +2983,36 @@ in evidence. The mobile table still wraps and scrolls; these checks do not claim
 an aesthetic 10/10, physical print-dialog qualification, installed-release
 qualification or a new published browser bundle. The frozen candidate and older
 published previews are unchanged.
+
+### Windows source-runtime selection: fresh Windows checks pending
+
+The original PR27 head `44712ec` passed its native jobs, but its full source gate
+is held. Two unchanged Windows Python 3.10 system-discovery fixtures timed out
+at the existing five-second limit. The help fixture's launcher diagnostics selected
+registered Python 3.14.7 despite Python 3.10.11 being available on PATH; no first
+Python-entry marker was observed. That is a selection mismatch, not proof that
+Python 3.14, Defender or scheduling caused the stall. The original failure remains
+recorded and is not relabelled as a passing run.
+
+The new Windows source-wrapper policy keeps the project's virtual environment
+authoritative, then probes an installed Python 3.10+ on PATH before using a
+registered fallback. Discovery imports only `sys` in isolated mode. Installed
+runtime landmarks exclude ordinary Store/manager aliases from the probe; the
+fallback reads the documented non-installing `py -0p` listing and invokes an
+admitted executable directly. Only ordinary numeric CPython tags and complete
+paths are admitted. Embedded/unbalanced quotes, executable arguments, vendor
+formats and unfamiliar layouts are refused. PATH precedence and listing-order
+fallback do not preserve every launcher configuration preference. Application
+dispatch happens once, and its exact exit status survives the error pause.
+
+The local focused run passed 172 tests with 31 native Windows cases skipped in
+3.42 seconds. These are Linux source/fixture checks, not Windows qualification.
+The new Windows cases cover the actual matrix interpreter on PATH, the real local
+virtual environment, registered fallback, alias/broken-runtime refusal, no runtime,
+and exit 7 without replay. Exact batch-helper controls use a real virtual
+environment with spaced Unicode and literal percent/exclamation/ampersand paths,
+and require complete quote admission and one entry marker. Their execution remains
+pending on Windows. The first local run's five failures came from a new import
+stub with the wrong call signature; its output is retained separately from the
+corrected run. No deadline, installed operator, hosted failure or published asset
+was changed, and this pass did not launch Sinter or a model.

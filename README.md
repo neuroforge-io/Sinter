@@ -257,7 +257,7 @@ cd Sinter
 python3 start.py
 ```
 
-On Windows use `py start.py`, or double-click `Start-Sinter.bat`. The source launchers prefer the project's `.venv` when it exists. To update a clean checkout: `git pull --ff-only`, then restart.
+On Windows use `py start.py`, or double-click `Start-Sinter.bat`. The source launchers prefer the project's `.venv` when it exists. The Windows wrapper next prefers a working Python 3.10+ on PATH, with installed registered runtimes as a fallback; it does not download Python or retry a failed application launch. Custom shims can use an explicit interpreter with `start.py`. See [installation details](docs/INSTALLATION.md). To update a clean checkout: `git pull --ff-only`, then restart.
 
 ## Practical tools, not just a chat window
 

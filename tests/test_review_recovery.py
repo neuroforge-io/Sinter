@@ -776,7 +776,7 @@ def _exercise_wrapper_fixture(
         arguments: Original arguments whose forwarding the test checks.
         request: Pytest request retaining diagnostics even when assertions fail.
         monkeypatch: Scoped environment changes undone after the test.
-        lane: System discovery or a real local venv from the test interpreter.
+        lane: System discovery, an explicit PATH runtime or a real local venv.
     """
     windows = wrapper.endswith('.bat')
     directory = tmp_path / 'source folder with spaces'
@@ -830,6 +830,14 @@ def _exercise_wrapper_fixture(
         )
         assert executable.is_file(), 'The actual fixture venv executable is missing.'
         selection.update(local_venv_present=True, expected_executable=str(executable))
+    elif lane == 'configured-path':
+        assert windows, 'The PATH selection lane exercises the Windows wrapper.'
+        assert selection['py_candidate'], 'CI must retain an available py fallback.'
+        monkeypatch.setenv(
+            'PATH', str(Path(sys.executable).parent) + os.pathsep + os.environ['PATH']
+        )
+        selection['expected_executable'] = sys.executable
+        selection['python_candidate'] = shutil.which('python')
     else:
         assert lane == 'system-discovery', 'Unknown wrapper fixture lane.'
     selection['legacy_minor_selector'] = (
@@ -900,6 +908,20 @@ def test_windows_wrapper_configured_interpreter_lanes(
     _exercise_wrapper_fixture(
         tmp_path, 'Start-Sinter.bat', arguments, request, monkeypatch,
         lane='configured-local-venv',
+    )
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Actual Windows PATH runtime selection.')
+@pytest.mark.parametrize('arguments', [
+    [], ['--help'], ['--version'],
+    ['review', 'notes Ω & (draft)! 100% ready.txt', '--offline'],
+])
+def test_windows_wrapper_prefers_the_working_matrix_runtime_on_path(
+    tmp_path, arguments, request, monkeypatch,
+):
+    _exercise_wrapper_fixture(
+        tmp_path, 'Start-Sinter.bat', arguments, request, monkeypatch,
+        lane='configured-path',
     )
 
 
