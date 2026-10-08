@@ -141,7 +141,7 @@ def sample(tmp_path, monkeypatch, *, catalogue_count=None):
         )
     raw_json(
         context.native / "handoff-container/browser.json",
-        {"schema": "sinter-rc4-native-handoff-browser/v2"},
+        {"schema": "sinter-rc4-native-handoff-browser/v3"},
     )
     for name in products[:1] + (receipt_name,):
         shutil.copyfile(context.candidate / name, context.replacement_candidate / name)
@@ -784,6 +784,21 @@ def orchestration_controls(tmp_path, monkeypatch, *, catalogue_count=None):
 
 
 ORIGINAL_VERIFY = release.verify_original
+
+
+def test_original_authorization_refuses_pre_temp_browser_schema(tmp_path, monkeypatch):
+    context, pins, _source, events, _results, _modules = orchestration_controls(
+        tmp_path, monkeypatch
+    )
+    raw_json(
+        context.native / "handoff-container/browser.json",
+        {"schema": "sinter-rc4-native-handoff-browser/v2"},
+    )
+    with pytest.raises(ValueError, match="owned temp evidence"):
+        release.verify_original(context, pins)
+    assert all(
+        role in events for role in ("workflow", "recovery", "native", "replacement")
+    )
 
 
 @pytest.mark.parametrize("count", [53, 54])

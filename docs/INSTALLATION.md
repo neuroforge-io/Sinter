@@ -103,7 +103,7 @@ acceptance remain unqualified; no stable all-platform release is claimed.
 | Windows x86 | 32-bit Python 3.13 under Windows x64 compatibility mode |
 | Windows ARM64 | Windows 11 ARM runner, native ARM64 Python 3.13 |
 | macOS Intel | macOS 15 Intel runner, Python 3.13 |
-| macOS Apple Silicon | macOS 14 ARM64 runner, Python 3.13 |
+| macOS Apple Silicon | macOS 15 ARM64 runner, Python 3.13 |
 | Linux x64 / ARM64 | Ubuntu 22.04 target runners, Python 3.13; glibc baseline recorded |
 | Linux x86 | Debian Trixie 32-bit userspace, Python 3.11, host compatibility execution |
 | Linux ARMv7 | Debian Bookworm armhf userspace, Python 3.11, QEMU emulation |
@@ -180,7 +180,9 @@ inputs at that moment; it does not save the project or create a file.
 
 ## Source and speech installation
 
-Python 3.10+ and a current browser are needed for a source installation:
+Python 3.10+ is required for a source installation. The native window also needs
+Tk and a working display; the full web workbench needs a current browser. CLI
+workflows need neither a browser nor a display.
 
 ```sh
 git clone https://github.com/neuroforge-io/Sinter.git

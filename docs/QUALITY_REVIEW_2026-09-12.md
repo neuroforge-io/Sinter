@@ -34,9 +34,11 @@ been published.
 
 **Historical checkpoint.** The counts, live outputs and scores below describe the
 September 12 review, not the September 30 candidate or the currently deployed
-native model. Current profile boundaries, offline and installed qualification
-are recorded in [published 0.5.4rc1 status](PREVIEW_0.5.4rc1.md) and
-[the published 0.5.4rc2 preview](PREVIEW_0.5.4rc2.md). Native ERAIS supports
+native model. Current native profile boundaries are recorded in the
+[public API contract](NATIVE_API_COMPATIBILITY.md). Published offline and installed
+qualification is recorded in the [0.5.4rc3 publication receipt](releases/PREVIEW_0.5.4rc3_PUBLICATION_RECEIPT.md).
+The [0.5.4rc1](PREVIEW_0.5.4rc1.md) and [0.5.4rc2](PREVIEW_0.5.4rc2.md) previews
+remain historical releases with different pinned sources. Native ERAIS supports
 1–128 output tokens and short buffered questions; the earlier 32–2,048 range and
 long-recipe successes apply to legacy contracts. No historical score substitutes
 for current acceptance.

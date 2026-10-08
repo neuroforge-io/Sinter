@@ -521,6 +521,19 @@ def test_native_browser_reads_both_actual_after_files_even_with_primary_failure(
     root = tmp_path / "owner/out/handoff"
     root.mkdir(parents=True)
     (root.parent.parent / "client").mkdir()
+    temporary = root.parent.parent / "client/controlled-browser-temp"
+
+    def create(record):
+        temporary.mkdir()
+        record.update(path=str(temporary), identity_before={"controlled": True})
+
+    def remove(record):
+        temporary.rmdir()
+        record.update(identity_after={"controlled": True}, removed=True)
+
+    monkeypatch.setattr(native_contract, "preflight_browser_temporary", lambda: None)
+    monkeypatch.setattr(handoff, "create_browser_temporary", create)
+    monkeypatch.setattr(handoff, "remove_browser_temporary", remove)
     first = RuntimeError("ORIGINAL-VISIBLE-UI")
     driver = Path("/fixed/playwright/driver/node").resolve()
     reads, seen = [], []
@@ -621,7 +634,7 @@ def test_native_browser_reads_both_actual_after_files_even_with_primary_failure(
     assert result.value is first
     assert reads == ["chromium", "node", "chromium", "node"]
     retained = json.loads((root.parent.parent / "browser.json").read_bytes())
-    assert retained["schema"] == "sinter-rc4-native-handoff-browser/v2"
+    assert retained["schema"] == "sinter-rc4-native-handoff-browser/v3"
     for key, role in (("chromium", "chromium"), ("driver_process", "node")):
         assert retained[key]["sha256"] == "a" * 64
         assert retained[key]["sha256_after"] == (

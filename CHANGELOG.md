@@ -16,6 +16,11 @@ original installed gates must pass before a separate Linux preview is admitted.
   an explicit retry, and preserve known server errors. A failed list refresh
   after a confirmed save no longer presents the save as failed or uncertain.
 
+- Fix the qualifier's observed Chromium socket-path abort with a separate short
+  owned temporary directory and strict path, ownership and removal evidence.
+  Start Playwright only after Chromium's debugger is ready; retain early-abort
+  output and cleanup failures. A new installed qualification remains required.
+
 - Describe casebooks and letters by the report or draft they prepare. Keep local
   source compilation, human review and separately approved optional AI drafting
   clear; remove vague slogans and the aging casebook novelty label.

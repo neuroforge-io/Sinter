@@ -1,9 +1,10 @@
 # RC4 original release authorization and public integrity inspection
 
-This is source tooling for a future exact `0.5.4rc4` Linux x64 candidate. No
-candidate is built, installed, tagged or published by this change. Current
-`0.5.4rc4.dev0` source cannot pass the original qualification. Synthetic unit
-controls exercise orchestration and byte integrity; they are not installed proof.
+This is source tooling for an exact `0.5.4rc4` Linux x64 candidate. The earlier
+`0.5.4rc4.dev0` proposal could not pass the original qualification. Current
+`0.5.4rc4` source still requires fresh successful installed qualification; this
+change does not build, install, tag or publish a candidate. Synthetic unit controls
+exercise orchestration and byte integrity; they are not installed proof.
 
 Three operations have different authority:
 
@@ -70,8 +71,10 @@ Original qualification invokes:
 - Fixed `rc4_replacement_contract.verify`: the unchanged exact four-prior map,
   including published RC3 E, one final package and all original source/data/owner
   lifetimes. RC1–RC3 prior maps and release rules stay unchanged.
-- Required native/replacement v2 before/after host observations, including the
-  actual original Docker, Chromium, Python and bundled Playwright Node identities.
+- Required native browser v3 and replacement v2 before/after host observations,
+  including the actual original Docker, Chromium, Python and bundled Playwright
+  Node identities. Native v3 also requires the owned short temporary directory's
+  identity and completed removal.
 
 The authorizer derives the expected catalogue count through the fixed trusted
 `installed_workflow_qualification.source_operations` parser after checking the
