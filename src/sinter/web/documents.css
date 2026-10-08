@@ -100,3 +100,13 @@
 @media screen{.handover-reading-opening{display:flex;flex-direction:column}.handover-context-toggle{order:1}.handover-context-content{order:2}}
 @media screen and (max-width:650px){.handover-reading-report .document-paper>.document{padding:16px 20px 24px}.handover-inline-editor[open]{grid-column:1/-1}.handover-inline-editor>summary{width:100%;min-height:40px;font-size:.72rem;padding:9px 10px}}
 @media print{.handover-context-content[hidden]{display:block!important}.handover-context-content{padding:0;border:0}.handover-reading-opening{display:block}.handover-reading-report .document-paper>.document{padding:0}.document .handover-reading-opening>p{font:inherit}.handover-reading-report .paper-label{display:none}.handover-reading-document .handover-opening-table th{background:white;color:black}}
+
+/* Print the report document once, even while its evidence tab is selected. */
+@media print{
+  body:has(.report-print-target) *:not(.report-print-target):not(.report-print-target *):not(:has(.report-print-target)){display:none!important}
+  .report-print-target[hidden]{display:block!important}
+  .report-print-target>:not(.document-paper){display:none!important}
+  .report-print-target .paper-label{display:block!important;padding:0 0 12pt;color:#444;letter-spacing:.08em}
+  .handover-reading-report .report-print-target .paper-label{display:none!important}
+  .report-print-target .document .citation-link{color:black}
+}

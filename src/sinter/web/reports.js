@@ -79,7 +79,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   const isAssistant = report.workflow === 'assistant';
   const documentLabel = isCampaign ? 'Decision brief' : 'Document';
   const evidenceLabel = isCampaign ? 'Audit & evidence' : 'Evidence';
-  const documentPanel = h('section', {class: 'document-panel', role: 'tabpanel', 'aria-label': documentLabel}, paper);
+  const documentPanel = h('section', {class: 'document-panel report-print-target', role: 'tabpanel', 'aria-label': documentLabel}, paper);
   const evidencePanel = h('section', {class: 'evidence-panel non-print', role: 'tabpanel', 'aria-label': evidenceLabel, hidden: true});
   const tabs = h('div', {class: 'report-tabs non-print', role: 'tablist', 'aria-label': isCampaign ? 'Campaign views' : 'Draft views'});
   const completion = h('div', {class: 'completion-panel non-print'});

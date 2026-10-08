@@ -22,6 +22,14 @@ original installed gates must pass before a separate Linux preview is admitted.
   covers keep their original presentation. Markdown, evidence and Word content
   are unchanged. Source-only tests do not qualify an installed release.
 
+- Print the reviewed document without project forms, saved-project shelves or
+  navigation text. Print the complete Document once when Evidence is selected,
+  retain source context and stale warnings, and keep fictional, model-generated
+  and incomplete labels prominent even after edits remove a draft preamble.
+  Pending edits still require an explicit apply/cancel choice before Print.
+  Qualified here in the cached Chromium source workflow, not every browser or
+  an installed package.
+
 - Offer “Read full message” when campaign feedback exceeds the compact save bar.
   Keep complete wording in a scrollable reader and restore keyboard focus when
   closed. Reading the message does not save, retry or send a request.

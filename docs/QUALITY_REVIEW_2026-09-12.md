@@ -3032,3 +3032,37 @@ passing evidence. An independent passive review rated this demonstrated opening
 8/10 for usability, functionality and appearance. Those scores concern this
 bounded local workflow, not the whole product, live providers or any installer.
 The original platform qualification failures and release holds remain unchanged.
+
+
+### 9 October: print the document without workspace controls
+
+The separate source follow-on to `3b56d29` repairs the actual Print/PDF output
+debt recorded above. The existing Document panel is an explicit print target;
+print-only styles retain that panel and its ancestor layout while hiding project
+forms, shelves, navigation and unrelated report controls. The Document prints
+once when Evidence is selected, without changing the selected screen view.
+Existing fictional, model-generated and incomplete classifications remain
+prominent even when a user-edited body removes its original preamble. Source-only
+handovers retain the complete original title, audience and review caution.
+Stale warnings, literal quotations, unknown/unassigned owners, unconfirmed dates
+and original source references remain intact. The print action and its existing
+pending-edit guard are unchanged.
+
+The final source checks passed 93 Node tests, 54 Python tests, 22 garden browser
+journeys and 15 report-recovery journeys. The browser produced complete actual
+Document and Evidence-tab PDFs with identical content, plus edited model,
+incomplete, fictional and stale-review captures. Passive inspection and full PDF
+text extraction verified the omitted controls and retained qualifications and
+four original passage identities; no pages or evidence were truncated. The
+downloaded Word file stayed byte-identical to the earlier `072e7b9` capture.
+The classification fixtures are local synthetic failure/status cases, not model
+outputs. There were no external requests, model operations or browser errors.
+
+This admission covers the current single-report workbench in the tested cached
+Chromium runtime, whose print selectors support `:has`. It does not establish
+every browser's print behaviour, a physical print-dialog result, assistive
+technology acceptance or installed-release qualification. Two tool line-length
+checks were corrected before the final run. A first PDF extraction check
+interleaved table columns in layout mode; complete layout and raw extractions
+are retained with the corrected cell-content review. Earlier source/platform
+failures and qualification holds remain unchanged.

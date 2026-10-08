@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
-from sinter import client, practice  # noqa: E402
+from sinter import casebooks, client, practice  # noqa: E402
 from sinter.server import make_server  # noqa: E402
 from tools._support import browser_arguments, launch_chromium  # noqa: E402
 
@@ -398,6 +398,10 @@ def main(argv: list[str] | None = None) -> None:
                     expect(context_control).to_have_attribute("aria-expanded", "false")
                     expect(context_body).to_be_hidden()
                     page.emulate_media(media="print")
+                    expect(page.locator(".skip-link")).to_be_hidden()
+                    expect(page.locator(".casebook-editor")).to_be_hidden()
+                    assert page.locator("input:visible,textarea:visible").count() == 0
+                    assert page.locator(".document-panel:visible").count() == 1
                     expect(context_body).to_be_visible()
                     expect(context_body.get_by_role("heading", level=1)).to_be_visible()
                     assert (
@@ -422,19 +426,40 @@ def main(argv: list[str] | None = None) -> None:
                         "2026-10-09 (unconfirmed; not a funder deadline)",
                     ):
                         expect(document).to_contain_text(phrase)
-                    document.evaluate("node => node.scrollIntoView({block: 'start'})")
+                    page.evaluate("window.scrollTo(0, 0)")
                     page.screenshot(path=str(out / "garden-handover-print-media.png"))
                     page.pdf(
                         path=str(out / "garden-handover-print.pdf"),
                         print_background=True,
                     )
                     page.emulate_media(media="screen")
+                    report.get_by_role("tab", name="Evidence", exact=True).click()
+                    expect(document).to_be_hidden()
+                    page.emulate_media(media="print")
+                    expect(document).to_be_visible()
+                    expect(report.locator(".evidence-panel")).to_be_hidden()
+                    assert page.locator(".document-panel:visible").count() == 1
+                    expect(document.get_by_role("heading", level=1)).to_have_count(1)
+                    page.evaluate("window.scrollTo(0, 0)")
+                    page.screenshot(path=str(out / "garden-evidence-tab-print.png"))
+                    page.pdf(
+                        path=str(out / "garden-evidence-tab-print.pdf"),
+                        print_background=True,
+                    )
+                    page.emulate_media(media="screen")
+                    expect(document).to_be_hidden()
+                    report.get_by_role("tab", name="Document", exact=True).click()
+                    expect(page.locator(".casebook-editor")).to_be_visible()
                     expect(context_body).to_be_hidden()
                     expect(context_control).to_have_attribute("aria-expanded", "false")
                     checks.append(
                         "first proposal fits initial desktop and390 viewport; "
                         "keyboard context disclosure retains audience; "
                         "print includes closed context in original heading order"
+                    )
+                    checks.append(
+                        "Print excludes editor and navigation; Evidence tab prints "
+                        "the complete Document once and restores the selected view"
                     )
                     checks.append(
                         "explicit three-row opening has actionable proposals, "
@@ -529,6 +554,24 @@ def main(argv: list[str] | None = None) -> None:
                     )
                     report.get_by_label("Edit your draft", exact=True).fill(
                         pending_handover
+                    )
+                    page.evaluate("""() => {
+                        window.originalPrint = window.print;
+                        window.printAttempts = 0;
+                        window.print = () => { window.printAttempts += 1; };
+                    }""")
+                    report.get_by_text("More options", exact=True).click()
+                    report.get_by_role(
+                        "button", name="Print / save PDF", exact=True
+                    ).click()
+                    assert page.evaluate("window.printAttempts") == 0
+                    page.evaluate("window.print = window.originalPrint")
+                    expect(
+                        report.get_by_label("Edit your draft", exact=True)
+                    ).to_have_value(pending_handover)
+                    checks.append(
+                        "Print refuses unapplied edits without discarding them "
+                        "or opening a print dialog"
                     )
                     checks.append(
                         "four practice sources and useful handover open "
@@ -719,6 +762,93 @@ def main(argv: list[str] | None = None) -> None:
                         "narrow view retains both practice actions "
                         "without horizontal overflow"
                     )
+                    print_report = casebooks.build(bundle["casebook"], "handover")
+                    for flag, value, label in (
+                        ("model_draft", True, "MODEL-GENERATED DRAFT"),
+                        ("incomplete", True, "INCOMPLETE MODEL DRAFT"),
+                        ("demo", True, "FICTIONAL EXAMPLE"),
+                        ("review_status", "stale", "EDITED DRAFT"),
+                    ):
+                        title = "Print classification fixture - " + flag
+                        body = "# " + title + "\n\n" + (
+                            "Human-edited wording with its preamble removed."
+                        )
+                        stale_warning = (
+                            "Review status: stale. Review this saved record again "
+                            "before current use. Original evidence and historical "
+                            "wording remain unchanged; "
+                            "no current source was substituted."
+                        )
+                        if flag == "review_status":
+                            body = exact_reviewed.replace(
+                                "## At a glance\n",
+                                "## At a glance\n\n**" + stale_warning + "**\n",
+                                1,
+                            )
+                        flagged = {
+                            **print_report,
+                            "title": title,
+                            "document_title": title,
+                            flag: value,
+                            "document_edits": {
+                                "markdown": body,
+                                "author": "user",
+                                "edited_at": "2026-10-09T00:00:00Z",
+                            },
+                        }
+                        server.app.store.save_report(flagged)
+                        flag_page = context.new_page()
+                        flag_page.on(
+                            "pageerror", lambda error: errors.append(str(error))
+                        )
+                        flag_page.goto(base + "/#library")
+                        flag_page.get_by_role("article").filter(
+                            has=flag_page.get_by_role("heading", name=title, exact=True)
+                        ).get_by_role("button", name="Open draft", exact=True).click()
+                        flag_report = flag_page.get_by_role(
+                            "region", name="Your draft report", exact=True
+                        )
+                        flag_report.get_by_role(
+                            "tab", name="Evidence", exact=True
+                        ).click()
+                        flag_page.emulate_media(media="print")
+                        expect(flag_report.locator(".paper-label")).to_be_visible()
+                        expect(flag_report.locator(".paper-label")).to_have_text(label)
+                        expect(flag_page.locator(".skip-link")).to_be_hidden()
+                        assert flag_page.locator(".document-panel:visible").count() == 1
+                        expected = stale_warning if flag == "review_status" else (
+                            "Human-edited wording with its preamble removed."
+                        )
+                        expect(flag_report.locator(".document").first).to_contain_text(
+                            expected
+                        )
+                        if flag == "incomplete":
+                            expect(flag_report.locator(".document").first).to_contain_text(
+                                "INCOMPLETE MODEL DRAFT — review the partial text."
+                            )
+                        if flag == "review_status":
+                            for phrase in (
+                                "Request the quote before proposing a purchase.",
+                                "Owner type unknown; acceptance unconfirmed",
+                                "The equipment quote has not been received.",
+                                "not a confirmed deadline or grant closing date",
+                                "Passage reference key",
+                            ):
+                                expect(
+                                    flag_report.locator(".document").first
+                                ).to_contain_text(phrase)
+                        flag_page.screenshot(path=str(out / ("print-" + flag + ".png")))
+                        flag_page.pdf(
+                            path=str(out / ("print-" + flag + ".pdf")),
+                            print_background=True,
+                        )
+                        flag_page.close()
+                        checks.append(
+                            "stale review prints complete warning, proposals and "
+                            "original evidence" if flag == "review_status" else
+                            flag + " print classification stays prominent after "
+                            "an edited body removes its preamble"
+                        )
                     assert not errors, errors
                     assert not external, external
                     browser.close()
