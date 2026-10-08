@@ -12,6 +12,10 @@ original installed gates must pass before a separate Linux preview is admitted.
   preserve original wording, links, review status and ordinary table layout.
   Avoid repeated document parsing when a report contains many small tables.
 
+- Keep the installed first-run check aligned with the current save-and-quit
+  guidance. Continue requiring that guidance to be visible before exercising
+  the separate project/report saves, restart and interruption recovery.
+
 - Prepare only the evidence folders used by each installed recovery profile.
   Keep the verifier's strict rejection of unexpected empty folders. The original
   recovery exercise completed its ten app lifetimes but failed qualification on

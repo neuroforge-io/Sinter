@@ -347,9 +347,11 @@ def browser_cycle(browser, process, origin, row, before, output, version, observ
         ).to_be_visible()
         expect(
             page.get_by_text(
-                "Use Save project for inputs and Save to My workspace "
-                "for edited reports.",
-                exact=False,
+                "Save project keeps inputs; Save to My workspace keeps edited "
+                "reports. Wait for Saved, then export a separate backup. Choose "
+                "Quit Sinter when finished; closing this browser tab does not "
+                "stop the app.",
+                exact=True,
             )
         ).to_be_visible()
 

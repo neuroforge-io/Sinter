@@ -2895,3 +2895,28 @@ The adversarial review rates this handover's UX 7.6, functionality 8.1 and
 aesthetics 7.4. Dense guidance and prominent technical identifiers remain
 improvement opportunities. This is bounded source and document polish, not new
 installed-platform qualification or a whole-product 10/10 assessment.
+
+### 8 October: installed first-run guidance check needs current wording
+
+The Word source-table draft at `1c89ca4a82b1ff7b33a55e966e7583d8056fb33d`
+triggered Native installers run `37737402949`, attempt 1, for PR 21. Its Linux
+x64 job `113179981094` built and exercised the package and passed the frozen
+native-window check, then failed the installed first-run browser check. These
+PR jobs built merge commit `a36544f36538ab39f994b3745e90d950a6bd0f28`; they are
+not qualification of the separately frozen `d179` candidate.
+
+The retained original log and first-run receipt show an exact wording mismatch.
+The browser test expected the earlier sentence “Use Save project for inputs and
+Save to My workspace for edited reports.” The installed page instead displayed
+the current guidance explaining that project saves keep inputs, report saves
+keep edits, and closing the browser tab does not stop the app. That rendered
+guidance matches the current source. The check now requires the complete current
+native sentence; no alternate wording, omitted assertion or reduced journey is
+accepted.
+
+The original run remains failed. It stopped during its first launch, before
+exercising the save/reopen journey. Owned shutdown completed with no provider or
+external browser requests or page errors, and the package-removal cleanup ran.
+A new source commit and fresh official run are required to prove the corrected
+check and the rest of the installed workflow. A stale expectation explains this
+failure; it does not prove the unexecuted steps passed.
