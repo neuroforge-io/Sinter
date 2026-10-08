@@ -2818,3 +2818,43 @@ selected job's Python 3.10.11 or 3.13.15. Original failures remain recorded, and
 unobserved launcher policy and descendants remain unknown. That green source run
 does not admit the subsequent Word change or an installed release; fresh exact-source
 hosted and original installed checks remain required.
+
+Exact source `8e0c26fd9b4643ef93157108b84e172926b710fb` subsequently passed hosted
+Quality run `37724460108` in all twelve jobs and browser run `37724460028` in
+Chromium, Firefox and WebKit. Its fresh Linux native build completed normally in
+41.90 seconds. Independent mechanical review matched the actual DEB, native
+archive and distribution, including 697 runtime files and 66 web assets. These
+source and package results do not establish an installed release or live model
+quality.
+
+The original installed browser workflow on that exact package completed normally
+in 20.01 seconds: two app lifetimes, 22 named checks, 13 retained artifacts and
+54 catalogue entries. Independent review inspected all five screenshots, all four
+Word exports and the backups. Source links, original inputs, edited reports and
+uncertain Word-save recovery were retained. Its generated source ZIP has the same
+526 names, member bytes and commit comment as the candidate source ZIP, with a
+ten-hour timestamp difference from the unchanged child's local timezone. The two
+actual archive hashes remain separate. Dense handover text and the tall action
+editor still limit practical presentation; this is not a whole-product 10/10.
+
+The following installed recovery qualification failed after 49.98 seconds.
+Its inner exercise completed six campaign and four scoped app lifetimes, with
+no inner failure or cleanup error. The final strict verifier rejected two empty
+campaign-only evidence folders that the producer also created for the scoped
+profile: `advanced` and `installed-recovery`. This is a producer/verifier layout
+mismatch, not a successful recovery qualification. The original failed receipt,
+complete streams and folder contents remain unchanged. Native, cold-install and
+prior-release replacement gates were not run, and RC4 publication remains held.
+The subsequent source correction creates only the roles each profile uses and
+retains the strict rejection of unexpected empty folders. It requires fresh
+exact-source hosted, packaged and installed qualification; the failed attempt is
+not replayed or relabelled.
+
+The directory correction's initial focused run passed 441 cases in 29.27 seconds.
+A subsequent broader check reached its unchanged 120-second bound without a test
+summary; the timeout and partial output remain recorded. No cause is established,
+and complete descendant cleanup was not observed. The final five new directory
+regressions were then independently checked once using an explicit private pytest
+temporary root: five passed, 329 deselected, in 0.36 seconds, with empty stderr.
+That narrow current-source result does not override the broader timeout or qualify
+the failed installed run. Fresh hosted and installed checks remain required.

@@ -1091,6 +1091,17 @@ class InstalledLifecycle:
             )
 
 
+def prepare_profile_evidence(output, profile):
+    """Create only directories used by this profile's original evidence roles."""
+    contract.require(profile in PROFILES, "Unknown recovery profile.")
+    directories = ("process", "rpc", "inner-rpc")
+    if profile == "campaign":
+        directories += ("installed-recovery", "advanced")
+    for name in directories:
+        (output / name).mkdir(mode=0o777)
+        (output / name).chmod(0o777)
+
+
 def seed_profile(runtime, output, source):
     """Source prepares fictional seed only; actual execution uses the frozen binary."""
     from tools.rc4_recovery_worker import seed
@@ -1255,9 +1266,7 @@ def run_inner():
                 (runtime / n).mkdir(mode=0o777 if n == "rpc" else 0o700)
             # Host-owned ancestors remain 0700; the fictional exchange is writable.
             (runtime / "rpc").chmod(0o777)
-            for n in ("process", "rpc", "inner-rpc", "installed-recovery", "advanced"):
-                (proof / n).mkdir(mode=0o777)
-                (proof / n).chmod(0o777)
+            prepare_profile_evidence(proof, profile)
             baseline = seed_profile(runtime, proof, source)
             lifecycle = InstalledLifecycle(
                 runtime, proof, identity, baseline, profile, config["session"]

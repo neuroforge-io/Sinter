@@ -70,7 +70,7 @@ changes still need fresh browser and installed qualification before publication.
 Current Linux menu builds open the full workbench and offer the native source
 window as a separate entry; the published RC3 menu behavior below is unchanged.
 
-The app defaults to a smaller native **source workspace**. For funding campaigns,
+Published RC3 defaults to a smaller native **source workspace**. For funding campaigns,
 rich documents and account sign-in, open the full browser workbench with
 `/opt/neuroforge/sinter/Sinter app --mode browser` after installing the Debian
 package. Its Overview offers **Open garden handover** and **Open garden campaign**.
@@ -78,9 +78,10 @@ See [one portable runtime](docs/PORTABLE_RUNTIME.md) for the separate presentati
 Native qualification covers repeat launch and clean shutdown; full native editing
 and customer-device acceptance remain unqualified.
 
-Linux Python and Chromium CI passed. The aggregate cross-platform Quality run
-failed: Windows test-fixture portability and a genuine macOS concurrent Word-save
-failure remain open. The release page retains these limits; this is a Linux-only
+For the published RC3 assessment, Linux Python and Chromium CI passed. Its
+aggregate cross-platform Quality run failed: Windows test-fixture portability
+and a genuine macOS concurrent Word-save failure remain open in that assessment.
+The release page retains these limits; this is a Linux-only
 preview, not a cross-platform qualification or a whole-product 10/10 claim.
 
 The earlier v0.5.3, [v0.5.4rc1](docs/PREVIEW_0.5.4rc1.md) and
@@ -262,7 +263,7 @@ On Windows use `py start.py`, or double-click `Start-Sinter.bat`. The source lau
 
 **Community plans.** Record actions, owners, confirmed dates and progress. Export CSV, JSON and calendar files, or save the plan in My workspace. The comparison tool finds changed lines in earlier and updated wording. Line-ending styles and the final newline are intentionally ignored.
 
-**Eight community drafting recipes.** Enquiry letters, agenda items, action registers, grant preparation, volunteer handovers, event plans, newsletters and consultation questions. Each keeps the original context available across extraction, drafting and review stages. A model self-check is not independent verification.
+**Eight community drafting recipes.** Enquiry letters, agenda items, action registers, grant preparation, volunteer handovers, event plans, newsletters and consultation questions. Each keeps the original context available across extraction, drafting and review stages. These generative recipes require a suitably configured provider; the native 128-token profile only admits clearly scoped compatible tasks. A model self-check is not independent verification.
 
 [Read the workflow guide](docs/WORKFLOWS.md).
 

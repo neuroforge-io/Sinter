@@ -2,10 +2,15 @@
 
 ## 0.5.4rc4 - candidate source, installed qualification pending
 
-This candidate source follows the frozen RC3 release. It has no new installed
-qualification and does not change any published RC3 asset or historical receipt.
+This candidate source follows the frozen RC3 release. It is not yet qualified as
+a new installed release and does not change any published RC3 asset or receipt.
 The candidate version does not publish automatically: exact-source hosted and
 original installed gates must pass before a separate Linux preview is admitted.
+
+- Prepare only the evidence folders used by each installed recovery profile.
+  Keep the verifier's strict rejection of unexpected empty folders. The original
+  recovery exercise completed its ten app lifetimes but failed qualification on
+  two unused folders; its failure remains recorded and needs a fresh candidate.
 
 - Make reviewed handover Word exports easier to read: plain summary quotations
   use body typography, short quotation groups stay together, and pages carry the

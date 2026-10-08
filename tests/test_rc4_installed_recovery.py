@@ -207,6 +207,40 @@ def test_profile_inventory_cannot_omit_an_unknown_empty_directory(tmp_path, nest
         contract.profile_artifacts(tmp_path)
 
 
+@pytest.mark.parametrize("profile", ["campaign", "scoped"])
+def test_producer_profile_directories_match_used_contract_roles(tmp_path, profile):
+    producer.prepare_profile_evidence(tmp_path, profile)
+    required = {
+        Path(name).parts[0]
+        for name in contract.profile_roles(profile)
+        if len(Path(name).parts) > 1
+    }
+    # Ordinary source-unit records exercise the real closed inventory reader,
+    # without claiming profile semantics, installed execution or a release pass.
+    expected = {}
+    for name in sorted(required):
+        relative = name + "/source-unit.json"
+        raw = contract.canonical({"profile": profile, "role": name}).encode("utf-8")
+        (tmp_path / relative).write_bytes(raw)
+        expected[relative] = raw
+    assert contract.profile_artifacts(tmp_path) == expected
+    assert {path.name for path in tmp_path.iterdir()} == required
+    if os.name == "posix":
+        assert all(
+            (tmp_path / name).stat().st_mode & 0o777 == 0o777 for name in required
+        )
+    (tmp_path / "unexpected").mkdir()
+    with pytest.raises(ValueError, match="Unlisted empty profile directories"):
+        contract.profile_artifacts(tmp_path)
+
+
+@pytest.mark.parametrize("profile", ["unknown", None, True])
+def test_producer_unknown_profile_refuses_before_creating_evidence(tmp_path, profile):
+    with pytest.raises(ValueError, match="Unknown recovery profile"):
+        producer.prepare_profile_evidence(tmp_path, profile)
+    assert list(tmp_path.iterdir()) == []
+
+
 @pytest.mark.parametrize("bound", ["entries", "depth"])
 def test_profile_inventory_bounds_directories_and_files(tmp_path, monkeypatch, bound):
     if bound == "entries":
