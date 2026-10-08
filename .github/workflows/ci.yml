@@ -105,7 +105,9 @@ jobs:
       - run: python tools/campaign_budget_browser.py
       - run: python tools/campaign_action_bar_browser.py
       - name: Read complete campaign recovery messages without replay
-        run: python tools/campaign_feedback_browser.py
+        run: |
+          python tools/campaign_feedback_browser.py
+          node --experimental-default-type=module tests/api_request_outcome.mjs
         env:
           TMPDIR: ${{ github.workspace }}/browser-artifacts
       - run: python tools/communication_view_browser.py

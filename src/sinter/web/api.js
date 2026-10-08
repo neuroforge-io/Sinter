@@ -1,33 +1,89 @@
 /** Same-origin client. Tokens stay in memory, never URLs or browser storage. */
 let sessionPromise;
+const knownRejections = new Set([400, 403, 409]);
+
+/** Keep observed request facts distinct from an unknown write outcome. */
+function requestFailure(cause, state) {
+  const writing = state.method === 'POST' && state.dispatched;
+  let message = cause.message;
+  if (state.responseStatus !== null && !state.responseComplete) {
+    message = knownRejections.has(state.responseStatus)
+      ? `The app rejected the request (${state.responseStatus}), but its error message could not be read.`
+      : `The app response could not be read (${state.responseStatus}).`;
+  } else if (cause.name === 'TypeError') {
+    message = writing ? 'Cannot reach the local Sinter app. Keep the launcher window open.'
+      : 'Cannot reach the local Sinter app. Keep the launcher window open, then retry.';
+  } else if (cause.name === 'AbortError') {
+    message = writing ? 'The request stopped or timed out.'
+      : 'The request stopped or timed out. Check the app connection before retrying.';
+  }
+  let failure = cause;
+  // A session failure has its own immutable GET context. Preserve it as the
+  // cause, and attach a separate not-sent context to the outer POST failure.
+  if (message !== cause.message || cause.requestState) {
+    failure = new Error(message);
+    failure.cause = cause;
+    for (const key of ['status', 'partialResult']) {
+      if (key in cause) failure[key] = cause[key];
+    }
+  }
+  if (failure.status === undefined && state.responseStatus !== null) failure.status = state.responseStatus;
+  failure.requestState = Object.freeze({...state,
+    outcome: !state.dispatched ? 'not-sent'
+      : knownRejections.has(state.responseStatus) ? 'rejected' : 'unconfirmed'});
+  return failure;
+}
+
+function rejectAborted(signal) {
+  if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
+}
+
 export function session() {
   if (!sessionPromise) sessionPromise = request('/api/session').catch(error => { sessionPromise = null; throw error; });
   return sessionPromise;
 }
 
-export async function request(path, {data, signal, method = data === undefined ? 'GET' : 'POST', responseType = 'json', headers: suppliedHeaders = {}} = {}) {
+export async function request(path, {data, signal, method = data === undefined ? 'GET' : 'POST', responseType = 'json', headers: suppliedHeaders = {}, acceptResponse} = {}) {
   if (!path.startsWith('/api/')) throw new Error('Only local API paths are allowed.');
-  if (globalThis.sinterBrowser) return globalThis.sinterBrowser.request(path, {data, signal, method, responseType, headers: suppliedHeaders});
+  if (globalThis.sinterBrowser) {
+    let dispatched = false, responseComplete = false;
+    try {
+      rejectAborted(signal); dispatched = true;
+      const result = await globalThis.sinterBrowser.request(path, {data, signal, method, responseType, headers: suppliedHeaders});
+      responseComplete = true;
+      return acceptResponse ? await acceptResponse(result) : result;
+    } catch (cause) {
+      // The bridge exposes status only after decoding a local runtime reply.
+      const responseStatus = Number.isInteger(cause.status) ? cause.status : null;
+      throw requestFailure(cause, {path, method, dispatched, responseStatus,
+        responseComplete: responseComplete || responseStatus !== null});
+    }
+  }
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (signal?.aborted) abort();
   signal?.addEventListener('abort', abort, {once: true});
   const timer = setTimeout(abort, 35000);
+  let dispatched = false, responseStatus = null, responseComplete = false;
   try {
+    rejectAborted(controller.signal);
     const headers = {...suppliedHeaders};
     if (method === 'POST') {
       headers['Content-Type'] = 'application/json';
       headers['X-Sinter-Token'] = (await session()).token;
     }
+    const body = data === undefined ? undefined : JSON.stringify(data);
+    rejectAborted(controller.signal);
+    dispatched = true;
     const response = await fetch(path, {method, headers, cache: 'no-store',
-      body: data === undefined ? undefined : JSON.stringify(data), signal: controller.signal});
+      body, signal: controller.signal});
+    responseStatus = response.status;
     const result = response.ok && responseType === 'blob' ? await response.blob() : await response.json();
-    if (!response.ok) { const error = new Error(result.error || result.message || `The request failed (${response.status}).`); error.status = response.status; error.partialResult = result.partial_result; throw error; }
-    return result;
-  } catch (error) {
-    if (error.name === 'TypeError') throw new Error('Cannot reach the local Sinter app. Keep the launcher window open, then retry.');
-    if (error.name === 'AbortError') throw new Error('The request stopped or timed out. Check the app connection before retrying.');
-    throw error;
+    responseComplete = true;
+    if (!response.ok) { const error = new Error(result?.error || result?.message || `The request failed (${response.status}).`); error.status = response.status; error.partialResult = result?.partial_result; throw error; }
+    return acceptResponse ? await acceptResponse(result) : result;
+  } catch (cause) {
+    throw requestFailure(cause, {path, method, dispatched, responseStatus, responseComplete});
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }
 

@@ -23,6 +23,7 @@ import {selectRequirementSource} from './campaign-requirement-source.js';
 import {selectWindowSource} from './campaign-window-source.js';
 import {campaignBackupControls, resetCampaignBackupControls} from './campaign-backup.js';
 import {campaignFeedback} from './campaign-feedback.js';
+import {acknowledgedCampaign} from './campaign-save.js';
 import {CEILING_CURRENCY_OPTIONS, campaignCeilingCurrency,
   campaignFundingAmount, campaignCurrencyComparisonNote} from './campaign-currency.js';
 import {createFundingSummaryState, fundingTrackingEditor,
@@ -171,6 +172,7 @@ export function hasUnverifiedRecordedDeadline(row) {
 export async function campaignsPage({setBusy = () => {}, remember = () => {}, seed = {}, onOpenGarden} = {}) {
   let document = compatibleCampaign(seed.document || blank()), savedId = seed.id || null, revision = seed.revision || null;
   let dirty = Boolean(seed.dirty), selected = Number.isSafeInteger(seed.selected) && seed.selected >= 0 ? seed.selected : 0;
+  let admittingSave = false;
   let practice = seed.practice || null;
   const practiceGuide = onOpenGarden ? gardenGuide('campaigns', onOpenGarden) : h('div');
   practiceGuide.hidden = practice !== GARDEN_PRACTICE;
@@ -266,6 +268,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
 
   function rememberCampaign() {
+    if (admittingSave) return;
     remember('campaigns', {document: structuredClone(document), id: savedId, revision,
       dirty, selected, tab, sourceQuery, assetQuery, communicationQuery,
       opportunityQuery, opportunityStatus, opportunityPage,
@@ -471,16 +474,25 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     renderShelf();
     return knownCampaigns;
   }
-  async function save() {
-    if (busy) return;
-    if (captureBudgetDisclosures()) rememberCampaign();
-    lock(true); feedback.replaceChildren();
+  function admitSavedCampaign(reply) {
+    // Some renderers add local defaults. Keep the decoded reply untouched as
+    // evidence if a later renderer refuses the candidate.
+    const saved = structuredClone(acknowledgedCampaign(reply));
+    const before = {document, savedId, revision, dirty, selected, tab,
+      sourceQuery, opportunityQuery, opportunityStatus, opportunityPage, assetQuery,
+      communicationQuery, communicationRoute, communicationOrder, communicationOpenState,
+      budgetOpenState, expandedActionRows, pendingFocus, pendingActionFocus,
+      pendingBudgetFocus, pendingAssetOpenId};
+    const areas = [editor, sectionNavigation, shelf, summary, decisionCard];
+    const children = areas.map(area => [...area.childNodes]);
+    const oldCapacity = {text: capacity.textContent, className: capacity.className,
+      state: capacity.getAttribute('data-capacity-state')};
+    const oldStyle = root.getAttribute('style');
+    admittingSave = true;
     try {
-      const saved = await request('/api/campaigns/save', {data: {document, id: savedId, revision}});
       const openCommunications = document.communications.map(row => communicationOpenState.get(row));
       const openBudgetRows = document.budget.map(row => budgetOpenState.get(row));
       document = saved.document; savedId = saved.id; revision = saved.revision; dirty = false;
-      fundingState.edited(); renderFunding();
       communicationOpenState = new WeakMap();
       // The save response retains the submitted canonical order, including hidden rows.
       document.communications.forEach((row, index) => {
@@ -494,11 +506,53 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         if (openBudgetRows[index] !== undefined) budgetOpenState.set(row, openBudgetRows[index]);
       });
       renderEditor(); renderSummary();
+      return saved;
+    } catch (cause) {
+      ({document, savedId, revision, dirty, selected, tab,
+        sourceQuery, opportunityQuery, opportunityStatus, opportunityPage, assetQuery,
+        communicationQuery, communicationRoute, communicationOrder, communicationOpenState,
+        budgetOpenState, expandedActionRows, pendingFocus, pendingActionFocus,
+        pendingBudgetFocus, pendingAssetOpenId} = before);
+      let rollbackError;
+      try {
+        areas.forEach((area, index) => area.replaceChildren(...children[index]));
+        capacity.textContent = oldCapacity.text; capacity.className = oldCapacity.className;
+        if (oldCapacity.state === null) capacity.removeAttribute('data-capacity-state');
+        else capacity.setAttribute('data-capacity-state', oldCapacity.state);
+        if (oldStyle === null) root.removeAttribute('style');
+        else root.setAttribute('style', oldStyle);
+      } catch (problem) { rollbackError = problem; }
+      const failure = new Error('The save reply could not be opened. Your earlier campaign inputs are retained.'
+        + (rollbackError ? ' Restoring the editor view also failed; back up the retained inputs before leaving.' : ''));
+      failure.cause = cause; failure.partialResult = reply;
+      if (rollbackError) failure.rollbackError = rollbackError;
+      throw failure;
+    } finally { admittingSave = false; }
+  }
+  async function save() {
+    if (busy) return;
+    if (captureBudgetDisclosures()) rememberCampaign();
+    lock(true); feedback.replaceChildren();
+    try {
+      await request('/api/campaigns/save', {data: {document, id: savedId, revision},
+        acceptResponse: admitSavedCampaign});
+      fundingState.edited(); renderFunding();
       rememberCampaign();
       status.textContent = 'Saved on this computer';
       feedback.replaceChildren(notice('Campaign saved. Answers, costs, checks and actions will be here when you return.', 'success'));
-      await refreshShelf(); announce('Campaign saved.');
-    } catch (problem) { error(problem.message + ' Your edits are still here. Export a campaign backup or use Copy backup text under Import or back up a campaign before reopening another version.'); }
+      announce('Campaign saved.');
+      try { await refreshShelf(); }
+      catch (problem) {
+        feedback.replaceChildren(notice('Campaign saved on this computer. Only the saved-campaign list could not be refreshed. You do not need to save again. ' + problem.message, 'warning'));
+      }
+    } catch (problem) {
+      const state = problem.requestState;
+      const saveRequest = state?.path === '/api/campaigns/save' && state.method === 'POST';
+      const outcome = saveRequest && state.outcome === 'unconfirmed'
+        ? ' The save may have finished, but Sinter did not receive confirmation. Back up these edits and check the saved campaign before explicitly choosing Save campaign again.'
+        : saveRequest && state.outcome === 'not-sent' ? ' The save was not started.' : '';
+      error(problem.message + outcome + ' Your edits are still here. Export a campaign backup or use Copy backup text under Import or back up a campaign before reopening another version.');
+    }
     finally { lock(false); }
   }
   async function prepare() {

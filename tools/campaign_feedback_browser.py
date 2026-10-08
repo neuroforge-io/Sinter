@@ -1,7 +1,8 @@
 """Fictional proof of readable campaign recovery messages and no request replay.
 
 Real local saves produce a stale revision and a deliberately dropped successful
-acknowledgement. A long Unicode provider error is a display fixture only. No
+acknowledgement. Damaged replies and list-refresh failures are explicit transport
+fixtures around real local saves. A long Unicode provider error is display-only. No
 provider, account, model, download or installed-release qualification is used.
 """
 
@@ -12,6 +13,7 @@ import json
 import sys
 import tempfile
 import threading
+from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
@@ -31,6 +33,58 @@ AT_END = """selector => {
 }"""
 READ_STORED = "async id => (await fetch('/api/campaigns/' + id)).json()"
 LONG_STATUS = "window.feedbackTest.feedback.textContent = 'Fictional '.repeat(200)"
+ABORTED_BODY = """() => {
+  const fetchOriginal = window.fetch;
+  window.fetch = async (path, options) => {
+    const response = await fetchOriginal(path, options);
+    if (path !== '/api/campaigns/save') return response;
+    window.feedbackSavedReply = await response.clone().json();
+    const body = new ReadableStream({start(controller) {
+      controller.error(new DOMException('Fictional body interruption', 'AbortError'));
+    }});
+    return new Response(body, {status: 200});
+  };
+}"""
+
+
+def damaged_reply_body(saved: dict, kind: str) -> tuple[int, str]:
+    """Damage a reply copy, never the genuine saved document used for comparison."""
+    if kind == "server-error-after-write":
+        return 500, json.dumps(
+            {
+                "error": "Fictional failure after writing",
+                "partial_result": {"original": "kept"},
+            }
+        )
+    if kind in ("malformed-applicant", "malformed-evidence"):
+        broken = deepcopy(saved)
+        document = broken["document"]
+        document["opportunities"] = [
+            {
+                "name": "Fictional malformed route",
+                "status": "open",
+                "applicant": "",
+                "applicant_confirmed": False,
+                "application_mode": "required",
+            }
+        ]
+        if kind == "malformed-applicant":
+            document["opportunities"][0].update(applicant={}, applicant_confirmed=True)
+        else:
+            document["requirements"] = [
+                {
+                    "opportunity": "Fictional malformed route",
+                    "rule": "Fictional checked criterion",
+                    "status": "met",
+                    "evidence": 123,
+                    "source_url": "https://example.invalid/x",
+                    "source_quote": "Fictional wording",
+                    "checked_at": "2026-10-08",
+                    "source_id": "",
+                }
+            ]
+        return 200, json.dumps(broken)
+    return 200, "{" if kind == "malformed-body" else "null"
 
 
 def source_hashes() -> dict[str, str]:
@@ -41,6 +95,7 @@ def source_hashes() -> dict[str, str]:
             "src/sinter/web/campaign-feedback.js",
             "src/sinter/web/campaigns.js",
             "src/sinter/web/campaigns.css",
+            "src/sinter/web/campaign-save.js",
             "src/sinter/web/api.js",
             "src/sinter/web/ui.js",
             "tools/campaign_feedback_browser.py",
@@ -138,7 +193,19 @@ def main(argv: list[str] | None = None) -> None:
                             ("light", 640, 200),
                             ("dark", 640, 200),
                         ):
-                            for kind in ("conflict", "uncertain", "provider"):
+                            kinds = ("conflict", "uncertain", "provider")
+                            if width == 390 and height == 844:
+                                kinds += (
+                                    "malformed-body",
+                                    "aborted-body",
+                                    "malformed-ack",
+                                    "validation",
+                                    "confirmed-shelf",
+                                    "server-error-after-write",
+                                    "malformed-applicant",
+                                    "malformed-evidence",
+                                )
+                            for kind in kinds:
                                 label = f"{kind}-{theme}-{width}x{height}"
                                 record = {"case": label, "passed": False}
                                 cases.append(record)
@@ -166,7 +233,13 @@ def main(argv: list[str] | None = None) -> None:
                                         "Fictional retained edits — café 中文 🧭 "
                                         + label
                                     )
+                                    if kind == "validation":
+                                        edited = ""
+                                    prior_saved = saved
                                     edit_title(page, edited)
+                                    original_title_node = page.get_by_label(
+                                        "Campaign name", exact=True
+                                    ).element_handle()
                                     if kind == "conflict":
                                         # Another real editor advances the revision.
                                         other = context.new_page()
@@ -202,7 +275,50 @@ def main(argv: list[str] | None = None) -> None:
                                             "**/api/campaigns/save",
                                             lose_acknowledgement,
                                         )
-                                    else:
+                                    elif kind in (
+                                        "malformed-body",
+                                        "malformed-ack",
+                                        "server-error-after-write",
+                                        "malformed-applicant",
+                                        "malformed-evidence",
+                                    ):
+
+                                        def damaged_reply(route):
+                                            nonlocal saved
+                                            result = route.fetch()
+                                            assert result.ok
+                                            saved = result.json()
+                                            status, body = damaged_reply_body(
+                                                saved, kind
+                                            )
+                                            route.fulfill(
+                                                status=status,
+                                                content_type="application/json",
+                                                body=body,
+                                            )
+
+                                        page.route(
+                                            "**/api/campaigns/save", damaged_reply
+                                        )
+                                    elif kind == "aborted-body":
+                                        page.evaluate(ABORTED_BODY)
+                                    elif kind == "confirmed-shelf":
+                                        page.route(
+                                            "**/api/campaigns",
+                                            lambda route: route.fulfill(
+                                                status=500,
+                                                content_type="application/json",
+                                                body=json.dumps(
+                                                    {
+                                                        "error": (
+                                                            "Fictional list "
+                                                            "refresh failure"
+                                                        )
+                                                    }
+                                                ),
+                                            ),
+                                        )
+                                    elif kind == "provider":
                                         page.route(
                                             "**/api/campaigns/prepare",
                                             lambda route: route.fulfill(
@@ -222,16 +338,86 @@ def main(argv: list[str] | None = None) -> None:
                                         "button", name=control, exact=True
                                     ).click()
                                     feedback = page.locator(".campaign-save-feedback")
+                                    notice_kind = (
+                                        "warning"
+                                        if kind == "confirmed-shelf"
+                                        else "error"
+                                    )
                                     expect(
-                                        feedback.locator(".notice.error")
+                                        feedback.locator(".notice." + notice_kind)
                                     ).to_be_visible()
+                                    if kind == "aborted-body":
+                                        saved = page.evaluate(
+                                            "window.feedbackSavedReply"
+                                        )
+                                    elif kind == "confirmed-shelf":
+                                        saved = server.app.campaigns.get(
+                                            prior_saved["id"]
+                                        )
                                     complete = feedback.text_content()
                                     assert complete and (
-                                        kind == "provider"
+                                        kind in ("provider", "confirmed-shelf")
                                         or "Your edits are still here" in complete
                                     )
                                     if kind == "provider":
                                         assert complete == provider_text
+                                    unconfirmed = kind in (
+                                        "uncertain",
+                                        "malformed-body",
+                                        "aborted-body",
+                                        "malformed-ack",
+                                        "server-error-after-write",
+                                        "malformed-applicant",
+                                        "malformed-evidence",
+                                    )
+                                    assert (
+                                        "save may have finished" in complete
+                                    ) == unconfirmed
+                                    if unconfirmed:
+                                        assert "check the saved campaign" in complete
+                                        assert "then retry" not in complete
+                                        assert (
+                                            saved["revision"]
+                                            == prior_saved["revision"] + 1
+                                        )
+                                    if kind == "uncertain":
+                                        assert (
+                                            "Cannot reach the local Sinter app"
+                                            in complete
+                                        )
+                                    if kind == "server-error-after-write":
+                                        assert (
+                                            "Fictional failure after writing"
+                                            in complete
+                                        )
+                                    if kind in (
+                                        "malformed-applicant",
+                                        "malformed-evidence",
+                                    ):
+                                        assert (
+                                            "earlier campaign inputs are retained"
+                                            in complete
+                                        )
+                                    if kind == "confirmed-shelf":
+                                        assert (
+                                            "You do not need to save again" in complete
+                                        )
+                                        expect(
+                                            page.locator(".campaign-save-state")
+                                        ).to_have_text("Saved on this computer")
+                                        assert (
+                                            saved["revision"]
+                                            == prior_saved["revision"] + 1
+                                        )
+                                    elif kind != "provider":
+                                        expect(
+                                            page.locator(".campaign-save-state")
+                                        ).to_have_text("Unsaved changes")
+                                        expect(
+                                            page.locator(
+                                                ".campaign-saved-item.is-current"
+                                            )
+                                        ).to_have_count(1)
                                     expect(
                                         page.get_by_label("Campaign name", exact=True)
                                     ).to_have_value(edited)
@@ -241,6 +427,9 @@ def main(argv: list[str] | None = None) -> None:
                                         )
                                     ).to_be_enabled()
                                     post_count = len(posts)
+                                    assert posts.count(
+                                        base + "/api/campaigns/save"
+                                    ) == (0 if kind == "provider" else 1)
                                     expand = page.get_by_role(
                                         "button", name="Read full message", exact=True
                                     )
@@ -314,6 +503,9 @@ def main(argv: list[str] | None = None) -> None:
                                     )
                                     message.press("Escape")
                                     expect(dialog).to_have_count(0)
+                                    expect(
+                                        page.locator(".campaign-message-dialog")
+                                    ).to_have_count(0)
                                     expect(expand).to_be_focused()
                                     assert feedback.text_content() == complete
                                     expand.click()
@@ -322,13 +514,29 @@ def main(argv: list[str] | None = None) -> None:
                                     ).get_by_role(
                                         "button", name="Close", exact=True
                                     ).click()
+                                    expect(dialog).to_have_count(0)
+                                    expect(
+                                        page.locator(".campaign-message-dialog")
+                                    ).to_have_count(0)
                                     expect(expand).to_be_focused()
                                     # Original keyboard scrolling remains available.
-                                    feedback.focus()
+                                    expand.press("Shift+Tab")
+                                    expect(feedback).to_be_focused()
                                     feedback.press("End")
-                                    page.wait_for_function(
-                                        AT_END, arg=".campaign-save-feedback"
-                                    )
+                                    try:
+                                        page.wait_for_function(
+                                            AT_END, arg=".campaign-save-feedback"
+                                        )
+                                    except Exception:
+                                        record["keyboard_fallback_failure"] = (
+                                            feedback.evaluate("""e => ({
+                                              focused: e === document.activeElement,
+                                              active: document.activeElement.outerHTML,
+                                              top: e.scrollTop, height: e.clientHeight,
+                                              total: e.scrollHeight
+                                            })""")
+                                        )
+                                        raise
                                     assert len(posts) == post_count
                                     expect(
                                         page.get_by_label("Campaign name", exact=True)
@@ -339,6 +547,26 @@ def main(argv: list[str] | None = None) -> None:
                                         saved["id"],
                                     )
                                     assert actual == saved
+                                    if kind != "confirmed-shelf":
+                                        assert original_title_node.evaluate(
+                                            "e => e.isConnected"
+                                        )
+                                    if kind in (
+                                        "malformed-applicant",
+                                        "malformed-evidence",
+                                        "malformed-ack",
+                                    ):
+                                        # Backup stays available for retained inputs.
+                                        page.get_by_text(
+                                            "Import or back up a campaign", exact=True
+                                        ).click()
+                                        expect(
+                                            page.get_by_role(
+                                                "button",
+                                                name="Copy backup text",
+                                                exact=True,
+                                            )
+                                        ).to_be_enabled()
                                     record.update(
                                         passed=True,
                                         message=complete,
@@ -349,6 +577,13 @@ def main(argv: list[str] | None = None) -> None:
                                         stored_revision=saved["revision"],
                                         original_edits_retained=True,
                                         no_request_replay=True,
+                                        save_outcome="confirmed"
+                                        if kind == "confirmed-shelf"
+                                        else "unconfirmed"
+                                        if unconfirmed
+                                        else "known rejection"
+                                        if kind in ("conflict", "validation")
+                                        else "display fixture",
                                     )
                                 finally:
                                     context.close()

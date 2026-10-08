@@ -11,6 +11,11 @@ original installed gates must pass before a separate Linux preview is admitted.
   Keep complete wording in a scrollable reader and restore keyboard focus when
   closed. Reading the message does not save, retry or send a request.
 
+- Explain when a campaign save may have finished without an acknowledgement.
+  Keep edits available, advise backing up and checking the saved version before
+  an explicit retry, and preserve known server errors. A failed list refresh
+  after a confirmed save no longer presents the save as failed or uncertain.
+
 - Describe casebooks and letters by the report or draft they prepare. Keep local
   source compilation, human review and separately approved optional AI drafting
   clear; remove vague slogans and the aging casebook novelty label.
