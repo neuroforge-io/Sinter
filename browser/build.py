@@ -1,13 +1,16 @@
 """Reproducibly assemble the static browser app from this Sinter source tree."""
-from pathlib import Path
 import argparse
 import hashlib
+import http.client
 import json
 import shutil
 import urllib.request
+from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[1]
 VENDOR_URL = 'https://cdn.jsdelivr.net/pyodide/v0.29.3/full/'
+VENDOR_TIMEOUT = 120
+VENDOR_MAX_BYTES = 20 * 1024 * 1024
 
 
 def _write_utf8(path: Path, content: str) -> None:
@@ -15,7 +18,56 @@ def _write_utf8(path: Path, content: str) -> None:
     path.write_text(content, encoding='utf-8', newline='\n')
 
 
-def build(output, vendor=None):
+def _vendor_payloads(output: Path, vendor: Path | None) -> dict[str, bytes]:
+    """Admit every pinned asset before changing an existing output directory."""
+    manifest = json.loads(
+        (SOURCE / 'browser/vendor-sha256.json').read_text(encoding='utf-8')
+    )
+    payloads = {}
+    for name, digest in manifest.items():
+        local = vendor / name if vendor is not None else output / 'vendor' / name
+        if vendor is not None or local.exists():
+            location = str(local)
+            try:
+                with local.open('rb') as handle:
+                    content = handle.read(VENDOR_MAX_BYTES + 1)
+            except OSError as exc:
+                raise OSError(
+                    f"Cannot read required vendor asset '{name}' from {local}: "
+                    f'{exc}. Supply a complete verified --vendor directory.'
+                ) from exc
+        else:
+            location = VENDOR_URL + name
+            try:
+                with urllib.request.urlopen(
+                    location, timeout=VENDOR_TIMEOUT,
+                ) as response:
+                    content = response.read(VENDOR_MAX_BYTES + 1)
+            except (OSError, http.client.HTTPException) as exc:
+                raise OSError(
+                    f"Cannot download required vendor asset '{name}' from "
+                    f'{location}: {exc}. No automatic retry was attempted. '
+                    'Retry the build manually or supply a complete verified '
+                    '--vendor directory.'
+                ) from exc
+        if len(content) > VENDOR_MAX_BYTES:
+            raise ValueError(
+                f"Vendor asset '{name}' from {location} exceeds the "
+                f'{VENDOR_MAX_BYTES}-byte limit.'
+            )
+        actual = hashlib.sha256(content).hexdigest()
+        if actual != digest:
+            raise ValueError(
+                f"Vendor integrity mismatch for '{name}' from {location}: "
+                f'expected SHA-256 {digest}; received {actual}.'
+            )
+        payloads[name] = content
+    return payloads
+
+
+def build(output: Path, vendor: Path | None = None) -> None:
+    """Build with admitted local or public vendor bytes, preserving their pins."""
+    payloads = _vendor_payloads(output, vendor)
     output.mkdir(parents=True, exist_ok=True)
     (output/'static').mkdir(exist_ok=True)
     package=SOURCE/'src/sinter'
@@ -43,13 +95,7 @@ def build(output, vendor=None):
         html=html.replace('./'+asset.relative_to(output).as_posix(), './'+renamed.relative_to(output).as_posix())
     _write_utf8(output/'index.html',html)
     (output/'vendor').mkdir(exist_ok=True)
-    manifest=json.loads((SOURCE/'browser/vendor-sha256.json').read_text(encoding='utf-8'))
-    for name,digest in manifest.items():
-        local=vendor/name if vendor else output/'vendor'/name
-        if not local.exists():
-            with urllib.request.urlopen(VENDOR_URL+name,timeout=120) as response: content=response.read(20*1024*1024)
-        else: content=local.read_bytes()
-        if hashlib.sha256(content).hexdigest()!=digest:raise ValueError('Vendor integrity mismatch: '+name)
+    for name, content in payloads.items():
         (output/'vendor'/name).write_bytes(content)
     shutil.copyfile(SOURCE/'LICENSE',output/'LICENSE.txt')
     shutil.copyfile(SOURCE/'browser/PYODIDE-LICENSE',output/'vendor/PYODIDE-LICENSE.txt')
@@ -59,5 +105,14 @@ def build(output, vendor=None):
     _write_utf8(output/'asset-manifest.json',json.dumps({'schema':'sinter-browser-assets/v1','files':manifest},sort_keys=True,separators=(',',':'))+'\n')
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('output',type=Path);parser.add_argument('--vendor',type=Path)
-    args=parser.parse_args();build(args.output,args.vendor)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('output', type=Path)
+    parser.add_argument(
+        '--vendor', type=Path,
+        help='Complete pinned Pyodide asset directory; strictly offline when set.',
+    )
+    args = parser.parse_args()
+    try:
+        build(args.output, args.vendor)
+    except (OSError, ValueError) as exc:
+        parser.exit(1, f'Browser build failed: {exc}\n')
