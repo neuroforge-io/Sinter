@@ -79,6 +79,82 @@ class CampaignChecks(DeliverableChecks):
         expect(page.get_by_text('Campaign saved. Answers, costs, checks and actions will be here when you return.', exact=True)).to_be_visible()
         expect(page.get_by_role('button', name='Save campaign', exact=True)).to_be_enabled()
 
+    def answer_review_invalidation(self, page):
+        from playwright.sync_api import expect
+        document = fixture()
+        document['title'] = 'Fictional application review campaign'
+        document['opportunities'][0].update(
+            status='open', application_mode='required',
+            applicant='Fictional Community Association', applicant_confirmed=True)
+        document['answers'][0]['limit'] = '0250'
+        document['answers'][0]['status'] = 'reviewed'
+        document['answers'].append({
+            'opportunity': document['opportunities'][0]['name'],
+            'label': 'Describe the unchanged team', 'text': 'A fictional team.',
+            'limit': 100, 'status': 'reviewed',
+        })
+        self.import_fixture(page, document)
+        _, initial_backup = self.download(page, 'Export campaign backup')
+        initial = json.loads(initial_backup)
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        answers = page.get_by_role('article', name='Application answer')
+        answer, sibling = answers.nth(0), answers.nth(1)
+        question = answer.get_by_label('Application question', exact=True)
+        review = answer.get_by_label('Answer review', exact=True)
+        limit = answer.get_by_label('Character limit', exact=True)
+        text = document['answers'][0]['text']
+        expect(review).to_have_value('reviewed')
+        question.fill(document['answers'][0]['label'])
+        question.dispatch_event('input')
+        expect(review).to_have_value('reviewed')
+        question.press('End')
+        question.press_sequentially(' and explain the need')
+        edited_question = document['answers'][0]['label'] + ' and explain the need'
+        expect(question).to_have_value(edited_question)
+        expect(question).to_be_focused()
+        assert question.evaluate('(field) => [field.selectionStart, field.selectionEnd]') == (
+            [len(edited_question), len(edited_question)])
+        expect(review).to_have_value('draft')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_value(text)
+        expect(sibling.get_by_label('Answer review', exact=True)).to_have_value('reviewed')
+        review.select_option('reviewed')
+        limit.fill('0250')
+        expect(review).to_have_value('reviewed')
+        limit.fill('250')
+        limit.dispatch_event('input')
+        expect(review).to_have_value('reviewed')
+        limit.fill('')
+        expect(review).to_have_value('draft')
+        expect(limit).to_be_focused()
+        expect(answer.locator('.campaign-character-count')).to_contain_text('confirm the form’s limit')
+        review.select_option('reviewed')
+        limit.fill('')
+        limit.dispatch_event('input')
+        expect(review).to_have_value('reviewed')
+        limit.fill('300')
+        expect(review).to_have_value('draft')
+        expect(limit).to_be_focused()
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_value(text)
+        expect(sibling.get_by_label('Answer review', exact=True)).to_have_value('reviewed')
+        self.save(page)
+        page.reload()
+        page.get_by_role('button', name='Start a new campaign', exact=True).click()
+        page.get_by_role('button', name='Open ' + document['title'], exact=True).click()
+        expect(page.get_by_text('Campaign opened.', exact=False)).to_be_visible()
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        expect(answers.nth(0).get_by_label('Application question', exact=True)).to_have_value(edited_question)
+        expect(answers.nth(0).get_by_label('Character limit', exact=True)).to_have_value('300')
+        expect(answers.nth(0).get_by_label('Draft answer', exact=True)).to_have_value(text)
+        expect(answers.nth(0).get_by_label('Answer review', exact=True)).to_have_value('draft')
+        expect(answers.nth(1).get_by_label('Answer review', exact=True)).to_have_value('reviewed')
+        self.transfers(page)
+        _, saved_backup = self.download(page, 'Export campaign backup')
+        saved = json.loads(saved_backup)
+        assert saved['answers'][0] == {
+            **initial['answers'][0], 'label': edited_question, 'limit': 300, 'status': 'draft'}
+        assert saved['answers'][1] == initial['answers'][1]
+        assert saved['sources'] == initial['sources']
+
     def action_text_contrast(self, page):
         from playwright.sync_api import expect
         document = fixture()
@@ -955,6 +1031,7 @@ def main(argv=None):
                 browser = launch_chromium(playwright, args.chromium)
                 checks = CampaignChecks(browser, f'http://127.0.0.1:{server.server_port}', artifacts)
                 checks.check('campaign-application-budget-roundtrip', checks.workflow)
+                checks.check('campaign-answer-review-invalidation', checks.answer_review_invalidation)
                 checks.check('campaign-conflict-import-recovery', checks.conflict_and_import)
                 checks.check('campaign-clarification-signer-isolation', checks.clarification_signer_is_campaign_scoped)
                 checks.check('campaign-communications-and-clarification-link', checks.communications_and_clarification_link)

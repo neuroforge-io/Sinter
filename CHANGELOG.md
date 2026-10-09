@@ -37,6 +37,10 @@
   before opening them. Require all three originals, then visible controls and
   complete literal wording. Retain the failed installed run; this harness repair
   requires fresh qualification and does not qualify that frozen candidate.
+- Return an application answer to Needs review when its question or character
+  limit changes. Preserve its wording, source records and other answer reviews;
+  equivalent imported numeric limits and unchanged edits retain their review.
+  The interface regression checks focus, save/reopen and exact backup contents.
 
 ## 0.5.4rc4 - candidate source, installed qualification pending
 

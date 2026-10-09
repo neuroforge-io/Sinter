@@ -1360,7 +1360,13 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     addQuestion.disabled = !canPrepare;
     panel.append(addQuestion);
     for (const row of document.answers.filter(row => row.opportunity === opportunity)) {
-      const label = input('Application question', 'textarea', row, 'label', 'Copy the actual wording from the application form.', {rows: 2, maxLength: 300});
+      let previousQuestion = row.label;
+      let previousLimit = row.limit == null ? null : Number(row.limit);
+      const resetReview = () => { row.status = 'draft'; reviewed.input.value = 'draft'; };
+      const label = input('Application question', 'textarea', row, 'label', 'Copy the actual wording from the application form.', {rows: 2, maxLength: 300}, element => {
+        if (element.value !== previousQuestion) resetReview();
+        previousQuestion = element.value;
+      });
       label.input.disabled = !canPrepare;
       const counter = h('p', {class: 'campaign-character-count', role: 'status'});
       function update() {
@@ -1368,7 +1374,12 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         counter.textContent = limit > 0 ? `${used} / ${limit} characters${used > limit ? ' · ' + (used - limit) + ' over — shorten before using' : ' · within limit'}` : `${used} characters · confirm the form’s limit`;
         counter.classList.toggle('over-limit', limit > 0 && used > limit);
       }
-      const limit = input('Character limit', 'number', row, 'limit', 'Keep this blank if the form does not specify a limit.', {min: 1, max: 20000, step: 1}, element => { row.limit = element.value ? Number(element.value) : null; update(); });
+      const limit = input('Character limit', 'number', row, 'limit', 'Keep this blank if the form does not specify a limit.', {min: 1, max: 20000, step: 1}, element => {
+        row.limit = element.value ? Number(element.value) : null;
+        if (row.limit !== previousLimit) resetReview();
+        previousLimit = row.limit;
+        update();
+      });
       limit.input.disabled = !canPrepare;
       const answer = input('Draft answer', 'textarea', row, 'text',
         canPrepare ? '' : answerAccess.message,

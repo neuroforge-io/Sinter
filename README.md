@@ -39,6 +39,15 @@ release-tool changes are separate from the published RC3 evidence. Read the
 [Word handover source review](docs/WORD_HANDOVER_NAVIGATION_2026-10-01.md) for the
 tested scope and remaining installer gates.
 
+On 9 October, the frozen Linux RC4 candidate at
+`4cab335e60bbeaceabd6910cf4a453454020eb2c` passed its installed garden workflow
+and both recovery profiles. Its four-launch native baseline passed, but the full
+browser handoff failed before complete source inspection; later cancellation and
+close journeys were not reached. Cold installation and prior-preview replacement
+were not run. Later source harness repairs need fresh qualification and do not
+qualify that frozen installer. Published RC3 remains unchanged. See the
+[dated qualification record](docs/QUALITY_REVIEW_2026-09-12.md).
+
 Development source also offers **Open full workbench** from the native window,
 with a bounded shutdown that preserves work when close must be refused. The
 [native-to-browser source review](docs/NATIVE_BROWSER_REVIEW_2026-10-01.md)

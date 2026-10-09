@@ -3266,3 +3266,36 @@ The focused JUnit run used xunit1. The hosted workflow keeps its existing
 default; actual hosted diagnostic retention is pending the new source run.
 The injected reporting fault covers artifact write and close, not an executed
 JUnit-publication fault. No broader reporting-failure experiment is claimed.
+
+### 9 October: installed workflow and recovery passed; native handoff held
+
+The frozen Linux `0.5.4rc4` candidate at
+`4cab335e60bbeaceabd6910cf4a453454020eb2c` completed its original installed
+garden workflow once in 23.71 seconds and both installed recovery profiles once
+in 52.53 seconds. Independent read-only artifact reviews accepted their actual
+content, source/package identities and cleanup. The garden workflow retained
+22 named checks, 13 artifact roles and two app lifetimes; its actual catalogue
+has 54 operations, not the historical 53 in one check identifier. Recovery
+retained ten app lifetimes, full fictional source inputs and history, unknown
+and unassigned owners, unconfirmed dates, stale/conflict warnings, separate
+restored copies and explicit recovery without automatic replay.
+
+The following original native handoff failed once in 27.82 seconds. Its separate
+four-launch native baseline passed independent semantic review, but the fifth
+owner stopped at the browser's first original-source inspection assertion.
+The retained scoped response contains all three complete sources and the three
+recorded pre-failure workspace snapshots are unchanged. Source inspection
+points to the harness filtering collapsed source cards by a hidden button before
+opening them; no failure DOM capture or screenshot proves that diagnosis.
+Later cancellation, timeout, interrupted-request and explicit final-close
+journeys were not reached. Emergency cleanup and exact container absence were
+recorded; this is not normal successful handoff cleanup or qualification.
+
+The failed frozen evidence remains unchanged. The later source harness repair
+identifies the collapsed cards, opens them and still requires three visible
+source controls and complete literal wording. It needs fresh exact-source
+qualification and does not promote the failed installer. Cold installation and
+prior-preview replacement were never run. RC4 remains unpublished; published
+RC3 and its receipts remain unchanged. These useful installed local-workflow
+and recovery results do not establish other-platform, customer-device or
+whole-product 10/10 acceptance.
