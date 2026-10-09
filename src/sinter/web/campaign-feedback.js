@@ -1,22 +1,52 @@
-/** Read clipped campaign feedback without changing the message or its actions. */
+/** Compact local feedback without discarding messages or replaying actions. */
 import {h, button} from './ui.js';
 
 let sequence = 0;
 
+export function campaignFeedbackPresentation(text, severity = '') {
+  if (!String(text || '').trim()) return {kind: 'empty', summary: ''};
+  const uncertain = /save may have finished|did not receive confirmation|\bunconfirmed (?:request|save|outcome)\b/i.test(text);
+  const partial = /\bincomplete\b|\bpartial (?:answer|result|work)\b/i.test(text);
+  const kind = severity === 'error' ? 'error'
+    : severity === 'warning' || uncertain || partial ? 'warning' : 'routine';
+  return {kind, summary: uncertain ? 'Outcome unconfirmed — read recovery details.'
+    : partial ? 'Read the partial-work recovery details before continuing.'
+      : kind === 'error' ? 'Needs attention — read the full message.'
+        : kind === 'warning' ? 'Review this message before continuing.' : ''};
+}
+
 export function campaignFeedback(fallbackFocus = () => null) {
   const feedback = h('div', {class: 'campaign-save-feedback',
     'aria-live': 'polite', tabindex: 0});
-  let dialog = null, disposed = false;
+  const summary = h('p', {class: 'campaign-message-summary', hidden: true});
+  const announcement = h('div', {class: 'sr-only campaign-message-announcement',
+    'aria-live': 'polite', 'aria-atomic': 'true'});
+  let dialog = null, disposed = false, inlineExpanded = false, previousText = '';
   const expand = button('Read full message', open, 'quiet campaign-message-expand');
   expand.setAttribute('aria-haspopup', 'dialog');
   expand.hidden = true;
   const panel = h('div', {class: 'campaign-save-feedback-panel', hidden: true},
-    feedback, expand);
+    summary, feedback, expand, announcement);
 
   function update() {
     if (disposed) return;
-    panel.hidden = !feedback.textContent.trim();
-    expand.hidden = panel.hidden || feedback.scrollHeight <= feedback.clientHeight + 1;
+    const text = feedback.textContent;
+    if (text !== previousText) { inlineExpanded = false; previousText = text; }
+    const severity = feedback.querySelector('.notice.error') ? 'error'
+      : feedback.querySelector('.notice.warning') ? 'warning' : '';
+    const state = campaignFeedbackPresentation(text, severity);
+    panel.hidden = state.kind === 'empty';
+    panel.dataset.kind = state.kind;
+    panel.dataset.inlineExpanded = String(inlineExpanded);
+    feedback.hidden = state.kind === 'routine' && !inlineExpanded;
+    summary.hidden = !state.summary;
+    summary.textContent = state.summary;
+    // Hidden routine DOM is retained verbatim; announce its actual new content.
+    const routineAnnouncement = state.kind === 'routine' ? text : '';
+    if (announcement.textContent !== routineAnnouncement) {
+      announcement.textContent = routineAnnouncement;
+    }
+    expand.hidden = panel.hidden;
   }
 
   function open() {
@@ -48,13 +78,15 @@ export function campaignFeedback(fallbackFocus = () => null) {
       message.focus({preventScroll: true});
     } catch {
       opened.remove(); dialog = null;
-      // The existing focusable, scrollable message remains a keyboard fallback.
+      // A missing dialog API must not make compact routine feedback unreadable.
+      inlineExpanded = true; update();
       feedback.focus({preventScroll: true});
     }
   }
 
   const mutations = new MutationObserver(update);
-  mutations.observe(feedback, {childList: true, characterData: true, subtree: true});
+  mutations.observe(feedback, {childList: true, characterData: true, subtree: true,
+    attributes: true, attributeFilter: ['class']});
   const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
   resize?.observe(feedback);
   window.addEventListener('resize', update);
@@ -63,8 +95,9 @@ export function campaignFeedback(fallbackFocus = () => null) {
     mutations.disconnect(); resize?.disconnect();
     window.removeEventListener('resize', update);
     if (dialog) {
-      if (dialog.open) dialog.close();
-      dialog.remove(); dialog = null;
+      const closing = dialog; dialog = null;
+      if (closing.open) closing.close();
+      closing.remove();
     }
   }};
 }

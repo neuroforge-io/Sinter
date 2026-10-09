@@ -164,6 +164,64 @@ def fixture_browser(root, monkeypatch):
     return relay
 
 
+@pytest.mark.parametrize("loop_entered", [False, True])
+def test_debugger_deadline_final_poll_preserves_owned_child_exit(
+    tmp_path, monkeypatch, loop_entered
+):
+    clock = iter([100.0, 100.0, 110.0] if loop_entered else [100.0, 110.0])
+    polls = iter([None, -signal.SIGABRT] if loop_entered else [-signal.SIGABRT])
+    observed = {"clock": [], "poll": [], "sleep": [], "driver": []}
+
+    def monotonic():
+        value = next(clock)
+        observed["clock"].append(value)
+        return value
+
+    def poll():
+        value = next(polls)
+        observed["poll"].append(value)
+        return value
+
+    monkeypatch.setattr(producer, "time", SimpleNamespace(
+        monotonic=monotonic, sleep=observed["sleep"].append))
+    monkeypatch.setattr(producer, "start_playwright",
+                        lambda *_: observed["driver"].append("FORBIDDEN"))
+    with pytest.raises(ValueError, match="exited before its private debugger"):
+        producer.wait_chromium_debugger(SimpleNamespace(poll=poll), tmp_path, timeout=10)
+    assert observed["poll"] == ([None, -signal.SIGABRT] if loop_entered else [-signal.SIGABRT])
+    assert observed["sleep"] == ([0.025] if loop_entered else [])
+    assert observed["clock"] == ([100.0, 100.0, 110.0] if loop_entered else [100.0, 110.0])
+    assert observed["driver"] == []
+
+
+def test_debugger_deadline_keeps_live_child_timeout_without_late_file_admission(
+    tmp_path, monkeypatch
+):
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    active = profile / "DevToolsActivePort"
+    original = b"32124\n/devtools/browser/01234567-89ab-cdef\n"
+    active.write_bytes(original)
+    clock = iter([100.0, 110.0])
+    observed = {"poll": 0, "sleep": [], "driver": [], "file_reads": []}
+
+    def poll():
+        observed["poll"] += 1
+        return None
+
+    monkeypatch.setattr(producer, "time", SimpleNamespace(
+        monotonic=lambda: next(clock), sleep=observed["sleep"].append))
+    monkeypatch.setattr(producer, "start_playwright",
+                        lambda *_: observed["driver"].append("FORBIDDEN"))
+    monkeypatch.setattr(producer.menu, "regular_bytes",
+                        lambda *_: observed["file_reads"].append("FORBIDDEN"))
+    child = SimpleNamespace(poll=poll, returncode=None)
+    with pytest.raises(TimeoutError, match="debugger did not appear"):
+        producer.wait_chromium_debugger(child, tmp_path, timeout=10)
+    assert observed == {"poll": 1, "sleep": [], "driver": [], "file_reads": []}
+    assert child.returncode is None and active.read_bytes() == original
+
+
 @pytest.mark.skipif(not LINUX, reason="Actual owned child SIGABRT and reap mechanics")
 @pytest.mark.parametrize("later_cleanup_failure", [False, True])
 def test_early_child_abort_keeps_full_bytes_and_never_starts_playwright(

@@ -40,6 +40,21 @@ DOCUMENT_FIELDS = {
 }
 
 
+def campaign_route_purpose(payload: dict) -> str | None:
+    """Admit only an explicitly scoped campaign brief; never infer its purpose."""
+    if "campaign_route_purpose" not in payload:
+        return None
+    purpose = payload["campaign_route_purpose"]
+    if not isinstance(purpose, str) or purpose not in {"discussion", "research"}:
+        raise ValueError("Campaign route purpose must be discussion or research.")
+    if (payload.get("workflow", "brief") != "brief"
+            or payload.get("campaign_sender_review") is not True):
+        raise ValueError(
+            "Campaign route purpose requires a brief with campaign sender review."
+        )
+    return purpose
+
+
 def document_details(payload: dict) -> dict[str, str]:
     """Validate explicit document details; never fetch or infer a person's identity."""
     return {key: text(payload.get(key, ""), label, limit).strip()
@@ -108,6 +123,7 @@ def prepare_document(payload: dict, sources: list[Source],
     kind = payload.get("document_type", "enquiry")
     if not isinstance(kind, str) or kind not in FORMATS:
         raise ValueError("Choose enquiry, briefing or agenda as the document type.")
+    purpose = campaign_route_purpose(payload)
     title = text(payload.get("title", ""), "Title", 200, True)
     details = document_details(payload)
     questions = document_questions(payload)
@@ -127,10 +143,21 @@ def prepare_document(payload: dict, sources: list[Source],
             missing.append({"field": "contact_details", "label": "Your reply contact details"})
         greeting = "Dear " + literal(details["recipient"]) + "," if details["recipient"] else "Hello,"
         if payload.get("campaign_sender_review") is True:
-            organisation = literal(details["organisation"])
-            opening = ((organisation + " is assessing whether this programme could support a defined project. ")
-                       if organisation else "We are assessing whether this programme could support a defined project. ")
-            opening += "We would appreciate guidance before deciding whether to proceed."
+            if purpose == "discussion":
+                opening = (
+                    "We would appreciate clarification on the points below before "
+                    "deciding on a next step for this discussion."
+                )
+            elif purpose == "research":
+                opening = (
+                    "We would appreciate clarification on the points below to help "
+                    "us check the research question and its scope."
+                )
+            else:
+                organisation = literal(details["organisation"])
+                opening = ((organisation + " is assessing whether this programme could support a defined project. ")
+                           if organisation else "We are assessing whether this programme could support a defined project. ")
+                opening += "We would appreciate guidance before deciding whether to proceed."
             reference_title = re.sub(r"^Clarification:\s*", "", title, flags=re.I)
         else:
             opening = ("I am writing on behalf of " + literal(details["organisation"]) + " about "
@@ -179,7 +206,8 @@ def prepare_document(payload: dict, sources: list[Source],
     return {"document_markdown": "\n\n".join(lines), "document_title": title,
             "document_type": kind, "document_details": details,
             "document_questions": questions, "missing_fields": missing,
-            "document_ready": not missing}
+            "document_ready": not missing,
+            **({"campaign_route_purpose": purpose} if purpose is not None else {})}
 
 
 def sections(payload: dict, sources: list, prepared: dict | None = None) -> tuple[list[str], list[dict]]:

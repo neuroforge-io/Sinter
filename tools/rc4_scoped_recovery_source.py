@@ -21,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from tools import installed_recovery_browser as legacy  # noqa: E402
+from tools._support import expect_campaign_message, save_campaign
 from tools import installed_workflow_browser as transport  # noqa: E402
 from tools import rc4_recovery_source as base  # noqa: E402
 from tools.installed_menu_browser import browser_notice  # noqa: E402
@@ -551,8 +552,8 @@ def browser_workflow(
             p.get_by_role("tab", name="Next actions", exact=True).click()
             card = legacy.action_card(p, 0)
             card.locator('[data-campaign-field="task"]').fill(ACTION)
-            p.get_by_role("button", name="Save campaign", exact=True).click()
-            expect(p.get_by_text(transport.SAVED_CAMPAIGN, exact=True)).to_be_visible()
+            save_campaign(p)
+            expect_campaign_message(p, transport.SAVED_CAMPAIGN, exact=True)
             campaign_row = read(p, "/api/campaigns")["campaigns"][0]
             observations["campaign"] = read(p, "/api/campaigns/" + campaign_row["id"])
             phase("saved-use")

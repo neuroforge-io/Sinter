@@ -291,8 +291,10 @@ def main(argv=None) -> int:
                             expect(page.locator(".campaign-save-state")).to_have_text("Saved on this computer")
 
                         def save():
-                            page.get_by_role("button", name="Save campaign", exact=True).click()
-                            expect(page.get_by_text("Campaign saved. Answers, costs, checks and actions will be here when you return.", exact=True)).to_be_visible()
+                            with page.expect_response("**/api/campaigns/save") as save_response:
+                                page.get_by_role("button", name="Save campaign", exact=True).click()
+                            assert save_response.value.status == 200, save_response.value.status
+                            expect(page.locator(".campaign-save-feedback")).to_have_text("Campaign saved. Answers, costs, checks and actions will be here when you return.")
                             ready()
 
                         def indexes():
@@ -349,7 +351,7 @@ def main(argv=None) -> int:
                         def import_fixture():
                             page.get_by_label("Import campaign backup", exact=True).set_input_files(fixture_path)
                             expect(page.get_by_label("Campaign name", exact=True)).to_have_value(TITLE)
-                            expect(page.get_by_text("Campaign imported locally.", exact=False)).to_be_visible()
+                            expect(page.locator(".campaign-save-feedback")).to_contain_text("Campaign imported locally.")
 
                         measured("import_complete_fixture", 1, import_fixture)
                         measured("initial_save", 1, save)

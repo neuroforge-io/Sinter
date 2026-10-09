@@ -22,10 +22,13 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from sinter import client  # noqa: E402
+from tools._support import expect_campaign_message, save_campaign
 from sinter.server import make_server  # noqa: E402
 from tools._support import browser_arguments, launch_chromium  # noqa: E402
 
 PATHS = (
+    "tools/_support.py",
+    "tools/campaign_backup_replacement_browser.py",
     "src/sinter/web/local-backup.js",
     "src/sinter/web/campaign-backup.js",
     "src/sinter/web/campaigns.js",
@@ -70,9 +73,7 @@ def flow(page, server, base, label, artifacts, expect):
     first = server.app.campaigns.save(fiction(label + " original"))
     page.goto(base + "/#campaigns")
     page.get_by_label("Campaign name", exact=True).wait_for(state="attached")
-    expect(
-        page.get_by_text("Most recently updated campaign opened.", exact=False)
-    ).to_be_visible()
+    expect_campaign_message(page, "Most recently updated campaign opened.", exact=False)
     page.get_by_role(
         "button",
         name=re.compile(
@@ -114,14 +115,9 @@ def flow(page, server, base, label, artifacts, expect):
     )
     second_title = f"Fictional new feedback {label}"
     page.get_by_label("Campaign name", exact=True).fill(second_title)
-    page.get_by_role("button", name="Save campaign", exact=True).click()
-    expect(
-        page.get_by_text(
-            "Campaign saved. Answers, costs, checks and actions "
-            "will be here when you return.",
-            exact=True,
-        )
-    ).to_be_visible()
+    save_campaign(page)
+    expect_campaign_message(page, "Campaign saved. Answers, costs, checks and actions "
+            "will be here when you return.", exact=True)
     second = next(
         row for row in server.app.campaigns.list() if row["title"] == second_title
     )
@@ -237,9 +233,7 @@ def held_transition_flow(page, server, base, label, artifacts, expect):
     first = server.app.campaigns.save(fiction(label + " held source"))
     other = server.app.campaigns.save(fiction(label + " held destination"))
     page.reload()
-    expect(
-        page.get_by_text("Most recently updated campaign opened.", exact=False)
-    ).to_be_visible()
+    expect_campaign_message(page, "Most recently updated campaign opened.", exact=False)
     name = page.get_by_label("Campaign name", exact=True)
     new = page.get_by_role("button", name="Start a new campaign", exact=True)
     panel = page.locator(".campaign-clipboard-backup")
@@ -324,13 +318,8 @@ def held_transition_flow(page, server, base, label, artifacts, expect):
                 )
                 expect(name).to_have_value(expected_title)
                 if operation == "save":
-                    expect(
-                        page.get_by_text(
-                            "Campaign saved. Answers, costs, checks and actions "
-                            "will be here when you return.",
-                            exact=True,
-                        )
-                    ).to_be_visible()
+                    expect_campaign_message(page, "Campaign saved. Answers, costs, checks and actions "
+                            "will be here when you return.", exact=True)
                     assert (
                         server.app.campaigns.get(first["id"])["revision"]
                         == current["revision"] + 1

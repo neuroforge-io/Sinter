@@ -264,6 +264,7 @@ def browser_workflow(
     from playwright.sync_api import expect, sync_playwright
 
     from tools._support import launch_chromium
+    from tools._support import expect_campaign_message, save_campaign
     from tools.installed_recovery_contract import (
         ARTIFACT_PATHS,
         CONTROL_ACTION,
@@ -369,8 +370,8 @@ def browser_workflow(
                 page.screenshot(path=str(path(role)), animations="disabled")
 
             def save(phase):
-                page.get_by_role("button", name="Save campaign", exact=True).click()
-                expect(page.get_by_text(SAVED, exact=True)).to_be_visible()
+                save_campaign(page)
+                expect_campaign_message(page, SAVED, exact=True)
                 campaigns = read_json(page, "/api/campaigns")["campaigns"]
                 row = next(
                     row for row in campaigns if row["title"] == states[phase]["title"]
@@ -585,12 +586,7 @@ def browser_workflow(
                 page.get_by_label("Import campaign backup", exact=True).set_input_files(
                     path(branch + "_text")
                 )
-                expect(
-                    page.get_by_text(
-                        "Campaign imported locally. Save campaign to keep this copy.",
-                        exact=True,
-                    )
-                ).to_be_visible()
+                expect_campaign_message(page, "Campaign imported locally. Save campaign to keep this copy.", exact=True)
                 details = page.locator(".campaign-details")
                 if details.get_attribute("open") is None:
                     details.locator("summary").click()

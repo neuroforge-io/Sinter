@@ -414,11 +414,20 @@ function campaignDraftLog(report, feedback, onCampaignUpdated, canSave, onChange
     h('p', {class: 'muted'}, 'Keep a copy of this exact draft in the linked campaign. Saving it marks it as not sent; Sinter will not contact anyone.'),
     evidenceLinks.length ? h('div', {class: 'campaign-draft-source-preview'},
       h('p', {class: 'fine'}, 'These selected campaign source links will be attached to the communication record. They remain user-entered and unverified.'),
-      h('ul', {}, evidenceLinks.map(link => h('li', {}, safeLink(link.url, link.title || link.url),
-        h('small', {class: 'fine'}, [
-          link.source_id ? `Source ID ${link.source_id.slice(0, 8)}` : 'Manual link',
-          link.checked_at ? `checked ${link.checked_at} · user-entered` : 'check date not recorded',
-        ].join(' · '))))))
+      h('ul', {}, evidenceLinks.map(link => {
+        const title = link.title || link.url || 'Untitled source';
+        const navigation = safeLink(link.url, title);
+        const navigable = navigation.tagName === 'A';
+        return h('li', {class: 'campaign-draft-source-item'},
+          h('div', {class: 'campaign-draft-source-title'}, navigable
+            ? navigation : h('span', {}, title)),
+          h('small', {class: 'fine campaign-draft-source-meta'}, [
+            link.source_id ? `Source ID: ${link.source_id}` : 'Manual link',
+            link.checked_at ? `Checked: ${link.checked_at}` : 'Check date not recorded',
+            'user-entered',
+            ...(navigable ? [] : ['No valid external link supplied']),
+          ].join(' · ')));
+      })))
       : h('p', {class: 'fine'}, 'No linked campaign source is recorded for this route’s open checks. You can add references to the communication record after saving.'),
     channel.wrap, control, blocked ? h('p', {class: 'fine'}, blocked) : null);
 }

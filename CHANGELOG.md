@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Keep campaign Save and section navigation compact on phones. Routine messages
+  remain available through **Read full message** and are announced in full;
+  warnings and uncertain outcomes retain visible recovery details. Opening the
+  message never retries a request. The selected section stays visible after resize.
+- Keep the selected discussion or research route's next step distinct from another
+  route's current action. The latter can be opened separately without changing its
+  original task, owner, date or scope. Suggested work still needs an explicit click.
+- Give discussion and research clarification drafts neutral openings and preserve
+  their explicit purpose in local and optional assistant inputs. Unsupported
+  purpose values are rejected before hosted work; legacy application wording and
+  all original evidence remain intact.
+- Separate complete source titles, recorded source identities and check dates in
+  clarification previews and unsent draft logs, including long Unicode text.
+- Classify an owned native-test child already observed to have exited at the
+  debugger deadline by its recorded exit status. Keep the original deadline,
+  live-child timeout and cleanup requirements, without another wait or replay.
 - Choose an explicit campaign route purpose: application, discussion or research.
   Existing records remain unclassified until edited. Discussion and research
   show local planning steps and retain application fields and funding history;

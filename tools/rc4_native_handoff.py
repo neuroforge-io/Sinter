@@ -266,6 +266,12 @@ def wait_chromium_debugger(process, home, timeout=10):
                 old.require(0 < port <= 65535, "Debugger port is invalid.")
                 return port
         time.sleep(0.025)
+    # The deadline may expire between loop checks and the owned child's exit.
+    # Observe its final state without admitting a late debugger or more waiting.
+    old.require(
+        process.poll() is None,
+        "Owned Chromium exited before its private debugger appeared.",
+    )
     raise TimeoutError("Owned Chromium debugger did not appear.")
 
 

@@ -290,16 +290,17 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
       String(date.getDate()).padStart(2, '0')].join('-');
   })();
   const active = opportunities.filter(row => isOpportunityActionable(row.status));
-  let focus = routeFocus(active, focusedOpportunityName);
+  const requested = focusedOpportunityName
+    ? opportunities.find(row => row.name === focusedOpportunityName) : null;
+  const scopedNonformal = Boolean(requested && isNonApplicationRoute(requested));
+  let focus = scopedNonformal ? requested : routeFocus(active, focusedOpportunityName);
   // Inactive informational records keep their explicit status and own context.
   // Mixed and legacy portfolios retain the existing funding overview behavior.
   if (!active.length && opportunities.length && opportunities.every(isNonApplicationRoute)) {
     focus = routeFocus(opportunities, focusedOpportunityName);
   }
   const purpose = purposeAssessment(focus, requirements, localToday, sources);
-  const selectedRecord = focusedOpportunityName
-    ? opportunities.find(row => row.name === focusedOpportunityName)
-    : !active.length ? opportunities[0] : null;
+  const selectedRecord = requested || (!active.length ? opportunities[0] : null);
   const historicalConflict = selectedRecord && !isOpportunityActionable(selectedRecord.status)
     ? campaignRoutePurposeConflict(selectedRecord) : '';
 
@@ -353,39 +354,47 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
   const otherRouteActions = openActions.filter(({action}) => hasText(action.opportunity)
     && action.opportunity !== focus?.name);
   // Keep the decision card aligned with its selected route. Route-specific
-  // actions win, then genuinely campaign-wide work, then another route.
+  // actions win, then genuinely campaign-wide work. An explicitly selected
+  // discussion/research record keeps its own suggestion instead of other work.
+  const otherNext = byUrgency(otherRouteActions);
   const next = byUrgency(routeActions) || byUrgency(campaignActions)
-    || byUrgency(otherRouteActions);
-  let action;
-  if (next) {
-    const row = next.action;
+    || (!scopedNonformal ? otherNext : null);
+  const recordedAction = item => {
+    const row = item.action;
     const owner = campaignActionOwnerState(row.owner, row.owner_confirmed,
       row.owner_kind);
     const ownerNeeded = owner.kind !== 'person' || row.owner_confirmed !== true;
-    action = {
-      source: 'recorded', task: row.task.trim(), actionIndex: next.index, ownerNeeded,
+    return {
+      source: 'recorded', task: row.task.trim(), actionIndex: item.index, ownerNeeded,
       opportunity: row.opportunity || '',
       ownerStatus: owner.detail,
       ...(row.due ? {due: row.due} : {}),
     };
+  };
+  let action;
+  if (next) {
+    action = recordedAction(next);
   } else {
-    const unconfirmedScopeCount = actions.filter(action => isCampaignActionOpen(action)
+    const guidanceActions = scopedNonformal
+      ? actions.filter(row => row.opportunity === focus.name || row.opportunity === '')
+      : actions;
+    const unconfirmedScopeCount = guidanceActions.filter(action => isCampaignActionOpen(action)
       && hasText(action.task) && !isCampaignActionScopeConfirmed(action)).length;
-    const submissionPhaseReviewCount = actions.filter(action => {
+    const submissionPhaseReviewCount = guidanceActions.filter(action => {
       if (!isCampaignActionOpen(action) || !hasText(action.task)
           || !isCampaignActionScopeConfirmed(action)) return false;
       const route = opportunities.find(row => row.name === action.opportunity);
       return route?.status === 'submitted'
         && action.submission_phase !== 'post_submission';
     }).length;
-    const reactivatedRouteReviewCount = actions.filter(action => {
+    const reactivatedRouteReviewCount = guidanceActions.filter(action => {
       if (!isCampaignActionOpen(action) || !hasText(action.task)
           || !isCampaignActionScopeConfirmed(action)
           || action.submission_phase !== 'post_submission') return false;
       const route = opportunities.find(row => row.name === action.opportunity);
       return Boolean(route && isOpportunityActionable(route.status));
     }).length;
-    const inactiveRouteReviewCount = actions.filter(action => {
+    const inactiveRouteReviewCount = guidanceActions.filter(action => {
       if (!isCampaignActionOpen(action) || !hasText(action.task)
           || !isCampaignActionScopeConfirmed(action) || !hasText(action.opportunity)) return false;
       const route = opportunities.find(row => row.name === action.opportunity);
@@ -406,6 +415,15 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
     };
   }
 
+  // Expose other current work separately for display/navigation only. Preserve
+  // entered metadata exactly; it is not a suggested action for the selected route.
+  const portfolioAction = scopedNonformal && otherNext ? {
+    ...recordedAction(otherNext), task: otherNext.action.task,
+    ...Object.fromEntries(['owner', 'owner_kind', 'owner_confirmed', 'due',
+      'status', 'submission_phase'].filter(key => Object.hasOwn(otherNext.action, key))
+      .map(key => [key, otherNext.action[key]])),
+  } : null;
   return {state, label, detail, action, focusOpportunity: focus?.name || '',
+    ...(portfolioAction ? {portfolioAction} : {}),
     reopenCriteria: purpose?.progressCriteria || reopenedWhen(document, state, localToday, focus)};
 }

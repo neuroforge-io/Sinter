@@ -1453,7 +1453,8 @@ def _objective_markdown(value: str) -> str:
     return "\n\n".join(rendered)
 
 
-def _next_open_action(document: dict, focused_opportunity: str) -> dict | None:
+def _next_open_action(document: dict, focused_opportunity: str, *,
+                      scoped_nonformal: bool = False) -> dict | None:
     """Select the same route-aware action shown in the campaign decision card."""
     open_actions = [(index, row) for index, row in enumerate(document["actions"])
                     if row["status"] == "open" and row["task"].strip()
@@ -1479,7 +1480,7 @@ def _next_open_action(document: dict, focused_opportunity: str) -> dict | None:
                            if row["opportunity"]
                            and row["opportunity"] != focused_opportunity]
     return (by_urgency(route_actions) or by_urgency(campaign_actions)
-            or by_urgency(other_route_actions))
+            or (by_urgency(other_route_actions) if not scoped_nonformal else None))
 
 
 def _portfolio_summary(assets: list[dict]) -> dict:
@@ -1596,7 +1597,8 @@ def _render_portfolio_register(assets: list[dict], sources: list[dict]) -> list[
 
 
 def _render_decision_brief(document: dict, readiness: dict,
-                           budget: dict, focused_opportunity: str) -> str:
+                           budget: dict, focused_opportunity: str, *,
+                           scoped_nonformal: bool = False) -> str:
     """Render a share-reviewable summary without answer or source content."""
     active = [row for row in document["opportunities"]
               if row["status"] in ACTIONABLE_OPPORTUNITY_STATES]
@@ -1777,7 +1779,8 @@ def _render_decision_brief(document: dict, readiness: dict,
     lines.extend(["## Open review items",
                   *["- " + item for item in review_items]])
 
-    next_action = _next_open_action(document, focused_opportunity)
+    next_action = _next_open_action(document, focused_opportunity,
+                                    scoped_nonformal=scoped_nonformal)
     if next_action:
         owner = _action_owner_summary(next_action["owner"],
                                       next_action["owner_kind"],
@@ -1799,7 +1802,9 @@ def _render_decision_brief(document: dict, readiness: dict,
                       + " · Proposed date: " + target])
     else:
         lines.extend(["## Next recorded open action",
-                      ("No current open action is recorded. Review held tasks above before treating them as current."
+                      ("No current open action is recorded for this selected route or campaign-wide scope. Other routes' work remains in the action register; review retained tasks before explicitly recording a next step."
+                       if scoped_nonformal else
+                       "No current open action is recorded. Review held tasks above before treating them as current."
                        if readiness["actions_to_classify"] else
                        "No current open action is recorded.")])
 
@@ -2179,7 +2184,10 @@ def prepare(data: object, focused_opportunity_name: object = "") -> dict:
     active = [row for row in campaign["opportunities"]
               if row["status"] in ACTIONABLE_OPPORTUNITY_STATES]
     requested_focus = focused_opportunity_name.strip()
-    focused_opportunity = next(
+    requested_route = next((row for row in campaign["opportunities"]
+                            if row["name"] == requested_focus), None)
+    scoped_nonformal = bool(requested_route and non_application_route(requested_route))
+    focused_opportunity = requested_route["name"] if scoped_nonformal else next(
         (row["name"] for row in active if row["name"] == requested_focus),
         active[0]["name"] if active else "",
     )
@@ -2189,7 +2197,8 @@ def prepare(data: object, focused_opportunity_name: object = "") -> dict:
     portfolio = _portfolio_summary(campaign["assets"])
     markdown = _render(campaign, readiness, metrics, budget)
     document_markdown = _render_decision_brief(
-        campaign, readiness, budget, focused_opportunity)
+        campaign, readiness, budget, focused_opportunity,
+        scoped_nonformal=scoped_nonformal)
     reportable_answers = _reportable_answer_indexes(campaign)
     report_campaign = _report_campaign_view(campaign, reportable_answers)
     report_metrics = [metric for metric in metrics

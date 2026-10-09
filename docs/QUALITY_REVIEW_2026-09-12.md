@@ -3648,3 +3648,92 @@ fixture byte-identical, SHA-256
 Public token preflight remains unavailable. No live endpoint or platform pass is
 inferred from that source comparison. RC4 remains unpublished and unqualified;
 published RC3 is unchanged. Backups with purpose require a supporting preview.
+
+### 9 October: compact campaign work and exact local recovery
+
+The next development cycle reduces the ordinary persistent campaign header to
+150 pixels at 390 × 844 and 128 pixels at 1265 × 712 in the qualified views.
+Complete routine acknowledgements remain in the original DOM, are announced
+verbatim and can be opened in a readable message dialog. Warnings, partial work
+and uncertain outcomes retain visible recovery details. The dialog is a snapshot
+and performs no save or retry; unavailable dialog support exposes the full inline
+message. Disposal closes the owned dialog and disconnects its observers.
+The selected section remains visible after a desktop-to-phone resize.
+
+Selected discussion and research routes now keep their own next step distinct
+from another route's current action. The latter opens separately with its exact
+task, original index, owner and proposed date. No action, acceptance or deadline
+is invented. Clarification drafts use neutral discussion or research openings;
+their explicitly recorded purpose survives local preparation and optional
+assistant inputs. Unsupported purpose values are rejected before hosted work.
+Legacy application wording and the original source material remain intact.
+Source previews and unsent logs separate full titles, identities and check dates,
+including long Unicode text and non-clickable unsafe addresses.
+
+Fresh final-source browser execution passed three source-preview groups, four
+light/dark header cases, nine route-purpose groups, 47 feedback cases, nine general
+campaign journeys, eight action-bar layouts, four backup-replacement groups and
+23 garden journeys. The three focused tools retain matching source inventories,
+complete local inputs, original results and closed owned resources. Broader tools
+retain their own narrower receipts; an outer execution record pins the full
+runtime around the action-bar, replacement, garden and portfolio runs. Provider
+messages in the feedback checks are display fixtures, not live provider results.
+
+The retained Python XML contains 2,857 distinct passing test identities across
+the original split runs and focused successors; overlapping runs are not added
+together. Five initial release-reader failures came from an inaccessible
+root-owned temporary ancestor. Their original failures remain; a new owned
+temporary root preserves the strict reader policy. A separate real child-exit
+failure exposed the debugger deadline crossing before its last poll. One final
+owned-child poll now reports an already observed exit without another wait,
+late-file admission or replay; a still-live child keeps the same timeout. The
+original failure and deterministic exit/timeout successors remain distinct.
+The final focused batch passed 160 checks and the last integration batch passed
+46, including three new browser-tool setup/admission checks.
+
+A human-operated browser journey imported a fictional research campaign,
+inspected a replaced 2019 source snapshot, framed a public-material/reviewer
+clarification question, added and edited one scoped action, saved, closed the app,
+reopened, exported and explicitly restored a separate saved copy. Only that
+question, the added action and one unsent communication differ from the admitted
+baseline. Every source, historical quote, held answer, earlier action and original
+communication remains exact. Nonblank unknown owners and unassigned owners remain
+distinct; the new action has neither an owner nor a date. The original revision 2
+record is unchanged by restoration; the separate revision 1 document equals the
+complete 7,021-byte GUI backup. The saved clarification report also reopens with
+identical complete text. Both owned app lifetimes closed with zero hosted attempts;
+temporary browser tabs were closed and the viewport override was reset.
+
+The original operator fixture used an invalid route type and was correctly
+rejected without creating a campaign. A separate validated fixture corrects only
+that field; the rejection evidence remains. The clarification itself is explicitly
+question-only: its Evidence view reports zero background sources. The campaign
+draft log separately retains the previewed complete source link and exact quote
+in its notes. This is not a source-grounded research conclusion or delivered mail.
+
+The portfolio probe retained 61 passing observations on a fictional 170,000-code-
+point record. These are current-host source timings, not matched speedup,
+installed performance or customer-device acceptance. Fresh-context saved openings
+had a 349.799 ms median across three samples (346.674–354.172 ms); correspondence
+tab rendering had a 50.349 ms median across five (36.222–266.074 ms). Explicit
+source-link selection remained slower: a 1,424.105 ms median across five
+(391.899–1,512.814 ms). Timings include browser control, scrolling, actionability
+and the stated final assertion; no overhead or outlier was removed.
+Phone correspondence filters
+still put all records below the first screen, and report controls precede the
+document by a long scroll. Those concrete usability issues remain open.
+Independent final scores for this bounded local journey are UX 7/10,
+functionality 8.5/10 for record integrity and recovery, and aesthetics 7/10.
+The feedback/header architecture boundary scores 8/10; the large campaign
+controller and duplicated JavaScript/Python policy remain maintainability work.
+None is a whole-product, live-AI or installed-release 10/10 assessment.
+
+Exact pushed `55f6ce7` Quality and Browser WebAssembly runs passed on their
+advertised source-test platforms. Its release workflow completed planning only;
+native packaging and publication were skipped. The read-only site refresh at
+`48ed3c67be1e6e5e4a5f9ebbec8067ee3a480b41` leaves all eight shared public-contract
+files unchanged from the prior comparison. That establishes neither live endpoint
+availability nor token-preflight qualification. Fresh CI for this successor and
+new exact-source installed workflow, recovery, native handoff, cold-install and
+prior-preview replacement gates remain required. RC4 stays unpublished and
+unqualified; published RC3 is unchanged.

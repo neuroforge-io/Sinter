@@ -8,6 +8,7 @@ import {home} from './home.js';
 import {h, button, notice, announce} from './ui.js';
 import {session, request} from './api.js';
 import {workbench} from './workbench.js';
+import {campaignLetterModelContext} from './campaign-letter.js';
 import {library, watches} from './library.js';
 import {playground} from './playground.js';
 import {tools, buildNavigation, installToolFinder} from './navigation.js';
@@ -69,7 +70,7 @@ async function route() {
         remember('explore', {mode: 'templates', template: 'enquiry-letter', signatory: payload.signatory,
           sender_role: payload.sender_role, organisation: payload.organisation, contact_details: payload.contact_details,
           variables: {recipient: payload.recipient, questions: payload.questions,
-            context: [payload.title, payload.notes, ...(payload.sources || []).map(source => `${source.title}\n${source.content}\n${source.url || ''}`)].filter(Boolean).join('\n\n')}});
+            context: campaignLetterModelContext(payload)}});
         go('explore');
       }};
     let content;

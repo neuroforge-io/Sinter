@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'src'))
 
 from sinter import client  # noqa: E402
+from tools._support import expect_campaign_message, save_campaign  # noqa: E402
 from sinter.server import make_server  # noqa: E402
 from tools._support import browser_arguments, launch_chromium  # noqa: E402
 from tools.deliverable_browser import DeliverableChecks  # noqa: E402
@@ -70,14 +71,11 @@ class CampaignChecks(DeliverableChecks):
         page.get_by_label('Import campaign backup', exact=True).set_input_files({
             'name': 'fictional-campaign.json', 'mimeType': 'application/json',
             'buffer': json.dumps(document).encode()})
-        expect(page.get_by_text('Campaign imported locally.', exact=False)).to_be_visible()
+        expect_campaign_message(page, 'Campaign imported locally.', exact=False)
         expect(page.get_by_label('Campaign name', exact=True)).to_have_value(document['title'])
 
     def save(self, page):
-        from playwright.sync_api import expect
-        page.get_by_role('button', name='Save campaign', exact=True).click()
-        expect(page.get_by_text('Campaign saved. Answers, costs, checks and actions will be here when you return.', exact=True)).to_be_visible()
-        expect(page.get_by_role('button', name='Save campaign', exact=True)).to_be_enabled()
+        save_campaign(page)
 
     def answer_review_invalidation(self, page):
         from playwright.sync_api import expect
@@ -140,7 +138,7 @@ class CampaignChecks(DeliverableChecks):
         page.reload()
         page.get_by_role('button', name='Start a new campaign', exact=True).click()
         page.get_by_role('button', name='Open ' + document['title'], exact=True).click()
-        expect(page.get_by_text('Campaign opened.', exact=False)).to_be_visible()
+        expect_campaign_message(page, 'Campaign opened.', exact=False)
         page.get_by_role('tab', name='Application answers', exact=True).click()
         expect(answers.nth(0).get_by_label('Application question', exact=True)).to_have_value(edited_question)
         expect(answers.nth(0).get_by_label('Character limit', exact=True)).to_have_value('300')
@@ -216,7 +214,7 @@ class CampaignChecks(DeliverableChecks):
         page.reload()
         page.get_by_role('button', name='Start a new campaign', exact=True).click()
         page.get_by_role('button', name='Open ' + document['title'], exact=True).click()
-        expect(page.get_by_text('Campaign opened.', exact=False)).to_be_visible()
+        expect_campaign_message(page, 'Campaign opened.', exact=False)
         page.get_by_role('tab', name='Application answers', exact=True).click()
         expect(short_answer.get_by_label('Draft answer', exact=True)).to_have_value(short)
         expect(long_answer.get_by_label('Draft answer', exact=True)).to_have_value(long)
@@ -492,7 +490,7 @@ class CampaignChecks(DeliverableChecks):
         page.reload()
         page.get_by_role('button', name='Start a new campaign', exact=True).click()
         page.get_by_role('button', name='Open ' + fixture()['title'], exact=True).click()
-        expect(page.get_by_text('Campaign opened.', exact=False)).to_be_visible()
+        expect_campaign_message(page, 'Campaign opened.', exact=False)
         page.get_by_role('tab', name='Application answers', exact=True).click()
         expect(answers).to_have_count(2)
         expect(answers.nth(0).get_by_label('Draft answer', exact=True)).to_have_value(original_answer['text'])
@@ -689,7 +687,7 @@ class CampaignChecks(DeliverableChecks):
         expect(page.locator('.campaign-saved-item.is-current')).to_have_count(0)
         expect(page.get_by_role('button', name='Open ' + fixture()['title'], exact=True)).to_be_visible()
         page.get_by_role('button', name='Open ' + fixture()['title'], exact=True).click()
-        expect(page.get_by_text('Campaign opened.', exact=False)).to_be_visible()
+        expect_campaign_message(page, 'Campaign opened.', exact=False)
         expect(page.locator('.campaign-saved-item.is-current')).to_have_count(1)
         page.get_by_role('tab', name='Next actions', exact=True).click()
         reopened_action = page.get_by_role('article', name='Campaign action', exact=True).filter(

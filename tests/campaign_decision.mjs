@@ -733,3 +733,204 @@ test('an unmet primary gap leaves the explicit recorded action, owner and propos
   assert.match(result.action.ownerStatus, /role suggestion, not a named person/);
   assert.equal(JSON.stringify(document), original);
 });
+
+const selectedRecordDocument = (purpose, status = 'researching') => ({
+  opportunities: [readyRoute, {name: 'Selected record', purpose, status,
+    application_mode: 'unknown'}], requirements: [goodCheck], sources: [windowSource],
+  actions: [{opportunity: readyRoute.name, scope_confirmed: true,
+    status: 'open', submission_phase: 'pre_submission',
+    task: '  Keep the other route’s actual task.  ', owner: 'Casey Example',
+    owner_kind: 'person', owner_confirmed: false, due: '2026-09-01'}],
+});
+
+test('an explicitly selected record keeps its suggestion while other current work stays separate', () => {
+  for (const purpose of ['discussion', 'research']) {
+    const document = selectedRecordDocument(purpose);
+    const before = structuredClone(document);
+    const result = campaignDecision(document, '2026-09-29', 'Selected record');
+    assert.equal(result.focusOpportunity, 'Selected record');
+    assert.equal(result.state, 'in_progress');
+    assert.equal(result.action.source, 'suggested');
+    assert.match(result.action.task, purpose === 'discussion'
+      ? /discussion scope.*next question/ : /specific research question.*source evidence/);
+    assert.equal(result.action.ownerNeeded, true);
+    assert.equal(Object.hasOwn(result.action, 'due'), false);
+    const portfolio = result.portfolioAction;
+    assert.equal(portfolio.source, 'recorded');
+    assert.equal(portfolio.actionIndex, 0);
+    assert.equal(portfolio.opportunity, readyRoute.name);
+    for (const key of ['task', 'owner', 'owner_kind', 'owner_confirmed', 'due',
+      'status', 'submission_phase']) {
+      assert.equal(portfolio[key], document.actions[0][key]);
+    }
+    assert.equal(portfolio.ownerNeeded, true);
+    assert.deepEqual(document, before);
+  }
+});
+
+test('separate portfolio work does not acquire absent owner, date, status or phase metadata', () => {
+  const document = selectedRecordDocument('research');
+  document.actions = [{opportunity: readyRoute.name, task: 'Original unstated metadata'}];
+  const before = structuredClone(document);
+  const result = campaignDecision(document, '2026-09-29', 'Selected record');
+  assert.equal(result.portfolioAction.actionIndex, 0);
+  assert.equal(result.portfolioAction.task, document.actions[0].task);
+  for (const key of ['owner', 'owner_kind', 'owner_confirmed', 'due', 'status',
+    'submission_phase']) assert.equal(Object.hasOwn(result.portfolioAction, key), false);
+  assert.deepEqual(document, before);
+});
+
+test('selected informational work keeps own then current campaign-wide action precedence', () => {
+  for (const purpose of ['discussion', 'research']) {
+    const document = selectedRecordDocument(purpose);
+    const global = {opportunity: '', scope_confirmed: true, status: 'open',
+      task: 'Review the campaign-wide records.', owner: '', owner_kind: 'unknown',
+      owner_confirmed: false, due: ''};
+    const own = {...global, opportunity: 'Selected record',
+      task: 'Check the selected record’s evidence.', owner_kind: 'unassigned'};
+    document.actions.push(global, own);
+    const before = structuredClone(document);
+    const result = campaignDecision(document, '2026-09-29', 'Selected record');
+    assert.equal(result.action.actionIndex, 2);
+    assert.equal(result.action.task, own.task);
+    assert.equal(result.action.opportunity, own.opportunity);
+    assert.equal(result.action.ownerNeeded, true);
+    assert.equal(Object.hasOwn(result.action, 'due'), false);
+    assert.equal(result.portfolioAction.actionIndex, 0);
+    assert.deepEqual(document, before);
+    const onlyGlobal = {...document, actions: document.actions.slice(0, 2)};
+    const globalResult = campaignDecision(onlyGlobal, '2026-09-29', 'Selected record');
+    assert.equal(globalResult.action.actionIndex, 1);
+    assert.equal(globalResult.action.opportunity, '');
+    assert.equal(globalResult.action.ownerNeeded, true);
+    assert.match(globalResult.action.ownerStatus, /Owner needed.*no person/);
+    assert.equal(onlyGlobal.actions[1].owner_kind, 'unknown');
+  }
+});
+
+test('unrelated held or unclassified history cannot replace a selected record’s local guidance', () => {
+  const document = selectedRecordDocument('research');
+  document.actions.push(
+    {opportunity: readyRoute.name, scope_confirmed: false, status: 'open',
+      task: 'Unclassified other route work'},
+    {status: 'open', task: 'Older action with no recorded scope'},
+    {opportunity: 'Selected record', scope_confirmed: true, status: 'held',
+      task: 'The selected record’s held historical task', due: '2026-09-01'},
+  );
+  document.requirements.push({...goodCheck, status: 'not_met',
+    rule: 'Other route’s historic adverse condition'});
+  const before = structuredClone(document);
+  const result = campaignDecision(document, '2026-09-29', 'Selected record');
+  assert.equal(result.action.source, 'suggested');
+  assert.match(result.action.task, /specific research question.*source evidence/);
+  assert.doesNotMatch(result.action.task + result.detail,
+    /Other route’s historic|older action|unclassified|held historical task/i);
+  assert.equal(result.portfolioAction.actionIndex, 0);
+  assert.deepEqual(document, before);
+});
+
+test('selected active records still surface their own entered unmet checks and uncertain action scope', () => {
+  const document = selectedRecordDocument('research');
+  document.requirements.push({...goodCheck, opportunity: 'Selected record',
+    status: 'not_met', rule: 'Selected evidence condition'});
+  const result = campaignDecision(document, '2026-09-29', 'Selected record');
+  assert.match(result.action.task, /Selected evidence condition.*marked not met/);
+  assert.equal(result.portfolioAction.actionIndex, 0);
+  document.actions.push({opportunity: 'Selected record', scope_confirmed: false,
+    status: 'open', task: 'Scope must be confirmed first'});
+  const unclassified = campaignDecision(document, '2026-09-29', 'Selected record');
+  assert.match(unclassified.action.task, /Confirm the scope of 1 older action/);
+  assert.equal(unclassified.action.source, 'suggested');
+});
+
+test('an explicitly selected inactive discussion or research record stays in focus beside active work', () => {
+  for (const purpose of ['discussion', 'research']) {
+    for (const status of ['paused', 'closed', 'not_pursuing']) {
+      const document = selectedRecordDocument(purpose, status);
+      document.actions.push({opportunity: 'Selected record', scope_confirmed: true,
+        status: 'held', task: 'Retained work stays held.', due: '2026-10-01'});
+      const before = structuredClone(document);
+      const result = campaignDecision(document, '2026-09-29', 'Selected record');
+      assert.equal(result.focusOpportunity, 'Selected record');
+      assert.equal(result.state, 'no_go');
+      assert.match(result.label, /NOT CURRENT/);
+      assert.match(result.detail, /Selected record/);
+      assert.match(result.detail, /historical records; no active commitment/);
+      assert.equal(result.action.source, 'suggested');
+      assert.match(result.action.task, /Review the retained scope and evidence/);
+      assert.equal(Object.hasOwn(result.action, 'due'), false);
+      assert.match(result.reopenCriteria, /explicit decision to change the route status/);
+      assert.equal(result.portfolioAction.actionIndex, 0);
+      assert.deepEqual(document, before);
+    }
+  }
+});
+
+test('a selected submitted informational record only promotes an explicit post-submission follow-up', () => {
+  for (const purpose of ['discussion', 'research']) {
+    const document = selectedRecordDocument(purpose, 'submitted');
+    const retained = {opportunity: 'Selected record', scope_confirmed: true,
+      status: 'open', submission_phase: 'pre_submission',
+      task: 'Retained unfinished preparation', owner: '', owner_kind: 'unassigned',
+      owner_confirmed: false, due: ''};
+    document.actions.push(retained);
+    const before = structuredClone(document);
+    const result = campaignDecision(document, '2026-09-29', 'Selected record');
+    assert.equal(result.focusOpportunity, 'Selected record');
+    assert.equal(result.state, 'awaiting_decision');
+    assert.equal(result.label, 'SUBMITTED STATUS RECORDED');
+    assert.match(result.detail, /does not establish a formal application, agreement, award/);
+    assert.equal(result.action.source, 'suggested');
+    assert.match(result.action.task, /Review 1 unfinished pre-submission action/);
+    assert.doesNotMatch(result.action.task, /Retained unfinished preparation/);
+    assert.deepEqual(document, before);
+    const followUp = {...document, actions: [document.actions[0],
+      {...retained, submission_phase: 'post_submission',
+        task: 'Record a response if documented.', due: '2026-10-04'}]};
+    const current = campaignDecision(followUp, '2026-09-29', 'Selected record');
+    assert.equal(current.action.source, 'recorded');
+    assert.equal(current.action.actionIndex, 1);
+    assert.equal(current.action.task, followUp.actions[1].task);
+    assert.equal(current.action.due, followUp.actions[1].due);
+    assert.equal(current.portfolioAction.actionIndex, 0);
+  }
+});
+
+test('missing and unknown purpose, formal conflicts and no explicit selection keep legacy fallback', () => {
+  for (const purpose of [undefined, 'unknown', 'application']) {
+    const document = selectedRecordDocument(purpose);
+    if (purpose === undefined) delete document.opportunities[1].purpose;
+    const before = structuredClone(document);
+    const selected = campaignDecision(document, '2026-09-29', 'Selected record');
+    assert.equal(selected.focusOpportunity, 'Selected record');
+    assert.equal(selected.action.source, 'recorded');
+    assert.equal(selected.action.actionIndex, 0);
+    assert.equal(Object.hasOwn(selected, 'portfolioAction'), false);
+    document.opportunities[1].status = 'closed';
+    const historical = campaignDecision(document, '2026-09-29', 'Selected record');
+    assert.equal(historical.focusOpportunity, readyRoute.name);
+    assert.equal(historical.state, 'ready_for_review');
+    assert.equal(Object.hasOwn(historical, 'portfolioAction'), false);
+    document.opportunities[1].status = before.opportunities[1].status;
+    assert.deepEqual(document, before);
+  }
+  const nonformal = selectedRecordDocument('research');
+  const overall = campaignDecision(nonformal, '2026-09-29');
+  assert.equal(overall.focusOpportunity, readyRoute.name);
+  assert.equal(overall.state, 'ready_for_review');
+  assert.equal(overall.action.actionIndex, 0);
+  assert.equal(Object.hasOwn(overall, 'portfolioAction'), false);
+  const informationalFirst = {...nonformal,
+    opportunities: [...nonformal.opportunities].reverse()};
+  const unselectedRecord = campaignDecision(informationalFirst, '2026-09-29');
+  assert.equal(unselectedRecord.focusOpportunity, 'Selected record');
+  assert.equal(unselectedRecord.action.actionIndex, 0);
+  assert.equal(Object.hasOwn(unselectedRecord, 'portfolioAction'), false);
+  const required = structuredClone(nonformal);
+  required.opportunities[1].application_mode = 'required';
+  const conflict = campaignDecision(required, '2026-09-29', 'Selected record');
+  assert.equal(conflict.state, 'not_ready');
+  assert.match(conflict.detail, /formal application is recorded as required/);
+  assert.equal(conflict.action.actionIndex, 0);
+  assert.equal(Object.hasOwn(conflict, 'portfolioAction'), false);
+});

@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "src")]
 
 from sinter import client  # noqa: E402
+from tools._support import expect_campaign_message, save_campaign  # noqa: E402
 from sinter.campaigns import validate  # noqa: E402
 from sinter.server import make_server  # noqa: E402
 from tools._support import browser_arguments, launch_chromium  # noqa: E402
@@ -114,6 +115,9 @@ def main(argv: list[str] | None = None) -> None:
         "src/sinter/web/campaigns.css",
         "src/sinter/campaigns.py",
         "src/sinter/web/campaign-currency.js",
+        "src/sinter/web/campaign-feedback.js",
+        "tools/_support.py",
+        "tools/campaign_source_picker_browser.py",
         "tools/campaign_action_bar_browser.py",
     )
     hashes = {
@@ -138,17 +142,7 @@ def main(argv: list[str] | None = None) -> None:
         return context, page
 
     def save(page):
-        page.get_by_role("button", name="Save campaign", exact=True).click()
-        expect(
-            page.get_by_text(
-                "Campaign saved. Answers, costs, checks and actions will be here "
-                "when you return.",
-                exact=True,
-            )
-        ).to_be_visible()
-        expect(
-            page.get_by_role("button", name="Save campaign", exact=True)
-        ).to_be_enabled()
+        save_campaign(page)
 
     def unobscured(page, field, name):
         """Check focused control, complete bar visibility and actual hit target."""
@@ -220,11 +214,11 @@ def main(argv: list[str] | None = None) -> None:
                                     page.get_by_label("Campaign name", exact=True)
                                 ).to_have_value(title)
                                 save(page)
-                                expect(
-                                    page.locator(
-                                        ".campaign-save-feedback .notice.success"
-                                    )
-                                ).to_be_visible()
+                                expect_campaign_message(
+                                    page,
+                                    "Campaign saved. Answers, costs, checks and actions "
+                                    "will be here when you return.",
+                                )
                                 saved_id = next(
                                     row["id"]
                                     for row in server.app.campaigns.list()

@@ -29,7 +29,9 @@ sys.path[:0] = [str(ROOT), str(ROOT / "src")]
 
 from sinter import client  # noqa: E402
 from sinter.server import make_server  # noqa: E402
-from tools._support import launch_chromium, require_module  # noqa: E402
+from tools._support import (  # noqa: E402
+    CAMPAIGN_SAVED_MESSAGE, expect_campaign_message, launch_chromium, require_module,
+)
 from tools.campaign_browser import CampaignChecks  # noqa: E402
 
 
@@ -42,7 +44,10 @@ def arguments(argv=None):
     require_module(parser, "playwright.sync_api", "Playwright",
                    "python -m pip install '.[browser]'")
     if args.chromium:
-        args.chromium = str(Path(args.chromium).expanduser().resolve(strict=True))
+        try:
+            args.chromium = str(Path(args.chromium).expanduser().resolve(strict=True))
+        except (OSError, RuntimeError):
+            parser.error("Choose an existing executable Chromium path.")
         if not Path(args.chromium).is_file() or not os.access(args.chromium, os.X_OK):
             parser.error("Choose an existing executable Chromium path.")
     if args.output_dir:
@@ -161,6 +166,8 @@ class PurposeChecks(CampaignChecks):
         self.backups = []
         self.fixture_inputs = []
         self.transport_guards = []
+        self.selected_scope_journeys = []
+        self.responsive_layouts = []
 
     def check(self, name, action):
         """Retain every failed journey; no profile mutation or broad error filter."""
@@ -222,6 +229,7 @@ class PurposeChecks(CampaignChecks):
             page.get_by_role("button", name="Save campaign", exact=True).click()
         assert reply.value.status == 200
         saved = reply.value.json()
+        expect_campaign_message(page, CAMPAIGN_SAVED_MESSAGE)
         expect(page.locator(".campaign-save-state")).to_have_text("Saved on this computer")
         expect(page.get_by_role("button", name="Save campaign", exact=True)).to_be_enabled()
         assert self.store.get(saved["id"]) == saved
@@ -415,6 +423,7 @@ class PurposeChecks(CampaignChecks):
         self.transfers(page)
         page.get_by_label("Import campaign backup", exact=True).set_input_files(
             self.artifacts / "history-saved-reopened.json")
+        expect_campaign_message(page, "Campaign imported locally.", exact=False)
         expect(page.get_by_label("Campaign name", exact=True)).to_have_value(before["title"])
         restored = self.save(page)
         assert restored["id"] != saved["id"]
@@ -453,6 +462,7 @@ class PurposeChecks(CampaignChecks):
                 pending.pop().continue_()
             assert reply.value.status == 200
             confirmed = reply.value.json()
+            expect_campaign_message(page, CAMPAIGN_SAVED_MESSAGE)
             expect(page.locator(".campaign-save-state")).to_have_text("Saved on this computer")
             expect(card).not_to_have_attribute("inert", "")
             assert confirmed["revision"] == saved["revision"] + 1
@@ -467,6 +477,157 @@ class PurposeChecks(CampaignChecks):
             for route in pending:
                 route.abort()
             page.context.unroute(save_url, hold)
+
+    def selected_records_keep_other_work_separate(self, page):
+        from playwright.sync_api import expect
+        for purpose in ("discussion", "research"):
+            for status in ("open", "paused", "closed", "not_pursuing", "submitted"):
+                label = f"selected-{purpose}-{status}"
+                document = fixture("Fictional " + label, "application", "required")
+                other_name = document["opportunities"][0]["name"]
+                selected_name = "Fictional selected " + purpose
+                document["opportunities"].append({"name": selected_name,
+                    "purpose": purpose, "status": status, "application_mode": "unknown"})
+                task = ("  Original other-route work e\u0301 🐝 <literal>.\n"
+                        + "Preserve this full recorded instruction without clipping. " * 7
+                        + "No commitment, owner acceptance or timing is confirmed.  ")
+                original_action = {"opportunity": other_name, "scope_confirmed": True,
+                    "submission_phase": "pre_submission", "task": task,
+                    "owner": "Casey Fictional", "owner_kind": "person",
+                    "owner_confirmed": False, "due": "2026-10-01", "status": "open"}
+                other_index = len(document["actions"])
+                document["actions"].append(original_action)
+                saved = self.start(page, document)
+                before = copy.deepcopy(saved["document"])
+                write_json(self.artifacts / (label + "-saved-baseline.json"), saved)
+                assert self.export(page, label + "-export-baseline") == before
+                initial_saves = sum(row["path"] == "/api/campaigns/save"
+                                    and row["method"] == "POST"
+                                    for row in self.local_responses)
+                page.locator('.campaign-opportunity[data-opportunity-index="1"]').click()
+                expect(page.get_by_label("Route purpose", exact=True)).to_have_value(purpose)
+                card = self.card(page)
+                expect(card.locator(".campaign-decision-focus")).to_have_text(
+                    "Selected route: " + selected_name)
+                expected_state = (purpose.upper() + " IN PROGRESS" if status == "open"
+                    else "SUBMITTED STATUS RECORDED" if status == "submitted"
+                    else purpose.upper() + " NOT CURRENT")
+                expect(card.locator(".campaign-decision-state")).to_have_text(expected_state)
+                primary = card.locator(".campaign-decision-action")
+                expect(primary).to_contain_text("SUGGESTED ROUTE STEP")
+                primary_task = primary.locator(".campaign-decision-task").text_content()
+                assert primary_task and task not in primary_task
+                suggestion = primary.get_by_role("button", name="Add suggested action", exact=True)
+                expect(suggestion).to_have_count(1 if status == "open" else 0)
+                if status == "open":
+                    expect(suggestion).to_be_visible()
+                    assert ("discussion scope" if purpose == "discussion"
+                            else "specific research question") in primary_task
+                else:
+                    expect(card.locator(".campaign-decision-detail")).to_contain_text(
+                        "submitted status" if status == "submitted" else "historical records")
+                other = card.locator(".campaign-decision-portfolio")
+                expect(other).to_have_count(1)
+                assert other.evaluate("element => element.open") is False
+                expect(other.locator("summary")).to_have_text(
+                    "Other route’s current work · " + other_name)
+                other.locator("summary").click()
+                expect(other).to_have_attribute("open", "")
+                assert other.locator(".campaign-decision-task").text_content() == task
+                expect(other.locator(".campaign-decision-owner")).to_contain_text(
+                    "Confirm that this person has accepted the action.")
+                expect(other.locator(".campaign-decision-date")).to_contain_text("Proposed target:")
+                other.get_by_role("button", name="Open recorded action", exact=True).click()
+                expect(page.get_by_role("tab", name="Next actions", exact=True)).to_have_attribute(
+                    "aria-selected", "true")
+                recorded = page.locator(f'[data-action-index="{other_index}"]')
+                field = recorded.get_by_label("Next action", exact=True)
+                expect(field).to_have_value(task)
+                expect(field).to_be_focused()
+                expect(recorded.get_by_label("Programme or scope", exact=True)).to_have_value("route:0")
+                expect(recorded.get_by_label("Owner type", exact=True)).to_have_value("person")
+                expect(recorded.get_by_label("Owner name or role", exact=True)).to_have_value("Casey Fictional")
+                expect(recorded.get_by_label("This person has accepted this action", exact=True)).not_to_be_checked()
+                expect(recorded.get_by_label("Proposed target date", exact=True)).to_have_value("2026-10-01")
+                page.get_by_role("tab", name="Opportunities", exact=True).click()
+                expect(page.get_by_label("Route purpose", exact=True)).to_have_value(purpose)
+                with page.expect_response(self.base + "/api/campaigns/prepare") as reply:
+                    page.get_by_role("button", name="Prepare campaign brief", exact=True).click()
+                assert reply.value.status == 200
+                report = reply.value.json()
+                assert reply.value.request.post_data_json["focused_opportunity"] == selected_name
+                assert ("Route in focus: " + selected_name + " (selected in Sinter") in report["document_markdown"]
+                section = report["document_markdown"].split("## Next recorded open action", 1)[1]
+                assert "No current open action is recorded for this selected route" in section
+                assert task not in section
+                assert self.export(page, label + "-after-navigation-prepare") == before
+                assert self.store.get(saved["id"]) == saved
+                assert sum(row["path"] == "/api/campaigns/save" and row["method"] == "POST"
+                           for row in self.local_responses) == initial_saves
+                self.selected_scope_journeys.append({"purpose": purpose, "status": status,
+                    "selected_route": selected_name, "other_action_index": other_index,
+                    "literal_other_task_sha256": hashlib.sha256(task.encode("utf-8")).hexdigest(),
+                    "saved_revision_unchanged": True, "whole_export_unchanged": True,
+                    "no_action_created": True, "no_automatic_save": True,
+                    "prepare_kept_explicit_focus": True})
+                if status in {"open", "paused"}:
+                    self.screenshot(page, "purpose-" + label + "-preserved")
+
+    def desktop_action_tab_remains_revealed_on_phone_resize(self, page):
+        from playwright.sync_api import expect
+        saved = self.start(page, fixture("Fictional desktop to phone resize", "research"))
+        before = copy.deepcopy(saved["document"])
+        assert self.export(page, "resize-export-baseline") == before
+        initial_saves = sum(row["path"] == "/api/campaigns/save" and row["method"] == "POST"
+                            for row in self.local_responses)
+        selected = page.get_by_role("tab", name="Next actions", exact=True)
+        selected.click()
+        selected.focus()
+        expect(selected).to_be_focused()
+        page.set_viewport_size({"width": 390, "height": 844})
+        # Await the actual resize observer. Do not scroll the tab into view here;
+        # doing so would mask the product regression under test.
+        page.wait_for_function("""() => {
+          const strip=document.querySelector('.campaign-tabs');
+          const tab=strip?.querySelector('[aria-selected="true"]');
+          if (!strip || !tab) return false;
+          const outer=strip.getBoundingClientRect(), chosen=tab.getBoundingClientRect();
+          return chosen.left >= outer.left-1 && chosen.right <= outer.right+1
+            && chosen.left >= 0 && chosen.right <= innerWidth;
+        }""")
+        expect(selected).to_have_attribute("aria-selected", "true")
+        expect(selected).to_be_focused()
+        controls = [("selected Next actions tab", selected),
+            ("Save campaign", page.get_by_role("button", name="Save campaign", exact=True)),
+            ("Prepare campaign brief", page.get_by_role("button", name="Prepare campaign brief", exact=True))]
+        observations = []
+        for name, control in controls:
+            expect(control).to_be_visible()
+            measured = control.evaluate("""element => {
+              const b=element.getBoundingClientRect();
+              return {name:element.textContent, x:b.x,y:b.y,width:b.width,height:b.height,
+                inViewport:b.left>=0 && b.right<=innerWidth && b.top>=0 && b.bottom<=innerHeight,
+                hit:element.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2))};
+            }""")
+            assert measured["width"] >= 44 and measured["height"] >= 44, (name, measured)
+            assert measured["inViewport"] and measured["hit"], (name, measured)
+            observations.append({"control": name, **measured})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save = page.get_by_role("button", name="Save campaign", exact=True)
+        save.focus()
+        save.press("Tab")
+        expect(page.get_by_role("button", name="Prepare campaign brief", exact=True)).to_be_focused()
+        expect(selected).to_have_attribute("aria-selected", "true")
+        assert self.export(page, "resize-after-keyboard-navigation") == before
+        assert self.store.get(saved["id"]) == saved
+        assert sum(row["path"] == "/api/campaigns/save" and row["method"] == "POST"
+                   for row in self.local_responses) == initial_saves
+        self.responsive_layouts.append({"from": {"width": 1265, "height": 712},
+            "to": {"width": 390, "height": 844}, "controls": observations,
+            "selected_tab_fully_revealed": True, "keyboard_focus_preserved": True,
+            "document_overflow": False, "whole_export_unchanged": True,
+            "saved_revision_unchanged": True, "no_automatic_save": True})
+        self.screenshot(page, "purpose-desktop-actions-phone-resize")
 
     def conflicting_saves_keep_local_work(self, page):
         from playwright.sync_api import expect
@@ -552,7 +713,9 @@ def main(argv=None):
                             ("purpose-mixed-counts-scoped-unsent-clarification", checks.mixed_counts_and_scoped_clarification),
                             ("purpose-history-stale-report-save-reopen-restore", checks.history_stale_report_roundtrip),
                             ("purpose-delayed-save-blocks-suggested-action", checks.delayed_save_blocks_suggested_action),
-                            ("purpose-conflicting-saves-retain-local-work", checks.conflicting_saves_keep_local_work)]:
+                            ("purpose-conflicting-saves-retain-local-work", checks.conflicting_saves_keep_local_work),
+                            ("purpose-selected-records-other-current-work-separate", checks.selected_records_keep_other_work_separate),
+                            ("purpose-desktop-actions-phone-resize", checks.desktop_action_tab_remains_revealed_on_phone_resize)]:
                             checks.check(name, action)
                     finally:
                         if browser:
@@ -582,6 +745,8 @@ def main(argv=None):
             "backups": checks.backups if checks else [],
             "fixture_inputs": checks.fixture_inputs if checks else [],
             "controlled_transport_fixtures": checks.transport_guards if checks else [],
+            "selected_scope_journeys": checks.selected_scope_journeys if checks else [],
+            "responsive_layouts": checks.responsive_layouts if checks else [],
             "page_errors": checks.errors if checks else [],
             "external_requests": checks.external if checks else [],
             "expected_conflict_console": checks.expected_console if checks else [],
@@ -592,7 +757,7 @@ def main(argv=None):
             "source_files_before": before, "source_files_after": after,
             "source_unchanged": before is not None and before == after,
             "no_automatic_replay": True})
-        receipt["passed"] = (bool(checks) and len(checks.results) == 7
+        receipt["passed"] = (bool(checks) and len(checks.results) == 9
             and all(row["passed"] and row["context_closed"] for row in checks.results)
             and not checks.errors and not checks.external and not fatal
             and all(resources.values()) and all(value == 0 for value in remote_counts.values())

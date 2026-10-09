@@ -920,10 +920,25 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const repeatsBlocker = result.state === 'not_ready' && result.action.source === 'suggested'
       && result.detail.includes(result.action.task);
     const openRouteChecks = () => {
+      if (busy || disposed) return;
       tab = 'overview'; rememberCampaign(); renderEditor();
       const focus = editor.querySelector('.campaign-focus') || editor;
       focus.tabIndex = -1; focus.focus({preventScroll: true});
       scrollCampaignTarget(focus);
+    };
+    const openRecordedAction = index => {
+      if (busy || disposed) return;
+      if (index !== undefined) {
+        expandedActionRows ||= new WeakSet();
+        const row = document.actions[index];
+        if (row) expandedActionRows.add(row);
+      }
+      tab = 'actions'; rememberCampaign(); renderEditor();
+      const recordedAction = index === undefined ? null
+        : editor.querySelector(`[data-action-index="${index}"]`);
+      const taskField = recordedAction?.querySelector('textarea');
+      scrollCampaignTarget(taskField || recordedAction || editor);
+      taskField?.focus({preventScroll: true});
     };
     const targetDate = result.action.due ? new Date(result.action.due + 'T12:00:00') : null;
     const targetDatePast = Boolean(result.action.due && result.action.due < localDate());
@@ -942,18 +957,18 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           + (targetDatePast ? ' · past — confirm or reset' : '')) : null,
       button(repeatsBlocker ? 'Review route checks' : result.action.actionIndex === undefined ? 'Open next actions' : 'Open full action', () => {
         if (repeatsBlocker) { openRouteChecks(); return; }
-        if (result.action.actionIndex !== undefined) {
-          expandedActionRows ||= new WeakSet();
-          const row = document.actions[result.action.actionIndex];
-          if (row) expandedActionRows.add(row);
-        }
-        tab = 'actions'; rememberCampaign(); renderEditor();
-        const recordedAction = result.action.actionIndex === undefined ? null
-          : editor.querySelector(`[data-action-index="${result.action.actionIndex}"]`);
-        const taskField = recordedAction?.querySelector('textarea');
-        scrollCampaignTarget(taskField || recordedAction || editor);
-        taskField?.focus({preventScroll: true});
+        openRecordedAction(result.action.actionIndex);
       }, 'quiet'));
+    const portfolio = result.portfolioAction;
+    const otherWork = portfolio ? h('details', {class: 'campaign-decision-portfolio'},
+      h('summary', {}, `Other route’s current work · ${portfolio.opportunity}`),
+      h('p', {class: 'campaign-decision-task'}, portfolio.task),
+      h('p', {class: 'campaign-decision-owner'}, portfolio.ownerStatus),
+      portfolio.due ? h('p', {class: 'campaign-decision-date'},
+        'Proposed target: ' + new Intl.DateTimeFormat('en-AU', {dateStyle: 'medium'})
+          .format(new Date(portfolio.due + 'T12:00:00'))
+          + (portfolio.due < localDate() ? ' · past — confirm or reset' : '')) : null,
+      button('Open recorded action', () => openRecordedAction(portfolio.actionIndex), 'quiet')) : null;
     const otherActiveRoutes = document.opportunities.filter(row =>
       isOpportunityActionable(row.status) && row.name !== result.focusOpportunity);
     const otherRoutesNeedReview = otherActiveRoutes.filter(row =>
@@ -990,6 +1005,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         result.state === 'not_ready' && !repeatsBlocker
           ? button('Review route checks', openRouteChecks, 'quiet') : null),
       h('p', {class: 'campaign-decision-note'}, CAMPAIGN_DECISION_NOTE));
+    if (otherWork) decisionCard.append(otherWork);
   }
   function scopeChoices() { return [['', 'Whole campaign'], ...document.opportunities.map(row => [row.name, row.name])]; }
   function addOpportunity() {
@@ -1014,12 +1030,14 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     else if (chosen.right > bounds.right) tabs.scrollLeft += chosen.right - bounds.right;
   }
   function updateCampaignClearance() {
+    if (disposed) return;
     const saveRegion = root.querySelector('.campaign-save-bar');
     const top = saveRegion ? Number.parseFloat(getComputedStyle(saveRegion).top) || 0 : 0;
     const navigationTop = (saveRegion?.getBoundingClientRect().height || 0) + top + 8;
     root.style.setProperty('--campaign-navigation-top', `${Math.ceil(navigationTop)}px`);
     const clearance = navigationTop + sectionNavigation.getBoundingClientRect().height + 16;
     root.style.setProperty('--campaign-scroll-clearance', `${Math.ceil(clearance)}px`);
+    revealSelectedCampaignTab();
   }
   function scrollCampaignTarget(target, focus = false) {
     if (!target) return;

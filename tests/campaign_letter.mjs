@@ -13,6 +13,7 @@ test('explicit discussion and research drafts retain checks without grant boiler
     const before = structuredClone(campaign);
     const draft = letters.campaignClarificationDraft(campaign, route);
     assert.equal(draft.recipient, 'Recorded counterpart');
+    assert.equal(draft.campaign_route_purpose, purpose);
     assert.match(draft.questions, /Who can review the proposed scope\?/);
     assert.match(draft.questions, /Background IP permission/);
     assert.doesNotMatch(draft.questions, /applicant|application|registration|intake|permitted costs|We will obtain/);
@@ -30,6 +31,7 @@ test('required workflow retains formal clarification despite a planning purpose'
   for (const purpose of ['discussion', 'research']) {
     const route = {name: 'Formal programme', purpose, application_mode: 'required'};
     const draft = letters.campaignClarificationDraft({requirements: []}, route);
+    assert.equal(Object.hasOwn(draft, 'campaign_route_purpose'), false);
     assert.match(draft.questions, /legal entity types may apply/);
     assert.match(draft.questions, /fixed or rolling intake/);
     assert.match(draft.questions, /official programme guidance/);
@@ -40,7 +42,93 @@ test('missing purpose does not infer discussion from no formal application recor
   const route = {name: 'Customer conversation', application_mode: 'not_required'};
   const draft = letters.campaignClarificationDraft({requirements: []}, route);
   assert.match(draft.questions, /fixed or rolling intake/);
+  assert.equal(Object.hasOwn(draft, 'campaign_route_purpose'), false);
   assert.equal(Object.hasOwn(route, 'purpose'), false);
+});
+
+test('neutral opening intent is explicit and never inferred from route labels or workflow', () => {
+  const campaign = {requirements: []};
+  for (const purpose of [undefined, 'unknown', 'application', 'invalid']) {
+    const route = {name: 'Research discussion with a counterpart',
+      application_mode: 'not_required', ...(purpose ? {purpose} : {})};
+    const before = structuredClone(route);
+    const draft = letters.campaignClarificationDraft(campaign, route);
+    assert.equal(Object.hasOwn(draft, 'campaign_route_purpose'), false);
+    assert.deepEqual(route, before);
+  }
+  for (const purpose of ['discussion', 'research']) {
+    for (const application_mode of ['unknown', 'not_required', undefined]) {
+      const route = {name: 'Formal programme in the saved name', purpose,
+        ...(application_mode ? {application_mode} : {})};
+      const before = structuredClone(route);
+      const draft = letters.campaignClarificationDraft(campaign, route);
+      assert.equal(draft.campaign_route_purpose, purpose);
+      assert.equal(draft.campaign_sender_review, true);
+      assert.equal(draft.use_model, false);
+      assert.equal(draft.use_search, false);
+      assert.deepEqual(route, before);
+    }
+  }
+});
+
+test('optional model context preserves exact legacy title, notes and full source strings', () => {
+  for (const payload of [{}, {title: 'Research discussion', notes: ''}, {
+    title: '  Original café e\u0301 🐝 <literal>\nTitle  ',
+    notes: 'PRIVATE ORIGINAL NOTES\r\nNo permission or approval.\n' + '長'.repeat(1500),
+    sources: [{title: ' Original source 🧭 ', content: 'Exact quote\r\n<literal>\n' + 'e\u0301'.repeat(1800),
+      url: 'https://example.invalid/' + 'full-path-'.repeat(120)},
+    {title: 'No URL', content: 'Remaining original passage.'}],
+    purpose: 'discussion', route_type: 'services', application_mode: 'not_required',
+  }]) {
+    const before = structuredClone(payload);
+    const original = [payload.title, payload.notes, ...(payload.sources || [])
+      .map(source => `${source.title}\n${source.content}\n${source.url || ''}`)]
+      .filter(Boolean).join('\n\n');
+    assert.equal(letters.campaignLetterModelContext(payload), original);
+    assert.deepEqual(payload, before);
+  }
+});
+
+test('optional model context declares explicit scope without cutting supplied material', () => {
+  for (const campaign_route_purpose of ['discussion', 'research']) {
+    const payload = {workflow: 'brief', campaign_sender_review: true, campaign_route_purpose,
+      title: ' Original fictional scope café e\u0301 🐝 ',
+      notes: 'PRIVATE ENTERED NOTES\r\nNo authority is established.\n' + 'n'.repeat(4000),
+      sources: [{title: ' Exact source title ', content: 'Exact full content\r\n' + '中文'.repeat(2000),
+        url: 'https://example.invalid/exact?source=1&scope=research'}]};
+    const before = structuredClone(payload);
+    const original = [payload.title, payload.notes, ...(payload.sources || [])
+      .map(source => `${source.title}\n${source.content}\n${source.url || ''}`)]
+      .filter(Boolean).join('\n\n');
+    const result = letters.campaignLetterModelContext(payload);
+    assert.match(result, new RegExp(`^Route purpose \\(user-entered\\): ${campaign_route_purpose === 'discussion' ? 'Discussion' : 'Research'}\\.`));
+    assert.match(result, /unsent clarification letter/);
+    assert.match(result, /Do not describe it as a formal application or imply any agreement, approval, authority or funding/);
+    assert.equal(result.slice(-original.length), original);
+    assert.deepEqual(payload, before);
+    assert.equal(letters.campaignLetterModelContext({...payload, workflow: undefined}), result);
+  }
+});
+
+test('unsupported explicit model scope fails before material can be handed to the model', () => {
+  const valid = {workflow: 'brief', campaign_sender_review: true,
+    campaign_route_purpose: 'discussion', title: 'Original local work'};
+  for (const change of [
+    ...[undefined, null, '', 'unknown', 'application', 'DISCUSSION', false, [], {}]
+      .map(campaign_route_purpose => ({campaign_route_purpose})),
+    ...['research', 'grants', 'meeting', '', null].map(workflow => ({workflow})),
+    ...[undefined, false, 'true', 1].map(campaign_sender_review => ({campaign_sender_review})),
+  ]) {
+    const payload = {...valid, ...change};
+    const before = structuredClone(payload);
+    assert.throws(() => letters.campaignLetterModelContext(payload),
+      /explicit discussion or research purpose with a campaign brief.*local inputs are unchanged/);
+    assert.deepEqual(payload, before);
+  }
+  const required = letters.campaignClarificationDraft({requirements: []},
+    {name: 'Discussion in a required application', purpose: 'discussion', application_mode: 'required'});
+  assert.equal(Object.hasOwn(required, 'campaign_route_purpose'), false);
+  assert.equal(letters.campaignLetterModelContext(required), required.title);
 });
 
 test('private and store-only checks remain local for every route purpose', () => {

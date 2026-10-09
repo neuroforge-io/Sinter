@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from playwright.sync_api import Page
 
 from sinter import client  # noqa: E402
+from tools._support import expect_campaign_message, save_campaign
 from sinter.campaigns import validate  # noqa: E402
 from sinter.server import make_server  # noqa: E402
 from tools._support import browser_arguments, launch_chromium  # noqa: E402
@@ -62,11 +63,13 @@ def source_hashes() -> dict[str, str]:
             "src/sinter/server.py",
             "src/sinter/workbench.py",
             "src/sinter/campaign_currency.py",
-            "VERSION",
+            "src/sinter/__init__.py",
+            "tools/_support.py",
+            "tools/campaign_portfolio_profile.py",
         )
     ]
     return {
-        str(path.relative_to(ROOT)): digest(path)
+        path.relative_to(ROOT).as_posix(): digest(path)
         for path in sorted(paths)
         if path.is_file()
     }
@@ -214,16 +217,7 @@ def ready(page: Page) -> None:
 
 def save(page: Page) -> None:
     """Save and wait through the persisted campaign response and shelf refresh."""
-    from playwright.sync_api import expect
-
-    page.get_by_role("button", name="Save campaign", exact=True).click()
-    expect(
-        page.get_by_text(
-            "Campaign saved. Answers, costs, checks and actions will be here "
-            "when you return.",
-            exact=True,
-        )
-    ).to_be_visible()
+    save_campaign(page)
     ready(page)
 
 
@@ -318,11 +312,7 @@ def main(argv: list[str] | None = None) -> None:
                                 expect(
                                     page.get_by_label("Campaign name", exact=True)
                                 ).to_have_value(TITLE)
-                                expect(
-                                    page.get_by_text(
-                                        "Campaign imported locally.", exact=False
-                                    )
-                                ).to_be_visible()
+                                expect_campaign_message(page, "Campaign imported locally.", exact=False)
 
                             measured("initial_import_backup", 1, import_backup)
                             measured("initial_save", 1, lambda: save(page))

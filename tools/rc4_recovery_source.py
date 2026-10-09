@@ -27,6 +27,7 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from tools import installed_recovery_browser as legacy  # noqa: E402
+from tools._support import expect_campaign_message, save_campaign
 from tools import installed_workflow_browser as transport  # noqa: E402
 from tools.installed_menu_browser import browser_notice  # noqa: E402
 from tools.rc4_recovery_contract import (  # noqa: E402
@@ -412,8 +413,8 @@ def advanced_workflow(args, runtime, relay, phases, *, browser_session=None):
                 selected.get_by_role("button").click()
 
             def save(p):
-                p.get_by_role("button", name="Save campaign", exact=True).click()
-                expect(p.get_by_text(legacy.SAVED, exact=True)).to_be_visible()
+                save_campaign(p)
+                expect_campaign_message(p, legacy.SAVED, exact=True)
                 row = next(
                     r
                     for r in legacy.read_json(p, "/api/campaigns")["campaigns"]
@@ -440,12 +441,7 @@ def advanced_workflow(args, runtime, relay, phases, *, browser_session=None):
             p.get_by_label("Import campaign backup", exact=True).set_input_files(
                 input_path
             )
-            expect(
-                p.get_by_text(
-                    "Campaign imported locally. Save campaign to keep this copy.",
-                    exact=True,
-                )
-            ).to_be_visible()
+            expect_campaign_message(p, "Campaign imported locally. Save campaign to keep this copy.", exact=True)
             base = save(p)
             # Show the old human mark and the current source mismatch together.
             p.get_by_role("tab", name="Opportunities", exact=True).click()

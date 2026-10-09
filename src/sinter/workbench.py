@@ -121,7 +121,7 @@ def run(payload: dict, progress=lambda message: None) -> dict:
     if not isinstance(kind, str) or kind not in WORKFLOWS:
         raise ValueError("Choose a research, funding, briefing or meeting workflow.")
     title = text(payload.get("title", ""), "Project title", 200, True)
-    from .briefs import document_details
+    from .briefs import campaign_route_purpose, document_details
     details = document_details(payload)
     notes = text(payload.get("notes", ""), "Notes", 1000000 if kind == "meeting" else MAX_CONTEXT)
     query = text(payload.get("query", ""), "Search query", 1024)
@@ -129,6 +129,7 @@ def run(payload: dict, progress=lambda message: None) -> dict:
     for flag in ("use_search", "use_model", "demo", "campaign_sender_review"):
         if flag in payload and type(payload[flag]) is not bool:
             raise ValueError(f"{flag} must be a boolean.")
+    campaign_route_purpose(payload)
     demo = payload.get("demo", False)
     if demo and (payload.get("use_search") or payload.get("use_model")):
         raise ValueError("Examples run offline. Start a new project before using live services.")

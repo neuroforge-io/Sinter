@@ -98,6 +98,7 @@ def source_hashes() -> dict[str, str]:
             "src/sinter/web/campaign-save.js",
             "src/sinter/web/api.js",
             "src/sinter/web/ui.js",
+            "tools/_support.py",
             "tools/campaign_feedback_browser.py",
         )
     }
@@ -111,6 +112,7 @@ def main(argv: list[str] | None = None) -> None:
     artifacts = Path(tempfile.mkdtemp(prefix="sinter-campaign-feedback-"))
     before = source_hashes()
     cases, errors, external = [], [], []
+    contexts = []
     closed = {"browser": False, "server": False, "contexts": False}
     provider_text = (
         "Fictional provider unavailable — display fixture only.\n"
@@ -137,6 +139,7 @@ def main(argv: list[str] | None = None) -> None:
                         context = browser.new_context(
                             service_workers="block", **options
                         )
+                        contexts.append({"context": context, "closed": False})
                         context.set_default_timeout(8000)
                         context.route(
                             "**/*",
@@ -153,6 +156,15 @@ def main(argv: list[str] | None = None) -> None:
                             ),
                         )
                         return context
+
+                    def close_context(context):
+                        context.close()
+                        for owned in contexts:
+                            if owned["context"] is context:
+                                owned["closed"] = True
+                                if "record" in owned:
+                                    owned["record"]["context_closed"] = True
+                                break
 
                     def edit_title(page, title):
                         field = page.get_by_label("Campaign name", exact=True)
@@ -180,7 +192,7 @@ def main(argv: list[str] | None = None) -> None:
                                 "button", name="Save campaign", exact=True
                             ).click()
                         saved = reply.value.json()
-                        setup.close()
+                        close_context(setup)
                         for theme, width, height in (
                             ("light", 390, 844),
                             ("dark", 390, 844),
@@ -207,12 +219,17 @@ def main(argv: list[str] | None = None) -> None:
                                 )
                             for kind in kinds:
                                 label = f"{kind}-{theme}-{width}x{height}"
-                                record = {"case": label, "passed": False}
+                                record = {
+                                    "case": label,
+                                    "passed": False,
+                                    "context_closed": False,
+                                }
                                 cases.append(record)
                                 context = private_context(
                                     viewport={"width": width, "height": height},
                                     reduced_motion="reduce",
                                 )
+                                contexts[-1]["record"] = record
                                 page = context.new_page()
                                 posts = []
                                 page.on(
@@ -436,13 +453,12 @@ def main(argv: list[str] | None = None) -> None:
                                     clipped = feedback.evaluate(
                                         "e => e.scrollHeight > e.clientHeight + 1"
                                     )
-                                    if not clipped:
-                                        expect(expand).to_be_hidden()
-                                        # Viewport change alone reveals the cue.
-                                        page.set_viewport_size(
-                                            {"width": 320, "height": 400}
-                                        )
+                                    # Recovery text is always inspectable, even
+                                    # when a short notice happens to fit inline.
                                     expect(expand).to_be_visible()
+                                    expect(page.locator(
+                                        ".campaign-message-summary"
+                                    )).to_be_visible()
                                     bounds = page.get_by_role(
                                         "region",
                                         name="Campaign save and preview",
@@ -586,102 +602,165 @@ def main(argv: list[str] | None = None) -> None:
                                         else "display fixture",
                                     )
                                 finally:
-                                    context.close()
+                                    close_context(context)
+                                    record["context_closed"] = True
                         # A source-only isolated component exercises snapshots and a
                         # missing ResizeObserver, without changing campaign work.
                         context = private_context(
                             viewport={"width": 390, "height": 844}
                         )
-                        context.add_init_script("window.ResizeObserver = undefined")
-                        page = context.new_page()
-                        page.goto(base + "/#campaigns")
-                        page.evaluate("""async () => {
-                          const mod = await import('/static/campaign-feedback.js');
-                          const {campaignFeedback} = mod;
-                          const fallback = document.createElement('button');
-                          fallback.textContent = 'Fictional focus return';
-                          window.feedbackTest = campaignFeedback(() => fallback);
-                          const host = document.createElement('div');
-                          host.className = 'campaign-save-bar';
-                          host.append(fallback, window.feedbackTest.panel);
-                          document.body.append(host);
-                          window.feedbackTest.host = host;
-                          const text = 'Fictional '.repeat(200);
-                          window.feedbackTest.feedback.textContent = text;
-                        }""")
-                        expand = page.get_by_role(
-                            "button", name="Read full message", exact=True
-                        ).last
-                        expand.click()
-                        dialog = page.get_by_role(
-                            "dialog", name="Campaign message", exact=True
-                        )
-                        expect(dialog).to_be_visible()
-                        original = dialog.get_by_label(
-                            "Complete campaign message", exact=True
-                        ).text_content()
-                        page.evaluate(
-                            "window.feedbackTest.feedback.textContent = "
-                            "'New short fictional status'"
-                        )
-                        assert (
-                            dialog.get_by_label(
-                                "Complete campaign message", exact=True
-                            ).text_content()
-                            == original
-                        )
-                        dialog.get_by_role("button", name="Close", exact=True).click()
-                        expect(
-                            page.locator(".campaign-save-feedback").last
-                        ).to_be_focused()
-                        expect(expand).to_be_hidden()
-                        # Mutation and resize fallback still discover overflow.
-                        page.evaluate(LONG_STATUS)
-                        expect(expand).to_be_visible()
-                        expand.click()
-                        page.evaluate("window.feedbackTest.feedback.textContent = ''")
-                        assert (
-                            dialog.get_by_label(
-                                "Complete campaign message", exact=True
-                            ).text_content()
-                            == original
-                        )
-                        dialog.get_by_role("button", name="Close", exact=True).click()
-                        expect(
-                            page.get_by_role(
-                                "button", name="Fictional focus return", exact=True
+                        isolated = {
+                            "case": "snapshot-clear-resize-fallback-disposal",
+                            "passed": False,
+                            "context_closed": False,
+                        }
+                        cases.append(isolated)
+                        contexts[-1]["record"] = isolated
+                        page = None
+                        try:
+                            context.add_init_script(
+                                "window.ResizeObserver = undefined"
                             )
-                        ).to_be_focused()
-                        expect(expand).to_be_hidden()
-                        page.evaluate(
-                            "window.feedbackTest.feedback.textContent = "
-                            "'Fictional '.repeat(40)"
-                        )
-                        expect(expand).to_be_visible()
-                        page.set_viewport_size({"width": 1440, "height": 1000})
-                        expect(expand).to_be_hidden()
-                        page.set_viewport_size({"width": 390, "height": 844})
-                        expect(expand).to_be_visible()
-                        page.evaluate(LONG_STATUS)
-                        expand.click()
-                        # Disposal closes the viewer and disconnects observers.
-                        page.evaluate(
-                            "window.feedbackTest.dispose(); "
-                            "window.feedbackTest.host.remove()"
-                        )
-                        expect(dialog).to_have_count(0)
-                        context.close()
-                        cases.append(
-                            {
-                                "case": "snapshot-clear-resize-fallback-disposal",
-                                "passed": True,
-                                "original_message": original,
-                                "snapshot_preserved": True,
-                                "focus_return": True,
-                            }
-                        )
-                        closed["contexts"] = True
+                            page = context.new_page()
+                            page.goto(base + "/#campaigns")
+                            page.evaluate("""async () => {
+                              const mod = await import('/static/campaign-feedback.js');
+                              const {campaignFeedback} = mod;
+                              const fallback = document.createElement('button');
+                              fallback.textContent = 'Fictional focus return';
+                              window.feedbackTest = campaignFeedback(() => fallback);
+                              const host = document.createElement('div');
+                              host.id = 'fictional-feedback-component';
+                              host.className = 'campaign-save-bar';
+                              host.append(fallback, window.feedbackTest.panel);
+                              document.body.append(host);
+                              window.feedbackTest.host = host;
+                              const text = 'Fictional '.repeat(200);
+                              window.feedbackTest.feedback.textContent = text;
+                            }""")
+                            component = page.locator("#fictional-feedback-component")
+                            # Include hidden nodes so clearing the isolated panel
+                            # cannot retarget the real campaign's visible disclosure.
+                            expand = component.get_by_role(
+                                "button", name="Read full message", exact=True,
+                                include_hidden=True,
+                            )
+                            feedback = component.locator(".campaign-save-feedback")
+                            announcement = component.locator(
+                                ".campaign-message-announcement"
+                            )
+                            expand.click()
+                            dialog = page.get_by_role(
+                                "dialog", name="Campaign message", exact=True
+                            )
+                            expect(dialog).to_be_visible()
+                            message = dialog.get_by_label(
+                                "Complete campaign message", exact=True
+                            )
+                            original = message.text_content()
+                            short = "New short fictional status"
+                            page.evaluate(
+                                "text => window.feedbackTest.feedback.textContent "
+                                "= text",
+                                short,
+                            )
+                            expect(message).to_have_text(original)
+                            dialog.get_by_role(
+                                "button", name="Close", exact=True
+                            ).click()
+                            expect(expand).to_be_focused()
+                            expect(expand).to_be_visible()
+                            expect(feedback).to_have_text(short)
+                            expect(feedback).to_be_hidden()
+                            expect(announcement).to_have_text(short)
+                            assert feedback.text_content() == short
+                            assert announcement.text_content() == short
+                            expand.click()
+                            expect(message).to_have_text(short)
+                            assert message.text_content() == short
+                            dialog.get_by_role(
+                                "button", name="Close", exact=True
+                            ).click()
+                            expect(expand).to_be_focused()
+                            # Routine text stays reachable regardless of its length.
+                            page.evaluate(LONG_STATUS)
+                            expect(feedback).to_have_text(original)
+                            expect(announcement).to_have_text(original)
+                            expect(expand).to_be_visible()
+                            expand.click()
+                            page.evaluate(
+                                "window.feedbackTest.feedback.textContent = ''"
+                            )
+                            expect(message).to_have_text(original)
+                            dialog.get_by_role(
+                                "button", name="Close", exact=True
+                            ).click()
+                            expect(component.get_by_role(
+                                "button", name="Fictional focus return", exact=True
+                            )).to_be_focused()
+                            expect(feedback).to_have_text("")
+                            expect(announcement).to_have_text("")
+                            expect(expand).to_be_hidden()
+                            page.evaluate(
+                                "window.feedbackTest.feedback.textContent = "
+                                "'Fictional '.repeat(40)"
+                            )
+                            expect(expand).to_be_visible()
+                            expect(feedback).to_have_text("Fictional " * 40)
+                            expect(announcement).to_have_text("Fictional " * 40)
+                            page.set_viewport_size({"width": 1440, "height": 1000})
+                            expect(expand).to_be_visible()
+                            page.set_viewport_size({"width": 390, "height": 844})
+                            expect(expand).to_be_visible()
+                            page.evaluate(LONG_STATUS)
+                            expand.click()
+                            # Disposal closes the viewer and disconnects observers.
+                            page.evaluate(
+                                "window.feedbackTest.dispose(); "
+                                "window.feedbackTest.host.remove()"
+                            )
+                            expect(dialog).to_have_count(0)
+                            isolated.update(
+                                passed=True,
+                                original_message=original,
+                                snapshot_preserved=True,
+                                short_message=short,
+                                exact_announcement=True,
+                                focus_return=True,
+                            )
+                        except Exception as problem:
+                            isolated["failure"] = (
+                                type(problem).__name__ + ": " + str(problem)
+                            )
+                            if page:
+                                try:
+                                    page.screenshot(path=str(
+                                        artifacts / "isolated-component-FAILED.png"
+                                    ))
+                                except Exception as capture_problem:
+                                    isolated["capture_failure"] = (
+                                        type(capture_problem).__name__
+                                        + ": " + str(capture_problem)
+                                    )
+                            raise
+                        finally:
+                            close_context(context)
+                            isolated["context_closed"] = True
                     finally:
+                        # Record each successful explicit close even when an
+                        # assertion/setup failed before its ordinary finally block.
+                        for owned in contexts:
+                            if not owned["closed"]:
+                                try:
+                                    close_context(owned["context"])
+                                except Exception as problem:
+                                    errors.append(
+                                        "Context cleanup: "
+                                        + type(problem).__name__ + ": " + str(problem)
+                                    )
+                        closed["contexts"] = bool(contexts) and all(
+                            owned["closed"] for owned in contexts
+                        )
                         browser.close()
                         closed["browser"] = True
             finally:

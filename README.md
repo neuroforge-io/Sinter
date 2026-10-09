@@ -144,6 +144,14 @@ agreement, research conclusion, eligibility nor permission to submit. Backups wi
 the optional purpose field require a supporting version; older strict importers
 refuse them rather than remove the field.
 
+The development campaign header keeps Save and section navigation close at hand.
+Use **Read full message** for the complete latest acknowledgement; warnings and
+uncertain outcomes keep their recovery details visible. That view does not retry
+anything. A selected discussion or research route shows its own next step; work
+already recorded for another route is available separately. Clarification drafts
+use neutral discussion or research openings and show complete source titles,
+recorded identities and check dates. Saving a draft log does not send it.
+
 Current development shows compact recorded-cost rows and opens the next missing
 price or reference. Open and closed cost rows stay as left when moving between
 pages in the same browser session. Recorded subtotals retain original amounts, unknowns and GST

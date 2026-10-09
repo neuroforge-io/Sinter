@@ -45,6 +45,8 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     demo, sources: [...sources], speaker_map: {...speakerMap}, corrections,
     document_type: documentType.input.value, recipient: recipient.input.value, ...sender.values(),
     campaign_sender_review: campaignSenderReview,
+    ...(Object.hasOwn(data, 'campaign_route_purpose')
+      ? {campaign_route_purpose: data.campaign_route_purpose} : {}),
     campaign_link: data.campaign_link || null,
     profile: {organisation_type: org.input.value, location: location.input.value, budget: budget.input.value}});
   const documentType = selectField('What are you preparing?', [['enquiry', 'Enquiry letter'], ['briefing', 'Briefing note'], ['agenda', 'Agenda item for discussion']], data.document_type || 'enquiry');
@@ -208,7 +210,9 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     h('button', {type: 'submit', class: 'button primary'}, kind === 'research' ? 'Prepare research brief' : 'Prepare my draft'));
   if (kind === 'brief' && !demo && onDraftWithModel) prepare.append(button('Draft with your model', () => {
     if (!form.reportValidity()) return;
-    const payload = state(); remember(kind, payload); onDraftWithModel(payload);
+    const payload = state(); remember(kind, payload);
+    try { onDraftWithModel(payload); }
+    catch (problem) { feedback.replaceChildren(notice(problem.message, 'error')); }
   }, 'quiet'), h('p', {class: 'fine'}, 'Opens a guided draft with these inputs for you to review before sending them to the model.'));
   fields.append(h('h3', {class: 'form-section-title'}, 'Review and prepare'), prepare);
   form.append(fields, status, h('div', {class: 'button-row'}, cancel), feedback);

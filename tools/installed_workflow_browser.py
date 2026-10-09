@@ -1316,6 +1316,7 @@ def browser_workflow(
 
     sys.path.insert(0, str(ROOT))
     from tools._support import launch_chromium
+    from tools._support import expect_campaign_message, save_campaign
 
     output = args.output / "installed-workflow"
     origin = f"http://127.0.0.1:{relay.server_address[1]}"
@@ -1457,13 +1458,8 @@ def browser_workflow(
                 COMMUNICATION["content"]
             )
             expect(communication).to_contain_text("Draft · not sent")
-            page.get_by_role("button", name="Save campaign", exact=True).click()
-            expect(
-                page.get_by_text(
-                    SAVED_CAMPAIGN,
-                    exact=True,
-                )
-            ).to_be_visible()
+            save_campaign(page)
+            expect_campaign_message(page, SAVED_CAMPAIGN, exact=True)
             campaigns = read("/api/campaigns")["campaigns"]
             assert len(campaigns) == 1
             snapshots["saved_campaign"] = read("/api/campaigns/" + campaigns[0]["id"])
@@ -1560,13 +1556,8 @@ def browser_workflow(
             if not page.locator('[data-campaign-field="title"]').is_visible():
                 page.get_by_text("Campaign details", exact=True).click()
             page.locator('[data-campaign-field="title"]').fill(RESTORED_CAMPAIGN_TITLE)
-            page.get_by_role("button", name="Save campaign", exact=True).click()
-            expect(
-                page.get_by_text(
-                    SAVED_CAMPAIGN,
-                    exact=True,
-                )
-            ).to_be_visible()
+            save_campaign(page)
+            expect_campaign_message(page, SAVED_CAMPAIGN, exact=True)
             campaigns = read("/api/campaigns")["campaigns"]
             assert len(campaigns) == 2
             copied = next(

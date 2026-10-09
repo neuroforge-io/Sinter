@@ -10,7 +10,45 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from playwright.sync_api import Browser, Playwright
+    from playwright.sync_api import Browser, Page, Playwright
+
+
+CAMPAIGN_SAVED_MESSAGE = (
+    "Campaign saved. Answers, costs, checks and actions will be here "
+    "when you return."
+)
+
+
+def expect_campaign_message(page: Page, text: str, *, exact: bool = True) -> None:
+    """Read the actual acknowledgement and await the unlocked campaign UI.
+
+    Compact routine messages retain their original DOM, announce the full text,
+    and expose a real message dialog. Older installed previews show the original
+    inline message. Neither path substitutes an already-Saved status for the
+    current acknowledgement. Save callers also await their actual HTTP response.
+    """
+    from playwright.sync_api import expect
+
+    feedback = page.locator(".campaign-save-feedback")
+    if exact:
+        expect(feedback).to_have_text(text)
+    else:
+        expect(feedback).to_contain_text(text)
+    expect(page.get_by_role("button", name="Save campaign", exact=True)).to_be_enabled()
+    announcement = page.locator(".campaign-message-announcement")
+    if announcement.count():
+        expect(announcement).to_have_text(feedback.text_content())
+        expect(page.get_by_role("button", name="Read full message", exact=True)).to_be_visible()
+    else:
+        expect(feedback).to_be_visible()
+
+
+def save_campaign(page: Page) -> None:
+    """Await this save's real reply, exact acknowledgement and completed unlock."""
+    with page.expect_response("**/api/campaigns/save") as response:
+        page.get_by_role("button", name="Save campaign", exact=True).click()
+    assert response.value.status == 200, response.value.status
+    expect_campaign_message(page, CAMPAIGN_SAVED_MESSAGE)
 
 
 def require_module(

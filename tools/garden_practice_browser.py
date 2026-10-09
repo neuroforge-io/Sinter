@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from sinter import casebooks, client, practice  # noqa: E402
+from tools._support import expect_campaign_message, save_campaign
 from sinter.server import make_server  # noqa: E402
 from tools._support import browser_arguments, launch_chromium  # noqa: E402
 
@@ -639,14 +640,9 @@ def main(argv: list[str] | None = None) -> None:
                     checks.append(
                         "switching paired practice editors preserves both sets of edits"
                     )
-                    page.get_by_role("button", name="Save campaign", exact=True).click()
-                    expect(
-                        page.get_by_text(
-                            "Campaign saved. Answers, costs, checks and actions "
-                            "will be here when you return.",
-                            exact=True,
-                        )
-                    ).to_be_visible()
+                    save_campaign(page)
+                    expect_campaign_message(page, "Campaign saved. Answers, costs, checks and actions "
+                            "will be here when you return.", exact=True)
                     latest = next(
                         row
                         for row in server.app.campaigns.list()
