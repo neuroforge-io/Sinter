@@ -1034,9 +1034,13 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const saveRegion = root.querySelector('.campaign-save-bar');
     const top = saveRegion ? Number.parseFloat(getComputedStyle(saveRegion).top) || 0 : 0;
     const navigationTop = (saveRegion?.getBoundingClientRect().height || 0) + top + 8;
-    root.style.setProperty('--campaign-navigation-top', `${Math.ceil(navigationTop)}px`);
     const clearance = navigationTop + sectionNavigation.getBoundingClientRect().height + 16;
-    root.style.setProperty('--campaign-scroll-clearance', `${Math.ceil(clearance)}px`);
+    // When sticky controls leave less than one usable target, let them scroll
+    // normally. Measure their unchanged natural heights to avoid mode oscillation.
+    const scrolling = clearance + 44 > window.innerHeight;
+    root.dataset.campaignChrome = scrolling ? 'scroll' : 'sticky';
+    root.style.setProperty('--campaign-navigation-top', `${scrolling ? 0 : Math.ceil(navigationTop)}px`);
+    root.style.setProperty('--campaign-scroll-clearance', `${scrolling ? 0 : Math.ceil(clearance)}px`);
     revealSelectedCampaignTab();
   }
   function scrollCampaignTarget(target, focus = false) {
@@ -2408,6 +2412,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   toolbarObserverFrame = requestAnimationFrame(() => {
     toolbarObserverFrame = null;
     if (!root.isConnected) return;
+    // A height-only resize may not change either observed element's dimensions.
+    window.addEventListener('resize', updateCampaignClearance);
     if (typeof ResizeObserver === 'function') {
       toolbarObserver = new ResizeObserver(updateCampaignClearance);
       toolbarObserver.observe(root.querySelector('.campaign-save-bar'));
@@ -2417,7 +2423,6 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       const changes = {childList: true, characterData: true, attributes: true, subtree: true};
       toolbarObserver.observe(root.querySelector('.campaign-save-bar'), changes);
       toolbarObserver.observe(sectionNavigation, changes);
-      window.addEventListener('resize', updateCampaignClearance);
     }
     revealSelectedCampaignTab();
     updateCampaignClearance();

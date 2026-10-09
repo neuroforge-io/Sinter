@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep campaign backup controls reachable below sticky navigation. Use measured
+  scrolling clearance and let the header scroll normally when the window cannot
+  fit a 44-pixel target beneath it. Recovery exports preserve the complete unsaved
+  inputs and do not retry a request; printed spacing is unchanged.
 - Give critical campaign recovery summaries the full header width before their
   scrolling details and message button. Keep readable controls, complete text and
   strict short-window space checks; browser failures now retain geometry and

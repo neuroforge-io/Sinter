@@ -309,6 +309,21 @@
 .campaign-decision-card,
 .campaign-action,
 .campaign-output { scroll-margin-block-start: var(--campaign-scroll-clearance, 0px); }
+@media screen {
+  /* Last controls need real scroll room as well as a target scroll margin. */
+  .campaign-page { padding-bottom: max(40px, var(--campaign-scroll-clearance, 0px)); }
+  .campaign-transfers > summary,
+  .campaign-transfers .button {
+    scroll-margin-block-start: var(--campaign-scroll-clearance, 0px);
+    scroll-margin-block-end: 16px;
+  }
+  .campaign-transfers > summary { min-height: 44px; }
+  /* Keep all controls and warnings present when a keyboard leaves little room. */
+  .campaign-page[data-campaign-chrome=scroll] .campaign-save-bar,
+  .campaign-page[data-campaign-chrome=scroll] .campaign-section-navigation {
+    position: static;
+  }
+}
 .campaign-section:focus-visible,
 .campaign-decision-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 6px; }
 

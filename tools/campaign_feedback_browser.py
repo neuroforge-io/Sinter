@@ -608,6 +608,95 @@ def main(argv: list[str] | None = None) -> None:
                                                 exact=True,
                                             )
                                         ).to_be_enabled()
+                                    if height <= 400:
+                                        # Exercise pointer recovery at document end,
+                                        # where sticky chrome used to cover backup.
+                                        transfers = page.get_by_text(
+                                            "Import or back up a campaign", exact=True
+                                        )
+                                        transfers.scroll_into_view_if_needed()
+                                        pointer = transfers.evaluate("""e => {
+                                          const r = e.getBoundingClientRect();
+                                          const hit = document.elementFromPoint(
+                                            r.x + r.width / 2, r.y + r.height / 2);
+                                          return {x:r.x, y:r.y, width:r.width,
+                                            height:r.height, bottom:r.bottom,
+                                            hitText:hit?.textContent,
+                                            unobstructed:e === hit || e.contains(hit)};
+                                        }""")
+                                        record["backup_pointer"] = pointer
+                                        page.screenshot(path=str(
+                                            artifacts / (label + "-backup-pointer.png")
+                                        ))
+                                        assert pointer["unobstructed"]
+                                        assert pointer["height"] >= 44
+                                        assert pointer["y"] >= 0
+                                        assert pointer["bottom"] <= height
+                                        chosen_tab = page.locator(
+                                            '[role="tab"][aria-selected="true"]'
+                                        ).text_content()
+                                        transfers.click()
+                                        expect(page.get_by_role(
+                                            "button", name="Export campaign backup",
+                                            exact=True,
+                                        )).to_be_visible()
+                                        assert page.locator(
+                                            '[role="tab"][aria-selected="true"]'
+                                        ).text_content() == chosen_tab
+                                        with page.expect_download() as exported:
+                                            page.get_by_role(
+                                                "button",
+                                                name="Export campaign backup",
+                                                exact=True,
+                                            ).click()
+                                        backup_path = artifacts / (
+                                            label + "-backup.json"
+                                        )
+                                        exported.value.save_as(backup_path)
+                                        expected_backup = deepcopy(saved["document"])
+                                        expected_backup["title"] = edited
+                                        assert json.loads(
+                                            backup_path.read_text()
+                                        ) == expected_backup
+                                        assert len(posts) == post_count
+                                        record["pointer_backup_exact"] = True
+                                        if (
+                                            width == 640 and height == 200
+                                            and theme == "light" and kind == "conflict"
+                                        ):
+                                            # Height-only changes must restore and
+                                            # release sticky controls without a save.
+                                            positions = []
+                                            for target_height, position in (
+                                                (400, "sticky"), (200, "static")
+                                            ):
+                                                page.set_viewport_size({
+                                                    "width": width,
+                                                    "height": target_height,
+                                                })
+                                                page.wait_for_function("""expected =>
+                                                  getComputedStyle(document.querySelector(
+                                                    '.campaign-save-bar')).position
+                                                    === expected
+                                                """, arg=position)
+                                                transfers.scroll_into_view_if_needed()
+                                                target = transfers.evaluate("""e => {
+                                                  const r = e.getBoundingClientRect();
+                                                  const hit = document.elementFromPoint(
+                                                    r.x+r.width/2,r.y+r.height/2);
+                                                  return {x:r.x,y:r.y,height:r.height,
+                                                    bottom:r.bottom,
+                                                    unobstructed:e===hit||e.contains(hit)};
+                                                }""")
+                                                record.setdefault(
+                                                    "resize_targets", []
+                                                ).append(target)
+                                                assert target["unobstructed"]
+                                                assert 0 <= target["y"]
+                                                assert target["bottom"] <= target_height
+                                                positions.append(position)
+                                            assert len(posts) == post_count
+                                            record["height_only_resize"] = positions
                                     record.update(
                                         passed=True,
                                         message=complete,

@@ -3774,3 +3774,44 @@ This observation is preserved, not counted as a successful pointer flow.
 Fresh exact-commit hosted browser and installed qualification remain required.
 RC4 is still unpublished and unqualified; the independent bounded scores above
 remain unchanged. This is not a live-model, customer or whole-product acceptance.
+
+### 9 October: reachable backup controls in short windows
+
+The pointer observation above reproduced independently with a local validation
+warning. At document bottom, the backup summary was 44 pixels high at y=171.109375
+in a 320 × 400 window; its centre hit the sticky Products & IP tab. The summary
+remained closed. Original screenshots, centre-hit measurements and exact saved
+records remain retained. Keyboard recovery was useful but did not resolve this
+pointer defect, so candidate preparation was stopped before any build or archive.
+
+The successor adds screen-only bottom space and backup-control scroll margins
+using the measured header clearance. The backup summary has an explicit 44-pixel
+minimum height. When the measured header would leave less than one usable target,
+both header regions scroll normally; warnings and controls remain present.
+Height-only resize events update the mode, with existing disposal cleanup and no
+automatic request, save or vertical scrolling. Printed bottom spacing is unchanged.
+
+Fresh source checks passed 47 recovery cases, including 18 actual pointer openings
+and exact backup exports, plus four header cases, eight action-bar layouts, nine
+general campaign journeys and nine browser-tool setup checks. A 400-to-200-pixel
+height-only transition restored and released sticky controls without another POST.
+All owned resources closed and source inventories remained unchanged. These are
+desktop viewport checks; a physical mobile keyboard that changes only its visual
+viewport has not been qualified.
+
+The human-operated successor used the same narrow validation-warning case.
+Pointer activation opened the backup disclosure at both 400 and 200 pixels without
+changing the selected Opportunities section. Its visible 44-pixel summary started
+at y=289.234375 and y=70.234375 respectively. Both GUI exports preserve every
+unsaved field, including the deliberately invalid blank title; the original saved
+revision 1 stays exact. A backup preserves inputs and does not admit invalid inputs
+as a saved campaign. The owned tab and app closed, the viewport was reset and no
+hosted operation was attempted.
+
+Historical precursor `d7e7fa31f207012114d0bdb397fedc1376da68a2` subsequently passed
+all 12 Quality jobs, including Chromium and source/portable packaging, and all
+three WebAssembly engines. Its release run was planning only; native and publish
+jobs were skipped. Those successes do not qualify this scrolling successor.
+Fresh exact-source CI, installed workflow/recovery/native/cold-install tests and
+all four prior-preview replacements remain release gates. RC4 remains unpublished;
+the independent scoped scores above are unchanged.
