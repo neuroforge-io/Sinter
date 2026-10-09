@@ -5,7 +5,7 @@ import {renderReport} from './reports.js';
 import {campaignClarificationDraft, campaignIdentityFromProfile} from './campaign-letter.js';
 import {defaultCampaignOpportunityIndex, isCampaignActionCurrent, isCampaignActionOpen,
   isCampaignActionScopeConfirmed, isOpportunityActionable,
-  applicationAnswerAvailability} from './campaign-state.js';
+  applicationAnswerAvailability, canDraftApplicationAnswer} from './campaign-state.js';
 import {applicationWindowGaps, campaignDecision, CAMPAIGN_DECISION_NOTE} from './campaign-decision.js';
 import {campaignActionOwnerState, normalizeCampaignActionOwners} from './campaign-owner.js';
 import {campaignSourceSnapshotGuidance,
@@ -20,6 +20,8 @@ import {campaignCapacity, CAMPAIGN_TEXT_LIMIT, CAMPAIGN_BYTE_LIMIT}
 import {campaignSourceOptions, matchingCampaignSources}
   from './campaign-source-options.js';
 import {selectRequirementSource} from './campaign-requirement-source.js';
+import {assetSourceReplacement, sourceHistoryReferences, sourceHistoryCount,
+  captureSourceReplacementGuard} from './campaign-source-history.js';
 import {selectWindowSource} from './campaign-window-source.js';
 import {campaignBackupControls, resetCampaignBackupControls} from './campaign-backup.js';
 import {campaignFeedback} from './campaign-feedback.js';
@@ -174,6 +176,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   let dirty = Boolean(seed.dirty), selected = Number.isSafeInteger(seed.selected) && seed.selected >= 0 ? seed.selected : 0;
   let admittingSave = false;
   let focusedCopyDialog = null;
+  let sourceReplacementDialog = null;
+  let disposed = false;
   let practice = seed.practice || null;
   const practiceGuide = onOpenGarden ? gardenGuide('campaigns', onOpenGarden) : h('div');
   practiceGuide.hidden = practice !== GARDEN_PRACTICE;
@@ -297,6 +301,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   // A native toggle event may still be queued when the container is removed.
   root.dispose = () => {
+    disposed = true;
+    sourceReplacementDialog?.close();
     if (focusedCopyDialog) {
       focusedCopyDialog.close(); focusedCopyDialog.remove(); focusedCopyDialog = null;
     }
@@ -341,7 +347,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     return entry;
   }
   let sourcePickerSequence = 0;
-  function campaignSourcePicker(label, selectedId, onSelect) {
+  function campaignSourcePicker(label, selectedId, onSelect, beforeSelect = null,
+    selectionCurrent = () => true) {
     const options = campaignSourceOptions(document.sources);
     const selectedOption = options.find(option => option.source.id === selectedId);
     const listId = `campaign-source-options-${++sourcePickerSequence}`;
@@ -358,11 +365,25 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const matches = h('div', {class: 'campaign-source-matches', id: listId,
       role: 'group', 'aria-label': 'Matching saved campaign sources', hidden: true});
     function closeMatches() { matches.hidden = true; matchStatus.textContent = ''; }
-    function selectSource(option) {
-      entry.input.value = option.label;
-      status.textContent = `Linked to ${option.source.title} · user-entered, unverified.`;
-      clear.hidden = false; closeMatches();
-      onSelect(option.source); changed();
+    let selecting = false;
+    async function selectSource(option) {
+      if (selecting) return;
+      selecting = true;
+      try {
+        // A cancelled or rejected replacement must not alter any picker control.
+        if (beforeSelect && !await beforeSelect(option?.source || null)) return;
+        // Admission can resolve just before another ready operation applies or
+        // removes this editor. Recheck at the actual control/data commit boundary.
+        if (disposed || !entry.input.isConnected || !selectionCurrent()) return;
+        entry.input.value = option?.label || '';
+        status.textContent = option ? `Linked to ${option.source.title} · user-entered, unverified.`
+          : options.length ? 'No campaign source linked.' : 'Add a source in the Sources tab first.';
+        clear.hidden = !option; closeMatches();
+        onSelect(option?.source || null); changed();
+        if (!option && entry.input.isConnected) entry.input.focus();
+      } catch (exception) {
+        error(exception.message || 'Could not change the source. Your local work is unchanged.');
+      } finally { selecting = false; }
     }
     function showMatches() {
       const found = matchingCampaignSources(options, entry.input.value);
@@ -382,14 +403,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
               ? ` · showing ${found.matches.length}. Refine the search to find another source.`
               : '. Choose a Link source button.');
     }
-    const clear = button('Clear link', () => {
-      entry.input.value = '';
-      status.textContent = options.length ? 'No campaign source linked.'
-        : 'Add a source in the Sources tab first.';
-      clear.hidden = true; closeMatches();
-      onSelect(null); changed();
-      if (entry.input.isConnected) entry.input.focus();
-    }, 'quiet');
+    const clear = button('Clear link', () => selectSource(null), 'quiet');
     clear.hidden = !selectedOption;
     entry.input.addEventListener('input', showMatches);
     entry.input.addEventListener('focus', showMatches);
@@ -408,6 +422,104 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     });
     return {input: entry.input, wrap: h('div', {class: 'campaign-source-picker'},
       entry.wrap, status, clear, matchStatus, matches)};
+  }
+  function historicalSourceView(row) {
+    const entries = row.source_history || [];
+    const view = h('div', {class: 'campaign-source-history'});
+    if (!entries.length) return view;
+    view.append(h('details', {},
+      h('summary', {}, `Historical sources (${entries.length}) · excluded from current checks`),
+      h('p', {class: 'fine'}, 'Previous wording and assessments are retained exactly as entered. They are unverified historical records, not current eligibility or IP evidence. Full campaign backups and campaign notes include them; older previews may reject these backups.'),
+      ...entries.map((entry, index) => h('details', {},
+        h('summary', {}, `Historical snapshot ${index + 1} · source ${entry.reason}`),
+        historicalSourceMaterial(entry)))));
+    return view;
+  }
+  function historicalSourceMaterial(entry) {
+    const labels = {opportunity: 'Previous route name', rule: 'Previous requirement',
+      status: 'Previous user-entered assessment', evidence: 'Previous applicant evidence',
+      source_id: 'Retained source ID', source_url: 'Previous source URL',
+      source_quote: 'Previous source wording', checked_at: 'Previous check date (user-entered)',
+      kind: 'Previous evidence type', title: 'Previous reference title', url: 'Previous source URL',
+      excerpt: 'Previous source passage', notes: 'Previous reference note'};
+    const material = h('div', {}, h('p', {class: 'fine'}, 'Historical · unverified · excluded from current checks.'));
+    for (const [key, value] of Object.entries(entry.record)) {
+      material.append(h('p', {}, h('strong', {}, labels[key] + ':' )),
+        h('pre', {class: 'campaign-source-text'}, value || 'Blank as recorded.'));
+    }
+    if (entry.assessment) {
+      const labels = {contributors_status: 'contributor', rights_status: 'rights',
+        disclosure_status: 'disclosure', prior_art_status: 'prior-art'};
+      const old = entry.assessment, label = labels[old.status_field];
+      material.append(h('p', {}, h('strong', {}, `Previous ${label} assessment (unverified):`)),
+        h('pre', {class: 'campaign-source-text'}, old.status));
+      if (Object.hasOwn(old, 'date')) material.append(
+        h('p', {}, h('strong', {}, `Previous ${label} date (user-entered):`)),
+        h('pre', {class: 'campaign-source-text'}, old.date || 'Blank as recorded.'));
+    }
+    return material;
+  }
+  function proposedSourceMaterial(source) {
+    const material = h('section', {'aria-label': 'Proposed source register record'},
+      h('h3', {}, 'Proposed source · user-entered, unverified'),
+      h('p', {class: 'fine'}, 'These are the full saved register fields. Its checked date and notes will not become the current passage or excerpt check date. Re-open the source and review the passage yourself.'));
+    for (const [key, label] of [['id', 'Source ID'], ['title', 'Source title'],
+      ['url', 'Source URL'], ['checked_at', 'Register checked date (user-entered)'],
+      ['notes', 'Original source wording and notes']]) {
+      material.append(h('p', {}, h('strong', {}, label + ':')),
+        h('pre', {class: 'campaign-source-text'}, source[key] || 'Blank as recorded.'));
+    }
+    return material;
+  }
+  async function admitSourceReplacement(candidate, previous, nextSource, changes, isCurrent) {
+    const returnFocus = root.ownerDocument.activeElement;
+    async function admit() {
+      // This route validates locally. Its report projection is never editor data.
+      await request('/api/campaigns/prepare', {data: {document: candidate}});
+      if (!isCurrent()) {
+        throw new Error('The campaign changed while checking this replacement. Review the current record and choose the source again.');
+      }
+    }
+    if (!previous) { await admit(); return true; }
+    if (sourceReplacementDialog) return false;
+    return new Promise(resolve => {
+      let approved = false, closed = false, pending = false;
+      const progress = h('div', {role: 'status', 'aria-live': 'polite'});
+      const cancel = button('Cancel', () => dialog.close(), 'quiet');
+      const replace = button(nextSource ? 'Replace source' : 'Clear source link', async () => {
+        if (pending) return;
+        pending = true; replace.disabled = true;
+        progress.replaceChildren(h('p', {}, 'Checking local size and record limits…'));
+        try {
+          await admit();
+          if (closed) return;
+          approved = true; dialog.close();
+        } catch (exception) {
+          if (!closed) progress.replaceChildren(notice(
+            (exception.message || 'This replacement could not be admitted.')
+            + ' The source, picker and unsaved state are unchanged. Export a backup or reduce scope before trying again.', 'error'));
+        } finally { pending = false; replace.disabled = false; }
+      }, 'primary');
+      const dialog = h('dialog', {class: 'action-confirmation campaign-focused-copy',
+        'aria-labelledby': 'campaign-source-replacement-title'},
+        h('h2', {id: 'campaign-source-replacement-title'}, nextSource ? 'Replace this source?' : 'Clear this source link?'),
+        h('div', {class: 'campaign-focused-body', tabindex: 0, role: 'region',
+          'aria-label': 'Source replacement and exact historical record'},
+          h('p', {}, nextSource ? `New source: ${nextSource.title}.` : 'No campaign source will remain linked.'),
+          h('p', {}, 'The previous record below will be preserved as historical, unverified evidence. The current passage and check date will be empty and need a fresh review. ', changes),
+          h('p', {class: 'fine'}, 'Historical snapshots use the existing record and size limits. Nothing is saved or sent. Older previews may reject backups containing source history.'),
+          nextSource ? proposedSourceMaterial(nextSource) : h('p', {}, 'Proposed source: no campaign source linked.'),
+          historicalSourceMaterial(previous), progress),
+        h('div', {class: 'button-row'}, cancel, replace));
+      sourceReplacementDialog = dialog;
+      dialog.addEventListener('close', () => {
+        closed = true; dialog.remove();
+        if (sourceReplacementDialog === dialog) sourceReplacementDialog = null;
+        if (returnFocus?.isConnected) returnFocus.focus({preventScroll: true});
+        resolve(approved);
+      }, {once: true});
+      root.ownerDocument.body.append(dialog); dialog.showModal(); cancel.focus();
+    });
   }
   function remove(rows, item, label, onRemove = null) {
     return button(label, () => {
@@ -785,7 +897,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     summary.replaceChildren(...[[pending.length, 'requirements to check'],
       [over.length, 'answers to shorten'],
       [heldAnswers.length, 'answer rows held'],
-      [quotes.length, 'costs needing a quote'], [windows.length, 'application windows to verify'],
+      [quotes.length, 'cost records needing details'], [windows.length, 'application windows to verify'],
       [document.opportunities.filter(row => isOpportunityActionable(row.status)
         && campaignCurrencyComparisonNote(row)).length, 'funding currencies to review'],
       [ownersToConfirm.length, 'owners to confirm'],
@@ -1244,7 +1356,12 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         sourcePicker: campaignSourcePicker, changed}));
     updateOpportunityView();
     const requirements = h('div', {class: 'campaign-checks'});
-    function addRequirement() { document.requirements.push({opportunity: item.name, rule: '', status: 'unknown', evidence: '', source_id: '', source_url: '', source_quote: '', checked_at: ''}); changed(); renderEditor(); }
+    function addRequirement() {
+      if (sourceHistoryCount(document.requirements) >= 200) {
+        error('Use at most 200 requirement records including historical source snapshots. Export a backup before reducing scope.'); return;
+      }
+      document.requirements.push({opportunity: item.name, rule: '', status: 'unknown', evidence: '', source_id: '', source_url: '', source_quote: '', checked_at: ''}); changed(); renderEditor();
+    }
     requirements.append(h('div', {class: 'campaign-section-heading'}, h('h4', {}, 'What must be true?'), button('Add requirement', addRequirement, 'quiet')),
       h('p', {class: 'fine'}, 'Check each condition against current official guidance. These records do not determine overall eligibility.'));
     for (const row of document.requirements.filter(row => row.opportunity === item.name)) {
@@ -1287,9 +1404,12 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }
       const linkedSource = document.sources.find(candidate => candidate.id === row.source_id);
       updateSourcePreview(linkedSource);
+      let approvedSelection = null;
+      const sourceHistory = historicalSourceView(row);
       const sourcePicker = campaignSourcePicker('Registered campaign source (optional)',
         row.source_id, linked => {
-        const selection = selectRequirementSource(row, linked);
+        const selection = approvedSelection;
+        approvedSelection = null;
         Object.assign(row, selection.requirement);
         source.input.disabled = Boolean(linked);
         date.wrap.querySelector('label').textContent = linked
@@ -1302,12 +1422,27 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         sourceChange.hidden = !selection.changedSource;
         sourceChange.textContent = selection.changedSource
           ? (linked
-            ? 'Source link changed. Your explanatory note is kept; recheck it against this source. Previous source wording was cleared.'
-            : 'Source link cleared. Your explanatory note is kept; source wording and check date were cleared.')
+            ? 'Source link changed. Your explanatory note is kept; recheck it against this source. Previous source wording is retained in Historical sources.'
+            : 'Source link cleared. Your explanatory note is kept; previous wording and check date are retained in Historical sources.')
             + (selection.resetAssessment ? ' The previous assessment was reset to Not checked.' : '')
           : '';
+          sourceHistory.replaceChildren(...historicalSourceView(row).childNodes);
           updateProof();
-        });
+        }, async linked => {
+          const selection = selectRequirementSource(row, linked);
+          if (!selection.changedSource) return false;
+          const index = document.requirements.indexOf(row);
+          if (index < 0) return false;
+          const candidate = structuredClone(document);
+          candidate.requirements[index] = structuredClone(selection.requirement);
+          const isCurrent = captureSourceReplacementGuard(document, row, () => document,
+            () => !disposed && root.isConnected);
+          const history = selection.requirement.source_history || [];
+          const previous = history.length > (row.source_history || []).length ? history.at(-1) : null;
+          if (!await admitSourceReplacement(candidate, previous, linked,
+            selection.resetAssessment ? 'The previous assessment will become Not checked.' : 'Your explanatory note and open assessment remain as entered.', isCurrent)) return false;
+          approvedSelection = {...selection, isCurrent}; return true;
+        }, () => Boolean(approvedSelection?.isCurrent()));
       source.input.disabled = Boolean(row.source_id);
       if (row.source_id) date.wrap.querySelector('label').textContent = 'Date checked for this excerpt · must match linked source';
       updateProof();
@@ -1317,7 +1452,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         h('article', {class: 'campaign-check-editor', 'aria-label': 'Requirement check'}, rule.wrap, status.wrap, proof, reason.wrap,
         h('details', {open: Boolean(row.source_id || row.source_url || row.source_quote)},
           h('summary', {}, 'Supporting source · user-entered, unverified'),
-          sourcePicker.wrap, sourceChange, sourcePreview, source.wrap, quote.wrap, date.wrap),
+          sourcePicker.wrap, sourceChange, sourcePreview, source.wrap, quote.wrap, date.wrap), sourceHistory,
         remove(document.requirements, row, 'Remove requirement'))));
     }
     if (!document.requirements.some(row => row.opportunity === item.name)) requirements.append(h('p', {class: 'fine'}, 'No requirements checked yet. Start with applicant type, timing and permitted costs.'));
@@ -1351,13 +1486,14 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const selectedOpportunity = document.opportunities[selected];
     const opportunity = selectedOpportunity.name;
     const answerAccess = applicationAnswerAvailability(selectedOpportunity);
-    const canPrepare = answerAccess.allowed;
+    const canUse = answerAccess.allowed;
+    const canDraft = canDraftApplicationAnswer(selectedOpportunity);
     panel.append(opportunityPicker(renderEditor));
-    if (!canPrepare) panel.append(notice(answerAccess.message, 'warning'));
+    if (!canUse) panel.append(notice(answerAccess.message, 'warning'));
     const addQuestion = button('Add application question', () => {
       document.answers.push({opportunity, label: '', text: '', limit: null, status: 'draft'}); changed(); renderEditor();
     }, 'quiet');
-    addQuestion.disabled = !canPrepare;
+    addQuestion.disabled = !canDraft;
     panel.append(addQuestion);
     for (const row of document.answers.filter(row => row.opportunity === opportunity)) {
       let previousQuestion = row.label;
@@ -1367,7 +1503,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         if (element.value !== previousQuestion) resetReview();
         previousQuestion = element.value;
       });
-      label.input.disabled = !canPrepare;
+      label.input.disabled = !canDraft;
       const counter = h('p', {class: 'campaign-character-count', role: 'status'});
       function update() {
         const used = countCharacters(row.text || ''), limit = Number(row.limit);
@@ -1380,22 +1516,22 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         previousLimit = row.limit;
         update();
       });
-      limit.input.disabled = !canPrepare;
+      limit.input.disabled = !canDraft;
       const answer = input('Draft answer', 'textarea', row, 'text',
-        canPrepare ? '' : answerAccess.message,
-        {rows: 5, maxLength: 20000, readOnly: !canPrepare,
-          placeholder: canPrepare ? '' : 'Saved answer held until this route is confirmed.'},
+        canDraft ? '' : answerAccess.message,
+        {rows: 5, maxLength: 20000, readOnly: !canDraft,
+          placeholder: canDraft ? '' : 'Saved answer held until this route is confirmed.'},
         () => { row.status = 'draft'; reviewed.input.value = 'draft'; update(); });
-      if (!canPrepare) answer.input.value = '';
+      if (!canDraft) answer.input.value = '';
       const reviewed = choice('Answer review', [['draft', 'Needs review'], ['reviewed', 'Reviewed by me']], row, 'status');
-      reviewed.input.disabled = !canPrepare;
+      reviewed.input.disabled = !canUse;
       const copied = h('p', {class: 'fine', 'aria-live': 'polite'});
       update();
       const copy = button(answerAccess.copyLabel, async () => {
         try { await navigator.clipboard.writeText(row.text); copied.textContent = row.limit && countCharacters(row.text) > row.limit ? 'Copied as written. Shorten this draft before pasting it into the application.' : 'Answer copied.'; }
         catch { error('Clipboard access is unavailable. Export the campaign brief instead.'); }
       }, 'quiet');
-      copy.disabled = !canPrepare;
+      copy.disabled = !canUse;
       panel.append(h('article', {class: 'campaign-row', 'aria-label': 'Application answer'}, label.wrap, h('div', {class: 'form-grid'}, limit.wrap, reviewed.wrap), answer.wrap, counter,
         h('div', {class: 'button-row'}, copy, remove(document.answers, row, 'Remove question')), copied));
     }
@@ -1431,9 +1567,11 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     panel.append(h('h3', {}, 'Current project costs'),
       h('p', {class: 'muted'}, 'Keep each quoted or estimated amount beside its original reference. Open a cost to check or edit it. Blank prices stay unknown.'),
       total, h('p', {class: 'fine campaign-budget-basis-note'},
-        'Quoted amounts may have different or unknown GST bases. No GST conversion was made. Sinter has not qualified an application budget.'),
+        'Recorded amounts may be quotes or planning estimates; GST bases may differ or be unknown. No GST conversion was made. Sinter has not qualified an application budget.'),
       h('div', {class: 'button-row'}, nextCost, button('Add budget item', () => {
-        const row = {item: '', opportunity: '', quantity: 1, unit_cost: null, quote_reference: ''};
+        const selectedRoute = document.opportunities[selected];
+        const row = {item: '', opportunity: actionable.has(selectedRoute?.name) ? selectedRoute.name : '',
+          quantity: 1, unit_cost: null, quote_reference: ''};
         document.budget.push(row); setBudgetDisclosure(row, true);
         invalidateBudgetAnswers();
         pendingBudgetFocus = {index: document.budget.length - 1, field: 'item'};
@@ -1475,7 +1613,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         row.unit_cost = element.value || null; revised();
       });
       const quote = input('Quote or estimate reference', 'textarea', row, 'quote_reference',
-        'Supplier, quote date, stated GST basis and where to find the original. This reference is not verified automatically.', {rows: 3, maxLength: 2000}, revised);
+        'For a quote, record the supplier, quote date, GST basis and original. For an estimate, record its author, date and basis. References are unverified.', {rows: 3, maxLength: 2000}, revised);
       const details = h('details', {}, h('summary', {}, title, amount, metadata),
         h('div', {class: 'campaign-budget-row-editor'}, h('div', {class: 'form-grid'}, item.wrap, scope.wrap),
           h('div', {class: 'form-grid'}, quantity.wrap, price.wrap), quote.wrap,
@@ -2153,7 +2291,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         h('h4', {}, 'Non-sensitive evidence references'),
         h('p', {class: 'fine'}, 'Add a public source, repository record or opaque internal reference you are authorised to use. Links remain unverified; do not add uploads or local paths.'),
         button('Add evidence reference', () => {
-          if (refs.length >= 20) { error('Each product or asset can have up to 20 evidence references.'); return; }
+          if (sourceHistoryCount(refs) >= 20) { error('Each product or asset can have up to 20 evidence references including historical source snapshots. Export a backup before reducing scope.'); return; }
           refs.push({kind: 'other', source_id: '', title: '', url: '',
             excerpt: '', checked_at: '', notes: ''});
           pendingFocus = {assetId: row.id, field: 'source_id', referenceIndex: refs.length - 1};
@@ -2162,20 +2300,32 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       for (const [referenceIndex, reference] of refs.entries()) {
         const referenceKind = choice('Evidence type', assetReferenceKinds,
           reference, 'kind');
+        let approvedSelection = null;
         const sourceChoice = campaignSourcePicker('Link a campaign source (optional)',
           reference.source_id, source => {
-            if (reference.source_id !== (source?.id || '')) {
-              reference.excerpt = '';
-              reference.checked_at = source?.checked_at || '';
-            }
-            reference.source_id = source?.id || '';
-            if (source) {
-              reference.title = source.title;
-              reference.url = source.url;
-            }
+            Object.assign(reference, approvedSelection.reference);
+            Object.assign(row, approvedSelection.assetChanges);
+            approvedSelection = null;
             pendingFocus = {assetId: row.id, field: 'excerpt', referenceIndex};
             renderEditor();
-          });
+          }, async source => {
+            const selection = assetSourceReplacement(reference, source, row);
+            if (!selection.changedSource) return false;
+            const index = document.assets.indexOf(row);
+            if (index < 0 || refs[referenceIndex] !== reference) return false;
+            const candidate = structuredClone(document);
+            Object.assign(candidate.assets[index], selection.assetChanges);
+            candidate.assets[index].references[referenceIndex] = structuredClone(selection.reference);
+            const isCurrent = captureSourceReplacementGuard(document, reference, () => document,
+              () => !disposed && root.isConnected, row);
+            const history = selection.reference.source_history || [];
+            const previous = history.length > (reference.source_history || []).length ? history.at(-1) : null;
+            if (!await admitSourceReplacement(candidate, previous, source,
+              Object.keys(selection.assetChanges).length
+                ? 'The associated IP workstream assessment and its date will need a fresh review. Other workstreams and the product stage remain as entered.'
+                : 'Other product records remain as entered.', isCurrent)) return false;
+            approvedSelection = {...selection, isCurrent}; return true;
+          }, () => Boolean(approvedSelection?.isCurrent()));
         sourceChoice.input.dataset.campaignField = 'source_id';
         const linkedSource = document.sources.find(item => item.id === reference.source_id);
         const title = linkedSource ? h('p', {class: 'fine'},
@@ -2201,6 +2351,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           'data-reference-index': referenceIndex},
           h('div', {class: 'form-grid'}, referenceKind.wrap, sourceChoice.wrap),
           title.wrap || title, url.wrap || url, excerpt.wrap, checkedAt.wrap, notes.wrap,
+          historicalSourceView(reference),
           remove(refs, reference, 'Remove reference')));
       }
       const summary = h('summary', {}, heading, meta);
@@ -2302,14 +2453,14 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           checkedAt.wrap, row.url ? safeLink(row.url, 'Open source') : h('span'),
           button('Remove source', () => {
           const linked = document.assets.some(asset => asset.references?.some(
-            reference => reference.source_id === row.id))
-            || document.requirements.some(requirement => requirement.source_id === row.id)
+            reference => reference.source_id === row.id || sourceHistoryReferences(reference, row.id)))
+            || document.requirements.some(requirement => requirement.source_id === row.id || sourceHistoryReferences(requirement, row.id))
             || document.opportunities.some(opportunity => opportunity.window_source_id === row.id)
             || document.opportunities.some(opportunity => fundingReferencesSource(opportunity, row.id))
             || document.communications.some(communication =>
               communication.evidence_links?.some(link => link.source_id === row.id));
           if (linked) {
-            error('This source is linked to a product, eligibility check, route window, funding record or communication. Unlink or replace those references before removing the source.');
+            error('This source is retained by a current or historical product reference, eligibility check, route window, funding record or communication. Keep it while those records are retained. Export a full backup before reducing scope.');
             return;
           }
           document.sources.splice(document.sources.indexOf(row), 1);

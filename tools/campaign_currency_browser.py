@@ -206,7 +206,7 @@ class CurrencyChecks(CampaignChecks):
         ).to_contain_text("Retain the explicitly recorded action")
         page.get_by_role("tab", name="Budget", exact=True).click()
         expect(page.locator(".campaign-budget-total")).to_have_text(
-            "Recorded quoted subtotal (AUD): A$60,000.00"
+            "Recorded cost subtotal (AUD): A$60,000.00"
         )
         expect(
             page.locator(".campaign-section .campaign-currency-comparison")

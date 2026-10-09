@@ -1,4 +1,4 @@
-"""Pure recorded-quote arithmetic, separate from application budget decisions.
+"""Pure recorded-cost arithmetic, separate from application budget decisions.
 
 Inputs are normalized campaign/v1 rows. Free-text quote references are retained
 by the caller; they cannot qualify GST treatment or eligible application costs.
@@ -26,15 +26,16 @@ from .campaign_currency import (
 )
 
 AMOUNT_BASIS_NOTE = (
-    "Quoted amounts are shown as entered; their GST basis may be unknown or "
-    "mixed. No GST conversion was made. Sinter has not qualified eligible "
+    "Recorded costs may be quotes or planning estimates; their GST basis may be "
+    "unknown or mixed. No GST conversion was made. Sinter has not qualified eligible "
     "costs or the application amount; this subtotal is not an eligibility or "
-    "application-ceiling decision."
+    "application-ceiling decision. Record the grant request and applicant cash or "
+    "in-kind contributions separately; this subtotal does not establish them."
 )
 
 
 def quoted_budget_total(rows: list[dict]) -> dict:
-    """Sum entered quote amounts exactly, without filling unknown costs or tax."""
+    """Sum entered costs exactly, without filling unknown costs or tax."""
     # Admission allows 200 rows at 1e9 AUD x 1e5 quantity: the maximum sum
     # needs 17 integer digits plus two cents digits. Keep its 19 digits exact
     # independently of an embedding caller's precision, traps and exponents.
@@ -74,11 +75,11 @@ def quoted_budget_total(rows: list[dict]) -> dict:
 
 
 def quoted_budget_summary(document: dict, actionable_states: Collection[str]) -> dict:
-    """Separate active/history quote sums and retain only raw AUD comparisons.
+    """Separate active/history cost sums and retain only raw AUD comparisons.
 
-    An AUD crossing is arithmetic on entered quotes, including a known subtotal
+    An AUD crossing is arithmetic on entered costs, including a known subtotal
     with unpriced lines. False cannot establish an application fits a ceiling.
-    Application comparison stays unknown, even when every quote amount exists.
+    Application comparison stays unknown, even when every cost amount exists.
     """
     active_names = {
         row["name"]

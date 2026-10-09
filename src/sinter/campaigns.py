@@ -21,6 +21,7 @@ from .campaign_budget import quoted_budget_summary
 from .campaign_funding import summarize as _funding_summary
 from .campaign_budget import quoted_budget_total as _budget_total
 from .campaign_capacity import text_characters
+from .campaign_source_history import historical_lines, validate_history
 from .campaign_currency import (
     ceiling_comparison_note,
     ceiling_currency,
@@ -160,6 +161,73 @@ def _status(value: object, choices: frozenset[str], label: str) -> str:
     if result not in choices:
         raise ValueError(f"Choose a valid {label.lower()}: "
                          + ", ".join(sorted(choices)) + ".")
+    return result
+
+
+def _historical_requirement(row: dict, sources: dict) -> dict:
+    """Keep old wording and assessment exactly, without a current-route lookup."""
+    row = _object(row, {"opportunity", "rule", "status", "evidence", "source_id",
+                        "source_url", "source_quote", "checked_at"},
+                  "Historical requirement")
+    result = {}
+    for key, limit in (("opportunity", 200), ("rule", 4000), ("evidence", 6000),
+                       ("source_id", 32), ("source_quote", 4000)):
+        if key in row:
+            result[key] = _text(row[key], "Historical " + key, limit, key == "rule")
+    if not result.get("rule"):
+        raise ValueError("A historical requirement needs its previous rule.")
+    if result.get("source_id") and result["source_id"] not in sources:
+        raise ValueError("A historical requirement points to a source that no longer exists.")
+    if "status" in row:
+        result["status"] = _status(row["status"], REQUIREMENT_STATUSES, "historical requirement status")
+    if "source_url" in row:
+        result["source_url"] = _url(row["source_url"], "Historical requirement URL")
+    if "checked_at" in row:
+        result["checked_at"] = _date(row["checked_at"], "Historical check date")
+    return result
+
+
+def _historical_asset_reference(row: dict, sources: dict) -> dict:
+    """Validate a prior reference without backfilling from its refreshed source."""
+    row = _object(row, {"kind", "source_id", "title", "url", "excerpt", "checked_at", "notes"},
+                  "Historical asset reference")
+    result = {}
+    for key, limit in (("source_id", 32), ("title", 500), ("excerpt", 3000), ("notes", 2000)):
+        if key in row:
+            result[key] = _text(row[key], "Historical " + key, limit)
+    if result.get("source_id") and result["source_id"] not in sources:
+        raise ValueError("A historical asset reference points to a source that no longer exists.")
+    if "kind" in row:
+        result["kind"] = _status(row["kind"], ASSET_REFERENCE_KINDS, "historical evidence type")
+    if "url" in row:
+        result["url"] = _url(row["url"], "Historical asset reference URL")
+    if "checked_at" in row:
+        result["checked_at"] = _date(row["checked_at"], "Historical asset reference date")
+    return result
+
+
+def _historical_asset_assessment(value: dict, reference: dict) -> dict:
+    """Only the workstream associated with that old reference can be archived."""
+    streams = {
+        "contributors": ("contributors_status", ASSET_CONTRIBUTOR_STATUSES, None),
+        "rights": ("rights_status", ASSET_RIGHTS_STATUSES, None),
+        "disclosure": ("disclosure_status", ASSET_DISCLOSURE_STATUSES, "first_public_date"),
+        "prior_art": ("prior_art_status", ASSET_PRIOR_ART_STATUSES, "prior_art_checked_at"),
+    }
+    stream = streams.get(reference.get("kind"))
+    if stream is None:
+        raise ValueError("This historical reference has no associated workstream assessment.")
+    status_field, statuses, date_field = stream
+    fields = {"status_field", "status"}
+    if date_field:
+        fields.update({"date_field", "date"})
+    value = _object(value, fields, "Historical workstream assessment")
+    if value.get("status_field") != status_field or (date_field and value.get("date_field") != date_field):
+        raise ValueError("The historical assessment must match its previous evidence type.")
+    result = {"status_field": status_field,
+              "status": _status(value.get("status"), statuses, "historical workstream status")}
+    if date_field:
+        result.update(date_field=date_field, date=_date(value.get("date"), "Historical workstream date"))
     return result
 
 
@@ -466,7 +534,7 @@ def validate(data: object) -> dict:
                 row["funding_tracking"], source_by_id)
     for row in _rows(data, "requirements", {
         "opportunity", "rule", "status", "evidence", "source_id", "source_url",
-        "source_quote", "checked_at",
+        "source_quote", "checked_at", "source_history",
     }):
         source_id = _text(row.get("source_id", ""),
                           "Requirement campaign source ID", 32)
@@ -487,6 +555,14 @@ def validate(data: object) -> dict:
                                   "Source wording", 4000),
             "checked_at": _date(row.get("checked_at", ""), "Date checked"),
         })
+        history = validate_history(row.get("source_history", []),
+                                   label="Requirement source history", limit=ROW_LIMITS["requirements"],
+                                   record=lambda value: _historical_requirement(value, source_by_id))
+        if history:
+            result["requirements"][-1]["source_history"] = history
+        if sum(1 + len(item.get("source_history", [])) for item in result["requirements"]) > ROW_LIMITS["requirements"]:
+            raise ValueError("Use at most 200 requirement records including historical source snapshots. "
+                             "Export a backup and make a smaller focused campaign; no history was removed.")
     for row in _rows(data, "answers", {
         "opportunity", "label", "text", "limit", "status",
     }):
@@ -603,14 +679,18 @@ def validate(data: object) -> dict:
         for index, reference in enumerate(references, 1):
             reference = _object(reference, {
                 "kind", "source_id", "title", "url", "excerpt", "checked_at",
-                "notes",
+                "notes", "source_history",
             },
                                 f"Asset evidence reference {index}")
             source_id = _text(reference.get("source_id", ""),
                               "Linked campaign source ID", 32)
             if source_id and source_id not in source_ids:
                 raise ValueError("An asset evidence reference points to a campaign source that no longer exists.")
-            if not source_id and not any(str(reference.get(key, "")).strip()
+            history = validate_history(reference.get("source_history", []),
+                                       label="Asset reference source history", limit=MAX_ASSET_REFERENCES,
+                                       record=lambda value: _historical_asset_reference(value, source_by_id),
+                                       assessment=_historical_asset_assessment)
+            if not history and not source_id and not any(str(reference.get(key, "")).strip()
                                          for key in ("title", "url", "excerpt", "notes")):
                 # An untouched Add-reference row is an editor placeholder, not
                 # evidence. Ignore it so a user can back out without a save error.
@@ -644,6 +724,11 @@ def validate(data: object) -> dict:
                 "notes": _text(reference.get("notes", ""),
                                "Asset evidence note", 2000),
             })
+            if history:
+                normalized_references[-1]["source_history"] = history
+            if sum(1 + len(item.get("source_history", [])) for item in normalized_references) > MAX_ASSET_REFERENCES:
+                raise ValueError("Use at most 20 evidence references including historical source snapshots "
+                                 "per product or asset. Export a backup before reducing scope; no history was removed.")
         reference_kinds = {reference["kind"] for reference in normalized_references}
         if (row.get("contributors_status") == "evidence_recorded"
                 and "contributors" not in reference_kinds):
@@ -1449,6 +1534,7 @@ def _render_portfolio_register(assets: list[dict], sources: list[dict]) -> list[
                                   literal(reference["excerpt"])])
                 if reference["notes"].strip():
                     lines.append("  " + literal(reference["notes"]))
+                lines.extend(historical_lines(reference))
     return lines
 
 
@@ -1578,28 +1664,28 @@ def _render_decision_brief(document: dict, readiness: dict,
             + (" needs" if window_count == 1 else " need")
             + " current official wording and a dated check within 90 days")
     if not budget["items"]:
-        review_items.append("No quoted amounts are linked to active opportunities; "
-                            "the current quoted subtotal is unknown")
+        review_items.append("No recorded costs are linked to active opportunities; "
+                            "the current recorded cost subtotal is unknown")
     elif not budget["complete"]:
         count = budget["unknown_costs"]
         cost_label = "cost remains" if count == 1 else "costs remain"
         review_items.append(
-            f"{count} {cost_label} unknown; known quoted subtotal "
-            f"{_brief_amount(budget['known_total'])}; quoted total unknown")
+            f"{count} {cost_label} unknown; known recorded cost subtotal "
+            f"{_brief_amount(budget['known_total'])}; recorded cost total unknown")
     else:
         review_items.append(
-            "Recorded quoted subtotal: " + _brief_amount(budget["total"]))
+            "Recorded cost subtotal: " + _brief_amount(budget["total"]))
     review_items.append(budget["amount_basis_note"])
     if readiness["budget_amount_basis_review"]:
         review_items.append(
             _brief_count(readiness["budget_amount_basis_review"],
-                         "quoted budget group")
+                         "recorded cost group")
             + ": application amount basis unqualified in Sinter; "
             "this is not a finding of missing GST wording or a tax error")
     if readiness["quoted_subtotals_above_ceiling"]:
         review_items.append(
             _brief_count(readiness["quoted_subtotals_above_ceiling"],
-                         "current quoted subtotal")
+                         "current recorded cost subtotal")
             + (" is numerically above its recorded AUD ceiling; the application "
                "comparison remains unqualified"
                if readiness["quoted_subtotals_above_ceiling"] == 1 else
@@ -1681,13 +1767,12 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
         lines.extend(["## Project objective",
                       _objective_markdown(document["objective"])])
     if not budget["items"]:
-        budget_progress = "current quoted subtotal not entered; quoted total unknown"
+        budget_progress = "current recorded cost subtotal not entered; recorded cost total unknown"
     elif not budget["complete"]:
-        budget_progress = "current quoted subtotal incomplete"
+        budget_progress = "current recorded cost subtotal incomplete"
     else:
         budget_progress = (
-            f"{readiness['unquoted_costs']} quoted subtotal items "
-            "without quote references")
+            f"{readiness['unquoted_costs']} cost records needing details")
     lines.extend(["## Work still to complete",
                   f"{readiness['requirements_unresolved']} requirements unresolved; "
                   f"{readiness['requirements_not_met']} marked not met; "
@@ -1697,7 +1782,7 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                   f"{readiness['open_actions']} open actions (confirmed current scope only).", NOTICE])
     if readiness["budget_amount_basis_review"]:
         lines.append(
-            f"{readiness['budget_amount_basis_review']} quoted budget group(s) "
+            f"{readiness['budget_amount_basis_review']} recorded cost group(s) "
             "have an application amount basis unqualified in Sinter; "
             "this is not a finding of missing GST wording or a tax error.")
     if readiness["funding_currency_review"]:
@@ -1793,6 +1878,7 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                 "Source wording (user-entered; unverified): " + wording,
                 source_link + " · Date checked (user-entered): " + checked_at,
             ])
+            lines.extend(historical_lines(row))
         indexes = [index for index, row in enumerate(document["answers"])
                    if row["opportunity"] == name]
         if not active:
@@ -1833,31 +1919,31 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                           if not row["opportunity"] or row["opportunity"] in active_names]
     historical_budget_rows = [row for row in document["budget"]
                               if row["opportunity"] and row["opportunity"] not in active_names]
-    lines.extend(["## Current quoted subtotal", budget["amount_basis_note"]])
+    lines.extend(["## Current recorded cost subtotal", budget["amount_basis_note"]])
     if not active_budget_rows:
         lines.append("No budget items are recorded for active opportunities. "
-                     "The quoted total is unknown.")
+                     "The recorded cost total is unknown.")
     else:
-        lines.extend(["| Item | Opportunity | Quantity | Quoted unit cost "
-                      "| Quoted line total | Quote |",
+        lines.extend(["| Item | Opportunity | Quantity | Recorded unit cost "
+                      "| Recorded line amount | Reference (unverified) |",
                       "| --- | --- | ---: | ---: | ---: | --- |"])
         for row in active_budget_rows:
             total = (None if row["unit_cost"] is None else
                      str(Decimal(row["unit_cost"]) * row["quantity"]))
             cells = [_inline(row["item"]), _inline(row["opportunity"] or "Unallocated"),
                      str(row["quantity"]), _amount(row["unit_cost"]), _amount(total),
-                     _inline(row["quote_reference"] or "Quote needed")]
+                     _inline(row["quote_reference"] or "Reference needed")]
             lines.append("| " + " | ".join(cells) + " |")
         if budget["complete"]:
-            lines.append("**Quoted subtotal: " + _amount(budget["total"]) + "**")
+            lines.append("**Recorded cost subtotal: " + _amount(budget["total"]) + "**")
         else:
-            lines.append("**Known quoted subtotal: " + _amount(budget["known_total"])
-                         + f". Quoted total incomplete: {budget['unknown_costs']} "
+            lines.append("**Known recorded cost subtotal: " + _amount(budget["known_total"])
+                         + f". Recorded cost total incomplete: {budget['unknown_costs']} "
                          "items still need costs.**")
         for group in budget["by_opportunity"]:
             if group["items"] and group["opportunity"] in active_names:
                 lines.append(_inline(group["opportunity"]) + ": "
-                             + "quoted subtotal " + _amount(group["known_total"])
+                             + "recorded cost subtotal " + _amount(group["known_total"])
                              + (" (incomplete)" if not group["complete"] else "")
                              + (" — numerically above the recorded AUD ceiling; "
                                 "application comparison unqualified."
@@ -1870,24 +1956,24 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
         lines.extend(["### Historical budget items · inactive routes",
                       "These costs belong to closed, submitted, paused or "
                       "not-pursued routes. They are excluded from the current "
-                      "quoted subtotal and readiness checks.",
+                      "recorded cost subtotal and readiness checks.",
                       budget["historical"]["amount_basis_note"],
-                      "| Item | Opportunity | Quantity | Quoted unit cost "
-                      "| Quoted line total | Quote |",
+                      "| Item | Opportunity | Quantity | Recorded unit cost "
+                      "| Recorded line amount | Reference (unverified) |",
                       "| --- | --- | ---: | ---: | ---: | --- |"])
         for row in historical_budget_rows:
             total = (None if row["unit_cost"] is None else
                      str(Decimal(row["unit_cost"]) * row["quantity"]))
             cells = [_inline(row["item"]), _inline(row["opportunity"]),
                      str(row["quantity"]), _amount(row["unit_cost"]), _amount(total),
-                     _inline(row["quote_reference"] or "Quote needed")]
+                     _inline(row["quote_reference"] or "Reference needed")]
             lines.append("| " + " | ".join(cells) + " |")
         historical = budget["historical"]
         if historical["complete"]:
-            lines.append("**Historical quoted subtotal (excluded above): "
+            lines.append("**Historical recorded cost subtotal (excluded above): "
                          + _amount(historical["total"]) + "**")
         else:
-            lines.append("**Historical quoted subtotal (excluded above): "
+            lines.append("**Historical recorded cost subtotal (excluded above): "
                          + _amount(historical["known_total"])
                          + f" · {historical['unknown_costs']} historical items remain uncosted.**")
     lines.append("## Next actions")

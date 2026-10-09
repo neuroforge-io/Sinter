@@ -1,5 +1,57 @@
 # Sinter user-testing closeout — 12 September 2026
 
+## 9 October campaign evidence and local drafting follow-up
+
+Actual operator use exposed three problems: replacing a requirement or product
+source erased its old quotation and assessment, applicant confirmation prevented
+useful local drafting, and planning estimates were described as quoted costs.
+Current development retains exact bounded historical snapshots, admits editable
+local drafts on active formal-application routes while keeping copy/review/shared
+brief gates, and uses neutral recorded-cost wording without changing amounts,
+references, arithmetic or legacy data keys. Historical evidence remains outside
+current checks; older strict previews refuse unsupported history fields.
+
+Independent review found two further source-selection defects before acceptance.
+An admission response could outlive its editor or an identical saved document;
+the final mutation now requires the original live document and row as well as
+unchanged values. Linking a previously empty IP reference could also erase an
+assessment supported by a sibling reference; first links now preserve it. Existing
+populated replacements still require explicit confirmation and retain the prior
+assessment. Cancellation and refused local admission do not approve a replacement.
+
+Focused Python regressions passed 320 tests. The refreshed campaign browser suite
+passed all eight journeys, including held local drafts, exact save/reopen and full
+backup retention, shared-brief redaction, conflicting saves and review invalidation.
+The budget suite passed 153 checks with unchanged source, complete recorded
+cleanup and no recorded external requests or browser errors. Nine fictional
+planning estimates total A$15,000 and survive save/reload exactly; the retained
+screenshots and Word export cover its separate A$210 fixture, not that nine-row
+state. Independent artifact review verified the receipt, source and artifact
+hashes and actual Word wording.
+
+Original failed attempts remain distinct. One earlier campaign reload exceeded
+the existing eight-second bound while the other seven journeys passed. An earlier
+budget failure lost its original error when its failure screenshot also timed out;
+the harness now records the original error, screenshot and cleanup failures
+separately and writes a terminal receipt. A later pass does not diagnose those
+failures. The first source-picker run passed six journeys but failed a hidden
+first-link control and two ambiguous nested-disclosure locators; the fixtures now
+open and identify the existing source disclosure without weakening visibility
+checks. The corrected run passed all nine journeys, including delayed first links
+after navigation and an identical save, cancellation during admission, full
+refusal retention and both desktop/phone note views. It also emitted Playwright
+response-finished task warnings about closed targets; these are retained driver
+warnings, not evidence of a product JavaScript error or proven complete driver
+task cleanup. Their cause still needs a focused harness review.
+
+The real local case retains original sources and costs, dated correspondence,
+five explicit drafts, unverified current form limits and unaccepted owners. Independent
+review accepted its conservation, not submission readiness. Portal wording,
+applicant authority, cost eligibility, quotes, insurance, video and practical
+delivery evidence remain unresolved. No outbound communication or application
+was made in this pass. These results do not qualify a successor installer or
+establish whole-product 10/10 acceptance; published RC3 remains unchanged.
+
 ## 9 October RC4 removal handoff follow-up
 
 The once-only installed workflow at source `3133402` completed 21 main UI checks,

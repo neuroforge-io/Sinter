@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {applicationAnswerAvailability, defaultCampaignOpportunityIndex, hasConfirmedApplicationRoute,
+import {applicationAnswerAvailability, canDraftApplicationAnswer, defaultCampaignOpportunityIndex, hasConfirmedApplicationRoute,
   hasCurrentApplicationWindowEvidence} from '../src/sinter/web/campaign-state.js';
 
 const today = '2026-09-29';
@@ -11,12 +11,50 @@ const verified = (name, status, deadline) => ({name, status, deadline,
   window_source_quote: 'Applications close on the recorded date.',
   window_checked_at: today});
 
-test('application answer controls require both a confirmed workflow and applicant', () => {
+test('application answer use requires both a confirmed workflow and applicant', () => {
   assert.equal(hasConfirmedApplicationRoute({application_mode: 'required', applicant: 'School'}), false);
   assert.equal(hasConfirmedApplicationRoute({application_mode: 'required', applicant: 'School', applicant_confirmed: true}), true);
   assert.equal(hasConfirmedApplicationRoute({application_mode: 'required', applicant: '  '}), false);
   assert.equal(hasConfirmedApplicationRoute({application_mode: 'unknown', applicant: 'School'}), false);
   assert.equal(hasConfirmedApplicationRoute({application_mode: 'not_required', applicant: 'School'}), false);
+});
+
+test('local formal-application drafts are independent of applicant confirmation', () => {
+  for (const status of ['researching', 'open', 'upcoming', 'clarification']) {
+    for (const applicant of ['', '   ', 'Proposed School']) {
+      const route = {status, application_mode: 'required', applicant,
+        applicant_confirmed: false};
+      assert.equal(canDraftApplicationAnswer(route), true);
+      const before = structuredClone(route);
+      const use = applicationAnswerAvailability(route);
+      assert.equal(use.allowed, false);
+      assert.equal(use.reason, 'applicant_unconfirmed');
+      assert.match(use.message, /You can save local drafts/);
+      assert.match(use.message, /Copying, answer review and inclusion in shared campaign briefs stay unavailable/);
+      assert.match(use.message, /confirmed directly|confirm it directly/);
+      assert.match(use.message, /does not establish programme eligibility or authority to submit/);
+      assert.deepEqual(route, before);
+    }
+    assert.equal(canDraftApplicationAnswer({status, application_mode: 'required',
+      applicant: 'School', applicant_confirmed: true}), true);
+  }
+});
+
+test('local drafting keeps unknown workflow, non-application and inactive locks', () => {
+  for (const application_mode of [undefined, 'unknown', 'not_required']) {
+    const route = {status: 'open', application_mode, applicant: 'School',
+      applicant_confirmed: true};
+    assert.equal(canDraftApplicationAnswer(route), false);
+    assert.equal(applicationAnswerAvailability(route).allowed, false);
+  }
+  for (const status of [undefined, 'closed', 'submitted', 'paused', 'not_pursued']) {
+    const route = {status, application_mode: 'required', applicant: 'School',
+      applicant_confirmed: true};
+    assert.equal(canDraftApplicationAnswer(route), false);
+    assert.equal(applicationAnswerAvailability(route).allowed, false);
+  }
+  assert.equal(canDraftApplicationAnswer(null), false);
+  assert.equal(canDraftApplicationAnswer(undefined), false);
 });
 
 test('application answer availability gives a matching lock reason and copy label', () => {
@@ -39,6 +77,8 @@ test('application answer availability gives a matching lock reason and copy labe
   });
   assert.equal(workflowUnknown.reason, 'workflow_unconfirmed');
   assert.equal(workflowUnknown.copyLabel, 'Copy unavailable · workflow not confirmed');
+  assert.match(workflowUnknown.message, /Local drafting stays locked until a formal application is recorded/);
+  assert.match(workflowUnknown.message, /Copying, answer review and inclusion in shared campaign briefs also require a named applicant confirmed directly/);
 
   const applicantUnknown = applicationAnswerAvailability({
     status: 'open', application_mode: 'required', applicant: '  ',

@@ -1,4 +1,4 @@
-"""Fictional quoted-budget journeys through the real local server and browser.
+"""Fictional recorded-cost journeys through the real local server and browser.
 
 Checks compact costs, exact cents, original-value preservation, current and
 historical answer reviews, keyboard focus, phone layout and report/Word holds.
@@ -186,6 +186,7 @@ def main(
         "negative_findings": [],
         "browser_errors": [],
         "external_requests": [],
+        "cleanup_errors": [],
         "resources": {
             "browser_closed": False,
             "context_closed": False,
@@ -468,6 +469,11 @@ def main(
             )
             page.get_by_role("button", name="Add budget item", exact=True).click()
             row(0).get_by_label("Budget item", exact=True).fill("Fictional new cost")
+            check(
+                prefix + "new-campaign-cost-defaults-to-whole-campaign",
+                row(0).get_by_label("Funding opportunity", exact=True).input_value()
+                == "",
+            )
             disclosure_navigation(page, checks)
             check(
                 prefix + "new-blank-editor-added-cost-stays-open",
@@ -642,7 +648,7 @@ def main(
             scoped["budget"].append(
                 {
                     "item": "",
-                    "opportunity": "",
+                    "opportunity": ROUTE,
                     "quantity": 1,
                     "unit_cost": None,
                     "quote_reference": "",
@@ -746,7 +752,7 @@ def main(
                     )
                     expect(page.locator(".campaign-budget-total")).to_have_text(
                         (
-                            "Recorded quoted subtotal (AUD): A$210.00 · 1 "
+                            "Recorded cost subtotal (AUD): A$210.00 · 1 "
                             "uncosted item — total incomplete"
                         )
                     )
@@ -786,7 +792,7 @@ def main(
                     )
                     row(2).get_by_label("Unit cost (AUD)", exact=True).fill("0")
                     expect(page.locator(".campaign-budget-total")).to_have_text(
-                        "Recorded quoted subtotal (AUD): A$210.00"
+                        "Recorded cost subtotal (AUD): A$210.00"
                     )
                     check(
                         "zero-is-priced-not-unknown",
@@ -816,7 +822,7 @@ def main(
                     row(1).get_by_label("Unit cost (AUD)", exact=True).fill("0.10")
                     row(1).get_by_label("Quantity", exact=True).fill("3")
                     expect(page.locator(".campaign-budget-total")).to_have_text(
-                        "Recorded quoted subtotal (AUD): A$110.30"
+                        "Recorded cost subtotal (AUD): A$110.30"
                     )
                     check("integer-cents-after-edit", True)
                     for width in [390, 320]:
@@ -970,6 +976,15 @@ def main(
                             is not None,
                         )
                         if name == "add":
+                            check(
+                                "new-cost-defaults-to-selected-active-route",
+                                captured["budget"][-1]["opportunity"] == ROUTE
+                                and captured["budget"][:-1] == ORIGINAL["budget"],
+                                captured["budget"],
+                            )
+                            expect(
+                                row(4).get_by_label("Funding opportunity", exact=True)
+                            ).to_have_value(ROUTE)
                             check(
                                 "add-focuses-title",
                                 immediate_focus["field"] == "item",
@@ -1172,7 +1187,7 @@ def main(
                             "word-contains-amount-basis-hold",
                             "GST" in word_text
                             and "application amount" in word_text
-                            and "quoted subtotal" in word_text.lower(),
+                            and "recorded cost subtotal" in word_text.lower(),
                             word_text,
                         )
                     seed()
@@ -1258,9 +1273,84 @@ def main(
                     ]
                     seed(zero)
                     expect(page.locator(".campaign-budget-total")).to_have_text(
-                        "Recorded quoted subtotal (AUD): A$0.00"
+                        "Recorded cost subtotal (AUD): A$0.00"
                     )
                     check("zero-only-total-exact", True)
+                    estimates = copy.deepcopy(ORIGINAL)
+                    estimates["title"] = "Fictional planning estimates only"
+                    estimates["budget"] = [
+                        {
+                            "item": f"Fictional planning cost {index}",
+                            "opportunity": ROUTE,
+                            "quantity": 1,
+                            "unit_cost": f"{amount}.00",
+                            "quote_reference": (
+                                f"Planning estimate {index} e\u0301 🐝; "
+                                "quote required; GST unspecified"
+                            ),
+                        }
+                        for index, amount in enumerate(
+                            [1000, 2000, 3000, 1500, 2500, 1000, 1500, 1000, 1500],
+                            start=1,
+                        )
+                    ]
+                    seed(estimates)
+                    expect(page.locator(".campaign-budget-total")).to_have_text(
+                        "Recorded cost subtotal (AUD): A$15,000.00"
+                    )
+                    expect(
+                        page.locator(".campaign-summary>div").filter(
+                            has=page.get_by_text(
+                                "cost records needing details", exact=True
+                            )
+                        ).locator("strong")
+                    ).to_have_text("0")
+                    expect(page.locator(".campaign-budget-basis-note")).to_contain_text(
+                        "may be quotes or planning estimates"
+                    )
+                    check(
+                        "planning-estimates-display-neutral-costs-and-preserve-references",
+                        backup(page, checks, "planning-estimates")["budget"]
+                        == estimates["budget"],
+                    )
+                    checks.save(page)
+                    page.reload()
+                    checks.goto(page, "campaigns")
+                    page.get_by_role("tab", name="Budget", exact=True).click()
+                    expect(page.locator(".campaign-budget-total")).to_have_text(
+                        "Recorded cost subtotal (AUD): A$15,000.00"
+                    )
+                    check(
+                        "planning-estimates-reopen-with-exact-references",
+                        backup(page, checks, "planning-estimates-reopened")["budget"]
+                        == estimates["budget"],
+                    )
+                    seed()
+                    page.get_by_role(
+                        "tab", name="Application answers", exact=True
+                    ).click()
+                    page.get_by_label(
+                        "Working on opportunity", exact=True
+                    ).select_option("2")
+                    page.get_by_role("tab", name="Budget", exact=True).click()
+                    page.get_by_role(
+                        "button", name="Add budget item", exact=True
+                    ).click()
+                    captured = backup(page, checks, "inactive-route-new-cost")
+                    check(
+                        "inactive-selected-route-new-cost-defaults-to-whole-campaign",
+                        captured["budget"][-1]["opportunity"] == ""
+                        and captured["budget"][:-1] == ORIGINAL["budget"],
+                    )
+                    row(4).get_by_label(
+                        "Funding opportunity", exact=True
+                    ).select_option(ALT)
+                    check(
+                        "new-cost-manual-route-choice-retained-with-original-rows",
+                        backup(page, checks, "new-cost-manual-route")["budget"]
+                        == ORIGINAL["budget"]
+                        + [{**captured["budget"][-1], "opportunity": ALT}],
+                    )
                     seed()
                     open_row(0)
                     row(0).get_by_label("Budget item", exact=True).fill("Q" * 1000)
@@ -1290,21 +1380,42 @@ def main(
                 except Exception as exc:
                     receipt["harness_completed"] = False
                     receipt["harness_error"] = str(exc)
-                    shot(page, "failure", True)
-                finally:
                     try:
-                        context.close()
-                        receipt["resources"]["context_closed"] = True
-                    finally:
-                        browser.close()
-                        receipt["resources"]["browser_closed"] = True
+                        shot(page, "failure", True)
+                    except Exception as screenshot_error:
+                        receipt["failure_screenshot_error"] = str(screenshot_error)
+                finally:
+                    for name, resource in (("context", context), ("browser", browser)):
+                        try:
+                            resource.close()
+                            receipt["resources"][name + "_closed"] = True
+                        except Exception as cleanup_error:
+                            receipt["cleanup_errors"].append(
+                                {"step": name + "_close", "error": str(cleanup_error)}
+                            )
+        except Exception as exc:
+            receipt["harness_completed"] = False
+            receipt.setdefault("harness_error", str(exc))
         finally:
-            server.shutdown()
-            server.app.close()
-            server.server_close()
-            receipt["resources"]["server_closed"] = True
-            thread.join(timeout=5)
-            receipt["resources"]["server_thread_stopped"] = not thread.is_alive()
+            server_closed = True
+            for name, close in (("server_shutdown", server.shutdown),
+                                ("app_close", server.app.close),
+                                ("server_close", server.server_close)):
+                try:
+                    close()
+                except Exception as cleanup_error:
+                    server_closed = False
+                    receipt["cleanup_errors"].append(
+                        {"step": name, "error": str(cleanup_error)}
+                    )
+            receipt["resources"]["server_closed"] = server_closed
+            try:
+                thread.join(timeout=5)
+                receipt["resources"]["server_thread_stopped"] = not thread.is_alive()
+            except Exception as cleanup_error:
+                receipt["cleanup_errors"].append(
+                    {"step": "server_thread_join", "error": str(cleanup_error)}
+                )
     receipt["source_sha256_after"] = source_hashes()
     receipt["copied_source_unchanged"] = receipt["source_sha256_after"] == source_before
     receipt["all_acceptance_checks_passed"] = (
@@ -1312,6 +1423,7 @@ def main(
         and all(c["passed"] for c in receipt["checks"])
         and not receipt["browser_errors"]
         and not receipt["external_requests"]
+        and not receipt["cleanup_errors"]
     )
     receipt["artifact_sha256"] = {
         p.name: hashlib.sha256(p.read_bytes()).hexdigest()

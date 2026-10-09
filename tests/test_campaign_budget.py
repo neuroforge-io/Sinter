@@ -1,4 +1,4 @@
-"""Quote arithmetic remains useful without becoming an application decision."""
+"""Recorded cost arithmetic stays separate from application decisions."""
 
 from __future__ import annotations
 
@@ -112,7 +112,7 @@ def test_mixed_gst_quote_subtotal_never_qualifies_an_application(ceiling, crossi
     assert report["readiness"]["funding_currency_review"] == 0
     assert report["readiness"]["budget_amount_basis_review"] == 2
     for text in (report["markdown"], report["document_markdown"]):
-        assert "quoted subtotal" in text.lower()
+        assert "recorded cost subtotal" in text.lower()
         assert "No GST conversion was made" in text
         assert (
             "Sinter has not qualified eligible costs or the application amount" in text
@@ -120,6 +120,61 @@ def test_mixed_gst_quote_subtotal_never_qualifies_an_application(ceiling, crossi
         assert "A$3,320" not in text
         assert "within the funding ceiling" not in text
         assert "exceeds the entered funding ceiling" not in text
+
+
+def test_planning_estimates_do_not_claim_supplier_quotes_or_a_grant_request():
+    original = fixture()
+    original["title"] = "Fictional planning estimate budget"
+    original["opportunities"] = [original["opportunities"][0]]
+    original["opportunities"][0]["ceiling"] = "15000.00"
+    original["budget"] = [
+        {
+            "item": f"Fictional planning cost {index}",
+            "opportunity": "Current route",
+            "quantity": 1,
+            "unit_cost": f"{amount}.00",
+            "quote_reference": (
+                f"Planning estimate {index} e\u0301 🐝; quote required; GST unspecified"
+            ),
+        }
+        for index, amount in enumerate(
+            [1000, 2000, 3000, 1500, 2500, 1000, 1500, 1000, 1500], start=1
+        )
+    ]
+    before = copy.deepcopy(original)
+    with patch.object(client, "chat") as model, patch.object(client, "_open") as remote:
+        report = campaigns.prepare(original)
+    assert original == before
+    assert report["campaign"]["budget"] == original["budget"]
+    model.assert_not_called()
+    remote.assert_not_called()
+    budget = report["budget_summary"]
+    assert budget["known_total"] == budget["total"] == "15000.00"
+    assert budget["unknown_costs"] == 0
+    # The legacy field counts absent references; a reference does not prove a quote.
+    assert budget["unquoted_costs"] == 0
+    assert "funding_tracking" not in report["campaign"]["opportunities"][0]
+    for part in ("markdown", "document_markdown"):
+        text = report[part]
+        assert "recorded cost subtotal" in text.lower()
+        assert "quoted subtotal" not in text.lower()
+        assert "may be quotes or planning estimates" in text
+        assert (
+            "grant request and applicant cash or in-kind contributions separately"
+            in text
+        )
+        assert "this subtotal does not establish them" in text
+    for row in original["budget"]:
+        assert row["quote_reference"] in report["markdown"]
+    package = export_docx({"title": original["title"], "markdown": report["markdown"]})
+    with zipfile.ZipFile(io.BytesIO(package.content)) as archive:
+        assert archive.testzip() is None
+        root = ET.fromstring(archive.read("word/document.xml"))
+    word_text = " ".join(node.text or "" for node in root.iter(f"{{{W}}}t"))
+    assert "recorded cost subtotal" in word_text.lower()
+    assert "quoted subtotal" not in word_text.lower()
+    for row in original["budget"]:
+        assert row["quote_reference"] in word_text
 
 
 @pytest.mark.parametrize(
@@ -130,6 +185,8 @@ def test_mixed_gst_quote_subtotal_never_qualifies_an_application(ceiling, crossi
         "GST free",
         "No GST registration",
         "Unknown 🐝 e\u0301",
+        "Planning estimate; quote required; GST unspecified",
+        "Supplier quote; GST included; unverified source",
         "",
     ],
 )
@@ -470,7 +527,7 @@ def test_historical_report_view_does_not_rewrite_original_report_or_editor(tmp_p
 
 
 @pytest.mark.parametrize("part", ["markdown", "document_markdown"])
-def test_word_has_quote_subtotal_basis_caveat_and_exact_source_wording(part):
+def test_word_has_recorded_cost_subtotal_basis_caveat_and_exact_source_wording(part):
     original = fixture()
     report = campaigns.prepare(original)
     package = export_docx({"title": original["title"], "markdown": report[part]})
@@ -478,7 +535,7 @@ def test_word_has_quote_subtotal_basis_caveat_and_exact_source_wording(part):
         assert archive.testzip() is None
         root = ET.fromstring(archive.read("word/document.xml"))
     text = " ".join(node.text or "" for node in root.iter(f"{{{W}}}t"))
-    assert "quoted subtotal" in text.lower()
+    assert "recorded cost subtotal" in text.lower()
     assert "GST basis may be unknown or mixed" in text
     assert "No GST conversion was made" in text
     assert "Sinter has not qualified eligible costs or the application amount" in text
@@ -486,7 +543,7 @@ def test_word_has_quote_subtotal_basis_caveat_and_exact_source_wording(part):
     if part == "markdown":
         assert "Written quote: GST included. e\u0301 <exact>." in text
         assert "excluding GST; not reviewed" in text
-        assert "Historical quoted subtotal (excluded above): A$1,000.00" in text
+        assert "Historical recorded cost subtotal (excluded above): A$1,000.00" in text
 
 
 @pytest.mark.parametrize(

@@ -15,7 +15,7 @@ test('mixed quote bases never become an application amount', () => {
   assert.equal(value.total, null);
   assert.equal(value.complete, false);
   assert.equal(value.nextIndex, 2);
-  assert.match(value.label, /Recorded quoted subtotal \(AUD\): A\$210\.00.*total incomplete/);
+  assert.match(value.label, /Recorded cost subtotal \(AUD\): A\$210\.00.*total incomplete/);
   assert.equal(value.amountBasisNote, QUOTED_BUDGET_NOTE);
   assert.match(value.amountBasisNote, /GST basis may be unknown or mixed/);
   assert.match(value.amountBasisNote, /not an eligibility or application-ceiling decision/);
@@ -30,7 +30,28 @@ test('zero is a recorded price; a blank budget has no complete zero total', () =
   assert.equal(value.total, 0n);
   assert.equal(value.complete, true);
   assert.equal(value.nextIndex, -1);
-  assert.equal(value.label, 'Recorded quoted subtotal (AUD): A$0.00');
+  assert.equal(value.label, 'Recorded cost subtotal (AUD): A$0.00');
+});
+
+test('planning estimates keep their references without becoming supplier quotes or a grant request', () => {
+  const rows = [1000, 2000, 3000, 1500, 2500, 1000, 1500, 1000, 1500].map((cost, index) => ({
+    item: `Fictional planning cost ${index + 1}`,
+    quantity: 1,
+    unit_cost: `${cost}.00`,
+    quote_reference: `Planning estimate ${index + 1} e\u0301 🐝; quote required; GST unspecified`,
+  }));
+  const original = structuredClone(rows);
+  const value = campaignQuotedBudget(rows);
+  assert.equal(value.knownCents, 1500000n);
+  assert.equal(value.total, 1500000n);
+  assert.equal(value.unknownCosts, 0);
+  assert.equal(value.missingReferences, 0);
+  assert.equal(value.label, 'Recorded cost subtotal (AUD): A$15,000.00');
+  assert.match(value.amountBasisNote, /may be quotes or planning estimates/);
+  assert.match(value.amountBasisNote, /grant request and applicant cash or in-kind contributions separately/);
+  assert.match(value.amountBasisNote, /subtotal does not establish them/);
+  assert.ok(rows.every(row => campaignBudgetRowState(row).reference === 'Reference recorded · unverified'));
+  assert.deepEqual(rows, original);
 });
 
 test('integer cents preserve quantity and the admitted maximum exactly', () => {

@@ -125,16 +125,29 @@ separate record. The original is unchanged. Export the original snapshot first
 if it has edits you want to keep. A selection that exceeds the existing limits
 is refused without cutting its text.
 
-Current development shows compact quoted-cost rows and opens the next missing
+Current development shows compact recorded-cost rows and opens the next missing
 price or reference. Open and closed cost rows stay as left when moving between
-pages in the same browser session. Quoted subtotals retain original amounts, unknowns and GST
+pages in the same browser session. Recorded subtotals retain original amounts, unknowns and GST
 wording; they do not establish an application amount or funding-ceiling decision.
+Amounts may be planning estimates; a recorded reference is not a verified quote.
+New cost rows use the selected active route; saved rows retain their own scope.
 The campaign workbench marks current application answers for review when active
 costs change. Direct CLI/Python saves retain entered review statuses; review them
 explicitly after changing costs.
 [Budget meanings and recovery](docs/CAMPAIGN_BUDGETS.md) explains this boundary;
 reviewed application-amount entry remains an
 [open extension](docs/APPLICATION_BUDGET_V2_DESIGN.md).
+
+In current development source, you can save and edit local answer drafts for an
+active formal-application route while the applicant is unconfirmed. Copying,
+answer review and inclusion in shared campaign briefs remain held until direct
+applicant confirmation. A full
+campaign backup retains those local drafts; confirmation does not grant
+authority to submit. Replacing eligibility or product sources preserves the
+old wording and assessment as explicitly historical evidence after a reviewed
+local size check. Cancel leaves the record unchanged. Historical snapshots count
+towards existing limits and require a supporting preview to restore; older
+strict previews refuse these backups without discarding the history.
 
 New connections discover the current supported NeuroForge model. Saved explicit
 choices are preserved. Answers start at 64 tokens; automatic/dense requests are

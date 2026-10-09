@@ -778,7 +778,7 @@ def test_unknown_cost_is_not_zero_and_totals_remain_incomplete():
     assert budget["unknown_costs"] == 1 and budget["unquoted_costs"] == 1
     assert budget["by_opportunity"][0]["total"] is None
     assert (
-        "Known quoted subtotal: A$125.00. Quoted total incomplete"
+        "Known recorded cost subtotal: A$125.00. Recorded cost total incomplete"
         in report["markdown"]
     )
     assert "Not yet costed" in report["markdown"]
@@ -801,9 +801,9 @@ def test_no_budget_is_not_a_complete_zero_budget():
     report = campaigns.prepare(campaign(budget=[]))
     assert report["budget_summary"]["total"] is None
     assert report["readiness"]["budget_incomplete"]
-    assert "quoted total is unknown" in report["markdown"]
+    assert "recorded cost total is unknown" in report["markdown"]
     assert (
-        "current quoted subtotal not entered; quoted total unknown"
+        "current recorded cost subtotal not entered; recorded cost total unknown"
         in report["markdown"]
     )
 
@@ -1627,10 +1627,10 @@ def test_inactive_route_costs_are_separated_from_current_project_total():
     assert groups["Closed equipment round"]["status"] == "closed"
     assert groups["Closed equipment round"]["historical"] is True
     markdown = report["markdown"]
-    assert "Quoted subtotal: A$25.00" in markdown
+    assert "Recorded cost subtotal: A$25.00" in markdown
     assert "### Historical budget items · inactive routes" in markdown
     assert "These costs belong to closed, submitted, paused or not-pursued routes." in markdown
-    assert "Historical quoted subtotal (excluded above): A$250.00" in markdown
+    assert "Historical recorded cost subtotal (excluded above): A$250.00" in markdown
     assert "| Old equipment | Closed equipment round |" in markdown
 
 
@@ -1933,10 +1933,11 @@ def test_decision_brief_omits_zero_review_bullets_but_keeps_audit_counts_and_not
     ("application_windows_to_check", "active application window needs current",
      "active application windows need current"),
     ("budget_amount_basis_review",
-     "quoted budget group: application amount basis unqualified in Sinter",
-     "quoted budget groups: application amount basis unqualified in Sinter"),
-    ("quoted_subtotals_above_ceiling", "current quoted subtotal is numerically above",
-     "current quoted subtotals are numerically above"),
+     "recorded cost group: application amount basis unqualified in Sinter",
+     "recorded cost groups: application amount basis unqualified in Sinter"),
+    ("quoted_subtotals_above_ceiling",
+     "current recorded cost subtotal is numerically above",
+     "current recorded cost subtotals are numerically above"),
     ("funding_currency_review", "active funding ceiling cannot be compared",
      "active funding ceilings cannot be compared"),
 ])
@@ -1998,11 +1999,12 @@ def test_decision_brief_caveats_keep_quote_arithmetic_separate_from_application(
     brief = report["document_markdown"]
     group = report["budget_summary"]["by_opportunity"][0]
 
-    assert "1 cost remains unknown; known quoted subtotal A$210" in brief
-    assert ("1 current quoted subtotal is numerically above its recorded AUD ceiling"
+    assert "1 cost remains unknown; known recorded cost subtotal A$210" in brief
+    assert ("1 current recorded cost subtotal is numerically above "
+            "its recorded AUD ceiling"
             in brief)
     assert "the application comparison remains unqualified" in brief
-    assert ("1 quoted budget group: application amount basis unqualified in Sinter"
+    assert ("1 recorded cost group: application amount basis unqualified in Sinter"
             in brief)
     assert "not a finding of missing GST wording or a tax error" in brief
     assert group["over_ceiling"] is None

@@ -1,5 +1,5 @@
-/** Recorded quote arithmetic only. Never infer GST or an application amount. */
-export const QUOTED_BUDGET_NOTE = 'Quoted amounts are shown as entered; their GST basis may be unknown or mixed. No GST conversion was made. Sinter has not qualified eligible costs or the application amount; this subtotal is not an eligibility or application-ceiling decision.';
+/** Recorded cost arithmetic only. Never infer GST or an application amount. */
+export const QUOTED_BUDGET_NOTE = 'Recorded costs may be quotes or planning estimates; their GST basis may be unknown or mixed. No GST conversion was made. Sinter has not qualified eligible costs or the application amount; this subtotal is not an eligibility or application-ceiling decision. Record the grant request and applicant cash or in-kind contributions separately; this subtotal does not establish them.';
 
 function moneyCents(value) {
   if (!['string', 'number'].includes(typeof value)) return null;
@@ -44,7 +44,7 @@ export function campaignQuotedBudget(rows = []) {
     label: !rows.length
       ? 'No costs recorded for active opportunities. The current project total is unknown.'
       : !priced ? `No costs priced yet · ${unknownCosts} item${unknownCosts === 1 ? '' : 's'} awaiting prices`
-        : `Recorded quoted subtotal (AUD): ${quotedAmount(knownCents)}${unknownCosts ? ' · ' + unknownCosts + ' uncosted item' + (unknownCosts === 1 ? '' : 's') + ' — total incomplete' : ''}`,
+        : `Recorded cost subtotal (AUD): ${quotedAmount(knownCents)}${unknownCosts ? ' · ' + unknownCosts + ' uncosted item' + (unknownCosts === 1 ? '' : 's') + ' — total incomplete' : ''}`,
     nextIndex: states.findIndex(row => !row.priced || !row.referenceRecorded),
     amountBasisNote: QUOTED_BUDGET_NOTE};
 }

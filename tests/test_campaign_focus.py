@@ -228,6 +228,33 @@ def test_exact_selected_history_unknowns_and_original_row_lineage_survive():
     assert original == before
 
 
+@pytest.mark.parametrize("target", ["requirement", "asset"])
+def test_focused_copy_retains_sources_referenced_only_by_historical_snapshots(target):
+    original = portfolio()
+    if target == "requirement":
+        row = original["requirements"][0]
+        previous = copy.deepcopy(row)
+        previous.update(source_id="4" * 32, source_url="https://example.invalid/historical",
+                        source_quote="Exact old café e\u0301 🐝\r\nwording.")
+    else:
+        row = original["assets"][0]["references"][0]
+        previous = copy.deepcopy(row)
+        previous.update(source_id="4" * 32, url="https://example.invalid/historical",
+                        excerpt="Exact old rights wording. e\u0301 🐝")
+    row["source_history"] = [{"state": "historical", "reason": "replaced", "record": previous}]
+    before = copy.deepcopy(original)
+    result = focus(original, options={"linked_assets": target == "asset"})
+    document = result["document"]
+    historical = (document["requirements"][0] if target == "requirement"
+                  else document["assets"][0]["references"][0])
+    assert historical["source_history"] == row["source_history"]
+    assert any(source["id"] == "4" * 32 for source in document["sources"])
+    assert 5 in result["included"]["sources"]
+    assert original == before
+    historical["source_history"][0]["record"]["source_id"] = "Changed copy only"
+    assert original == before
+
+
 def test_explicit_shared_material_and_cross_route_dependencies_keep_links():
     original = portfolio()
     normalized = campaigns.validate(original)

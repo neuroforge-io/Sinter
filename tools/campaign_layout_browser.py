@@ -344,7 +344,7 @@ def main(argv: Sequence[str] | None = None) -> dict:
                                 "requirements to check",
                                 "answers to shorten",
                                 "answer rows held",
-                                "costs needing a quote",
+                                "cost records needing details",
                                 "application windows to verify",
                                 "funding currencies to review",
                                 "owners to confirm",

@@ -16,7 +16,7 @@ test('first explicit link keeps the entered clarification and exact explanatory 
   const before = structuredClone(row);
   const {requirement: linked, changedSource, resetAssessment} = selectRequirementSource(row, first);
   assert.deepEqual(linked, {...row, source_id: first.id, source_url: first.url,
-    checked_at: first.checked_at});
+    checked_at: ''});
   assert.equal(changedSource, true);
   assert.equal(resetAssessment, false);
   assert.deepEqual(row, before);
@@ -32,9 +32,11 @@ test('unknown and clarification stay explicit on replacement and unlinking', () 
       assert.equal(result.requirement.status, status);
       assert.equal(result.requirement.evidence, note);
       assert.equal(result.requirement.source_quote, '');
-      assert.equal(result.requirement.checked_at, source?.checked_at || '');
+      assert.equal(result.requirement.checked_at, '');
       assert.equal(result.requirement.source_url, source?.url || '');
       assert.equal(result.resetAssessment, false);
+      assert.deepEqual(result.requirement.source_history, [{state: 'historical',
+        reason: source ? 'replaced' : 'cleared', record: beforeRecord(row)}]);
       assert.equal(row.source_quote, 'Previous exact wording.');
     }
   }
@@ -49,11 +51,40 @@ test('changing a met or not-met assessment source still requires a fresh assessm
       assert.equal(result.requirement.status, 'unknown');
       assert.equal(result.requirement.evidence, note);
       assert.equal(result.requirement.source_quote, '');
-      assert.equal(result.requirement.checked_at, source?.checked_at || '');
+      assert.equal(result.requirement.checked_at, '');
       assert.equal(result.resetAssessment, true);
+      assert.deepEqual(result.requirement.source_history[0].record, beforeRecord(row));
       assert.equal(row.status, status);
     }
   }
+});
+
+function beforeRecord(row) { return structuredClone(row); }
+
+test('a refreshed URL at the same stable source ID archives the exact old snapshot', () => {
+  const row = requirement({status: 'met', source_id: first.id, source_url: first.url,
+    source_quote: 'Original café 中文 e\u0301 🐝\r\n<literal>', checked_at: '2026-09-10'});
+  const result = selectRequirementSource(row, {...first, url: 'https://example.invalid/refreshed'});
+  assert.equal(result.changedSource, true);
+  assert.equal(result.requirement.status, 'unknown');
+  assert.equal(result.requirement.source_quote, '');
+  assert.equal(result.requirement.checked_at, '');
+  assert.deepEqual(result.requirement.source_history[0].record, row);
+});
+
+test('successive changes preserve non-recursive chronological snapshots', () => {
+  const old = requirement({status: 'met', source_id: first.id, source_url: first.url,
+    source_quote: 'First wording.', checked_at: first.checked_at});
+  const middle = selectRequirementSource(old, second).requirement;
+  middle.source_quote = 'Second wording.'; middle.checked_at = second.checked_at;
+  const result = selectRequirementSource(middle, first).requirement;
+  assert.equal(result.source_history.length, 2);
+  assert.deepEqual(result.source_history[0].record, old);
+  const previous = {...middle}; delete previous.source_history;
+  assert.deepEqual(result.source_history[1].record, previous);
+  assert.equal(Object.hasOwn(result.source_history[1].record, 'source_history'), false);
+  result.source_history[0].record.source_quote = 'Changed copy only.';
+  assert.equal(middle.source_history[0].record.source_quote, 'First wording.');
 });
 
 test('first link invalidates an existing manual met assessment without erasing its note', () => {

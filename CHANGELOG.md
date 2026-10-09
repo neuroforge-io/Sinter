@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Retain replaced eligibility and product evidence as bounded historical source
+  snapshots. Preview the old record before replacing or clearing its link;
+  Cancel and rejected local admission leave the record unchanged. Previous
+  wording, dates and assessments stay in backups and historical campaign notes,
+  outside current checks. Backups with source history require a supporting
+  preview; older strict importers refuse them rather than discard the history.
+- Allow local answer drafts for an active formal-application route before its
+  applicant is confirmed. Keep copying, answer review and shared brief inclusion
+  held until direct applicant confirmation; saving does not grant authority.
+- Describe entered budget amounts as recorded costs, including planning
+  estimates, rather than supplier quotes. Keep the original amounts, references
+  and legacy data fields unchanged. New costs use the selected active route;
+  existing costs retain their recorded scope. A cost subtotal establishes
+  neither a grant request nor cash or in-kind contributions.
 - Make a separate focused campaign in the browser workbench. Preview included
   and omitted material, choose shared work and linked products explicitly, and
   retain source identities, old quotes, recorded statuses and correspondence.

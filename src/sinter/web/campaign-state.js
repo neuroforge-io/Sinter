@@ -35,12 +35,18 @@ export function isOpportunityActionable(status) {
   return actionableOpportunityStates.has(status);
 }
 
-/** Require a named applicant and explicit operator confirmation before drafting. */
+/** Require a named applicant and explicit operator confirmation before use. */
 export function hasConfirmedApplicationRoute(opportunity) {
   return opportunity?.application_mode === 'required'
     && typeof opportunity.applicant === 'string'
     && opportunity.applicant.trim().length > 0
     && opportunity.applicant_confirmed === true;
+}
+
+/** Local drafts do not establish applicant identity or permission to use them. */
+export function canDraftApplicationAnswer(opportunity) {
+  return isOpportunityActionable(opportunity?.status)
+    && opportunity?.application_mode === 'required';
 }
 
 /** Keep the answer lock, explanation and button label tied to one route state. */
@@ -57,7 +63,7 @@ export function applicationAnswerAvailability(opportunity) {
   }
   if (opportunity?.application_mode !== 'required') {
     return {allowed: false, reason: 'workflow_unconfirmed',
-      message: 'Confirm whether this route uses a formal application and who is allowed to apply in the route details. Drafting and copying stay locked until both are recorded.',
+      message: 'Confirm whether this route uses a formal application in the route details. Local drafting stays locked until a formal application is recorded. Copying, answer review and inclusion in shared campaign briefs also require a named applicant confirmed directly with the person responsible for applying. This does not establish programme eligibility or authority to submit.',
       copyLabel: 'Copy unavailable · workflow not confirmed'};
   }
   if (!hasConfirmedApplicationRoute(opportunity)) {
@@ -65,8 +71,8 @@ export function applicationAnswerAvailability(opportunity) {
       && opportunity.applicant.trim().length > 0;
     return {allowed: false, reason: 'applicant_unconfirmed',
       message: recorded
-        ? 'An applicant name is recorded, but it has not been explicitly confirmed with the person responsible for applying. Confirm the named applicant in the route details before drafting or copying answers. This does not establish programme eligibility or authority to submit.'
-        : 'The application workflow is marked as required, but an applicant or lead is not recorded. Record who must apply in the route details before drafting or copying answers.',
+        ? 'An applicant name is recorded, but it has not been explicitly confirmed with the person responsible for applying. You can save local drafts. Copying, answer review and inclusion in shared campaign briefs stay unavailable until the named applicant is confirmed directly. This does not establish programme eligibility or authority to submit.'
+        : 'The application workflow is marked as required, but an applicant or lead is not recorded. You can save local drafts. Copying, answer review and inclusion in shared campaign briefs stay unavailable until you record the named applicant and confirm it directly with the person responsible for applying. This does not establish programme eligibility or authority to submit.',
       copyLabel: recorded
         ? 'Copy unavailable · applicant not confirmed'
         : 'Copy unavailable · applicant not recorded'};

@@ -81,6 +81,12 @@ unqualified. Earlier rc2 installers do not include local Word-copy recovery.
 
 ## Platform qualification
 
+Development campaign backups that contain `source_history` need a preview with
+historical-source support. Published RC3 and other older strict importers reject
+unsupported fields; they do not silently drop the snapshots. Export and retain
+your full backup before changing previews. Local drafts for an unconfirmed
+applicant stay in the full backup but are held out of shared campaign briefs.
+
 Current RC4 candidate source is version `0.5.4rc4`; an RC4 installer is not yet
 qualified or published. Source CI results do not establish installed operation.
 On 9 October, the frozen Linux candidate at

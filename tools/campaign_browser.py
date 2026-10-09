@@ -320,19 +320,75 @@ class CampaignChecks(DeliverableChecks):
         page.get_by_label('Application workflow', exact=True).select_option('required')
         page.get_by_role('tab', name='Application answers', exact=True).click()
         answer = page.get_by_role('article', name='Application answer')
-        expect(answer.get_by_label('Draft answer', exact=True)).to_have_attribute('readonly', '')
-        expect(answer.get_by_label('Draft answer', exact=True)).to_have_value('')
+        original_answer = fixture()['answers'][0]
+        expect(answer.get_by_label('Application question', exact=True)).to_be_enabled()
+        expect(answer.get_by_label('Character limit', exact=True)).to_be_enabled()
+        expect(answer.get_by_label('Draft answer', exact=True)).not_to_have_attribute('readonly', '')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_value(original_answer['text'])
+        expect(answer.get_by_label('Answer review', exact=True)).to_be_disabled()
         expect(answer.get_by_role('button', name='Copy unavailable · applicant not recorded', exact=True)).to_be_disabled()
+        expect(page.get_by_role('button', name='Add application question', exact=True)).to_be_enabled()
         expect(page.locator('.notice.warning')).to_contain_text('an applicant or lead is not recorded')
+        expect(page.locator('.notice.warning')).to_contain_text('You can save local drafts')
+        local_question = 'Fictional local planning question — scope still to confirm'
+        local_text = 'LOCAL HELD DRAFT: café 🐝 é\nNo applicant confirmation or costs assumed.'
+        page.get_by_role('button', name='Add application question', exact=True).click()
+        answers = page.get_by_role('article', name='Application answer')
+        expect(answers).to_have_count(2)
+        local_answer = answers.nth(1)
+        local_answer.get_by_label('Application question', exact=True).fill(local_question)
+        local_answer.get_by_label('Character limit', exact=True).fill('350')
+        local_answer.get_by_label('Draft answer', exact=True).fill(local_text)
+        expect(local_answer.get_by_label('Answer review', exact=True)).to_have_value('draft')
+        expect(local_answer.get_by_label('Answer review', exact=True)).to_be_disabled()
+        expect(local_answer.get_by_role('button', name='Copy unavailable · applicant not recorded', exact=True)).to_be_disabled()
+        self.save(page)
+        page.reload()
+        page.get_by_role('button', name='Start a new campaign', exact=True).click()
+        page.get_by_role('button', name='Open ' + fixture()['title'], exact=True).click()
+        expect(page.get_by_text('Campaign opened.', exact=False)).to_be_visible()
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        expect(answers).to_have_count(2)
+        expect(answers.nth(0).get_by_label('Draft answer', exact=True)).to_have_value(original_answer['text'])
+        expect(local_answer.get_by_label('Application question', exact=True)).to_have_value(local_question)
+        expect(local_answer.get_by_label('Character limit', exact=True)).to_have_value('350')
+        expect(local_answer.get_by_label('Draft answer', exact=True)).to_have_value(local_text)
+        expect(local_answer.get_by_label('Answer review', exact=True)).to_be_disabled()
+        expect(local_answer.get_by_role('button', name='Copy unavailable · applicant not recorded', exact=True)).to_be_disabled()
+        self.transfers(page)
+        _, local_backup = self.download(page, 'Export campaign backup')
+        local_document = json.loads(local_backup)
+        assert local_document['opportunities'][0]['applicant'] == ''
+        assert local_document['opportunities'][0]['applicant_confirmed'] is False
+        assert local_document['answers'][0] == original_answer
+        assert local_document['answers'][1] == {
+            'opportunity': original_answer['opportunity'], 'label': local_question,
+            'text': local_text, 'limit': 350, 'status': 'draft'}
+        page.get_by_role('button', name='Prepare campaign brief', exact=True).click()
+        expect(page.get_by_role('region', name='Your draft report')).to_be_visible(timeout=10000)
+        held_pack = self.pack(page)
+        assert len(held_pack['campaign']['answers']) == 2
+        for held_answer in held_pack['campaign']['answers']:
+            assert held_answer['text'] == ''
+            assert held_answer['label'] == 'Held answer details omitted from report'
+            assert held_answer['limit'] is None
+        assert held_pack['answer_metrics'] == []
+        assert 'LOCAL HELD DRAFT' not in json.dumps(held_pack)
+        assert local_question not in json.dumps(held_pack, ensure_ascii=False)
         page.get_by_role('tab', name='Opportunities', exact=True).click()
         page.get_by_text('Edit opportunity details', exact=True).click()
         page.get_by_label('Applicant / programme lead', exact=True).fill('Fictional Community Association')
         page.get_by_role('tab', name='Application answers', exact=True).click()
-        answer = page.get_by_role('article', name='Application answer')
-        expect(answer.get_by_label('Draft answer', exact=True)).to_have_attribute('readonly', '')
-        expect(answer.get_by_label('Draft answer', exact=True)).to_have_value('')
+        answer = page.get_by_role('article', name='Application answer').first
+        expect(answer.get_by_label('Draft answer', exact=True)).not_to_have_attribute('readonly', '')
+        expect(answer.get_by_label('Draft answer', exact=True)).to_have_value(original_answer['text'])
+        expect(answer.get_by_label('Answer review', exact=True)).to_be_disabled()
         expect(answer.get_by_role('button', name='Copy unavailable · applicant not confirmed', exact=True)).to_be_disabled()
-        expect(page.locator('.notice.warning')).to_contain_text('has not been explicitly confirmed')
+        expect(page.locator('.campaign-section .notice.warning')).to_contain_text('has not been explicitly confirmed')
+        expect(local_answer.get_by_label('Draft answer', exact=True)).to_have_value(local_text)
+        expect(local_answer.get_by_role('button', name='Copy unavailable · applicant not confirmed', exact=True)).to_be_disabled()
+        local_answer.get_by_role('button', name='Remove question', exact=True).click()
+        expect(answers).to_have_count(1)
         page.get_by_role('tab', name='Opportunities', exact=True).click()
         page.get_by_text('Edit opportunity details', exact=True).click()
         page.get_by_label('Applicant confirmed directly', exact=True).check()
@@ -359,7 +415,7 @@ class CampaignChecks(DeliverableChecks):
         items = page.get_by_role('article', name='Budget item', exact=True)
         expect(items.first.get_by_label('Unit cost (AUD)', exact=True)).to_have_value('')
         items.first.get_by_label('Unit cost (AUD)', exact=True).fill('2.55')
-        expect(page.locator('.campaign-budget-total')).to_have_text('Recorded quoted subtotal (AUD): A$42.15')
+        expect(page.locator('.campaign-budget-total')).to_have_text('Recorded cost subtotal (AUD): A$42.15')
         self.save(page)
         self.screenshot(page, 'budget-editable', full_page=True)
         page.get_by_role('tab', name='Next actions', exact=True).click()
