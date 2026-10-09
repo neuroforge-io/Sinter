@@ -338,13 +338,14 @@ def test_catalog_discovery_does_not_create_workspace_or_socket(tmp_path):
         result = catalog()
     ids = {row["id"] for row in result["operations"]}
     assert (
-        len(ids) == 54
+        len(ids) == 55
         and {
             "template.preview",
             "atlas.context",
             "casebooks.save",
             "documents.docx.save",
             "campaigns.funding_summary",
+            "campaigns.focus",
         }
         <= ids
     )

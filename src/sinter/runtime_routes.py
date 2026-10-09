@@ -274,6 +274,11 @@ class RouteDispatch:
                     body.get("document"), body.get("focused_opportunity", "")
                 )
             )
+        elif path == "/api/campaigns/focus":
+            self._json(campaigns.focused_document(
+                body.get("document"), body.get("opportunity"), body.get("title"),
+                body.get("options"), body.get("parent"),
+            ))
         elif path == "/api/campaigns/funding-summary":
             self._json(campaigns.funding_summary(body.get("document")))
         elif path == "/api/campaigns/save":

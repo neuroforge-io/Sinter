@@ -5,6 +5,8 @@ Preparation does not fetch links, call a model, send messages or submit an appli
 """
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import re
 import sqlite3
@@ -764,6 +766,125 @@ def validate(data: object) -> dict:
     if len(encoded.encode("utf-8")) > MAX_DOCUMENT_BYTES:
         raise ValueError("The campaign exceeds 1 MB. Split it into smaller campaigns.")
     return result
+
+
+def focused_document(data: object, opportunity: object, title: object,
+                     options: object = None, parent: object = None) -> dict:
+    """Preview a separate editable case, keeping source snapshots and history.
+
+    This pure local projection never saves or changes the parent. Selection is
+    independent of route readiness: held answers and historical correspondence
+    remain complete. Original row numbers refer to the supplied editor snapshot.
+    """
+    document = validate(data)
+    route = _text(opportunity, "Selected route", 200, True, strip=True)
+    if not any(row["name"] == route for row in document["opportunities"]):
+        raise ValueError("Choose an exact route from this campaign.")
+    choices = _object({} if options is None else options, {
+        "campaign_wide", "linked_assets", "all_sources",
+    }, "Focused-copy choices")
+    for key in ("campaign_wide", "linked_assets", "all_sources"):
+        if type(choices.get(key, False)) is not bool:
+            raise ValueError("Focused-copy choices must be true or false.")
+    choices = {key: choices.get(key, False)
+               for key in ("campaign_wide", "linked_assets", "all_sources")}
+    origin = _object({} if parent is None else parent, {
+        "id", "revision", "dirty",
+    }, "Parent reference")
+    identifier, revision = origin.get("id"), origin.get("revision")
+    if identifier is not None:
+        identifier = CampaignStore._identifier(identifier)
+        revision = CampaignStore._revision(revision)
+    elif revision is not None:
+        raise ValueError("A parent revision requires a saved campaign reference.")
+    dirty = origin.get("dirty", False)
+    if type(dirty) is not bool:
+        raise ValueError("Parent unsaved-edit state must be true or false.")
+    snapshot_hash = hashlib.sha256(json.dumps(
+        data, ensure_ascii=False, allow_nan=False, sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+    origin = {"id": identifier, "revision": revision, "dirty": dirty,
+              "snapshot_sha256": snapshot_hash}
+    selected: dict[str, list[int]] = {key: [] for key in ROW_LIMITS}
+    selected["assets"] = [index for index, row in enumerate(document["assets"])
+                          if choices["linked_assets"]
+                          and route in row["funding_opportunities"]]
+    dependencies = {name for index in selected["assets"]
+                    for name in document["assets"][index]["funding_opportunities"]}
+    selected["opportunities"] = [
+        index for index, row in enumerate(document["opportunities"])
+        if row["name"] == route or row["name"] in dependencies]
+    for key in ("requirements", "answers", "budget", "actions", "communications"):
+        selected[key] = [index for index, row in enumerate(document[key])
+                         if row["opportunity"] == route
+                         or (choices["campaign_wide"]
+                             and key in {"budget", "actions", "communications"}
+                             and not row["opportunity"])]
+    focused = {key: copy.deepcopy(value) for key, value in document.items()
+               if key not in ROW_LIMITS}
+    focused["title"] = _text(title, "Focused campaign title", 200, True, strip=True)
+    for key in ROW_LIMITS:
+        focused[key] = [copy.deepcopy(document[key][index])
+                        for index in selected[key]]
+    # Follow all retained nested source references, including funding events.
+    source_ids = set()
+    pending = [focused]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            source_ids.update(value[key] for key in ("source_id", "window_source_id")
+                              if value.get(key))
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    selected["sources"] = [index for index, row in enumerate(document["sources"])
+                           if choices["all_sources"] or row["id"] in source_ids]
+    focused["sources"] = [copy.deepcopy(document["sources"][index])
+                          for index in selected["sources"]]
+    # Validation drops only empty source placeholders; retain original numbering.
+    original_numbers = {key: [index + 1 for index, row in enumerate(data.get(key, []))
+                             if key != "sources" or any(str(row.get(field, "")).strip()
+                                 for field in ("title", "url", "notes"))]
+                        for key in ROW_LIMITS}
+    included, omitted = {}, {}
+    included_material, omitted_material = {}, {}
+    for key in ROW_LIMITS:
+        chosen = set(selected[key])
+        included[key] = [original_numbers[key][index] for index in selected[key]]
+        omitted[key] = [number for index, number in enumerate(original_numbers[key])
+                        if index not in chosen]
+        included_material[key] = copy.deepcopy(focused[key])
+        omitted_material[key] = [copy.deepcopy(row)
+                                 for index, row in enumerate(document[key])
+                                 if index not in chosen]
+    lineage = {"parent": origin, "selected_route": route, "choices": choices,
+               "original_rows_included": included,
+               "original_rows_omitted": omitted}
+    lineage_text = json.dumps(lineage, ensure_ascii=False, sort_keys=True,
+                              separators=(",", ":"))
+    lineage_id = uuid.uuid5(uuid.NAMESPACE_URL,
+                           "sinter-focused-copy:" + lineage_text).hex
+    if lineage_id in {row["id"] for row in focused["sources"]}:
+        raise ValueError("This focused-copy provenance is already in the selection.")
+    focused["sources"].append({
+        "id": lineage_id, "title": "Focused-copy origin and selected material",
+        "url": "", "checked_at": "",
+        "notes": "Local copy provenance, not source verification. Parent ID and "
+                 "revision are editor references; the snapshot may contain "
+                 "unsaved edits. Original campaign was not changed.\n" + lineage_text,
+    })
+    focused = validate(focused)
+    return {"document": focused, "parent": origin, "route": route,
+            "choices": choices, "included": included, "omitted": omitted,
+            "included_material": included_material,
+            "omitted_material": omitted_material,
+            "dependency_routes": [row["name"] for row in focused["opportunities"]
+                                  if row["name"] != route],
+            "lineage_source_id": lineage_id,
+            "notice": "Separate unsaved copy. Recorded statuses, owners, dates and "
+                      "historical evidence are unchanged; copying does not confirm "
+                      "eligibility, authority or current source accuracy."}
 
 
 def _check_date_is_current(value: str, today: date) -> bool:

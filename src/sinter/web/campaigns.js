@@ -173,6 +173,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   let document = compatibleCampaign(seed.document || blank()), savedId = seed.id || null, revision = seed.revision || null;
   let dirty = Boolean(seed.dirty), selected = Number.isSafeInteger(seed.selected) && seed.selected >= 0 ? seed.selected : 0;
   let admittingSave = false;
+  let focusedCopyDialog = null;
   let practice = seed.practice || null;
   const practiceGuide = onOpenGarden ? gardenGuide('campaigns', onOpenGarden) : h('div');
   practiceGuide.hidden = practice !== GARDEN_PRACTICE;
@@ -296,6 +297,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   // A native toggle event may still be queued when the container is removed.
   root.dispose = () => {
+    if (focusedCopyDialog) {
+      focusedCopyDialog.close(); focusedCopyDialog.remove(); focusedCopyDialog = null;
+    }
     feedbackView.dispose();
     fundingState.close();
     toolbarObserver?.disconnect();
@@ -412,7 +416,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     }, 'quiet');
   }
   function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; newButton.disabled = value; fundingButton.disabled = value || fundingState.pending || fundingState.closed; editor.inert = value; sectionNavigation.inert = value; transfers.inert = value; }
-  function apply(next, id = null, rev = null, preferActionable = false) {
+  function apply(next, id = null, rev = null, preferActionable = false, focusedRoute = '') {
     const resumeCurrentCampaign = Boolean(id && id === savedId);
     const previousTab = tab;
     const previousSelection = selected;
@@ -431,7 +435,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     pendingBudgetFocus = null;
     const retainedSelection = resumeCurrentCampaign && previousOpportunityName
       ? document.opportunities.findIndex(row => row.name === previousOpportunityName) : -1;
-    selected = retainedSelection >= 0 ? retainedSelection : preferActionable
+    const explicitSelection = focusedRoute
+      ? document.opportunities.findIndex(row => row.name === focusedRoute) : -1;
+    selected = explicitSelection >= 0 ? explicitSelection : retainedSelection >= 0 ? retainedSelection : preferActionable
       ? defaultCampaignOpportunityIndex(document.opportunities, localDate(), document.sources) : 0;
     tab = resumeCurrentCampaign && campaignTabs.some(([key]) => key === previousTab)
       ? previousTab : 'overview';
@@ -578,6 +584,118 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   function exportBackup() {
     download('sinter-campaign-backup.json', JSON.stringify(document, null, 2), 'application/json');
+  }
+  function focusedCopy(route, returnFocus) {
+    if (busy || focusedCopyDialog) return;
+    // Work on the complete editor snapshot, never a shareable report projection.
+    const snapshot = structuredClone(document);
+    const parent = {id: savedId, revision, dirty};
+    let preview = null, pending = false, closed = false;
+    const name = field('Name for the focused campaign', 'text',
+      `${snapshot.title} — ${route}`, 'Choose a name for this separate copy.', {maxLength: 200});
+    const wide = check('Also include campaign-wide actions, costs and communications');
+    const assets = check('Include linked products and IP evidence, keeping all their route links');
+    const sources = check('Also include every other source record from the original');
+    const progress = h('div', {role: 'status', 'aria-live': 'polite'});
+    const material = h('div', {class: 'campaign-focused-material'});
+    const cancel = button('Cancel', () => dialog.close(), 'quiet');
+    const downloadCopy = button('Download focused backup', () => {
+      if (preview && !pending) download('sinter-focused-campaign.json',
+        JSON.stringify(preview.document, null, 2), 'application/json');
+    }, 'quiet');
+    const open = button('Open unsaved focused campaign', () => {
+      if (!preview || pending || !canReplace()) return;
+      const next = structuredClone(preview.document);
+      dialog.close();
+      apply(next, null, null, false, route); changed();
+      feedback.replaceChildren(notice('Focused copy opened with unsaved changes. No existing saved campaign was changed. Save campaign to create a separate record; nothing was sent or submitted.', 'success'));
+      scrollCampaignTarget(status, true);
+    }, 'primary');
+    downloadCopy.disabled = true; open.disabled = true;
+    const controls = [name.input, wide.input, assets.input, sources.input];
+    function invalidate() {
+      preview = null; material.replaceChildren(); progress.replaceChildren();
+      downloadCopy.disabled = true; open.disabled = true;
+    }
+    for (const control of controls) control.addEventListener('input', invalidate);
+    const inspect = button('Preview selected material', async () => {
+      if (pending) return;
+      invalidate(); pending = true; inspect.disabled = true;
+      for (const control of controls) control.disabled = true;
+      progress.textContent = 'Preparing a local copy preview. The original is unchanged.';
+      try {
+        const result = await request('/api/campaigns/focus', {data: {
+          document: snapshot, opportunity: route, title: name.input.value, parent,
+          options: {campaign_wide: wide.input.checked,
+            linked_assets: assets.input.checked, all_sources: sources.input.checked},
+        }});
+        if (closed) return;
+        preview = result;
+        progress.replaceChildren(notice(result.notice));
+        if (result.dependency_routes.length) material.append(notice(
+          'Additional route records are included to preserve product links: '
+          + result.dependency_routes.join('; ')
+          + '. Their checks, answers, actions and communications are omitted unless they belong to the selected route.', 'warning'));
+        const labels = {opportunities: 'Routes', requirements: 'Checks', answers: 'Answers',
+          budget: 'Costs', actions: 'Actions', communications: 'Communications',
+          assets: 'Products and IP', sources: 'Sources'};
+        for (const [key, label] of Object.entries(labels)) {
+          const kept = result.included[key], left = result.omitted[key];
+          const rows = result.included_material[key].map((row, index) =>
+            h('article', {class: 'campaign-focused-record'},
+              h('h4', {}, row.rule || row.label || row.task || row.subject
+                || row.name || row.title || row.item || `${label} row ${kept[index]}`),
+              h('p', {class: 'fine'}, `Original row ${kept[index]}`
+                + (row.status ? ' · Recorded status: ' + row.status.replaceAll('_', ' ') : '')),
+              ...['text', 'content', 'evidence', 'source_quote', 'notes', 'fit', 'public_summary']
+                .filter(field => typeof row[field] === 'string' && row[field])
+                .map(field => h('p', {class: 'campaign-focused-record-text'}, row[field]))));
+          material.append(h('details', {}, h('summary', {},
+            `${label}: ${kept.length} included, ${left.length} omitted`),
+          h('p', {class: 'fine'}, 'Original row numbers: included '
+            + (kept.join(', ') || 'none') + '; omitted ' + (left.join(', ') || 'none') + '.'),
+          h('h4', {}, 'Included material'),
+          ...(rows.length ? rows : [h('p', {class: 'fine'}, 'None selected.')]),
+          h('details', {}, h('summary', {}, 'Complete included records'),
+            h('pre', {tabindex: 0}, JSON.stringify(result.included_material[key], null, 2))),
+          h('details', {}, h('summary', {}, 'Omitted material — retained in the original'),
+            h('pre', {tabindex: 0}, JSON.stringify(result.omitted_material[key], null, 2)))));
+        }
+        material.append(h('details', {}, h('summary', {}, 'Campaign details and added copy provenance'),
+          h('pre', {tabindex: 0}, JSON.stringify(Object.fromEntries(Object.entries(result.document)
+            .filter(([key]) => !Object.hasOwn(labels, key))), null, 2)),
+          h('pre', {tabindex: 0}, JSON.stringify(result.document.sources.find(
+            source => source.id === result.lineage_source_id), null, 2))));
+        downloadCopy.disabled = false; open.disabled = false;
+      } catch (problem) {
+        if (!closed) progress.replaceChildren(notice(problem.message
+          + ' The original and its edits are unchanged. Reduce the explicit selection; no material was truncated.', 'error'));
+      } finally {
+        pending = false; inspect.disabled = false;
+        for (const control of controls) control.disabled = false;
+      }
+    }, 'quiet');
+    const dialog = h('dialog', {class: 'action-confirmation campaign-focused-copy',
+      'aria-labelledby': 'campaign-focused-title'},
+    h('h2', {id: 'campaign-focused-title'}, 'Make a focused campaign'),
+    h('div', {class: 'campaign-focused-body', tabindex: 0, role: 'region',
+      'aria-label': 'Focused campaign selection and material'},
+    h('p', {}, 'Selected route: ', h('strong', {}, route),
+      '. Preview the full material before opening a separate unsaved copy. Statuses and historical evidence stay as recorded; copying does not verify them.'),
+    name.wrap, wide.wrap, assets.wrap, sources.wrap,
+    h('p', {class: 'fine'}, 'The organisation, objective and signatory details are copied as entered. Linked sources are always kept. Other-route work stays in the original.'),
+    button('Download original snapshot backup', () => download('sinter-original-campaign-snapshot.json',
+      JSON.stringify(snapshot, null, 2), 'application/json'), 'quiet'),
+    inspect, progress, material),
+    h('div', {class: 'button-row'}, cancel, downloadCopy, open));
+    focusedCopyDialog = dialog;
+    dialog.addEventListener('close', () => {
+      closed = true; dialog.remove();
+      if (focusedCopyDialog === dialog) focusedCopyDialog = null;
+      if (returnFocus?.isConnected) returnFocus.focus({preventScroll: true});
+    }, {once: true});
+    root.ownerDocument.body.append(dialog);
+    dialog.showModal(); name.input.focus();
   }
   const imported = field('Import campaign backup', 'file', '', 'Sinter campaign JSON, up to 1 MB. Importing stays on this computer.', {accept: '.json'});
   imported.input.addEventListener('change', async () => {
@@ -1110,7 +1228,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       h('div', {class: 'form-grid'}, applicationMode.wrap, applicant.wrap),
       applicantConfirmation.wrap,
       h('div', {class: 'form-grid'}, windowKind.wrap, deadline.wrap, windowChecked.wrap, decision.wrap, ceiling.wrap, ceilingCurrency.wrap, state.wrap), windowQuote.wrap, fit.wrap);
+    const copyRoute = button('Make focused campaign…', () => focusedCopy(item.name, copyRoute), 'quiet');
     focus.append(h('header', {class: 'campaign-focus-heading'}, headerFunder, headerName, programme),
+      copyRoute,
       h('dl', {class: 'campaign-opportunity-facts'},
         h('div', {}, h('dt', {}, 'Recorded funding amount / ceiling'), maximum),
         h('div', {}, deadlineLabel, deadlineValue), recordedDeadline,
@@ -1240,7 +1360,13 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     addQuestion.disabled = !canPrepare;
     panel.append(addQuestion);
     for (const row of document.answers.filter(row => row.opportunity === opportunity)) {
-      const label = input('Application question', 'textarea', row, 'label', 'Copy the actual wording from the application form.', {rows: 2, maxLength: 300});
+      let previousQuestion = row.label;
+      let previousLimit = row.limit == null ? null : Number(row.limit);
+      const resetReview = () => { row.status = 'draft'; reviewed.input.value = 'draft'; };
+      const label = input('Application question', 'textarea', row, 'label', 'Copy the actual wording from the application form.', {rows: 2, maxLength: 300}, element => {
+        if (element.value !== previousQuestion) resetReview();
+        previousQuestion = element.value;
+      });
       label.input.disabled = !canPrepare;
       const counter = h('p', {class: 'campaign-character-count', role: 'status'});
       function update() {
@@ -1248,7 +1374,12 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         counter.textContent = limit > 0 ? `${used} / ${limit} characters${used > limit ? ' · ' + (used - limit) + ' over — shorten before using' : ' · within limit'}` : `${used} characters · confirm the form’s limit`;
         counter.classList.toggle('over-limit', limit > 0 && used > limit);
       }
-      const limit = input('Character limit', 'number', row, 'limit', 'Keep this blank if the form does not specify a limit.', {min: 1, max: 20000, step: 1}, element => { row.limit = element.value ? Number(element.value) : null; update(); });
+      const limit = input('Character limit', 'number', row, 'limit', 'Keep this blank if the form does not specify a limit.', {min: 1, max: 20000, step: 1}, element => {
+        row.limit = element.value ? Number(element.value) : null;
+        if (row.limit !== previousLimit) resetReview();
+        previousLimit = row.limit;
+        update();
+      });
       limit.input.disabled = !canPrepare;
       const answer = input('Draft answer', 'textarea', row, 'text',
         canPrepare ? '' : answerAccess.message,
@@ -1441,7 +1572,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         let refreshActionSummary = () => {};
         const task = input('Next action', 'textarea', row, 'task',
           'Write the next step in plain language, including what to check and where to record the result.',
-          {rows: 3, maxLength: 2000}, refreshActionSummary);
+          {rows: 3, maxLength: 2000}, () => refreshActionSummary());
         const scopeChoices = [
           ...(row.scope_confirmed === true ? [] : [['__confirm_scope__', 'Choose scope · not confirmed']]),
           ['', 'Campaign-wide'], ...document.opportunities.map((item, index) => [`route:${index}`, item.name])];

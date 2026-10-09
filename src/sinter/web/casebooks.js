@@ -49,7 +49,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   const questions = field('What do you need to find out?', 'textarea', seed.book?.questions || '', 'One question per line, up to 20. Missing answers stay visible.', {maxLength: 12000, rows: 5});
   const format = selectField('Prepare a', [['brief', 'Briefing note'], ['enquiry', 'Enquiry letter'], ['agenda', 'Agenda item'], ['handover', 'Volunteer handover']], seed.book?.document_type || 'brief');
   const handoverEvidence = selectField('Evidence in source-only handover', HANDOVER_EVIDENCE_OPTIONS,
-    handoverEvidenceMode(seed.book), 'Word exports the document text you review or edit. The appendix carries selected passages, not all original sources; it does not establish answers.');
+    handoverEvidenceMode(seed.book), 'Choose Compact notes for up to four selected passages, or All selected passages for every selected passage, with an appendix when needed. Word exports the document text you review or edit. Selected passages are not all original sources and do not establish answers.');
   const showHandoverEvidence = () => { handoverEvidence.wrap.hidden = format.input.value !== 'handover'; };
   showHandoverEvidence();
   const status = h('div', {'aria-live': 'polite'}), output = h('div', {class: 'stack', id: 'casebook-output'}), sources = h('div', {class: 'stack', style: 'grid-template-columns:minmax(0,1fr)'});
@@ -70,6 +70,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   const upload = field('Add text files', 'file', '', 'TXT, Markdown, UTF-8 notes or code. Up to 300 documents and 2 million characters. No PDF/DOCX extraction.', {multiple: true});
   const backup = field('Restore a casebook backup', 'file', '', 'Opens as a new unsaved project; existing casebooks are not overwritten.', {accept: '.json'});
   const editor = h('fieldset', {class: 'casebook-editor'});
+  let browserGuidance = null, focusBrowserEditor = false;
   const scopeContents = h('div');
   const scopePanel = h('details', {class: 'card'},
     h('summary', {}, 'Choose sources for each question'), scopeContents);
@@ -122,6 +123,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   }
   async function localDecision(trigger, decide, action) {
     if (busy) return;
+    focusBrowserEditor = false;
     const outputWasInert = output.inert;
     output.inert = true;
     lock(true);
@@ -130,8 +132,11 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     finally {
       lock(false);
       output.inert = outputWasInert;
-      const target = trigger?.isConnected && !trigger.disabled ? trigger : title.input;
+      const focusEditor = focusBrowserEditor; focusBrowserEditor = false;
+      const target = focusEditor ? title.input
+        : trigger?.isConnected && !trigger.disabled ? trigger : title.input;
       target.focus({preventScroll: true});
+      if (focusEditor) window.scrollTo({top: 0, left: 0, behavior: 'instant'});
     }
   }
   function changed({dirty = true} = {}) {
@@ -172,6 +177,14 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
     clearPending(); sourcePanel.open = !docs.length;
     sender.panel.dispatchEvent(new Event('input', {bubbles: true}));
     changed({dirty: !id}); drawSources();
+    showCurrentBrowserEditor();
+  }
+  function showCurrentBrowserEditor() {
+    if (!browserGuidance) return;
+    browserGuidance.open = false;
+    editor.after(browserGuidance);
+    // localDecision unlocks the editor before focusing; Cancel keeps its trigger.
+    focusBrowserEditor = true;
   }
   async function refresh() {
     const result = await casebookRequest('/api/casebooks'); catalogue.replaceChildren();
@@ -325,8 +338,19 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
           confirmLabel: 'Clear pending source'}), clearPending), 'quiet'), pendingNotice, upload.wrap);
   updateSaveState(); drawSources(); await refresh();
   if (preparedReport) drawReport(preparedReport);
-  return h('div', {class: 'stack casebooks-page'}, h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'COMMUNITY CASEBOOKS'),
-    h('h2', {}, 'Prepare a report from your notes.'), h('p', {}, 'Add notes and questions. Prepare a local report with related source passages and visible gaps, then review the originals. Optional AI drafting uses your configured connection after you approve the context preview.')),
-    h('section', {class: 'card'}, h('h3', {}, 'Your saved projects'), catalogue),
-    practiceGuide, notice('Local by default. Sources are not fetched or uploaded automatically. Save deliberately, export backups, and review before sharing.'), editor, status, stop, output);
+  const explanation = h('p', {}, 'Add notes and questions. Prepare a local report with related source passages and visible gaps, then review the originals. Optional AI drafting uses your configured connection after you approve the context preview.');
+  const intro = h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'COMMUNITY CASEBOOKS'),
+    h('h2', {}, 'Prepare a report from your notes.'));
+  const shelf = h('section', {class: 'card'}, h('h3', {}, 'Your saved projects'), catalogue);
+  const localNotice = notice('Local by default. Sources are not fetched or uploaded automatically. Save deliberately, export backups, and review before sharing.');
+  if (globalThis.sinterBrowser) {
+    browserGuidance = h('details', {class: 'browser-project-details', open: !seed.book},
+      h('summary', {}, 'Saved projects and project guidance'), localNotice, explanation, shelf, practiceGuide);
+    // A current editor comes first. Opening the catalogue shows saved projects.
+    const work = seed.book ? [editor, browserGuidance] : [browserGuidance, editor];
+    return h('div', {class: 'stack casebooks-page'}, intro, ...work, status, stop, output);
+  }
+  intro.append(explanation);
+  return h('div', {class: 'stack casebooks-page'}, intro, shelf,
+    practiceGuide, localNotice, editor, status, stop, output);
 }

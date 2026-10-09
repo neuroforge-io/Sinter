@@ -1,7 +1,7 @@
 /** Export scope for a source-only handover, separate from evidence selection. */
 export const HANDOVER_EVIDENCE_OPTIONS = Object.freeze([
-  Object.freeze(['compact', 'Compact notes · up to four selected passages']),
-  Object.freeze(['selected_appendix', 'Include every selected passage · with appendix']),
+  Object.freeze(['compact', 'Compact notes']),
+  Object.freeze(['selected_appendix', 'All selected passages']),
 ]);
 
 export function handoverEvidenceMode(book = {}) {
@@ -18,6 +18,6 @@ export function handoverExportNotice(report) {
   const scope = handoverEvidenceMode(report) === 'selected_appendix'
     ? `This prepared handover includes all ${count} selected passages.`
       + (count > 4 ? ' Passages after the first four are in its appendix.' : '')
-    : `This prepared handover includes ${Math.min(4, count)} of ${count} selected passages. Additional passages stay in Evidence; choose the appendix option to include them in the document.`;
+    : `This prepared handover includes ${Math.min(4, count)} of ${count} selected passages. Additional passages stay in Evidence; choose All selected passages to include them in the document.`;
   return scope + ' This is selected wording, not answered questions or a whole-source review. Word exports the current document text; your edits can change what it includes.';
 }

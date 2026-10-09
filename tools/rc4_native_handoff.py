@@ -1194,13 +1194,20 @@ def browser(root, executable):
             contract.scoped_fixture()["title"]
         )
         originals = page.locator("details.source").filter(
-            has=page.get_by_role("button", name="Remove source", exact=True)
+            # Identify original cards while their source disclosure is closed.
+            # Visibility is required after opening each card below.
+            has=page.get_by_role("button", name="Remove source", exact=True,
+                                 include_hidden=True)
         )
         expect(originals).to_have_count(3)
         for row, source in zip(originals.all(), contract.fixture()["documents"]):
             if row.get_attribute("open") is None:
                 row.locator("summary").click()
+            expect(row.get_by_role("button", name="Remove source", exact=True)).to_be_visible()
+            expect(row.locator("pre")).to_be_visible()
             expect(row.locator("pre")).to_have_text(source["content"])
+            old.exact(row.locator("pre").text_content(), source["content"],
+                      "Browser original wording differs.")
         scope = page.locator("details.card").filter(
             has=page.get_by_text("Choose sources for each question", exact=True)
         )

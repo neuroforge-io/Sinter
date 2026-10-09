@@ -45,9 +45,13 @@ def main(argv: list[str] | None = None) -> None:
                     )
                 )
                 expect(originals).to_have_count(3)
+                expect(page.get_by_role('button', name='Remove source', exact=True)).to_have_count(0)
+                original_texts = []
                 for index in range(3):
                     originals.nth(index).locator('summary').click()
+                    expect(originals.nth(index).get_by_role('button', name='Remove source', exact=True)).to_be_visible()
                     expect(originals.nth(index).locator('pre')).to_be_visible()
+                    original_texts.append(originals.nth(index).locator('pre').text_content())
                 expect(originals.nth(0)).to_contain_text('No booking has been confirmed.')
                 expect(originals.nth(2)).to_contain_text('No one agreed to own the roster yet.')
                 page.get_by_role('button', name='Prepare source-only report', exact=True).click()
@@ -94,6 +98,7 @@ def main(argv: list[str] | None = None) -> None:
                     page.get_by_role('button', name='Export project backup', exact=True).click()
                 contents = json.loads(Path(download.value.path()).read_text())
                 assert len(contents['documents']) == 3
+                assert original_texts == [source['content'] for source in contents['documents']]
                 assert contents['document_type'] == 'handover'
                 assert contents['recipient'] == 'Fictional handover team'
                 assert contents['contact_details'] == details['Contact details']

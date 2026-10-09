@@ -83,8 +83,15 @@ unqualified. Earlier rc2 installers do not include local Word-copy recovery.
 
 Current RC4 candidate source is version `0.5.4rc4`; an RC4 installer is not yet
 qualified or published. Source CI results do not establish installed operation.
-The published RC3 Linux preview remains the available qualified download while
-the separate RC4 installed and upgrade gates are completed.
+On 9 October, the frozen Linux candidate at
+`4cab335e60bbeaceabd6910cf4a453454020eb2c` passed the installed garden workflow
+and both recovery profiles. Its four-launch native baseline passed, but the full
+browser handoff failed before complete source inspection. Later cancellation and
+close journeys were not reached; cold installation and prior-preview replacement
+were not run. Later source harness repairs need fresh qualification and do not
+qualify that frozen installer. The published RC3 Linux preview remains the
+available qualified download and is unchanged. See the
+[dated qualification record](QUALITY_REVIEW_2026-09-12.md).
 
 The table below declares the CI build/test environments. It is not a pass matrix
 for every candidate. Earlier v0.5.3, RC1 and RC2 packages have separate evidence;

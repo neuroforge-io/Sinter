@@ -251,6 +251,13 @@ _OPERATIONS = (
         "document; optional focused_opportunity.",
     ),
     Operation(
+        "campaigns.focus",
+        "POST",
+        "/api/campaigns/focus",
+        "Preview a separate focused campaign without changing or saving its parent.",
+        "document, opportunity, title; optional options and parent reference.",
+    ),
+    Operation(
         "campaigns.save",
         "POST",
         "/api/campaigns/save",

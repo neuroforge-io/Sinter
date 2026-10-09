@@ -1268,9 +1268,12 @@ def test_original_ui_contract_positives_and_no_invoked_operations_claim():
         if path.is_file()
     }
     operations = source_operations(source)
-    assert len(operations) in {53, 54}
+    assert len(operations) in {53, 54, 55}
     assert ("campaigns.funding_summary" in {row["id"] for row in operations}) is (
-        len(operations) == 54
+        len(operations) >= 54
+    )
+    assert ("campaigns.focus" in {row["id"] for row in operations}) is (
+        len(operations) == 55
     )
     assert len(workflow_checks(source)) == 22
     roles = workflow_artifact_paths(source)
@@ -1303,9 +1306,9 @@ def test_original_ui_contract_positives_and_no_invoked_operations_claim():
 
 def catalogue_alignment_source(count):
     raw = (producer.ROOT / "src/sinter/runtime.py").read_bytes()
-    if count == 54:
+    if count == 55:
         return {"src/sinter/runtime.py": raw}
-    assert count == 53
+    assert count in {53, 54}
     tree = ast.parse(raw)
     entries = next(
         node.value
@@ -1319,12 +1322,56 @@ def catalogue_alignment_source(count):
     entries.elts = [
         entry
         for entry in entries.elts
-        if entry.args[0].value != "campaigns.funding_summary"
+        if entry.args[0].value != "campaigns.focus"
+        and (count == 54 or entry.args[0].value != "campaigns.funding_summary")
     ]
     return {"src/sinter/runtime.py": ast.unparse(tree).encode()}
 
 
-@pytest.mark.parametrize("count", [53, 54])
+@pytest.mark.parametrize("operation", ["campaigns.focus", "campaigns.funding_summary"])
+@pytest.mark.parametrize("mutation", ["missing-id", "method", "route", "effect"])
+def test_focused_catalogue_requires_both_exact_local_definitions(operation, mutation):
+    from tools.installed_workflow_qualification import source_operations
+
+    source = catalogue_alignment_source(55)
+    tree = ast.parse(source["src/sinter/runtime.py"])
+    entries = next(
+        node.value for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "_OPERATIONS"
+                for target in node.targets)
+    )
+    selected = next(entry for entry in entries.elts
+                    if entry.args[0].value == operation)
+    if mutation == "missing-id":
+        selected.args[0] = ast.Constant("unrecognized.replacement")
+    elif mutation == "effect":
+        selected.args.append(ast.Constant("write"))
+    else:
+        selected.args[{"method": 1, "route": 2}[mutation]] = ast.Constant("wrong")
+    source["src/sinter/runtime.py"] = ast.unparse(tree).encode()
+    with pytest.raises(ValueError):
+        source_operations(source)
+
+
+def test_focused_catalogue_cannot_replace_an_existing_operation_in_old_profile():
+    from tools.installed_workflow_qualification import source_operations
+
+    source = catalogue_alignment_source(55)
+    tree = ast.parse(source["src/sinter/runtime.py"])
+    entries = next(
+        node.value for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "_OPERATIONS"
+                for target in node.targets)
+    )
+    entries.elts.pop(0)
+    source["src/sinter/runtime.py"] = ast.unparse(tree).encode()
+    with pytest.raises(ValueError, match="cannot replace"):
+        source_operations(source)
+
+
+@pytest.mark.parametrize("count", [53, 54, 55])
 def test_workflow_returned_catalogue_count_comes_from_trusted_source(count):
     from tools.installed_workflow_qualification import source_operations
 

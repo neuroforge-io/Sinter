@@ -11,6 +11,34 @@ load downloads about 15 MB before compression; subsequent loads can use normal
 browser caching. Local work requires no model. An initial connection is required
 to load application assets; a fully offline-installable PWA is not yet provided.
 
+### Build admission and recovery
+
+The builder admits all required assets against `browser/vendor-sha256.json`
+before creating or changing its output directory. Vendor read/download failures,
+oversized payloads and digest mismatches therefore leave existing output intact.
+This protection covers vendor admission; later source-copy or
+output-write failures are not an atomic build transaction.
+Use a fresh output directory for release builds: rebuilding an existing
+directory does not remove old files.
+
+Use `python browser/build.py dist/browser/sinter --vendor /path/to/pyodide-v0.29.3`
+for a strictly offline build. That directory must contain every manifest asset
+with its exact pinned bytes. A missing or invalid selected file fails with its
+asset name and path; the builder never substitutes the output cache or a network
+download for an explicitly supplied vendor directory. Without `--vendor`, valid
+files already in the output's `vendor` directory are reused and only missing
+assets are fetched from the version-pinned public URL. A corrupt cached asset
+fails rather than being silently replaced.
+
+Network failures name the asset and public URL. Each request retains the
+120-second urllib timeout; this is not a total wall-clock build deadline.
+No download is automatically retried, no fallback origin is configured, and a failed
+integrity check is never bypassed. The CLI reports the failure and exits 1.
+After inspecting the error, retry the build manually, or provide a complete
+verified vendor directory to avoid network availability affecting the build.
+Keep the original failed CI run as evidence; a later successful build does not
+establish that its earlier browser journey ran.
+
 ## Storage and recovery
 
 Only explicitly saved project/report/preferences and watch changes are committed.
@@ -66,6 +94,9 @@ all four workbench workflows, export/import validation, rollback and paused watc
 The same contract can run under CPython and Pyodide. `browser/smoke.py` is the real
 browser save/reload/download/multi-tab/mobile contract; the dedicated workflow runs
 it on Chromium, Firefox and WebKit. Passing Node/WASM tests is not a browser pass.
+`tests/test_browser_build.py` uses fictional vendor payloads and a fake network
+to check strict offline admission, failure context, intact prior output, digest
+enforcement and deterministic artifacts without downloading a runtime.
 
 ## Application-managed search in chat
 

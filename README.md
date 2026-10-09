@@ -39,6 +39,15 @@ release-tool changes are separate from the published RC3 evidence. Read the
 [Word handover source review](docs/WORD_HANDOVER_NAVIGATION_2026-10-01.md) for the
 tested scope and remaining installer gates.
 
+On 9 October, the frozen Linux RC4 candidate at
+`4cab335e60bbeaceabd6910cf4a453454020eb2c` passed its installed garden workflow
+and both recovery profiles. Its four-launch native baseline passed, but the full
+browser handoff failed before complete source inspection; later cancellation and
+close journeys were not reached. Cold installation and prior-preview replacement
+were not run. Later source harness repairs need fresh qualification and do not
+qualify that frozen installer. Published RC3 remains unchanged. See the
+[dated qualification record](docs/QUALITY_REVIEW_2026-09-12.md).
+
 Development source also offers **Open full workbench** from the native window,
 with a bounded shutdown that preserves work when close must be refused. The
 [native-to-browser source review](docs/NATIVE_BROWSER_REVIEW_2026-10-01.md)
@@ -106,6 +115,15 @@ step. Template steps keep their source context, preserve incomplete output and n
 silently replay a request. Funding campaigns keep opportunities, quotes and next
 actions in a revisioned local record. Readable drafts can be edited and exported
 to Word while their original sources remain in the evidence pack.
+
+In the development browser workbench, choose a route and **Make focused campaign…**
+to work on a smaller case. Preview the complete included and omitted material,
+and choose explicitly whether to include shared work, linked products and other
+sources. Historical answers, communications and source snapshots retain their
+recorded status. Opening creates an unsaved copy; **Save campaign** creates a
+separate record. The original is unchanged. Export the original snapshot first
+if it has edits you want to keep. A selection that exceeds the existing limits
+is refused without cutting its text.
 
 Current development shows compact quoted-cost rows and opens the next missing
 price or reference. Open and closed cost rows stay as left when moving between

@@ -96,6 +96,10 @@ jobs:
       - run: python tools/deliverable_browser.py
       - run: python tools/campaign_browser.py
       - run: python tools/campaign_hold_browser.py
+      - name: Focused copies retain selected evidence and unsaved parent work
+        run: python tools/campaign_focus_browser.py
+        env:
+          TMPDIR: ${{ github.workspace }}/browser-artifacts
       - run: python tools/campaign_backup_browser.py
       - run: python tools/campaign_source_picker_browser.py
       - run: python tools/campaign_currency_browser.py

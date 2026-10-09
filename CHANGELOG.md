@@ -1,5 +1,47 @@
 # Changelog
 
+## Unreleased
+
+- Make a separate focused campaign in the browser workbench. Preview included
+  and omitted material, choose shared work and linked products explicitly, and
+  retain source identities, old quotes, recorded statuses and correspondence.
+  The original stays unchanged; the copy remains unsaved until an explicit Save.
+- Keep the requested route selected when earlier linked dependencies are retained.
+  A fictional source journey checks cancellation, unsaved-parent protection,
+  a readable 390px preview and one new-record save with a lost acknowledgement.
+  These checks do not qualify a new installed release or real funding campaign.
+- Keep browser backup controls collapsed until requested and Stop available
+  during active work. Focus the project name when opening a saved browser casebook;
+  retain complete local-storage and privacy notices in guidance and backups.
+  Fresh cross-browser and installed qualification remain required.
+- Admit every pinned Pyodide asset before changing browser build output.
+  Explicit vendor directories stay strictly offline; missing or corrupt assets
+  and public download failures identify their path or URL and exit 1. Keep pins
+  and the public download URL unchanged, without automatic retries or configured
+  fallback origins.
+- Preserve returned model identity and prompt, completion and total token counts
+  in template events, completed helper results and partials. Incomplete steps
+  still stop dependent work without replaying the request.
+- Use short handover evidence choices, with complete scope details beside the
+  control. Retain compact and appendix values and every original source. Check
+  phone width when opening a saved project as well as the fictional example;
+  fresh WebKit execution is required to qualify the layout repair.
+- Add opt-in fixed phase diagnostics to the Windows source-wrapper fixtures.
+  Missing or invalid traces remain unknown. Preserve runtime selection, the
+  five-second checks and application exit status; this does not establish the
+  cause of the retained Windows timeouts or qualify a Windows release.
+- Update an action's summary as its task is edited, preserving the editor's
+  focus, caret, unsaved work and explicit Save. Use readable text for hold reasons
+  and suggested-owner status in both themes; decorative accents are unchanged.
+- Identify collapsed original-source cards in the native browser-handoff check
+  before opening them. Require all three originals, then visible controls and
+  complete literal wording. Retain the failed installed run; this harness repair
+  requires fresh qualification and does not qualify that frozen candidate.
+- Return an application answer to Needs review when its question or character
+  limit changes. Preserve its wording, source records and other answer reviews;
+  equivalent imported numeric limits and unchanged edits retain their review.
+  The interface regression checks focus, save/reopen and exact backup contents.
+
 ## 0.5.4rc4 - candidate source, installed qualification pending
 
 This candidate source follows the frozen RC3 release. It is not yet qualified as
