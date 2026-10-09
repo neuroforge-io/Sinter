@@ -468,6 +468,15 @@ class SourcePickerChecks(CampaignChecks):
             record.setdefault("source_history", []).append(
                 self.history_entry(record, source)
             )
+            expect(
+                current.get_by_label("Requirement source change", exact=True)
+            ).to_contain_text(
+                "Previous source wording is retained in Historical sources."
+            )
+            expect(current.get_by_text(
+                f"Historical sources ({len(record['source_history'])}) · "
+                "excluded from current checks", exact=True,
+            )).to_be_visible()
 
         def clear():
             current = open_check()
@@ -484,9 +493,11 @@ class SourcePickerChecks(CampaignChecks):
         self.choose(check, "Registered campaign source (optional)", second)
         expect(
             check.get_by_label("Requirement source change", exact=True)
-        ).to_contain_text(
-            "Your explanatory note is kept; recheck it against this source."
+        ).to_have_text(
+            "Source link changed. Your explanatory note is kept; "
+            "recheck it against this source."
         )
+        expect(check.get_by_text("Historical sources (", exact=False)).to_have_count(0)
         check.get_by_label(
             "What the evidence establishes or leaves unclear", exact=True
         ).scroll_into_view_if_needed()
@@ -531,6 +542,13 @@ class SourcePickerChecks(CampaignChecks):
         expect(
             check.get_by_label("Source link (user-entered)", exact=True)
         ).to_have_value(undated["url"])
+        # Older snapshots remain, but this first link adds no previous record.
+        expect(
+            check.get_by_label("Requirement source change", exact=True)
+        ).to_have_text(
+            "Source link changed. Your explanatory note is kept; "
+            "recheck it against this source."
+        )
         check = save_exact(
             status="unknown",
             source_id=undated["id"],
@@ -648,11 +666,18 @@ class SourcePickerChecks(CampaignChecks):
             assert len(pending) == 1
             dialog.get_by_role("button", name="Cancel", exact=True).click()
             expect(dialog).to_have_count(0)
+            held_request = pending[0].request
             reply = pending[0].fetch()
             assert reply.ok
-            with page.expect_response("**/api/campaigns/prepare") as cancelled:
-                pending[0].fulfill(response=reply)
-            cancelled.value.finished()
+            with page.expect_request_finished(
+                lambda request: request is held_request
+            ) as completed:
+                with page.expect_response(
+                    lambda response: response.request is held_request
+                ) as cancelled:
+                    pending[0].fulfill(response=reply)
+            assert completed.value is held_request
+            assert cancelled.value.ok
             page.evaluate("()=>new Promise(resolve=>requestAnimationFrame(resolve))")
             expect(page.locator(".campaign-save-state")).to_have_text(
                 "Saved on this computer"
@@ -813,11 +838,18 @@ class SourcePickerChecks(CampaignChecks):
                 else:
                     self.save(page)
                     assert self.snapshot(page, title) == before
+                held_request = pending[0].request
                 reply = pending[0].fetch()
                 assert reply.ok
-                with page.expect_response("**/api/campaigns/prepare") as released:
-                    pending[0].fulfill(response=reply)
-                released.value.finished()
+                with page.expect_request_finished(
+                    lambda request: request is held_request
+                ) as completed:
+                    with page.expect_response(
+                        lambda response: response.request is held_request
+                    ) as released:
+                        pending[0].fulfill(response=reply)
+                assert completed.value is held_request
+                assert released.value.ok
                 page.evaluate(
                     "()=>new Promise(resolve=>requestAnimationFrame(resolve))"
                 )

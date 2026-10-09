@@ -40,17 +40,37 @@ open and identify the existing source disclosure without weakening visibility
 checks. The corrected run passed all nine journeys, including delayed first links
 after navigation and an identical save, cancellation during admission, full
 refusal retention and both desktop/phone note views. It also emitted Playwright
-response-finished task warnings about closed targets; these are retained driver
-warnings, not evidence of a product JavaScript error or proven complete driver
-task cleanup. Their cause still needs a focused harness review.
+response-finished task warnings about closed targets. Inspection of the installed
+Playwright implementation found that `Response.finished()` leaves its losing
+page-closure task unconsumed. The three waits now use the public request-finished
+event, matched to the exact held request, before context closure. A fresh serial
+run passed all nine journeys without those warnings; its source hashes remained
+unchanged and browser/server closure was recorded. The earlier warnings remain
+historical evidence. This proves the exercised wait repair, not every driver task.
+Screenshot review then exposed misleading first-link feedback: it claimed previous
+wording had been preserved when no previous snapshot existed. Feedback now says
+that only when the selection adds a historical entry. A further fresh nine-journey
+pass checks first links, populated replacements and re-linking beside older history;
+it retains full data assertions and emitted no response-finished warnings.
 
 The real local case retains original sources and costs, dated correspondence,
 five explicit drafts, unverified current form limits and unaccepted owners. Independent
-review accepted its conservation, not submission readiness. Portal wording,
+review accepted its conservation, not submission readiness. Closing and reopening
+the browser then exporting the full campaign produced an identical 47,600-byte
+backup, retaining all five drafts. Its actual Word decision brief preserves the
+A$15,000 planning estimate and review caveats while excluding the held answer
+texts; the brief was saved locally in My workspace. These are actual source-only
+operator results, distinct from the fictional budget screenshots. Portal wording,
 applicant authority, cost eligibility, quotes, insurance, video and practical
 delivery evidence remain unresolved. No outbound communication or application
 was made in this pass. These results do not qualify a successor installer or
 establish whole-product 10/10 acceptance; published RC3 remains unchanged.
+
+The complete quality run at `32506ea` passed its browser job but failed two
+Python 3.13 Windows wrapper-fallback lanes at the unchanged five-second watchdog.
+Neither reached the application marker; runtime selection and entry are unknown.
+The original logs and XML are retained for diagnosis. Python 3.10 Windows passed
+separately; that result does not supersede the failed lanes or qualify an installer.
 
 ## 9 October RC4 removal handoff follow-up
 

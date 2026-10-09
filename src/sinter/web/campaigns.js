@@ -1410,6 +1410,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         row.source_id, linked => {
         const selection = approvedSelection;
         approvedSelection = null;
+        const historyRetained = (selection.requirement.source_history || []).length
+          > (row.source_history || []).length;
         Object.assign(row, selection.requirement);
         source.input.disabled = Boolean(linked);
         date.wrap.querySelector('label').textContent = linked
@@ -1422,8 +1424,10 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         sourceChange.hidden = !selection.changedSource;
         sourceChange.textContent = selection.changedSource
           ? (linked
-            ? 'Source link changed. Your explanatory note is kept; recheck it against this source. Previous source wording is retained in Historical sources.'
-            : 'Source link cleared. Your explanatory note is kept; previous wording and check date are retained in Historical sources.')
+            ? 'Source link changed. Your explanatory note is kept; recheck it against this source.'
+              + (historyRetained ? ' Previous source wording is retained in Historical sources.' : '')
+            : 'Source link cleared. Your explanatory note is kept'
+              + (historyRetained ? '; previous wording and check date are retained in Historical sources.' : '.'))
             + (selection.resetAssessment ? ' The previous assessment was reset to Not checked.' : '')
           : '';
           sourceHistory.replaceChildren(...historicalSourceView(row).childNodes);
