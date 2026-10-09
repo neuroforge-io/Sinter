@@ -22,6 +22,14 @@
 - Preserve returned model identity and prompt, completion and total token counts
   in template events, completed helper results and partials. Incomplete steps
   still stop dependent work without replaying the request.
+- Use short handover evidence choices, with complete scope details beside the
+  control. Retain compact and appendix values and every original source. Check
+  phone width when opening a saved project as well as the fictional example;
+  fresh WebKit execution is required to qualify the layout repair.
+- Add opt-in fixed phase diagnostics to the Windows source-wrapper fixtures.
+  Missing or invalid traces remain unknown. Preserve runtime selection, the
+  five-second checks and application exit status; this does not establish the
+  cause of the retained Windows timeouts or qualify a Windows release.
 
 ## 0.5.4rc4 - candidate source, installed qualification pending
 

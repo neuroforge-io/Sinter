@@ -49,7 +49,7 @@ export async function casebooksPage({setBusy, remember, seed = {}, onOpenGarden}
   const questions = field('What do you need to find out?', 'textarea', seed.book?.questions || '', 'One question per line, up to 20. Missing answers stay visible.', {maxLength: 12000, rows: 5});
   const format = selectField('Prepare a', [['brief', 'Briefing note'], ['enquiry', 'Enquiry letter'], ['agenda', 'Agenda item'], ['handover', 'Volunteer handover']], seed.book?.document_type || 'brief');
   const handoverEvidence = selectField('Evidence in source-only handover', HANDOVER_EVIDENCE_OPTIONS,
-    handoverEvidenceMode(seed.book), 'Word exports the document text you review or edit. The appendix carries selected passages, not all original sources; it does not establish answers.');
+    handoverEvidenceMode(seed.book), 'Choose Compact notes for up to four selected passages, or All selected passages for every selected passage, with an appendix when needed. Word exports the document text you review or edit. Selected passages are not all original sources and do not establish answers.');
   const showHandoverEvidence = () => { handoverEvidence.wrap.hidden = format.input.value !== 'handover'; };
   showHandoverEvidence();
   const status = h('div', {'aria-live': 'polite'}), output = h('div', {class: 'stack', id: 'casebook-output'}), sources = h('div', {class: 'stack', style: 'grid-template-columns:minmax(0,1fr)'});

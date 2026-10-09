@@ -107,6 +107,7 @@ def main():
         opened_question=page.get_by_label('What do you need to find out?',exact=True).bounding_box()
         opened_layout={'project_input':opened_box,'scroll_y':page.evaluate('scrollY'),
             'first_question_input':opened_question,
+            'scroll_width':page.evaluate('document.documentElement.scrollWidth'),
             'guidance_open':project_details.evaluate('(element)=>element.open'),
             'editor_precedes_guidance':project_details.evaluate('(element)=>element.previousElementSibling.matches(".casebook-editor")'),
             'input_focused':opened_project.evaluate('(element)=>document.activeElement===element')}
@@ -116,6 +117,7 @@ def main():
         assert opened_box and 0 <= opened_box['y'] < opened_box['y']+opened_box['height'] <= 844
         assert opened_layout['scroll_y']==0 and opened_layout['editor_precedes_guidance']
         assert opened_layout['input_focused'] and opened_project.is_enabled()
+        assert opened_layout['scroll_width'] <= 392
         assert opened_question and 0 <= opened_question['y'] < opened_question['y']+opened_question['height'] <= 844
         assert not project_details.evaluate('(element)=>element.open')
         page.set_viewport_size({'width':1440,'height':1000})

@@ -734,6 +734,41 @@ def _wrapper_stage_observation(stages: Path) -> dict:
     return value
 
 
+_BATCH_WRAPPER_PHASES = frozenset({
+    'batch_entered', 'python_lookup_begin', 'python_lookup_end',
+    'launcher_lookup_begin', 'launcher_lookup_end', 'launcher_listing_begin',
+    'launcher_listing_end', 'listed_candidate_entered', 'runtime_probe_begin',
+    'runtime_probe_end', 'start_dispatch_begin', 'start_dispatch_end',
+    'batch_finish',
+})
+
+
+def _wrapper_batch_stage_observation(stages: Path) -> dict:
+    """Read only closed fixed phase names; absent or invalid evidence is unknown.
+
+    This reuses the fixture's bounded snapshot reader. Even a complete snapshot
+    is not proof that descendants finished or that a selected runtime is valid.
+    """
+    value, raw = _snapshot(stages, limit=MAX_SAMPLE_BYTES)
+    value['batch_entered'] = None
+    value['last_phase'] = None
+    if raw is not None:
+        try:
+            lines = raw.decode('utf-8').splitlines()
+        except UnicodeError as error:
+            value['decode_error'] = f'{type(error).__name__}: {error}'
+        else:
+            value['lines'] = lines
+            if (
+                raw.endswith(b'\n') and lines
+                and all(line in _BATCH_WRAPPER_PHASES for line in lines)
+            ):
+                value['last_phase'] = lines[-1]
+                if lines[0] == 'batch_entered':
+                    value['batch_entered'] = True
+    return value
+
+
 def _wrapper_selection_satisfied(selection: dict, runtime: object) -> bool | None:
     """Check only the explicitly configured fixture selection.
 
@@ -784,6 +819,7 @@ def _exercise_wrapper_fixture(
     launcher = directory / wrapper
     shutil.copyfile(Path(__file__).parents[1] / wrapper, launcher)
     marker, stages = tmp_path / 'wrapper-marker.json', tmp_path / 'wrapper-stages.bin'
+    batch_stages = tmp_path / 'wrapper-batch-stages.bin'
     selection = {
         'lane': lane,
         'fixture_interpreter': sys.executable,
@@ -801,6 +837,7 @@ def _exercise_wrapper_fixture(
         'launcher_policy_effective': None,
     }
     if windows:
+        monkeypatch.setenv('SINTER_FIXTURE_BATCH_STAGES', str(batch_stages))
         # Launcher families have different controls. Request both debug channels
         # and request no automatic runtime installs before any fixture launch.
         # Administrative manager overrides may supersede environment settings;
@@ -856,6 +893,8 @@ def _exercise_wrapper_fixture(
         command = ['sh', str(launcher), *arguments]
     observation, stdout = observe_wrapper(command, tmp_path, marker, timeout=5)
     observation['startup_stages'] = _wrapper_stage_observation(stages)
+    if windows:
+        observation['batch_stages'] = _wrapper_batch_stage_observation(batch_stages)
     runtime = observation['marker'].get('value', {})
     selection['satisfied'] = _wrapper_selection_satisfied(selection, runtime)
     observation['interpreter_selection'] = selection
