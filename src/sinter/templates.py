@@ -348,6 +348,8 @@ def _template_events(template: Template, variables: dict[str, str], stream: bool
                               else ChatResult("".join(parts), finish_reason="error"))
             partial = {"type": "step_partial", "step": step.name, "index": index,
                        "content": partial_result.content, "tokens": partial_result.total_tokens,
+                       "prompt_tokens": partial_result.prompt_tokens,
+                       "completion_tokens": partial_result.completion_tokens,
                        "finish_reason": partial_result.finish_reason,
                        "model": partial_result.model,
                        "max_tokens": (None if selected_provider() == CHATGPT else
@@ -360,6 +362,8 @@ def _template_events(template: Template, variables: dict[str, str], stream: bool
         outputs.append(result.content)
         yield {"type": "step_done", "step": step.name, "content": result.content,
                "tokens": result.total_tokens, "finish_reason": result.finish_reason,
+               "prompt_tokens": result.prompt_tokens,
+               "completion_tokens": result.completion_tokens,
                "model": result.model,
                "max_tokens": (None if selected_provider() == CHATGPT else
                               effective_max_tokens(maximum, model=result.model or None)),
@@ -378,5 +382,10 @@ def run_template(template: Template, variables: dict[str, str], on_step=None, on
         elif event["type"] == "token" and on_token:
             on_token(event["t"])
         elif event["type"] == "step_done":
-            results.append(ChatResult(event["content"], total_tokens=event["tokens"], finish_reason=event["finish_reason"]))
+            results.append(ChatResult(
+                event["content"], prompt_tokens=event["prompt_tokens"],
+                completion_tokens=event["completion_tokens"],
+                total_tokens=event["tokens"], finish_reason=event["finish_reason"],
+                model=event["model"],
+            ))
     return results

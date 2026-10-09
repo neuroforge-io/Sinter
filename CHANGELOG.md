@@ -10,6 +10,18 @@
   A fictional source journey checks cancellation, unsaved-parent protection,
   a readable 390px preview and one new-record save with a lost acknowledgement.
   These checks do not qualify a new installed release or real funding campaign.
+- Keep browser backup controls collapsed until requested and Stop available
+  during active work. Focus the project name when opening a saved browser casebook;
+  retain complete local-storage and privacy notices in guidance and backups.
+  Fresh cross-browser and installed qualification remain required.
+- Admit every pinned Pyodide asset before changing browser build output.
+  Explicit vendor directories stay strictly offline; missing or corrupt assets
+  and public download failures identify their path or URL and exit 1. Keep pins
+  and the public download URL unchanged, without automatic retries or configured
+  fallback origins.
+- Preserve returned model identity and prompt, completion and total token counts
+  in template events, completed helper results and partials. Incomplete steps
+  still stop dependent work without replaying the request.
 
 ## 0.5.4rc4 - candidate source, installed qualification pending
 

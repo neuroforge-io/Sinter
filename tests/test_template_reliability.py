@@ -15,6 +15,7 @@ from sinter.templates import (
     TemplateStepError,
     _from_data,
     get_builtin_template,
+    run_template,
     template_events,
 )
 
@@ -88,6 +89,83 @@ def test_template_stream_reports_actual_finish_metadata(reason):
         events = list(template_events(template, {}))
     assert events[-1]["type"] == "step_done" and events[-1]["complete"] is True
     assert events[-1]["finish_reason"] == reason and events[-1]["tokens"] == 16
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_run_template_preserves_transport_model_and_each_token_counter(stream):
+    template = Template("Draft", "", [Step("Draft", "Question", stream=True)])
+    body = {
+        "model": client.MODEL,
+        "choices": [{"message": {"content": "A useful answer."},
+                     "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 12, "completion_tokens": 4, "total_tokens": 16},
+    }
+    tokens = []
+    with patch.object(client, "_post", return_value=body) as send_json, \
+            patch.object(client, "_post_raw", return_value=stream_response()) as send_stream:
+        results = run_template(
+            template, {}, on_token=tokens.append if stream else None,
+        )
+    assert results == [client.ChatResult(
+        "A useful answer.", 12, 4, 16, "stop", client.MODEL,
+    )]
+    assert tokens == (["A useful answer."] if stream else [])
+    assert send_json.call_count == int(not stream)
+    assert send_stream.call_count == int(stream)
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_incomplete_first_step_retains_transport_metadata_without_followup(stream):
+    template = Template("Two passes", "", [Step("Draft", "Question", stream=True),
+                                          Step("Check", "Must not run", stream=True)])
+    body = {
+        "model": client.MODEL,
+        "choices": [{"message": {"content": "Useful partial"},
+                     "finish_reason": "length"}],
+        "usage": {"prompt_tokens": 12, "completion_tokens": 4, "total_tokens": 16},
+    }
+    collected = []
+    with patch.object(client, "_post", return_value=body) as send_json, \
+            patch.object(client, "_post_raw", return_value=stream_response(
+                "Useful partial", "length")) as send_stream:
+        with pytest.raises(TemplateStepError) as failed:
+            for event in template_events(template, {}, stream=stream):
+                collected.append(event)
+    partial = failed.value.partial
+    assert partial is collected[-1]
+    assert partial["content"] == "Useful partial"
+    assert partial["model"] == client.MODEL
+    assert (
+        partial["prompt_tokens"], partial["completion_tokens"], partial["tokens"],
+    ) == (12, 4, 16)
+    assert partial["finish_reason"] == "length" and partial["complete"] is False
+    assert partial["index"] == 0 and partial["step"] == "Draft"
+    assert isinstance(failed.value.__cause__, client.IncompleteGeneration)
+    assert failed.value.__cause__.result == client.ChatResult(
+        "Useful partial", 12, 4, 16, "length", client.MODEL,
+    )
+    assert [event["index"] for event in collected if event["type"] == "step"] == [0]
+    assert not any(event["type"] == "step_done" for event in collected)
+    assert send_json.call_count == int(not stream)
+    assert send_stream.call_count == int(stream)
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_run_template_keeps_omitted_custom_transport_metadata_omitted(stream):
+    template = Template("Draft", "", [Step("Draft", "Question", stream=True)])
+
+    def text_only_stream(*args, **kwargs):
+        yield "Custom transport answer."
+
+    with patch("sinter.templates.chat", return_value=client.ChatResult(
+            "Custom transport answer.")) as send_json, \
+            patch("sinter.templates.chat_stream", side_effect=text_only_stream) as send_stream:
+        results = run_template(
+            template, {}, on_token=(lambda token: None) if stream else None,
+        )
+    assert results == [client.ChatResult("Custom transport answer.")]
+    assert send_json.call_count == int(not stream)
+    assert send_stream.call_count == int(stream)
 
 
 @pytest.mark.parametrize("name", community_recipes())
