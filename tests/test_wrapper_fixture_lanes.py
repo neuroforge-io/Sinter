@@ -214,7 +214,7 @@ def test_failed_parent_keeps_entry_stage_and_selection_in_junit_before_refusal(
     stages.write_bytes(b"python_entered\n")
     launches = []
 
-    def observe(command, directory, final_marker, *, timeout):
+    def observe(command, directory, final_marker, *, timeout, phase_paths):
         launches.append(command)
         assert directory == tmp_path and final_marker == marker and timeout == 5
         return {
@@ -260,7 +260,7 @@ def test_windows_fixture_requests_both_launcher_policies_before_one_launch(
     monkeypatch.setenv("COMSPEC", "inert-cmd.exe")
     launches = []
 
-    def observe(command, directory, marker, *, timeout):
+    def observe(command, directory, marker, *, timeout, phase_paths):
         # Observe requested process policy without running a Windows executable.
         launches.append(command)
         assert timeout == 5
@@ -309,7 +309,7 @@ def _windows_selection_fixture(
 
     The registered fallback is a real installed launcher/runtime. Alias and
     broken-runtime files are deliberate refusal fixtures, not Python versions.
-    Every actual dispatch keeps the existing five-second whole-wrapper bound.
+    Every actual dispatch keeps the existing five-second parent wait bound.
     """
     source = tmp_path / "source Ω & (draft)! 100% folder"
     source.mkdir()
@@ -364,6 +364,7 @@ def _windows_selection_fixture(
     command = f'{shell} /d /s /c "{invocation}"'
     observation, stdout = fixtures.observe_wrapper(
         command, tmp_path, marker, timeout=5,
+        phase_paths={"batch": batch_stages, "python": stages},
     )
     observation["startup_stages"] = fixtures._wrapper_stage_observation(stages)
     observation["batch_stages"] = fixtures._wrapper_batch_stage_observation(
@@ -421,7 +422,7 @@ def test_inert_fallback_retains_batch_phase_before_unknown_python_entry(
     request = SimpleNamespace(node=SimpleNamespace(user_properties=[]))
     launches = []
 
-    def observe(command, directory, marker, *, timeout):
+    def observe(command, directory, marker, *, timeout, phase_paths):
         launches.append(command)
         assert timeout == 5
         assert os.environ["SINTER_FIXTURE_BATCH_STAGES"] == str(

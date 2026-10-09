@@ -44,6 +44,11 @@
   Missing or invalid traces remain unknown. Preserve runtime selection, the
   five-second checks and application exit status; this does not establish the
   cause of the retained Windows timeouts or qualify a Windows release.
+- Record bounded parent observations of wrapper filtering, runtime probing and
+  entry phases under one unchanged wait deadline after process creation.
+  Failed reads and incomplete traces remain visible; sampling never adds a
+  launch or retry. Host observations are not exact child timings. Current-host
+  regressions do not substitute for the remaining Windows qualification.
 - Update an action's summary as its task is edited, preserving the editor's
   focus, caret, unsaved work and explicit Save. Use readable text for hold reasons
   and suggested-owner status in both themes; decorative accents are unchanged.

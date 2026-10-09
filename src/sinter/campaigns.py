@@ -1254,11 +1254,13 @@ def _reportable_answer_indexes(document: dict) -> set[int]:
 
 def _report_campaign_view(document: dict,
                          reportable_answers: set[int]) -> dict:
-    """Keep held and historical answer content out of shareable report data.
+    """Omit held and historical answer fields from report views.
 
     The editable campaign and its explicit JSON backup retain the complete
-    labels and drafts. A report view only includes answer rows eligible to
-    appear in the active-route brief.
+    labels and drafts. A report view includes answer fields only for rows
+    eligible to appear in the active-route brief. Original source quotations
+    and notes stay unchanged and may repeat draft wording; this is not a
+    complete content redaction.
     """
     report = dict(document)
     report["answers"] = []

@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from wrapper_diagnostics import MAX_SAMPLE_BYTES, _snapshot, observe_wrapper
+from wrapper_diagnostics import MAX_SAMPLE_BYTES, PHASES, _snapshot, observe_wrapper
 
 from sinter import cli, client, review, review_checkpoints
 
@@ -734,13 +734,7 @@ def _wrapper_stage_observation(stages: Path) -> dict:
     return value
 
 
-_BATCH_WRAPPER_PHASES = frozenset({
-    'batch_entered', 'python_lookup_begin', 'python_lookup_end',
-    'launcher_lookup_begin', 'launcher_lookup_end', 'launcher_listing_begin',
-    'launcher_listing_end', 'listed_candidate_entered', 'runtime_probe_begin',
-    'runtime_probe_end', 'start_dispatch_begin', 'start_dispatch_end',
-    'batch_finish',
-})
+_BATCH_WRAPPER_PHASES = PHASES['batch']
 
 
 def _wrapper_batch_stage_observation(stages: Path) -> dict:
@@ -891,7 +885,11 @@ def _exercise_wrapper_fixture(
         command = f'{shell} /d /s /c "{invocation}"'
     else:
         command = ['sh', str(launcher), *arguments]
-    observation, stdout = observe_wrapper(command, tmp_path, marker, timeout=5)
+    observation, stdout = observe_wrapper(
+        command, tmp_path, marker, timeout=5,
+        phase_paths=({'batch': batch_stages, 'python': stages}
+                     if windows else {'python': stages}),
+    )
     observation['startup_stages'] = _wrapper_stage_observation(stages)
     if windows:
         observation['batch_stages'] = _wrapper_batch_stage_observation(batch_stages)

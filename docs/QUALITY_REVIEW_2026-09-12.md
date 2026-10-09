@@ -59,8 +59,16 @@ review accepted its conservation, not submission readiness. Closing and reopenin
 the browser then exporting the full campaign produced an identical 47,600-byte
 backup, retaining all five drafts. Its actual Word decision brief preserves the
 A$15,000 planning estimate and review caveats while excluding the held answer
-texts; the brief was saved locally in My workspace. These are actual source-only
-operator results, distinct from the fictional budget screenshots. Portal wording,
+texts; the brief was saved locally in My workspace. After the owned app closed,
+a read-only workspace lookup independently verified that report's persisted row
+and exact 87,449-byte payload. Its 2,532-character decision brief excludes all
+five held drafts and their labels; the projected answer fields have blank text,
+generic held labels and no limits. The 40,565-character full audit notes retain
+dated original source quotations, including one complete passage matching a
+held draft. Those sources remain intact. This verifies durable local storage,
+not a later interface reopening of the saved report or complete content redaction.
+These are actual source-only operator results, distinct from the fictional budget
+screenshots. Portal wording,
 applicant authority, cost eligibility, quotes, insurance, video and practical
 delivery evidence remain unresolved. No outbound communication or application
 was made in this pass. These results do not qualify a successor installer or
@@ -71,6 +79,22 @@ Python 3.13 Windows wrapper-fallback lanes at the unchanged five-second watchdog
 Neither reached the application marker; runtime selection and entry are unknown.
 The original logs and XML are retained for diagnosis. Python 3.10 Windows passed
 separately; that result does not supersede the failed lanes or qualify an installer.
+A later run at `225b36e`, with the same Windows wrapper, failed the Python 3.10
+registered-fallback lane at 5.020 seconds while the Python 3.13 job passed.
+The last recorded phase was `runtime_probe_begin`; no final runtime marker or
+application entry was observed. Its original logs and XML are retained separately.
+The cause remains unknown; neither passing comparison diagnoses the failed run.
+The next source adds four opt-in, fixed filter-phase markers and bounded parent
+observations of batch/Python phase files. Samples record the first completed host
+read, not exact child boundaries or exclusive CPU cost. One five-second parent
+wait deadline still begins after process creation; no retry or selection change
+was added. Sampling checks that deadline before each read; an already begun OS
+read is byte-bounded, not a hard wall-time guarantee. An expired observation uses
+only a nonblocking exit poll before retaining the original result or timeout and
+cleanup. Focused current-host checks passed 68 tests with 30 Windows cases skipped,
+including real Linux argument/path preservation and inert slow-read, read-error,
+partial-trace, sample-cap and creation-delay regressions. This is diagnostic
+validation, not a Windows startup fix, descendant-cleanup proof or installer pass.
 
 ## 9 October RC4 removal handoff follow-up
 

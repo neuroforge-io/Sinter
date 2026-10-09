@@ -53,12 +53,16 @@ endlocal & exit /b %SINTER_EXIT%
 if defined SINTER_FIXTURE_BATCH_STAGES call :trace listed_candidate_entered
 if defined SINTER_PYTHON exit /b 0
 rem Admit complete ordinary CPython tags, not headers or arbitrary commands.
+if defined SINTER_FIXTURE_BATCH_STAGES call :trace tag_filter_begin
 set SINTER_LIST_TAG| "%SystemRoot%\System32\findstr.exe" /r /x /c:"SINTER_LIST_TAG=-V:3\.[0-9][0-9]*[-0-9]*" /c:"SINTER_LIST_TAG=-3\.[0-9][0-9]*[-0-9]*" >nul
+if defined SINTER_FIXTURE_BATCH_STAGES call :trace tag_filter_end
 if not "%errorlevel%"=="0" exit /b 0
 rem Before expansion, admit no quotes or exactly one complete outer quote pair.
+if defined SINTER_FIXTURE_BATCH_STAGES call :trace quote_filter_begin
 set SINTER_CANDIDATE| "%SystemRoot%\System32\findstr.exe" /r /x ^
   /c:"SINTER_CANDIDATE=[^\"]*" /c:"SINTER_CANDIDATE=\"[^\"]*\"" ^
   /c:"SINTER_CANDIDATE=\* [^\"]*" /c:"SINTER_CANDIDATE=\* \"[^\"]*\"" >nul
+if defined SINTER_FIXTURE_BATCH_STAGES call :trace quote_filter_end
 if not "%errorlevel%"=="0" exit /b 0
 set "SINTER_CANDIDATE=%SINTER_CANDIDATE:"=%"
 for /f "tokens=1,*" %%P in ("%SINTER_CANDIDATE%") do (
