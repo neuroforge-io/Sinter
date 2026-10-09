@@ -1561,7 +1561,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         let refreshActionSummary = () => {};
         const task = input('Next action', 'textarea', row, 'task',
           'Write the next step in plain language, including what to check and where to record the result.',
-          {rows: 3, maxLength: 2000}, refreshActionSummary);
+          {rows: 3, maxLength: 2000}, () => refreshActionSummary());
         const scopeChoices = [
           ...(row.scope_confirmed === true ? [] : [['__confirm_scope__', 'Choose scope · not confirmed']]),
           ['', 'Campaign-wide'], ...document.opportunities.map((item, index) => [`route:${index}`, item.name])];

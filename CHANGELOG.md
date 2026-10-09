@@ -30,6 +30,13 @@
   Missing or invalid traces remain unknown. Preserve runtime selection, the
   five-second checks and application exit status; this does not establish the
   cause of the retained Windows timeouts or qualify a Windows release.
+- Update an action's summary as its task is edited, preserving the editor's
+  focus, caret, unsaved work and explicit Save. Use readable text for hold reasons
+  and suggested-owner status in both themes; decorative accents are unchanged.
+- Identify collapsed original-source cards in the native browser-handoff check
+  before opening them. Require all three originals, then visible controls and
+  complete literal wording. Retain the failed installed run; this harness repair
+  requires fresh qualification and does not qualify that frozen candidate.
 
 ## 0.5.4rc4 - candidate source, installed qualification pending
 
