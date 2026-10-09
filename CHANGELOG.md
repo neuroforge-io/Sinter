@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Show approximate word counts beside the existing application-answer character
+  counts. Keep character limits explicit; word counts are guidance, not a portal
+  limit or permission to use a held draft. Saved inputs and backups are unchanged.
+- Give campaign source searches the full available width on phones and place
+  Clear link on its own compact row. Preserve explicit selection, confirmation,
+  cancellation and historical source records.
 - Retain replaced eligibility and product evidence as bounded historical source
   snapshots. Preview the old record before replacing or clearing its link;
   Cancel and rejected local admission leave the record unchanged. Previous

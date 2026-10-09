@@ -1,5 +1,64 @@
 # Sinter user-testing closeout — 12 September 2026
 
+## 9 October application counts and phone source editing
+
+The real local SubjectNest application has a 186-character answer under a recorded
+200-character limit and a 2,914-character alignment draft with an approximately
+405-word length. Its historical 800-word note is not a confirmed current portal
+rule and correctly remains outside the character-only limit field. Adversarial
+operator review rated the demonstrated operational experience 6/10 and
+functionality 7/10; unresolved applicant authority and programme facts remain
+blockers. Screenshot review rated the demonstrated desktop composition 7/10,
+phone source editing 5.5/10 and source-selection clarity 6.5/10. These are bounded
+assessments, not whole-product or installed-release ratings.
+
+Current source adds an informational approximate word counter without changing
+the campaign schema, character-limit admission, original answer text or applicant
+holds. It does not interpret question labels as current portal limits. Phone
+source searches now have a full-width field and a separate compact Clear link
+row; source-selection and recovery semantics are unchanged.
+
+Focused regressions passed 252 Python tests, including the four local Unicode
+counter checks. The campaign suite passed all nine fictional browser journeys,
+including word-count guidance, held drafts, scoped review invalidation and exact
+save/reopen/export/restore. The source-picker suite separately passed all nine
+journeys with eleven declared source hashes unchanged, recorded browser/server
+closure and no recorded external requests or browser errors. At 390px the search
+uses all 286px of its available panel, with a 49.6px height; Clear link uses a
+separate 92px by 44px target. Counter guidance wraps inside its card and remains
+visible. These checks used the installed Google Chrome executable against source;
+they do not establish cross-browser or installed-release qualification.
+
+Actual operator use then showed 186/200 characters and about 31 words for the
+short answer, and 2,914 characters and about 405 words for alignment. A temporary
+local edit updated alignment to 2,935 characters and about 408 words; review and
+copy remained unavailable. Restoring the exact original wording and saving once
+created revision 11. Its 47,600-byte exported backup is byte-for-byte identical to
+the earlier revision-10 backup, including all original sources, the unconfirmed
+applicant and the blank character-limit field for alignment. A browser-control
+focus timeout during initial navigation was inspected before retrying the
+navigation; it did not change or replay a campaign save.
+
+The previously persisted SubjectNest report was also reopened through the actual
+My workspace interface at source `0ee5363`. Its visible save state was Saved
+locally in My workspace. The rendered decision brief retained planning-estimate
+and unconfirmed-applicant cautions and excluded each of the five full held drafts.
+This extends the earlier database read-back with an actual interface reopening;
+original audit sources remain intact and may repeat held wording. No model call,
+outbound communication or application was made.
+
+The original full Quality run at `0ee5363` completed successfully: all twelve
+jobs passed, including Python 3.10/3.13 on Linux, macOS and Windows, Chromium,
+local speech, RKC interoperability and the source/portable-app check. Each
+Windows job recorded 5,063 passed tests, 778 skips and no failed tests. Both
+registered-runtime fallback lanes actually selected Python 3.14.7, while the
+explicit matrix-runtime lanes selected 3.10.11 and 3.13.15 respectively.
+Registered fallback took 1.618 and 1.577 seconds in these passing fixture rows;
+bounded phase samples are first host observations, not exclusive child timings.
+Original logs, artifacts and terminal job metadata are retained. This green
+source run does not explain or erase the earlier Windows timeouts, qualify an
+installed successor or cover subsequent source edits.
+
 ## 9 October campaign evidence and local drafting follow-up
 
 Actual operator use exposed three problems: replacing a requirement or product

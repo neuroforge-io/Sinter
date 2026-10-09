@@ -155,6 +155,152 @@ class CampaignChecks(DeliverableChecks):
         assert saved['answers'][1] == initial['answers'][1]
         assert saved['sources'] == initial['sources']
 
+    def answer_word_counts(self, page):
+        from playwright.sync_api import expect
+        document = fixture()
+        document['title'] = 'Fictional answer word-count campaign'
+        document['opportunities'][0].update(
+            status='open', application_mode='required',
+            applicant='Fictional Community Association', applicant_confirmed=False)
+        short = ('Map X–Z through 8 areas; publish a reviewer-approved resource in each. '
+                 'Invite 10 fictional adults; target 6 reviews and 5 who can find a source, '
+                 'edit, and print unaided. Publish results.')
+        paragraph = ('This fictional draft describes a local study and makes no claim that a real '
+                     'project, organisation, participant or quotation is confirmed. The proposed '
+                     'activities would allow community reviewers to investigate references, prepare '
+                     'a targeted revision and retain a document. A reviewer would assess each '
+                     'outcome before sharing it. Estimates, consent, responsibilities and timing '
+                     'would remain provisional until recorded evidence supports them.')
+        long = ' '.join((paragraph.split() * 7)[:405]).replace('. ', '.\n\n', 3)
+        assert (len(short), len(short.split()), len(long), len(long.split())) == (186, 31, 2914, 405)
+        route = document['opportunities'][0]['name']
+        document['answers'] = [
+            {'opportunity': route, 'label': 'Fictional success measures',
+             'text': short, 'limit': 200, 'status': 'draft'},
+            {'opportunity': route,
+             'label': 'Fictional alignment — historical 800 WORDS; current portal limit unverified',
+             'text': long, 'limit': None, 'status': 'draft'},
+        ]
+        self.import_fixture(page, document)
+        _, initial_backup = self.download(page, 'Export campaign backup')
+        initial = json.loads(initial_backup)
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        answers = page.get_by_role('article', name='Application answer')
+        short_answer, long_answer = answers.nth(0), answers.nth(1)
+        hint = 'Character limits only. For a word limit, leave this blank and check the portal’s word counter.'
+        short_status = '186 / 200 characters · within limit · about 31 words'
+        long_status = '2914 characters · confirm the form’s limit · about 405 words'
+        expect(short_answer.get_by_role('status')).to_have_text(short_status)
+        expect(long_answer.get_by_role('status')).to_have_text(long_status)
+        expect(short_answer.get_by_label('Character limit', exact=True)).to_have_value('200')
+        expect(long_answer.get_by_label('Character limit', exact=True)).to_have_value('')
+        for answer in (short_answer, long_answer):
+            expect(answer.get_by_text(hint, exact=True)).to_be_visible()
+            expect(answer.get_by_label('Draft answer', exact=True)).not_to_have_attribute('readonly', '')
+            expect(answer.get_by_label('Answer review', exact=True)).to_be_disabled()
+            expect(answer.get_by_role('button', name='Copy unavailable · applicant not confirmed', exact=True)).to_be_disabled()
+        text = long_answer.get_by_label('Draft answer', exact=True)
+        text.fill('Café e\u0301 🐝\n第二行')
+        expect(long_answer.get_by_role('status')).to_have_text(
+            '13 characters · confirm the form’s limit · about 4 words')
+        text.fill(' \n\t ')
+        expect(long_answer.get_by_role('status')).to_have_text(
+            '4 characters · confirm the form’s limit · about 0 words')
+        text.fill('')
+        expect(long_answer.get_by_role('status')).to_have_text(
+            '0 characters · confirm the form’s limit · about 0 words')
+        text.fill(long)
+        long_answer.get_by_label('Character limit', exact=True).fill('')
+        expect(long_answer.get_by_role('status')).to_have_text(long_status)
+        self.save(page)
+        page.reload()
+        page.get_by_role('button', name='Start a new campaign', exact=True).click()
+        page.get_by_role('button', name='Open ' + document['title'], exact=True).click()
+        expect(page.get_by_text('Campaign opened.', exact=False)).to_be_visible()
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        expect(short_answer.get_by_label('Draft answer', exact=True)).to_have_value(short)
+        expect(long_answer.get_by_label('Draft answer', exact=True)).to_have_value(long)
+        expect(short_answer.get_by_role('status')).to_have_text(short_status)
+        expect(long_answer.get_by_role('status')).to_have_text(long_status)
+        expect(long_answer.get_by_label('Character limit', exact=True)).to_have_value('')
+        expect(long_answer.get_by_label('Answer review', exact=True)).to_be_disabled()
+        self.transfers(page)
+        _, reopened_backup = self.download(page, 'Export campaign backup')
+        reopened = json.loads(reopened_backup)
+        assert reopened == initial
+        assert reopened['answers'][1]['limit'] is None
+
+        page.set_viewport_size({'width': 390, 'height': 844})
+        help_text = long_answer.get_by_text(hint, exact=True)
+        help_text.evaluate("element => element.scrollIntoView({block: 'center'})")
+        expect(help_text).to_be_visible()
+        expect(long_answer.get_by_role('status')).to_have_text(long_status)
+        geometry = help_text.evaluate('''hint => {
+            const card = hint.closest('article'), counter = card.querySelector('.campaign-character-count');
+            const bounds = card.getBoundingClientRect();
+            const texts = [hint, counter].map(element => {
+                const range = document.createRange();
+                range.selectNodeContents(element);
+                const box = element.getBoundingClientRect();
+                const lines = [...range.getClientRects()].map(line => ({
+                    left: line.left, right: line.right, top: line.top, bottom: line.bottom,
+                    visible: element.contains(document.elementFromPoint(
+                        (line.left + line.right) / 2, (line.top + line.bottom) / 2)),
+                }));
+                return {text: element.textContent, left: box.left, right: box.right,
+                    top: box.top, bottom: box.bottom, scrollWidth: element.scrollWidth,
+                    clientWidth: element.clientWidth, scrollHeight: element.scrollHeight,
+                    clientHeight: element.clientHeight, lines};
+            });
+            return {width: innerWidth, height: innerHeight, pageWidth: document.documentElement.scrollWidth,
+                card: {left: bounds.left, right: bounds.right}, texts};
+        }''')
+        assert geometry['pageWidth'] <= geometry['width'] + 1, geometry
+        for item in geometry['texts']:
+            assert item['scrollWidth'] <= item['clientWidth'] + 1, geometry
+            assert item['scrollHeight'] <= item['clientHeight'] + 1, geometry
+            assert item['lines'], geometry
+            for line in item['lines']:
+                assert 0 <= line['left'] <= line['right'] <= geometry['width'] + 1, geometry
+                assert geometry['card']['left'] <= line['left'] <= line['right'] <= geometry['card']['right'], geometry
+                assert 0 <= line['top'] < line['bottom'] <= geometry['height'], geometry
+                assert line['visible'], geometry
+        (self.artifacts / 'campaign-answer-word-counts-390-geometry.json').write_text(
+            json.dumps(geometry, indent=2), encoding='utf-8')
+        self.screenshot(page, 'answer-word-counts-390')
+        page.set_viewport_size({'width': 1440, 'height': 1000})
+
+        # Restoring the user-exported copy keeps word-limit scope and the holds.
+        self.import_fixture(page, reopened)
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        expect(long_answer.get_by_label('Draft answer', exact=True)).to_have_value(long)
+        expect(long_answer.get_by_label('Character limit', exact=True)).to_have_value('')
+        expect(long_answer.get_by_label('Answer review', exact=True)).to_be_disabled()
+        self.transfers(page)
+        _, restored_backup = self.download(page, 'Export campaign backup')
+        assert json.loads(restored_backup) == reopened
+
+        # Only this explicit fictional confirmation enables review; edits still
+        # invalidate just the changed answer, without assigning a word limit.
+        page.get_by_role('tab', name='Opportunities', exact=True).click()
+        page.get_by_text('Edit opportunity details', exact=True).click()
+        page.get_by_label('Applicant confirmed directly', exact=True).check()
+        page.get_by_role('tab', name='Application answers', exact=True).click()
+        short_answer.get_by_label('Answer review', exact=True).select_option('reviewed')
+        long_answer.get_by_label('Answer review', exact=True).select_option('reviewed')
+        long_answer.get_by_label('Draft answer', exact=True).fill('Café e\u0301 🐝\n第二行')
+        expect(long_answer.get_by_role('status')).to_have_text(
+            '13 characters · confirm the form’s limit · about 4 words')
+        expect(long_answer.get_by_label('Answer review', exact=True)).to_have_value('draft')
+        expect(short_answer.get_by_label('Answer review', exact=True)).to_have_value('reviewed')
+        expect(long_answer.get_by_label('Character limit', exact=True)).to_have_value('')
+        self.transfers(page)
+        _, edited_backup = self.download(page, 'Export campaign backup')
+        edited = json.loads(edited_backup)
+        assert edited['answers'][1] == {
+            **initial['answers'][1], 'text': 'Café e\u0301 🐝\n第二行', 'status': 'draft'}
+        assert edited['sources'] == initial['sources']
+
     def action_text_contrast(self, page):
         from playwright.sync_api import expect
         document = fixture()
@@ -403,7 +549,7 @@ class CampaignChecks(DeliverableChecks):
         expect(answer.locator('.campaign-character-count')).to_contain_text(
             '/ 250 characters')
         answer.get_by_label('Draft answer', exact=True).fill('a' * 251)
-        expect(answer.get_by_role('status')).to_have_text('251 / 250 characters · 1 over — shorten before using')
+        expect(answer.get_by_role('status')).to_have_text('251 / 250 characters · 1 over — shorten before using · about 1 word')
         answer.get_by_role('button', name='Copy this answer', exact=True).click()
         expect(answer.get_by_text('Copied as written.', exact=False)).to_be_visible()
         assert page.evaluate('() => navigator.clipboard.readText()') == 'a' * 251
@@ -1088,6 +1234,7 @@ def main(argv=None):
                 checks = CampaignChecks(browser, f'http://127.0.0.1:{server.server_port}', artifacts)
                 checks.check('campaign-application-budget-roundtrip', checks.workflow)
                 checks.check('campaign-answer-review-invalidation', checks.answer_review_invalidation)
+                checks.check('campaign-answer-word-counts', checks.answer_word_counts)
                 checks.check('campaign-conflict-import-recovery', checks.conflict_and_import)
                 checks.check('campaign-clarification-signer-isolation', checks.clarification_signer_is_campaign_scoped)
                 checks.check('campaign-communications-and-clarification-link', checks.communications_and_clarification_link)

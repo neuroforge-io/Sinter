@@ -6,6 +6,7 @@ import {campaignClarificationDraft, campaignIdentityFromProfile} from './campaig
 import {defaultCampaignOpportunityIndex, isCampaignActionCurrent, isCampaignActionOpen,
   isCampaignActionScopeConfirmed, isOpportunityActionable,
   applicationAnswerAvailability, canDraftApplicationAnswer} from './campaign-state.js';
+import {campaignAnswerCounts} from './campaign-answer-counts.js';
 import {applicationWindowGaps, campaignDecision, CAMPAIGN_DECISION_NOTE} from './campaign-decision.js';
 import {campaignActionOwnerState, normalizeCampaignActionOwners} from './campaign-owner.js';
 import {campaignSourceSnapshotGuidance,
@@ -1510,11 +1511,13 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       label.input.disabled = !canDraft;
       const counter = h('p', {class: 'campaign-character-count', role: 'status'});
       function update() {
-        const used = countCharacters(row.text || ''), limit = Number(row.limit);
-        counter.textContent = limit > 0 ? `${used} / ${limit} characters${used > limit ? ' · ' + (used - limit) + ' over — shorten before using' : ' · within limit'}` : `${used} characters · confirm the form’s limit`;
+        const {characters: used, words} = campaignAnswerCounts(row.text || '');
+        const limit = Number(row.limit);
+        const characterStatus = limit > 0 ? `${used} / ${limit} characters${used > limit ? ' · ' + (used - limit) + ' over — shorten before using' : ' · within limit'}` : `${used} characters · confirm the form’s limit`;
+        counter.textContent = `${characterStatus} · about ${words} ${words === 1 ? 'word' : 'words'}`;
         counter.classList.toggle('over-limit', limit > 0 && used > limit);
       }
-      const limit = input('Character limit', 'number', row, 'limit', 'Keep this blank if the form does not specify a limit.', {min: 1, max: 20000, step: 1}, element => {
+      const limit = input('Character limit', 'number', row, 'limit', 'Character limits only. For a word limit, leave this blank and check the portal’s word counter.', {min: 1, max: 20000, step: 1}, element => {
         row.limit = element.value ? Number(element.value) : null;
         if (row.limit !== previousLimit) resetReview();
         previousLimit = row.limit;

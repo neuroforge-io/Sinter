@@ -501,6 +501,37 @@ class SourcePickerChecks(CampaignChecks):
         check.get_by_label(
             "What the evidence establishes or leaves unclear", exact=True
         ).scroll_into_view_if_needed()
+        if width == 390:
+            picker = check.locator(".campaign-source-picker")
+            search = picker.get_by_label(
+                "Registered campaign source (optional)", exact=True
+            )
+            clear_link = picker.get_by_role("button", name="Clear link", exact=True)
+            expect(search).to_be_in_viewport(ratio=1)
+            expect(clear_link).to_be_in_viewport(ratio=1)
+            picker_box = picker.bounding_box()
+            search_box = search.bounding_box()
+            field_box = picker.locator(".field").bounding_box()
+            clear_box = clear_link.bounding_box()
+            assert picker_box and search_box and field_box and clear_box
+            geometry = {
+                "fixture_only": True, "viewport_width": width,
+                "picker": picker_box, "search": search_box,
+                "field": field_box, "clear_link": clear_box,
+            }
+            detail = json.dumps(geometry, sort_keys=True)
+            assert search_box["width"] >= picker_box["width"] * 0.9, detail
+            assert clear_box["y"] >= field_box["y"] + field_box["height"] - 1, detail
+            assert clear_box["width"] <= picker_box["width"] * 0.75, detail
+            assert min(search_box["height"], clear_box["height"]) >= 44, detail
+            for box in (search_box, clear_box):
+                assert box["x"] >= picker_box["x"] - 1, detail
+                assert box["x"] + box["width"] <= (
+                    picker_box["x"] + picker_box["width"] + 1
+                ), detail
+            (self.artifacts / "source-picker-mobile-geometry.json").write_text(
+                json.dumps(geometry, indent=2)
+            )
         self.screenshot(page, f"requirement-first-link-{width}")
         check = save_exact(
             source_id=second["id"],
@@ -884,6 +915,7 @@ def main(argv: list[str] | None = None) -> None:
     resources = {"browser_closed": False, "server_closed": False}
     paths = (
         "src/sinter/web/campaigns.js",
+        "src/sinter/web/campaign-answer-counts.js",
         "src/sinter/web/campaign-source-options.js",
         "src/sinter/web/campaign-requirement-source.js",
         "src/sinter/web/campaign-source-history.js",
@@ -891,6 +923,7 @@ def main(argv: list[str] | None = None) -> None:
         "src/sinter/campaign_source_history.py",
         "src/sinter/campaigns.py",
         "src/sinter/web/campaigns.css",
+        "tools/campaign_browser.py",
         "tools/campaign_source_picker_browser.py",
     )
     hashes = {

@@ -141,7 +141,10 @@ reviewed application-amount entry remains an
 In current development source, you can save and edit local answer drafts for an
 active formal-application route while the applicant is unconfirmed. Copying,
 answer review and inclusion in shared campaign briefs remain held until direct
-applicant confirmation. A full
+applicant confirmation. Application answers show characters and approximate word
+counts. **Character limit** accepts only a character limit; leave it blank for a
+word-based limit and check the application portal's counter. Sinter does not infer
+current form requirements from a question label. A full
 campaign backup retains those local drafts; confirmation does not grant
 authority to submit. Replacing eligibility or product sources preserves the
 old wording and assessment as explicitly historical evidence after a reviewed
