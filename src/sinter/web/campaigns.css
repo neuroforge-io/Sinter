@@ -224,6 +224,7 @@
 .campaign-save-feedback-panel[hidden], .campaign-message-expand[hidden] { display: none; }
 .campaign-save-feedback-panel .campaign-save-feedback {
   grid-column: 1;
+  grid-row: 2;
   max-height: 36px;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -232,7 +233,8 @@
 .campaign-save-feedback-panel[data-kind=routine] { grid-column: 3; grid-row: 1; display: block; }
 .campaign-save-feedback-panel:not([data-kind=routine]) { grid-column: 1 / -1; }
 .campaign-message-summary {
-  grid-column: 1;
+  grid-column: 1 / -1;
+  grid-row: 1;
   margin: 0;
   font-size: .875rem;
   line-height: 1.4;
@@ -350,7 +352,7 @@
 /* The disclosure stays readable and reachable at every width and height. */
 .campaign-save-bar .campaign-message-expand {
   grid-column: 2;
-  grid-row: 1 / 3;
+  grid-row: 2;
   align-self: center;
   width: auto;
   max-width: none;

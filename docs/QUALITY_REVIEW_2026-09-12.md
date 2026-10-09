@@ -3737,3 +3737,40 @@ availability nor token-preflight qualification. Fresh CI for this successor and
 new exact-source installed workflow, recovery, native handoff, cold-install and
 prior-preview replacement gates remain required. RC4 stays unpublished and
 unqualified; published RC3 is unchanged.
+
+### 9 October: original hosted feedback failure and focused repair
+
+The first Quality run for pushed `b57daf665591f99765a900e09aa5300f0e1531f3`
+failed its Chromium campaign-feedback height assertion at 320 × 400. Ten other
+Quality jobs passed; the source/portable packaging job was skipped. The original
+WebAssembly run passed Chromium, Firefox and WebKit. The release workflow passed
+planning only, with quality, native packaging and publication skipped. These
+results are retained as original results, not described as a qualified release.
+
+The failed case closed its contexts, browser and server but did not capture its
+height before the assertion. Its exact failing height remains unknown. Original
+390-pixel screenshots and receipts show a wider disclosure and an additional
+19.59375-pixel summary line in the hosted renderer. The repair gives critical
+summaries full-width row 1 and keeps the complete scrolling feedback beside the
+44-pixel message button in row 2. Routine messages, inline fallback, original
+fonts, screen-space limits, save semantics and explicit retry policy are unchanged.
+The browser tool now retains full text, component bounds, computed CSS font
+properties, viewport, strict height limit and screenshot before checking height.
+Computed font-family is the CSS stack, not identification of an installed font.
+
+Fresh local successors passed 47 feedback cases, four header cases, eight
+action-bar layouts and nine tool-setup checks. Their unchanged source inventories,
+original receipts and closed resources are retained separately from the hosted
+failure. A human-operated two-window fictional conflict kept the unsaved title,
+opened the exact full warning and exported the complete conflicting draft.
+The saved revision 2 and exported draft each retain every other admitted field.
+At 320 × 400 the actual warning bar measured 157.78125 pixels against the unchanged
+200-pixel limit. Both temporary tabs and the owned app were closed, with no hosted
+operation attempted. The initial pointer action on the off-screen backup disclosure
+selected a section instead of expanding the disclosure; its cause is unresolved.
+Keyboard activation opened the disclosure and exported the original retained edits.
+This observation is preserved, not counted as a successful pointer flow.
+
+Fresh exact-commit hosted browser and installed qualification remain required.
+RC4 is still unpublished and unqualified; the independent bounded scores above
+remain unchanged. This is not a live-model, customer or whole-product acceptance.

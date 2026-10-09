@@ -26,6 +26,20 @@ from tools._support import browser_arguments, launch_chromium  # noqa: E402
 
 THEME = "theme => document.documentElement.dataset.theme = theme"
 NO_OVERFLOW = "document.documentElement.scrollWidth <= innerWidth"
+FEEDBACK_GEOMETRY = """() => {
+  const measure = selector => {
+    const e = document.querySelector(selector);
+    if (!e) return null;
+    const r = e.getBoundingClientRect(), style = getComputedStyle(e);
+    return {x:r.x, y:r.y, width:r.width, height:r.height,
+      fontFamily:style.fontFamily, fontSize:style.fontSize,
+      fontWeight:style.fontWeight, lineHeight:style.lineHeight,
+      text:e.textContent};
+  };
+  return {summary:measure('.campaign-message-summary'),
+    feedback:measure('.campaign-save-feedback'),
+    disclosure:measure('.campaign-message-expand')};
+}"""
 LIVE_OR_ACTIVE = '[aria-live], [role="alert"], [role="status"], img, script'
 AT_END = """selector => {
   const e = document.querySelector(selector);
@@ -466,15 +480,26 @@ def main(argv: list[str] | None = None) -> None:
                                     ).bounding_box()
                                     # Keep room beneath the bar even at keyboard height.
                                     fraction = 0.75 if height < 400 else 0.5
+                                    # Preserve the actual layout and complete message
+                                    # before an assertion can close the context.
+                                    record.update(
+                                        message=complete,
+                                        save_bar=bounds,
+                                        viewport=page.viewport_size,
+                                        height_limit=(
+                                            page.viewport_size["height"] * fraction
+                                        ),
+                                        components=page.evaluate(FEEDBACK_GEOMETRY),
+                                    )
+                                    page.screenshot(
+                                        path=str(artifacts / (label + "-bar.png"))
+                                    )
                                     assert (
                                         bounds
                                         and bounds["height"]
                                         < page.viewport_size["height"] * fraction
                                     )
                                     assert page.evaluate(NO_OVERFLOW)
-                                    page.screenshot(
-                                        path=str(artifacts / (label + "-bar.png"))
-                                    )
                                     expand.focus()
                                     expand.press("Enter")
                                     dialog = page.get_by_role(

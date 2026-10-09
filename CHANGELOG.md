@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Give critical campaign recovery summaries the full header width before their
+  scrolling details and message button. Keep readable controls, complete text and
+  strict short-window space checks; browser failures now retain geometry and
+  screenshots before assertions.
 - Keep campaign Save and section navigation compact on phones. Routine messages
   remain available through **Read full message** and are announced in full;
   warnings and uncertain outcomes retain visible recovery details. Opening the
