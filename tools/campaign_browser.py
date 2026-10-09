@@ -952,15 +952,22 @@ class CampaignChecks(DeliverableChecks):
         page.get_by_role('tab', name='Communications', exact=True).click()
         entries = page.get_by_role('article', name='Campaign communication')
         expect(entries).to_have_count(2)
+        expect(entries.nth(0).locator('.campaign-communication-state')).to_have_text(
+            'Recorded as received')
         entries.nth(0).locator('summary').click()
-        expect(entries.nth(0)).to_contain_text(
+        expect(entries.nth(0).locator(
+            '.campaign-communication-provenance')).to_contain_text(
             'Recorded as received · user-entered, unverified')
         expect(entries.nth(0).get_by_label(
             'Message text or summary', exact=True)).to_have_value(
                 'IncomingMessageBodyFictional: a fictional reply about a '
                 'community project.')
+        expect(entries.nth(1).locator('.campaign-communication-state')).to_have_text(
+            'Draft · not sent')
         entries.nth(1).locator('summary').click()
-        expect(entries.nth(1)).to_contain_text('Draft · not sent · user-entered')
+        expect(entries.nth(1).locator(
+            '.campaign-communication-provenance')).to_contain_text(
+            'Draft · not sent · user-entered')
         expect(entries.nth(1).get_by_label(
             'Message text or summary', exact=True)).to_have_value(
                 'OutgoingDraftBodyFictional: not sent.')

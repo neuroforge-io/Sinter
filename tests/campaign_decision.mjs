@@ -114,6 +114,21 @@ test('complete user-entered screening clearly requires human review and remains 
   assert.match(result.reopenCriteria, /before any submission/);
 });
 
+test('human review suggestions apply to any campaign without inventing a P&C role', () => {
+  const document = {opportunities: [{...readyRoute,
+    applicant: 'Fictional research company'}], requirements: [goodCheck]};
+  const original = JSON.stringify(document);
+  const result = decide(document, '2026-09-29');
+  assert.equal(result.state, 'ready_for_review');
+  assert.match(result.action.task, /Ask a campaign reviewer/);
+  assert.match(result.action.task, /eligibility evidence and authority/);
+  assert.match(result.reopenCriteria, /authority appropriate to this campaign/);
+  assert.doesNotMatch(result.action.task + result.reopenCriteria, /P&C/);
+  assert.equal(result.action.ownerNeeded, true);
+  assert.equal(Object.hasOwn(result.action, 'due'), false);
+  assert.equal(JSON.stringify(document), original);
+});
+
 test('the decision card describes owner type consistently with the saved action', () => {
   const result = decide({actions: [{opportunity: '', scope_confirmed: true,
     task: 'Confirm the applicant', owner: 'Treasurer', owner_kind: 'role',

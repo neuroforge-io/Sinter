@@ -5,6 +5,9 @@ import {campaignActionOwnerState} from './campaign-owner.js';
 import {campaignCurrencyComparisonNote} from './campaign-currency.js';
 import {campaignSourceSnapshotGuidance,
   campaignSourceSnapshotIssue} from './campaign-source-state.js';
+import {campaignRequirementSourceComplete as sourceComplete,
+  campaignRequirementSourceGuidance as sourceRecordGuidance}
+  from './campaign-requirement-policy.js';
 
 export const CAMPAIGN_DECISION_NOTE = 'Based on your records. Sinter has not verified sources, eligibility or authority; this is not permission to submit.';
 
@@ -16,47 +19,6 @@ const parseDay = value => {
   return Number.isFinite(parsed)
     && new Date(parsed).toISOString().slice(0, 10) === value ? parsed : null;
 };
-
-function requirementDateGap(checkedAt, today) {
-  if (!hasText(checkedAt)) return 'Record the date this eligibility source was checked.';
-  const checked = parseDay(checkedAt), current = parseDay(today);
-  if (checked === null || current === null) {
-    return 'Record a valid date for this eligibility source check.';
-  }
-  if (checked > current) return `The eligibility source check date (${checkedAt}) is in the future; correct it.`;
-  const ageDays = Math.floor((current - checked) / 86400000);
-  return ageDays > WINDOW_CHECK_MAX_AGE_DAYS
-    ? `The eligibility source was last checked ${ageDays} days ago; recheck it (within ${WINDOW_CHECK_MAX_AGE_DAYS} days).`
-    : '';
-}
-
-function sourceVersionGap(row, sources = []) {
-  if (!hasText(row?.source_id)) return '';
-  const linked = sources.find(source => source?.id === row.source_id);
-  return campaignSourceSnapshotGuidance(campaignSourceSnapshotIssue(
-    row.source_url, row.checked_at, linked));
-}
-
-const sourceComplete = (row, today, sources = []) => ['evidence', 'source_url', 'source_quote']
-  .every(key => hasText(row?.[key])) && !requirementDateGap(row?.checked_at, today)
-  && !sourceVersionGap(row, sources);
-const sourceFields = [
-  ['evidence', 'applicant-specific evidence'],
-  ['source_url', 'a current official source link'],
-  ['source_quote', 'a source excerpt'],
-];
-
-function sourceRecordGuidance(row, today, sources = []) {
-  const missing = sourceFields.filter(([key]) => !hasText(row?.[key]))
-    .map(([, label]) => label);
-  const fields = missing.length < 2 ? missing[0]
-    : `${missing.slice(0, -1).join(', ')} and ${missing.at(-1)}`;
-  // Field labels are noun phrases; date and snapshot guidance are complete
-  // sentences. Keep each instruction intact instead of joining unlike parts.
-  return [fields ? `Record ${fields}.` : '',
-    requirementDateGap(row?.checked_at, today), sourceVersionGap(row, sources)]
-    .filter(Boolean).join(' ');
-}
 
 function requirementGap(check, today, sources = []) {
   const name = hasText(check.rule) ? `“${check.rule.trim()}”` : 'This eligibility check';
@@ -229,7 +191,7 @@ function reopenedWhen(document, state, today, focus) {
     return 'Assess a route only after recording its current official programme page, application window and applicant eligibility wording.';
   }
   if (state === 'ready_for_review') {
-    return 'Keep this at human review. Recheck the current official guidance, the applicant evidence and P&C authority before any submission.';
+    return 'Keep this at human review. Recheck the current official guidance, the applicant evidence and authority appropriate to this campaign before any submission.';
   }
   return `After resolving the blocker above, review the remaining applicant checks and application window in Opportunities. Reassess ${focus ? `“${focus.name}”` : 'this route'} against current official wording and applicant evidence; keep unresolved checks open.`;
 }
@@ -239,7 +201,7 @@ function suggestedAction(state, active, document, today, focus) {
   if (state === 'no_go') return 'Check whether a future round has been published by the funder.';
   if (state === 'awaiting_decision') return 'Record the funder’s decision when it arrives.';
   if (state === 'not_assessed') return 'Record a current official funding route before assessing eligibility.';
-  if (state === 'ready_for_review') return 'Ask a P&C reviewer to check the recorded eligibility evidence and authority.';
+  if (state === 'ready_for_review') return 'Ask a campaign reviewer to check the recorded eligibility evidence and authority.';
   const ordered = focus ? [focus] : active;
   for (const opportunity of ordered) {
     const checks = (document.requirements || []).filter(row =>

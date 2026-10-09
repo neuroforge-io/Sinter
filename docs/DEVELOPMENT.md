@@ -23,6 +23,7 @@ python tools/campaign_source_picker_browser.py
 python tools/campaign_currency_browser.py
 python tools/campaign_action_bar_browser.py
 python tools/communication_view_browser.py
+python tools/campaign_guidance_browser.py
 python tools/handover_appendix_browser.py
 python tools/casebook_save_state_browser.py
 python tools/casebook_context_browser.py
@@ -50,6 +51,7 @@ The same setup runs `browser_smoke.py`, `studio_browser.py`, `desktop_browser.py
 `campaign_currency_browser.py`,
 `campaign_action_bar_browser.py`,
 `communication_view_browser.py`,
+`campaign_guidance_browser.py`,
 `handover_appendix_browser.py`, `document_export_browser.py`,
 `download_lifecycle_browser.py`,
 `document_page_break_browser.py`,
@@ -66,6 +68,16 @@ samples in a fresh temporary evidence folder. Measurements include automation,
 scrolling and assertions; no overhead is subtracted. Host load and customer
 devices are uncontrolled. The tool checks the saved workflow and fixture
 identity; it does not enforce a CI timing threshold or establish a speedup.
+
+For a matched correspondence comparison, use the same
+`tools/campaign_communications_profile.py` with `--source-root` pointing to each
+exact source tree and a new `--output-dir` for every sequential A/B/B/A run.
+The fixed fictional workload contains 47 messages, 76 sources and 12 routes.
+The tool retains complete saved documents, every attempted timing, source and
+harness hashes, failures and cleanup results. Its common controls work with the
+older eager editor and the current lazy editor; it does not impose a speed target
+or qualify an installed release. Keep unrelated builds and browser tests separate
+from the comparison, and retain interrupted or failed runs before trying again.
 
 Other integration and release tools also explain their arguments with `--help`:
 

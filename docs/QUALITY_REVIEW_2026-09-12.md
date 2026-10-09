@@ -1,5 +1,85 @@
 # Sinter user-testing closeout — 12 September 2026
 
+## 9 October correspondence reading, evidence navigation and review counts
+
+The source workbench now filters correspondence by recorded draft, sent or
+received status, route and literal saved wording. Closed entries show a bounded
+excerpt and evidence count. Editors are created when opened, using canonical
+rows so filtering, sorting and saving do not rewrite record order or historical
+snapshots. Unicode lowercasing that expands a character is mapped back to the
+saved text before excerpting; the critic's late-match example remains visible.
+The renderer is now a separate module. Short reading labels retain explicit
+unverified provenance within each opened record and above the list.
+
+The critic found a separate navigation defect: selecting another source changed
+the saved URL and field while the evidence button still opened the old address.
+The button now updates after explicit selection or manual URL changes. Blank and
+unsafe addresses do not create a clickable link. Clearing or reselecting an
+unchanged source does not silently replace its historical snapshot.
+
+Campaign summary counts and route decisions now share the same requirement
+evidence policy, including exact dates, future dates, the 90-day boundary and
+registered-source snapshots. A fully recorded not-met finding can correctly
+show zero checks needing completion while still blocking the route. Human-review
+wording now refers to this campaign's reviewer and appropriate authority.
+
+Validation recorded 476 passing campaign Python checks, including the Node
+policy and preview runners. The focused Node suites cover 14 correspondence,
+21 requirement-policy and 52 decision cases. The final correspondence browser
+run passed six groups, including source A-to-B navigation, manual/unsafe/blank
+URLs, hidden-record saves and a 390px literal-evidence view without horizontal
+overflow. The source-picker suite passed nine journeys; general campaign checks
+passed nine, including conflicts, exact save/reopen and mobile layouts. Seventeen
+guidance journeys covered fresh, 90-day, 91-day, future and changed-source checks,
+not-met findings and neutral business reviewer wording. These fictional tests
+made no hosted model request or external browser request.
+
+An additional in-app-browser operator imported the fictional bundle, wrote a
+useful clarification draft, saved, closed the tab and app, reopened, explicitly
+selected a different evidence source, exported and restored a separate campaign.
+The two 202,226-byte interface exports were byte-for-byte identical. Independent
+read-only review found the parent at revision 3 and restored copy at revision 1
+with identical complete documents; only the requested draft and explicit link
+changed from the initial fixture. Every unrelated record and saved note remained
+exact. Both owned app lifetimes closed gracefully and no model operation was
+requested. Source files changed during the first lifetime's product repair; that
+receipt remains marked as changed. All 127 runtime pins stayed exact during the
+reopened phase. This is source workflow evidence, not installed or upgrade proof.
+
+A shared harness compared the previous `a364de5` source with the initial lazy
+renderer in sequential A/B/B/A runs: 47 messages, 76 sources, 12 routes and exactly
+170,000 text code points. All 212 measurements and complete documents were
+retained. Identical harness and fixture hashes, per-run source stability, exact
+saved/reopened documents and owned resource closure were independently checked.
+The exact 127-file measured runtime was preserved before the subsequent link
+repair and reading-view polish. Its pooled driver-inclusive medians were:
+
+| Operation | Previous source | Measured lazy renderer |
+| --- | ---: | ---: |
+| Open Communications | 174.7 ms | 54.8 ms |
+| Save full campaign | 491.5 ms | 181.8 ms |
+| Search saved message | 121.5 ms | 21.1 ms |
+| Reopen in fresh browser context | 595.1 ms | 553.2 ms |
+| First entry expansion | 37.4 ms | 51.5 ms |
+
+Closed entries mounted 799 editor controls in the previous source and zero in
+the measured renderer; neither displayed those controls. Opening one mounted
+17 controls in the lazy renderer. Deferred construction improves broad views
+while making first expansion slower. Driver, scrolling and assertions remain
+inside these timings, with no outlier or overhead subtraction. This busy host
+does not establish a user-device, pure-render, native cold-start or final polished
+renderer performance guarantee. The preliminary run with an inaccurate
+visibility observation remains retained and excluded from this comparison.
+
+Independent review of the final desktop and mobile correspondence screens rated
+this bounded flow **UX 7.5/10, functionality 8.5/10 and aesthetics 7/10**. Remaining
+friction includes generous row spacing and a tall mobile save/navigation area.
+Customer or research discussions also need an explicit purpose with appropriate
+guidance; this pass does not reinterpret unknown legacy routes or bypass grant
+gates. No whole-product 10/10, assistive-technology or installed qualification is
+claimed. RC4 still needs fresh installed workflow, handoff and upgrade evidence
+before publication; previously retained failed or unrun gates remain open.
+
 ## 9 October recorded funding and amount-source guidance
 
 An actual local SubjectNest campaign was operated through the source workbench

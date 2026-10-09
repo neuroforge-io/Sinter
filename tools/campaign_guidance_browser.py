@@ -8,7 +8,7 @@ import json
 import sys
 import tempfile
 import threading
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -94,9 +94,54 @@ def main(argv: list[str] | None = None) -> None:
             inactive["title"] = "Fictional inactive route"
             for opportunity in inactive["opportunities"]:
                 opportunity["status"] = "closed"
+            evidence_cases: list[tuple[dict, int, str, str]] = []
+            for label, age, state, count, guidance, verdict in [
+                ("fresh", 0, "HUMAN REVIEW REQUIRED", 0, "", "met"),
+                ("90 days", 90, "HUMAN REVIEW REQUIRED", 0, "", "met"),
+                ("91 days", 91, "NOT READY", 1, "last checked 91 days ago", "met"),
+                ("future", -1, "NOT READY", 1, "is in the future", "met"),
+                ("changed source", 0, "NOT READY", 1,
+                 "saved check date differs from the linked record", "met"),
+                ("recorded unmet", 0, "NOT READY", 0,
+                 "marked not met in the user-entered record", "not_met"),
+            ]:
+                fixture = copy.deepcopy(ready)
+                fixture["title"] = "Fictional requirement evidence — " + label
+                fixture["actions"] = []
+                check_date = (date.today() - timedelta(days=age)).isoformat()
+                evidence_source = {
+                    "id": "e" * 32,
+                    "title": "Fictional applicant evidence source",
+                    "url": "https://example.invalid/applicant-rules",
+                    "notes": "Fictional browser fixture; no real applicant or programme.",
+                    "checked_at": (
+                        (date.today() - timedelta(days=1)).isoformat()
+                        if label == "changed source" else check_date
+                    ),
+                }
+                # Window evidence remains fresh: only this requirement's saved
+                # evidence date/snapshot varies, so the visible count is scoped.
+                fixture["sources"].append(evidence_source)
+                fixture["requirements"][0].update(
+                    source_id=evidence_source["id"],
+                    source_url=evidence_source["url"],
+                    checked_at=check_date,
+                    status=verdict,
+                )
+                evidence_cases.append((fixture, count, state, guidance))
+            business_ready = copy.deepcopy(ready)
+            business_ready["title"] = "Fictional research company human review"
+            business_ready["organisation"] = "Fictional Research Company"
+            business_ready["opportunities"][0]["applicant"] = (
+                "Fictional Research Company"
+            )
+            business_ready["actions"] = []
             saved = [
                 server.app.campaigns.save(item)
-                for item in [suggested, long_action, ready, submitted, inactive]
+                for item in [
+                    suggested, long_action, ready, submitted, inactive,
+                    *[case[0] for case in evidence_cases], business_ready,
+                ]
             ]
             try:
                 with sync_playwright() as driver:
@@ -245,11 +290,56 @@ def main(argv: list[str] | None = None) -> None:
                     assert card.inner_text().count("Sinter has not verified") == 1
                     expect(card).to_contain_text("not permission to submit")
                     expect(card.locator(".campaign-decision-reopen")).to_contain_text(
-                        "P&C authority before any submission"
+                        "authority appropriate to this campaign before any submission"
                     )
                     checks.append(
                         "complete user-entered screening still requires human "
                         "review and explicit authority before submission"
+                    )
+                    requirement_count = page.locator(".campaign-summary > div").filter(
+                        has=page.locator("span", has_text="requirements to check")
+                    ).locator("strong")
+                    for fixture, count, state, guidance in evidence_cases:
+                        open_saved(fixture["title"])
+                        expect(requirement_count).to_have_text(str(count))
+                        expect(card.locator(".campaign-decision-state")).to_have_text(
+                            state
+                        )
+                        if guidance:
+                            expect(card.locator(".campaign-decision-detail")).to_contain_text(
+                                guidance
+                            )
+                        else:
+                            expect(card.locator(".campaign-decision-detail")).to_contain_text(
+                                "complete user-entered screening records"
+                            )
+                        expect(page.locator(".campaign-save-state")).to_have_text(
+                            "Saved on this computer"
+                        )
+                        checks.append(
+                            fixture["title"] + ": visible requirement count "
+                            "agrees with decision evidence policy; original "
+                            "verdict and source snapshot remain saved"
+                        )
+                    open_saved(business_ready["title"])
+                    expect(requirement_count).to_have_text("0")
+                    expect(card.locator(".campaign-decision-state")).to_have_text(
+                        "HUMAN REVIEW REQUIRED"
+                    )
+                    expect(card.locator(".campaign-decision-task")).to_contain_text(
+                        "Ask a campaign reviewer"
+                    )
+                    expect(card.locator(".campaign-decision-reopen")).to_contain_text(
+                        "authority appropriate to this campaign"
+                    )
+                    expect(card.locator(".campaign-decision-task")).not_to_contain_text(
+                        "P&C"
+                    )
+                    expect(card.locator(".campaign-decision-date")).to_have_count(0)
+                    card.screenshot(path=str(out / "business-neutral-reviewer.png"))
+                    checks.append(
+                        "business review guidance retains eligibility and authority "
+                        "checks without inventing a P&C reviewer or target date"
                     )
                     open_saved(submitted["title"])
                     expect(card.locator(".campaign-decision-state")).to_have_text(
@@ -301,6 +391,8 @@ def main(argv: list[str] | None = None) -> None:
                             name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
                             for name in [
                                 "src/sinter/web/campaign-decision.js",
+                                "src/sinter/web/campaign-requirement-policy.js",
+                                "src/sinter/web/campaign-source-state.js",
                                 "src/sinter/web/campaigns.js",
                             ]
                         },

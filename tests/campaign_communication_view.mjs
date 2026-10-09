@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {campaignCommunicationView, communicationHasDate}
+import {campaignCommunicationView, campaignCommunicationPreview,
+  communicationHasDate, COMMUNICATION_STATUSES}
   from '../src/sinter/web/campaign-communication-view.js';
 
 const rows = () => [
@@ -67,4 +68,84 @@ test('invalid dates remain undated, without timezone or guessed date ordering', 
 test('empty and legacy communications are harmless', () => {
   assert.deepEqual(campaignCommunicationView(), []);
   assert.deepEqual(indexes(campaignCommunicationView([{}], {route: ''})), [0]);
+});
+
+test('status filtering is explicit, combined with scope and search, and never rewrites rows', () => {
+  const original = rows();
+  original[0].status = 'received';
+  original[1].status = 'sent';
+  original[2].status = 'draft';
+  const before = structuredClone(original);
+  assert.deepEqual(COMMUNICATION_STATUSES.map(([value]) => value),
+    ['all', 'draft', 'sent', 'received']);
+  assert.deepEqual(indexes(campaignCommunicationView(original, {status: 'draft'})), [2, 3]);
+  assert.deepEqual(indexes(campaignCommunicationView(original, {status: 'sent'})), [1]);
+  assert.deepEqual(indexes(campaignCommunicationView(original, {status: 'received'})), [0]);
+  assert.deepEqual(indexes(campaignCommunicationView(original,
+    {status: 'draft', query: 'cash', route: 'Fictional route'})), [2]);
+  assert.deepEqual(indexes(campaignCommunicationView(original, {status: 'invalid'})), [0, 1, 2, 3, 4]);
+  assert.deepEqual(original, before);
+});
+
+test('previews show literal saved message wording and retain Unicode characters', () => {
+  const row = {content: 'Saved <script>alert(1)</script> 🌱 text.', evidence_links: [{}, {}]};
+  const before = structuredClone(row);
+  const preview = campaignCommunicationPreview(row);
+  assert.equal(preview.kind, 'message');
+  assert.equal(preview.text, row.content);
+  assert.equal(preview.evidenceCount, 2);
+  assert.equal(preview.matchesQuery, false);
+  assert.deepEqual(row, before);
+  assert.equal(campaignCommunicationPreview({content: '🌱'.repeat(8)}, {limit: 3}).text,
+    '🌱🌱🌱…');
+});
+
+test('search previews identify historical evidence rather than substituting current source text', () => {
+  const row = rows()[2];
+  const before = structuredClone(row);
+  const preview = campaignCommunicationPreview(row, {query: 'überprüfung 🌱'});
+  assert.equal(preview.kind, 'evidence');
+  assert.equal(preview.label, 'Saved evidence');
+  assert.equal(preview.text, 'Überprüfung 🌱');
+  assert.equal(preview.matchesQuery, true);
+  assert.equal(preview.evidenceCount, 1);
+  assert.deepEqual(row, before);
+  assert.equal(campaignCommunicationPreview(row, {query: 'Current different wording'}).matchesQuery,
+    false);
+});
+
+test('matching saved text is brought into the excerpt without shortening the underlying record', () => {
+  const row = {content: 'Before 🌱 '.repeat(80) + 'MATCHED wording' + ' After'.repeat(80)};
+  const before = row.content;
+  const preview = campaignCommunicationPreview(row, {query: 'matched wording', limit: 120});
+  assert.equal(preview.kind, 'message');
+  assert.equal(preview.matchesQuery, true);
+  assert.match(preview.text, /MATCHED wording/);
+  assert.equal([...preview.text].length <= 122, true);
+  assert.equal(row.content, before);
+});
+
+test('expanded lowercase search offsets still preview the matching original Unicode wording', () => {
+  const row = {content: 'İ'.repeat(200) + ' MATCHED wording ' + 'After '.repeat(20)};
+  const preview = campaignCommunicationPreview(row, {query: 'matched wording', limit: 80});
+  assert.match(preview.text, /MATCHED wording/);
+  assert.equal([...preview.text].length <= 82, true);
+  assert.equal(preview.matchesQuery, true);
+  const longQuery = 'Q'.repeat(180);
+  const longMatch = campaignCommunicationPreview(
+    {content: 'Prefix '.repeat(40) + longQuery + ' suffix'},
+    {query: longQuery, limit: 200});
+  assert.equal(longMatch.text.includes(longQuery), true);
+  assert.equal([...longMatch.text].length <= 202, true);
+});
+
+test('blank and metadata-only previews do not invent message text or evidence', () => {
+  assert.deepEqual(campaignCommunicationPreview(), {
+    kind: 'empty', label: '', text: '', matchesQuery: false, evidenceCount: 0,
+  });
+  const preview = campaignCommunicationPreview({subject: 'Saved title only'}, {query: 'title'});
+  assert.equal(preview.kind, 'metadata');
+  assert.equal(preview.label, 'Saved record');
+  assert.equal(preview.text, 'Saved title only');
+  assert.equal(preview.evidenceCount, 0);
 });

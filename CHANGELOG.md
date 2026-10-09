@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Filter campaign correspondence by its recorded status, keeping drafts visibly
+  separate from sent and received records. Collapsed entries show a literal
+  preview and their saved evidence count; opening an entry reveals its editor.
+  These views do not change the message, evidence snapshot or export order.
+- Keep the evidence navigation link in sync with explicit source selection and
+  manual URL edits, including previously empty links. Unsafe addresses remain
+  non-clickable; choosing a source does not open or verify it.
+- Build correspondence editors when their entry is opened, retaining local edits
+  and explicit source selection across filters, sorting and Save. Keep unopened
+  entries light while preserving every record in backups.
+- Use the same dated requirement-evidence checks for campaign review counts and
+  route guidance, including invalid, future and stale source dates. Human review
+  guidance refers to the current campaign's reviewer and authority.
 - Describe retained amount sources without a web URL honestly. Local planning or
   other amount records can keep a blank URL; missing or changed dates and
   historical URL mismatches still need review. Current URL-backed eligibility,

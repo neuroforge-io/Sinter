@@ -8,14 +8,16 @@ import {defaultCampaignOpportunityIndex, isCampaignActionCurrent, isCampaignActi
   applicationAnswerAvailability, canDraftApplicationAnswer} from './campaign-state.js';
 import {campaignAnswerCounts} from './campaign-answer-counts.js';
 import {applicationWindowGaps, campaignDecision, CAMPAIGN_DECISION_NOTE} from './campaign-decision.js';
+import {campaignRequirementNeedsReview} from './campaign-requirement-policy.js';
 import {campaignActionOwnerState, normalizeCampaignActionOwners} from './campaign-owner.js';
 import {campaignSourceSnapshotGuidance,
   campaignSourceSnapshotIssue} from './campaign-source-state.js';
 import {campaignActionRowsForCalendar, campaignActionRowsForPlan,
   normalizeCampaignActionScopes} from './campaign-plan.js';
 import {gardenGuide, GARDEN_PRACTICE} from './garden-practice.js';
-import {campaignCommunicationView, COMMUNICATION_ORDERS}
+import {COMMUNICATION_ORDERS, COMMUNICATION_STATUSES}
   from './campaign-communication-view.js';
+import {renderCampaignCommunications} from './campaign-communications.js';
 import {campaignCapacity, CAMPAIGN_TEXT_LIMIT, CAMPAIGN_BYTE_LIMIT}
   from './campaign-capacity.js';
 import {campaignSourceOptions, matchingCampaignSources}
@@ -207,6 +209,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   let communicationRoute = typeof seed.communicationRoute === 'string' ? seed.communicationRoute : null;
   let communicationOrder = COMMUNICATION_ORDERS.some(([value]) => value === seed.communicationOrder)
     ? seed.communicationOrder : 'record';
+  let communicationStatus = COMMUNICATION_STATUSES.some(([value]) => value === seed.communicationStatus)
+    ? seed.communicationStatus : 'all';
   let communicationOpenState = new WeakMap();
   let pendingAssetOpenId = '';
   let pendingFocus = null;
@@ -278,7 +282,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     remember('campaigns', {document: structuredClone(document), id: savedId, revision,
       dirty, selected, tab, sourceQuery, assetQuery, communicationQuery,
       opportunityQuery, opportunityStatus, opportunityPage,
-      communicationRoute, communicationOrder, practice,
+      communicationRoute, communicationOrder, communicationStatus, practice,
       budgetDisclosures: document.budget.map(row => budgetOpenState.get(row) ?? null)});
   }
   function captureBudgetDisclosures() {
@@ -537,7 +541,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const previousSourceQuery = sourceQuery;
     const previousAssetQuery = assetQuery;
     const previousCommunicationView = {query: communicationQuery,
-      route: communicationRoute, order: communicationOrder};
+      route: communicationRoute, order: communicationOrder, status: communicationStatus};
     practice = null; practiceGuide.hidden = true;
     document = compatibleCampaign(next); savedId = id; revision = rev; dirty = false;
     fundingState.reset(); fundingProblem = ''; renderFunding();
@@ -562,6 +566,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     communicationQuery = resumeCurrentCampaign ? previousCommunicationView.query : '';
     communicationRoute = resumeCurrentCampaign ? previousCommunicationView.route : null;
     communicationOrder = resumeCurrentCampaign ? previousCommunicationView.order : 'record';
+    communicationStatus = resumeCurrentCampaign ? previousCommunicationView.status : 'all';
     status.textContent = id ? 'Saved on this computer' : 'Not saved yet'; output.replaceChildren();
     delete output.dataset.stale; output.classList.remove('campaign-output-stale');
     editor.replaceChildren();
@@ -599,7 +604,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const saved = structuredClone(acknowledgedCampaign(reply));
     const before = {document, savedId, revision, dirty, selected, tab,
       sourceQuery, opportunityQuery, opportunityStatus, opportunityPage, assetQuery,
-      communicationQuery, communicationRoute, communicationOrder, communicationOpenState,
+      communicationQuery, communicationRoute, communicationOrder, communicationStatus, communicationOpenState,
       budgetOpenState, expandedActionRows, pendingFocus, pendingActionFocus,
       pendingBudgetFocus, pendingAssetOpenId};
     const areas = [editor, sectionNavigation, shelf, summary, decisionCard];
@@ -629,7 +634,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     } catch (cause) {
       ({document, savedId, revision, dirty, selected, tab,
         sourceQuery, opportunityQuery, opportunityStatus, opportunityPage, assetQuery,
-        communicationQuery, communicationRoute, communicationOrder, communicationOpenState,
+        communicationQuery, communicationRoute, communicationOrder, communicationStatus, communicationOpenState,
         budgetOpenState, expandedActionRows, pendingFocus, pendingActionFocus,
         pendingBudgetFocus, pendingAssetOpenId} = before);
       let rollbackError;
@@ -852,9 +857,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       .filter(row => isOpportunityActionable(row.status))
       .map(row => [row.name, row]));
     const pending = document.requirements.filter(row => actionable.has(row.opportunity)
-      && (!['met', 'not_met'].includes(row.status)
-      || ![row.evidence, row.source_url, row.source_quote, row.checked_at].every(value => value?.trim())
-      || !linkedSourceMatchesCheck(row, document.sources)));
+      && campaignRequirementNeedsReview(row, localDate(), document.sources));
     const heldAnswers = document.answers.filter(row => row.opportunity
       && actionable.has(row.opportunity)
       && !applicationAnswerAvailability(actionable.get(row.opportunity)).allowed);
@@ -1942,218 +1945,15 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       h('div', {class: 'button-row'}, button('Download actions CSV', () => exportPlan('csv'), 'quiet'), button('Download action dates', () => exportPlan('calendar'), 'quiet')));
   }
   function renderCommunications(panel) {
-    panel.append(h('h3', {}, 'Record correspondence and drafts'),
-      h('p', {class: 'muted'}, 'Keep incoming messages, outgoing drafts and sent records with their dates and evidence links. These are your entries: Sinter does not access email, open or verify links, send messages, or confirm that a message was sent or received.'),
-      h('p', {class: 'fine'}, 'Only keep message details the campaign needs. Drafts are clearly marked as not sent.'),
-      button('Add communication', () => {
-        const row = {opportunity: '', date: '', direction: 'outgoing', status: 'draft',
-          channel: 'email', counterparty: '', subject: '', content: '', evidence_links: []};
-        document.communications.push(row);
-        communicationQuery = ''; communicationRoute = null;
-        communicationOpenState.set(row, true);
-        changed(); tab = 'communications'; renderEditor();
-        const target = editor.querySelector(`.campaign-communication[data-communication-index="${document.communications.indexOf(row)}"] [data-campaign-field="subject"]`);
-        target?.focus(); target?.scrollIntoView({block: 'nearest'});
-      }, 'quiet'));
-    if (!document.communications.length) {
-      panel.append(h('div', {class: 'campaign-empty'}, h('h4', {}, 'No communications recorded yet'),
-        h('p', {}, 'Add a received message or an outgoing draft when there is something to track. Nothing is sent from this page.')));
-      return;
-    }
-    if (communicationRoute && !document.opportunities.some(row => row.name === communicationRoute)) {
-      communicationRoute = null;
-    }
-    const search = field('Find a communication', 'search', communicationQuery,
-      'Search subjects, parties, message text, routes and saved evidence wording. This view does not change your records.',
-      {placeholder: 'Try a contact, route or phrase from a message', maxLength: 200});
-    const routeChoices = [['all', 'All routes and campaign-wide'], ['campaign', 'Campaign-wide'],
-      ...document.opportunities.map((row, index) => [`route:${index}`, row.name])];
-    const routeValue = communicationRoute === null ? 'all' : communicationRoute === '' ? 'campaign'
-      : `route:${document.opportunities.findIndex(row => row.name === communicationRoute)}`;
-    const routeFilter = selectField('Communication scope', routeChoices, routeValue);
-    const order = selectField('Communication order', COMMUNICATION_ORDERS, communicationOrder);
-    const resultCount = h('p', {class: 'campaign-filter-status', 'aria-live': 'polite'});
-    const empty = h('p', {class: 'campaign-filter-empty', hidden: true},
-      'No communications match this view. Clear the search or choose another scope.');
-    const clear = button('Clear communication filters', () => {
-      communicationQuery = ''; communicationRoute = null;
-      search.input.value = ''; routeFilter.input.value = 'all';
-      updateCommunicationView(); rememberCampaign(); search.input.focus();
-    }, 'quiet');
-    const communicationList = h('div', {class: 'campaign-communication-list'});
-    const cards = new Map();
-    function updateCommunicationView() {
-      const view = campaignCommunicationView(document.communications, {
-        query: communicationQuery, route: communicationRoute, order: communicationOrder});
-      const shown = new Set(view.map(({index}) => index));
-      for (const [index, card] of cards) card.hidden = !shown.has(index);
-      const arranged = [...view.map(({index}) => cards.get(index)),
-        ...[...cards].filter(([index]) => !shown.has(index)).map(([, card]) => card)];
-      const current = [...communicationList.children];
-      if (arranged.length !== current.length || arranged.some((card, index) => card !== current[index])) {
-        communicationList.replaceChildren(...arranged);
-      }
-      empty.hidden = view.length !== 0;
-      clear.hidden = !communicationQuery && communicationRoute === null;
-      const orderLabel = COMMUNICATION_ORDERS.find(([value]) => value === communicationOrder)?.[1]
-        || 'Record order';
-      resultCount.textContent = `${view.length} of ${document.communications.length} communications · ${orderLabel}.`
-        + (communicationOrder === 'record' ? '' : ' Entries without a valid recorded date appear last.');
-    }
-    search.input.addEventListener('input', () => {
-      communicationQuery = search.input.value.trim(); updateCommunicationView(); rememberCampaign();
-    });
-    routeFilter.input.addEventListener('change', () => {
-      const value = routeFilter.input.value;
-      communicationRoute = value === 'all' ? null : value === 'campaign' ? ''
-        : document.opportunities[Number(value.slice(6))]?.name ?? null;
-      updateCommunicationView(); rememberCampaign();
-    });
-    order.input.addEventListener('change', () => {
-      communicationOrder = order.input.value; updateCommunicationView(); rememberCampaign();
-    });
-    // Commit-time refresh keeps edited wording searchable without moving a row mid-typing.
-    communicationList.addEventListener('change', event => {
-      // Source search is view-only. Detaching this card on search-field blur
-      // interrupts the mouse click on its explicit selection button.
-      if (!event.target.closest('.campaign-source-picker')) updateCommunicationView();
-    });
-    communicationList.addEventListener('click', event => {
-      if (event.target.closest('.campaign-source-picker button')) updateCommunicationView();
-    });
-    panel.append(search.wrap, h('div', {class: 'form-grid'}, routeFilter.wrap, order.wrap),
-      clear, resultCount, empty, communicationList);
-    const directionOptions = [['incoming', 'Incoming'], ['outgoing', 'Outgoing']];
-    const channelOptions = [['email', 'Email'], ['letter', 'Letter'], ['phone', 'Phone call'],
-      ['meeting', 'Meeting'], ['portal', 'Application portal'], ['other', 'Other']];
-    for (const [index, row] of document.communications.entries()) {
-      const evidenceLinks = Array.isArray(row.evidence_links) ? row.evidence_links : (row.evidence_links = []);
-      const state = h('span', {class: 'campaign-communication-state', 'data-state': row.status},
-        row.status === 'draft' ? 'Draft · not sent · user-entered'
-          : row.status === 'sent' ? 'Recorded as sent · user-entered, unverified'
-            : 'Recorded as received · user-entered, unverified');
-      const summaryTitle = h('strong', {}, row.subject || 'Untitled communication');
-      const summaryDetails = h('span', {class: 'fine'});
-      function updateSummary() {
-        const channelLabel = channelOptions.find(([value]) => value === row.channel)?.[1]
-          || 'Other';
-        summaryDetails.textContent = [row.date || 'Date not recorded',
-          row.direction === 'incoming' ? 'Incoming' : 'Outgoing', channelLabel,
-          row.counterparty, row.opportunity || 'Campaign-wide'].filter(Boolean).join(' · ');
-      }
-      const summary = h('summary', {}, summaryTitle, state, summaryDetails);
-      const direction = choice('Direction', directionOptions, row, 'direction', () => {
-        row.status = row.direction === 'incoming' ? 'received'
-          : row.status === 'received' ? 'draft' : row.status;
-        state.textContent = row.status === 'draft' ? 'Draft · not sent · user-entered'
-          : row.status === 'sent' ? 'Recorded as sent · user-entered, unverified'
-            : 'Recorded as received · user-entered, unverified';
-        state.dataset.state = row.status;
-        updateSummary();
-        changed(); renderEditor();
-      });
-      const statusChoices = row.direction === 'incoming'
-        ? [['received', 'Received · recorded by you']]
-        : [['draft', 'Draft · not sent'], ['sent', 'Sent · recorded by you']];
-      const statusField = choice('Communication status', statusChoices, row, 'status', () => {
-        state.textContent = row.status === 'draft' ? 'Draft · not sent · user-entered'
-          : row.status === 'sent' ? 'Recorded as sent · user-entered, unverified'
-            : 'Recorded as received · user-entered, unverified';
-        state.dataset.state = row.status;
-        updateSummary();
-      });
-      const channel = choice('Channel', channelOptions, row, 'channel', updateSummary);
-      const date = input('Communication date (user-entered)', 'date', row, 'date',
-        'Enter the date shown by your records. For a draft, leave blank unless you have a separate date to record. Sinter does not infer or verify it.', {}, updateSummary);
-      const counterparty = input('Person or organisation', 'text', row, 'counterparty',
-        'Who the message was with. This is a user-entered record.', {maxLength: 300}, updateSummary);
-      const subject = input('Subject or short title', 'text', row, 'subject', '', {maxLength: 1000}, () => {
-        summaryTitle.textContent = row.subject || 'Untitled communication';
-        updateSummary();
-      });
-      const content = input('Message text or summary', 'textarea', row, 'content',
-        'Paste the relevant message or a useful summary. Stored with this campaign on this computer; include only details the campaign needs.',
-        {rows: 6, maxLength: 20000});
-      const contentCount = h('small', {class: 'campaign-character-count'},
-        `${countCharacters(row.content || '')} characters · destination limits vary; check before copying.`);
-      content.input.addEventListener('input', () => {
-        contentCount.textContent = `${countCharacters(content.input.value)} characters · destination limits vary; check before copying.`;
-      });
-      content.wrap.append(contentCount);
-      const evidence = h('div', {class: 'campaign-communication-evidence'},
-        h('h4', {}, 'Evidence links · user-entered, unverified'),
-        h('p', {class: 'fine'}, 'For example, a link to a message, attachment or portal record. Sinter does not open or check it.'),
-      button('Add evidence link', () => {
-        if (evidenceLinks.length >= 10) { error('A communication can have up to 10 evidence links.'); return; }
-          evidenceLinks.push({source_id: '', title: '', url: '', notes: '', checked_at: ''}); changed(); renderEditor();
-        }, 'quiet'));
-      for (const link of evidenceLinks) {
-        link.source_id ??= '';
-        link.checked_at ??= '';
-        const linkTitle = input('Evidence title', 'text', link, 'title',
-          'For example, “Email from programme officer” or “Application portal receipt”.', {maxLength: 500});
-        const linkUrl = input('Evidence link', 'url', link, 'url',
-          'HTTP or HTTPS link only. Links are not opened or verified by Sinter.', {maxLength: 4000});
-        const linkNotes = input('Evidence note', 'textarea', link, 'notes', '',
-          {rows: 2, maxLength: 2000});
-        const savedSource = document.sources.find(source => source.id === link.source_id);
-        const linkChecked = input(savedSource
-          ? 'Source check date at link time · user-entered'
-          : 'Source check date · user-entered', 'date', link, 'checked_at',
-        savedSource
-          ? 'Preserved from when this evidence was linked. Sinter does not verify the date.'
-          : 'Record the source check date. Sinter does not verify it.', {});
-        const snapshotWarning = notice('', 'warning');
-        function updateSnapshotWarning(source) {
-          const differs = Boolean(source && (link.title !== source.title
-            || link.url !== source.url || link.checked_at !== source.checked_at));
-          snapshotWarning.hidden = !differs;
-          snapshotWarning.textContent = differs
-            ? 'This saved evidence snapshot differs from the current source record. Its original title, link and check date are preserved. Recheck the source before use; clear and select it again only to replace the snapshot.'
-            : '';
-        }
-        updateSnapshotWarning(savedSource);
-        const sourceChoice = campaignSourcePicker('Link to a saved campaign source', link.source_id, source => {
-          const isNewLink = Boolean(source && source.id !== link.source_id);
-          link.source_id = source?.id || '';
-          if (source && isNewLink) {
-            link.title = source.title;
-            link.url = source.url;
-            link.checked_at = source.checked_at;
-            linkTitle.input.value = source.title;
-            linkUrl.input.value = source.url;
-            linkChecked.input.value = source.checked_at;
-          }
-          linkTitle.input.disabled = Boolean(source);
-          linkUrl.input.disabled = Boolean(source);
-          linkChecked.input.disabled = Boolean(source);
-          linkChecked.wrap.querySelector('label').textContent = source
-            ? 'Source check date at link time · user-entered'
-            : 'Source check date · user-entered';
-          updateSnapshotWarning(source);
-        });
-        linkTitle.input.disabled = Boolean(savedSource);
-        linkUrl.input.disabled = Boolean(savedSource);
-        linkChecked.input.disabled = Boolean(savedSource);
-        evidence.append(h('article', {class: 'campaign-row', 'aria-label': 'Communication evidence link'},
-          sourceChoice.wrap, snapshotWarning, linkTitle.wrap, linkUrl.wrap, linkChecked.wrap, linkNotes.wrap,
-          link.url ? safeLink(link.url, 'Open evidence link') : null,
-          remove(evidenceLinks, link, 'Remove evidence link')));
-      }
-      const opportunity = choice('Related opportunity', scopeChoices(), row, 'opportunity', updateSummary);
-      const open = communicationOpenState.get(row) ?? (!row.subject && !row.content);
-      communicationOpenState.set(row, open);
-      const details = h('details', {open}, summary,
-          h('div', {class: 'form-grid'}, direction.wrap, statusField.wrap, channel.wrap, date.wrap),
-          h('div', {class: 'form-grid'}, counterparty.wrap, subject.wrap, opportunity.wrap),
-          content.wrap, evidence, h('p', {class: 'fine'}, 'Status, date, message details and links remain user-entered and unverified.'),
-          remove(document.communications, row, 'Remove communication'));
-      details.addEventListener('toggle', () => communicationOpenState.set(row, details.open));
-      cards.set(index, h('article', {class: 'campaign-row campaign-communication',
-        'aria-label': 'Campaign communication', 'data-communication-index': String(index)}, details));
-      updateSummary();
-    }
-    updateCommunicationView();
+    const view = {
+      get query() { return communicationQuery; }, set query(value) { communicationQuery = value; },
+      get route() { return communicationRoute; }, set route(value) { communicationRoute = value; },
+      get order() { return communicationOrder; }, set order(value) { communicationOrder = value; },
+      get status() { return communicationStatus; }, set status(value) { communicationStatus = value; },
+    };
+    renderCampaignCommunications(panel, {document, view, openState: communicationOpenState,
+      editor, input, choice, changed, renderEditor, rememberCampaign, error, remove,
+      scopeChoices, campaignSourcePicker});
   }
   function renderAssets(panel) {
     const previouslyOpen = new Map([...editor.querySelectorAll('.campaign-asset[data-asset-id]')]

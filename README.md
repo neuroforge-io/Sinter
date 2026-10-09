@@ -125,6 +125,12 @@ separate record. The original is unchanged. Export the original snapshot first
 if it has edits you want to keep. A selection that exceeds the existing limits
 is refused without cutting its text.
 
+Campaign communications can be filtered by recorded draft, sent or received
+status, scope and saved wording. Closed entries show a short literal preview and
+their saved evidence count; open an entry to view or edit the complete record.
+These views preserve original message order and historical evidence in backups.
+Dates and delivery status remain your records and are not independently verified.
+
 Current development shows compact recorded-cost rows and opens the next missing
 price or reference. Open and closed cost rows stay as left when moving between
 pages in the same browser session. Recorded subtotals retain original amounts, unknowns and GST
