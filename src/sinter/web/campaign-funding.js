@@ -60,6 +60,31 @@ export function selectFundingAmountSource(opportunity, key, source) {
   return changedSource;
 }
 
+/** Amount provenance may be a retained record without a web URL, not an availability claim. */
+export function fundingAmountSourceGuidance(record, source) {
+  if (!source) return record.source_id
+    ? 'The linked amount source is missing. Reconnect it before using this amount.'
+    : 'No amount source linked.';
+  const savedUrl = String(record.source_url || '').trim();
+  const sourceUrl = String(source.url || '').trim();
+  if (!savedUrl && sourceUrl) {
+    return 'No source URL snapshot was saved with this amount wording; compare it with the linked source record and recheck before use.';
+  }
+  if (savedUrl !== sourceUrl) {
+    return 'The saved source URL differs from the linked record; reconcile the reference and recheck the amount wording and date before use.';
+  }
+  const savedDate = String(record.checked_at || '').trim();
+  const sourceDate = String(source.checked_at || '').trim();
+  if (!sourceDate) return 'The linked source has no check date; re-read the amount wording and record when it was checked.';
+  if (!savedDate) return 'No source check date was saved with this amount wording; re-read it and record a date before use.';
+  if (savedDate !== sourceDate) {
+    return 'The saved check date differs from the linked record; re-read the amount wording and update the date before use.';
+  }
+  return sourceUrl
+    ? 'Saved URL and check date match the source record; the amount and wording remain unverified.'
+    : 'Linked source has no web URL. Its saved check date matches the source record; the amount and wording remain unverified.';
+}
+
 export function fundingReferencesSource(opportunity, sourceId) {
   const tracking = opportunity.funding_tracking;
   return Boolean(tracking && [...FUNDING_AMOUNT_KEYS, ...claimKeys]
@@ -151,17 +176,15 @@ export function fundingTrackingEditor(opportunity, {sources, sourcePicker, chang
     function showLink() {
       const record = opportunity.funding_tracking?.[key] || view[key];
       const source = sources.find(row => row.id === record.source_id);
-      const issue = campaignSourceSnapshotIssue(record.source_url, record.checked_at, source);
+      const guidance = fundingAmountSourceGuidance(record, source);
       linked.replaceChildren(source
         ? h('span', {}, 'Amount source · user-entered, unverified: ',
           source.url ? safeLink(source.url, source.title) : source.title,
-          ' · ', issue ? campaignSourceSnapshotGuidance(issue)
-            : 'Saved URL and check date match the source record; the amount and wording remain unverified.')
-        : record.source_id ? 'The linked amount source is missing. Reconnect it before using this amount.'
-          : 'No amount source linked.');
+          ' · ', guidance)
+        : guidance);
     }
     const url = text(title + ' source URL snapshot', [key, 'source_url'], 'url',
-      'The selected saved URL is copied here. Keep the exact page for the amount wording.', {maxLength: 4000}, showLink);
+      'Copied from the linked source when available. Leave blank for a source record without a web URL; keep its original reference and exact amount wording.', {maxLength: 4000}, showLink);
     const quote = text(title + ' exact amount wording', [key, 'source_quote'], 'textarea',
       'Enter the exact relevant wording yourself; saved source notes are not copied as evidence.', {rows: 3, maxLength: 2000}, showLink);
     const date = text(title + ' amount wording checked date', [key, 'checked_at'], 'date',

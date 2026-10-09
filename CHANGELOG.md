@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Describe retained amount sources without a web URL honestly. Local planning or
+  other amount records can keep a blank URL; missing or changed dates and
+  historical URL mismatches still need review. Current URL-backed eligibility,
+  ceiling and application-window requirements remain unchanged.
+- Acknowledge a linked campaign source briefly, retaining its full title in the
+  source field and detailed preview. Typing alone still does not change a link.
+- Reconcile RC4 qualification guidance with the existing closed 55-operation
+  focused-copy catalogue. The catalogue is not an installed execution result.
 - Show approximate word counts beside the existing application-answer character
   counts. Keep character limits explicit; word counts are guidance, not a portal
   limit or permission to use a held draft. Saved inputs and backups are unchanged.

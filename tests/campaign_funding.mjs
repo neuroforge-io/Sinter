@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createFundingSummaryState, editFundingTracking, FUNDING_AMOUNT_KEYS,
-  fundingGroupText, fundingReferencesSource, fundingTrackingView,
+  fundingAmountSourceGuidance, fundingGroupText, fundingReferencesSource, fundingTrackingView,
   selectFundingAmountSource, selectFundingClaimSource} from '../src/sinter/web/campaign-funding.js';
+import {campaignSourceSnapshotIssue} from '../src/sinter/web/campaign-source-state.js';
 
 const packet = marker => ({schema: 'sinter-funding-summary/v1', marker});
 
@@ -100,6 +101,54 @@ test('amount source selection copies metadata, clears obsolete wording and prese
   selectFundingAmountSource(row, 'received', null);
   assert.equal(row.funding_tracking.received.source_url, '');
   assert.equal(row.funding_tracking.received.checked_at, '');
+});
+
+test('all four amount stages retain URL-less provenance without implying verified events', () => {
+  const source = {id: 'd'.repeat(32), title: 'Fictional retained planning record',
+    url: '', checked_at: '2026-10-09', notes: 'Fictional source notes, not amount wording.'};
+  const row = {funding_tracking: {application_status: 'preparing',
+    award_status: 'unknown', receipt_status: 'unknown'}};
+  for (const key of FUNDING_AMOUNT_KEYS) {
+    row.funding_tracking[key] = {amount: '15000.00', currency: 'AUD', source_id: source.id,
+      source_url: '', source_quote: `Fictional ${key} wording, unverified.`,
+      checked_at: source.checked_at, notes: `Original ${key} note.`};
+  }
+  const before = structuredClone({row, source});
+  for (const key of FUNDING_AMOUNT_KEYS) {
+    const guidance = fundingAmountSourceGuidance(row.funding_tracking[key], source);
+    assert.match(guidance, /no web URL/);
+    assert.match(guidance, /saved check date matches/);
+    assert.match(guidance, /amount and wording remain unverified/);
+    assert.doesNotMatch(guidance, /official|verified event/);
+    assert.equal(selectFundingAmountSource(row, key, source), false);
+  }
+  assert.deepEqual({row, source}, before);
+  // Availability claims still use the stricter shared source contract.
+  assert.equal(campaignSourceSnapshotIssue('', source.checked_at, source), 'source_url_missing');
+});
+
+test('amount guidance preserves missing and mismatched snapshot distinctions for URL-less records', () => {
+  const source = {id: 'd'.repeat(32), url: '', checked_at: '2026-10-09'};
+  const record = {source_id: source.id, source_url: '', checked_at: source.checked_at};
+  const cases = [
+    [{...record, source_url: 'https://example.invalid/retained'}, source, /saved source URL differs/],
+    [record, {...source, url: 'https://example.invalid/current'}, /No source URL snapshot was saved/],
+    [{...record, checked_at: ''}, source, /No source check date was saved/],
+    [record, {...source, checked_at: ''}, /linked source has no check date/],
+    [{...record, checked_at: '2026-09-30'}, source, /saved check date differs/],
+    [record, undefined, /linked amount source is missing/],
+    [{}, undefined, /No amount source linked/],
+  ];
+  for (const [saved, linked, expected] of cases) {
+    const before = structuredClone({saved, linked});
+    const guidance = fundingAmountSourceGuidance(saved, linked);
+    assert.match(guidance, expected);
+    assert.doesNotMatch(guidance, /add the official page|date matches|wording remain unverified/);
+    assert.deepEqual({saved, linked}, before);
+  }
+  const web = {...source, url: 'https://example.invalid/current'};
+  assert.match(fundingAmountSourceGuidance({...record, source_url: web.url}, web),
+    /Saved URL and check date match.*remain unverified/);
 });
 
 test('edits retain a stale cached summary and reject delayed responses for the previous document', () => {

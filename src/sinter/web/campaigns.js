@@ -359,7 +359,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       });
     entry.input.setAttribute('aria-controls', listId);
     const status = h('small', {class: 'campaign-source-picker-status', role: 'status'},
-      selectedOption ? `Linked to ${selectedOption.source.title} · user-entered, unverified.`
+      selectedOption ? 'Source linked · unverified.'
         : options.length ? 'No campaign source linked.'
           : 'Add a source in the Sources tab first.');
     const matchStatus = h('small', {class: 'campaign-source-picker-status', role: 'status'});
@@ -377,7 +377,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         // removes this editor. Recheck at the actual control/data commit boundary.
         if (disposed || !entry.input.isConnected || !selectionCurrent()) return;
         entry.input.value = option?.label || '';
-        status.textContent = option ? `Linked to ${option.source.title} · user-entered, unverified.`
+        status.textContent = option ? 'Source linked · unverified.'
           : options.length ? 'No campaign source linked.' : 'Add a source in the Sources tab first.';
         clear.hidden = !option; closeMatches();
         onSelect(option?.source || null); changed();

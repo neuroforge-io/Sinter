@@ -59,7 +59,8 @@ Original qualification invokes:
   exact RC4 checks and complete raw clean receipt/context/log identities must
   match the installed package receipt and the same final source/package/binary.
 - Fixed `rc4_installed_workflow_contract.verify_original`: the exact source-declared
-  53-entry legacy or recognized 54-entry funding-enabled catalogue, 22 named UI
+  53-entry legacy, recognized 54-entry funding-enabled or 55-entry focused-copy
+  catalogue, 22 named UI
   checks, 13 roles and both actual app lifetimes. The complete installed CLI
   catalogue retains the exact source IDs and all definition fields. The actual
   count is recorded in workflow evidence and staged release notes; this does not
@@ -78,9 +79,11 @@ Original qualification invokes:
 
 The authorizer derives the expected catalogue count through the fixed trusted
 `installed_workflow_qualification.source_operations` parser after checking the
-complete pinned source/tool identity. It admits only that parser's closed 53/54
-profiles, including the exact local funding extension in the 54-entry profile.
-A 54-entry source cannot be labelled or authorized as 53. The RC4 independent
+complete pinned source/tool identity. It admits only that parser's closed
+53/54/55 profiles. The 54-entry profile requires the exact local funding
+extension; the 55-entry profile additionally requires the exact local
+`campaigns.focus` operation. The current candidate source declares 55 operations.
+A 55-entry source cannot be labelled or authorized as 53 or 54. The RC4 independent
 review uses the source-catalogue check name rather than claiming 53 UI executions.
 Public integrity inspection derives the release-note count from the pinned source
 ZIP as data; it never imports exported code or executes catalogue operations.

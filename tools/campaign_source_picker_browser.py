@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 import sys
 import tempfile
 import threading
@@ -220,10 +221,24 @@ class SourcePickerChecks(CampaignChecks):
         )
         self.screenshot(page, "visible-source-matches")
         chosen = before["sources"][1]
-        evidence.locator(f'button[data-campaign-source-id="{chosen["id"]}"]').click()
+        chosen_control = evidence.locator(
+            f'button[data-campaign-source-id="{chosen["id"]}"]'
+        )
+        preview = chosen_control.locator("..")
+        expect(preview).to_contain_text(chosen["url"])
+        expect(preview).to_contain_text(
+            "Source checked date (user-entered): " + chosen["checked_at"]
+        )
+        chosen_control.click()
         expect(evidence.get_by_label("Evidence link", exact=True)).to_have_value(
             chosen["url"]
         )
+        expect(evidence.get_by_label(
+            "Link to a saved campaign source", exact=True
+        )).to_have_value(re.compile(re.escape(chosen["title"])))
+        expect(evidence.locator(
+            ".campaign-source-picker-status"
+        ).first).to_have_text("Source linked · unverified.")
         self.save(page)
         expected = json.loads(json.dumps(before))
         expected["communications"][0]["evidence_links"][0].update(
@@ -237,8 +252,15 @@ class SourcePickerChecks(CampaignChecks):
         assert self.snapshot(page, title) == expected
         evidence = self.evidence(page)
         picker = evidence.get_by_label("Link to a saved campaign source", exact=True)
+        expect(picker).to_have_value(re.compile(re.escape(chosen["title"])))
+        expect(evidence.locator(
+            ".campaign-source-picker-status"
+        ).first).to_have_text("Source linked · unverified.")
         picker.fill("nothing matches")
         expect(evidence).to_contain_text("No matching saved sources")
+        expect(evidence.locator(
+            ".campaign-source-picker-status"
+        ).first).to_have_text("Source linked · unverified.")
         expect(evidence.get_by_label("Evidence link", exact=True)).to_have_value(
             chosen["url"]
         )

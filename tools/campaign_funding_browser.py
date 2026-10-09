@@ -429,6 +429,110 @@ class FundingChecks(CampaignChecks):
         ), "Funding view overflows the mobile viewport."
         self.screenshot(page, "funding-restored-mobile", full_page=True)
 
+    def url_less_amount_sources_are_retained(self, page):
+        from playwright.sync_api import expect
+
+        document = fixture("Fictional URL-less amount provenance")
+        document["opportunities"] = document["opportunities"][:1]
+        source = {
+            "id": "d" * 32,
+            "title": "Fictional retained planning record — original",
+            "url": "", "checked_at": TODAY,
+            "notes": "Fictional working record, not official funding terms.",
+        }
+        document["sources"].append(source)
+        records = {
+            key: {
+                "amount": amount, "currency": "AUD", "source_id": source["id"],
+                "source_url": ("https://example.invalid/retained-request"
+                               if key == "requested" else ""),
+                "source_quote": f"Fictional {key} wording, unverified.",
+                "checked_at": TODAY, "notes": f"Original {key} note.",
+            }
+            for key, amount in (("target", "15000.00"), ("requested", "1000.00"),
+                                ("awarded", "500.00"), ("received", "50.00"))
+        }
+        document["opportunities"][0]["funding_tracking"] = {
+            "round_key": "fictional-local-record-2026", "benefit_type": "cash",
+            "application_status": "preparing", **records,
+        }
+        self.import_fixture(page, document)
+        original = self.save_snapshot(page)
+        tracking = self.tracking(page)
+        for key, record in records.items():
+            label = key.title()
+            details = tracking.locator(".campaign-funding-amount").filter(
+                has_text=label + " amount and source"
+            )
+            details.locator("summary").first.click()
+            evidence = details.locator(".campaign-funding-amount-evidence")
+            evidence.locator("summary").first.click()
+            guidance = evidence.locator(".campaign-window-source")
+            expect(guidance).to_contain_text(source["title"])
+            if key == "requested":
+                expect(guidance).to_contain_text("saved source URL differs")
+                expect(guidance).not_to_contain_text("check date matches")
+            else:
+                expect(guidance).to_contain_text("Linked source has no web URL.")
+                expect(guidance).to_contain_text("amount and wording remain unverified")
+            expect(guidance).not_to_contain_text("add the official page")
+            expect(evidence.get_by_label(
+                label + " source URL snapshot", exact=True
+            )).to_have_value(record["source_url"])
+            expect(evidence.get_by_label(
+                label + " exact amount wording", exact=True
+            )).to_have_value(record["source_quote"])
+            expect(evidence.get_by_label(
+                label + " amount wording checked date", exact=True
+            )).to_have_value(TODAY)
+            expect(evidence.get_by_label(
+                label + " amount source", exact=True
+            )).to_have_value(re.compile(re.escape(source["title"])))
+        target = tracking.locator(".campaign-funding-amount-evidence").first
+        expect(target).to_contain_text(
+            "Leave blank for a source record without a web URL"
+        )
+        target_date = target.get_by_label(
+            "Target amount wording checked date", exact=True
+        )
+        target_date.fill("")
+        expect(target.locator(".campaign-window-source")).to_contain_text(
+            "No source check date was saved"
+        )
+        target_date.fill("2000-01-02")
+        expect(target.locator(".campaign-window-source")).to_contain_text(
+            "saved check date differs"
+        )
+        target_date.fill(TODAY)
+        # Selecting the same actual result preserves the retained wording/date.
+        self.source(target, "Target amount source", source["title"])
+        saved = self.save_snapshot(page)
+        assert saved["document"] == original["document"]
+        summary = self.update(page)
+        assert self.group(summary, "targets", "cash", "AUD")["total"] == "15000.00"
+        for stage in ("available", "submitted", "awarded", "received"):
+            assert summary["stages"][stage]["groups"] == []
+        assert summary["counts"]["awards"] == {"unknown": 1}
+        assert summary["counts"]["receipts"] == {"unknown": 1}
+        self.screenshot(page, "funding-url-less-records", full_page=True)
+        page.reload()
+        expect(page.get_by_label("Campaign name", exact=True)).to_have_value(
+            document["title"]
+        )
+        assert self.update(page) == summary
+        backup = self.backup(page, "funding-url-less-backup")
+        assert backup == saved["document"]
+        self.import_fixture(
+            page, dict(backup, title="Restored fictional URL-less amount provenance")
+        )
+        restored = self.save_snapshot(page)
+        assert restored["id"] != saved["id"]
+        assert (restored["document"]["opportunities"]
+                == saved["document"]["opportunities"])
+        assert restored["document"]["sources"] == saved["document"]["sources"]
+        assert self.app.campaigns.get(saved["id"]) == saved
+        assert self.update(page) == summary
+
     def source_changes_and_protection(self, page):
         from playwright.sync_api import expect
 
@@ -681,6 +785,7 @@ def main(argv: list[str] | None = None) -> None:
                         checks.app = server.app
                         for name in (
                             "legacy_read_is_not_an_edit", "workflow", "source_changes_and_protection",
+                            "url_less_amount_sources_are_retained",
                             "delayed_summary_cannot_replace_edited_records",
                             "portfolio_view_retains_full_records_and_totals",
                             "portfolio_add_limit_keeps_backup",

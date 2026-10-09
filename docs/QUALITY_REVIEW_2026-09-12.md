@@ -1,5 +1,70 @@
 # Sinter user-testing closeout — 12 September 2026
 
+## 9 October recorded funding and amount-source guidance
+
+An actual local SubjectNest campaign was operated through the source workbench
+at `6bbad0ac489ebba13453073d57486aab598155df`. Its existing proposed cash target
+was recorded separately from requests, awards and receipts, with a linked
+historical planning source and its exact retained wording. Applicant confirmation
+and eligibility remained unresolved; no submitted request, award or receipt
+amount was entered. Only the optional funding-tracking record changed. All
+original answers, sources, cost notes, checks and actions remained identical.
+After one acknowledged save, revision 12 survived full browser and app shutdown
+and restart. The two exported 49,972-byte backups were byte-for-byte identical.
+No model, outbound communication or application was used in this journey.
+
+The source interface marked calculated totals stale after save, requiring an
+explicit refresh against the saved version. The fresh view kept the planning
+target separate from empty submission, award and receipt stages. Empty recorded
+stages do not prove there was no historical funding. An independent screenshot
+and content critic rated this demonstrated funding screen **UX 6/10,
+functionality 7/10 and aesthetics 7/10**. Long explanations and repeated empty
+stages dominate; the selected round's blocker and next evidence action should
+be easier to see beside its target. These are bounded source-workbench ratings,
+not whole-product or installed-release claims.
+
+This real use exposed an amount-source wording defect: a retained source without
+a web URL was told to add an official page. Current tested source now distinguishes
+missing, changed and matching source dates and references without changing saved
+source identities or inventing URLs. A matching source record does not verify the
+amount wording. The link acknowledgement is shorter and retains its unverified
+status. Eligibility, ceiling and application-window availability still require
+current URL-backed evidence. RC4 guidance also now names the already implemented
+closed 55-operation focused-copy profile alongside its historical 53/54 profiles;
+no new operation or installed pass is inferred from that documentation correction.
+
+The selected Python checks now cover **611 distinct passing tests**. The original
+combined run recorded 510 passed and 101 failed in 68.16 seconds: the strict
+directory reader could not open the root-owned `/tmp/user` ancestor with mode
+0711. Its original fixture tree and failure-cache snapshot remain retained;
+complete original console output was not captured. Only the affected release
+module was repeated under a fresh owned 0700 base directory, passing all 131
+tests in 13.71 seconds with its full log and XML retained. The other 480 passing
+checks were not repeated. No directory permissions or reader policy were weakened.
+Root's focused Node checks passed all twelve tests. The original source-picker
+and funding browser runs each passed all nine journeys; neither suite was
+replayed. Their declared source hashes stayed unchanged, browser and server
+closure was recorded, and no external request or model operation was recorded.
+
+The real saved revision-12 SubjectNest campaign was then reopened through the
+current source interface. It showed Saved on this computer, the short
+"Source linked · unverified." acknowledgement and guidance that the URL-less
+record's saved check date matches its source, while its amount and wording remain
+unverified. This was a read and export check, with no campaign edit or save.
+Export 22 is byte-for-byte and JSON-identical to export 21, both 49,972 bytes.
+An independent scoped critic rated this demonstrated follow-up **UX 6.5/10,
+functionality 7.5/10 and aesthetics 6.5/10**. These are source-workflow observations;
+no installed qualification or new whole-product rating follows from them.
+
+The original `6bbad0a` Quality run 37880948801, attempt 1, passed all twelve jobs.
+Each Windows matrix recorded 5,064 passed tests, 778 skips and zero failures.
+Registered-runtime fallback fixtures selected Python 3.14.7; explicit matrix
+fixtures selected 3.10.11 and 3.13.15. Root review checked the retained original
+run/job identities, file hashes and both original artifact ZIPs. Earlier Windows
+timeouts remain unexplained and retained. WASM passed; the community workflow
+ran its plan only and skipped publication. These results do not qualify a newer
+source commit, an installed candidate or an upgrade.
+
 ## 9 October application counts and phone source editing
 
 The real local SubjectNest application has a 186-character answer under a recorded

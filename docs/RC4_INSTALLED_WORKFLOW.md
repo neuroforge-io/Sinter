@@ -25,12 +25,17 @@ stdout is not presented as captured application diagnostics.
 The journey verifies opening the example, inspecting sources, preparing a
 handover, editing an action, saving, closing, restarting, exporting, restoring,
 changed sources, stale reviews, conflicting saves and uncertain activity. The
-unchanged contract admits the exact source-declared **53-entry legacy or
-54-entry funding-enabled operation catalogue**, **22 named
+contract admits the exact source-declared **53-entry legacy, 54-entry
+funding-enabled or 55-entry focused-copy operation catalogue**, **22 named
 checks** and **13 retained roles**, including the original handover and three
 additional Word copies. The returned evidence records the actual catalogue count
 from the fixed trusted source parser. It does not claim that every catalogue operation was
 individually executed. Historical evidence remains historical.
+
+Current candidate source declares 55 operations. Its funding summary and focused
+copy must match their exact local operation IDs, routes and effects; a count
+alone does not admit an arbitrary extension. This source catalogue does not
+establish an installed pass or change any prior preview's catalogue.
 
 The Word-copy exercise deliberately leaves changed report wording unsaved in
 Sinter while preserving the original saved report. Saving a Word copy is a

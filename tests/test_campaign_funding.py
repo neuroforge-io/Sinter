@@ -79,6 +79,68 @@ def test_ceilings_targets_requests_and_recorded_receipts_are_distinct():
     assert "do not add them together" in result["notice"]
 
 
+def test_url_less_amounts_survive_restore_without_creating_funding_events(tmp_path):
+    row = route()
+    document = campaign(row)
+    source = {"id": "d" * 32, "title": "Fictional retained planning record",
+              "url": "", "checked_at": date.today().isoformat(),
+              "notes": "Fictional working record, not official funding terms."}
+    document["sources"].append(source)
+    for key, value in (("target", "15000.00"), ("requested", "1000.00"),
+                       ("awarded", "500.00"), ("received", "50.00")):
+        row["funding_tracking"][key] = {
+            "amount": value, "currency": "AUD", "source_id": source["id"],
+            "source_url": "", "checked_at": source["checked_at"],
+            "source_quote": f"Fictional {key} wording, unverified.",
+            "notes": f"Original {key} note.",
+        }
+    before = copy.deepcopy(document)
+    summary = campaigns.funding_summary(document)
+    assert document == before
+    assert group(summary, "targets")["total"] == "15000.00"
+    assert group(summary, "available")["total"] == "8000.00"
+    for stage in ("submitted", "awarded", "received"):
+        assert summary["stages"][stage]["groups"] == []
+    assert summary["counts"]["applications"] == {"preparing": 1}
+    assert summary["counts"]["awards"] == {"unknown": 1}
+    assert summary["counts"]["receipts"] == {"unknown": 1}
+    store = campaigns.CampaignStore(tmp_path)
+    saved = store.save(document)
+    expected = campaigns.validate(document)
+    assert saved["document"] == expected
+    reopened = campaigns.CampaignStore(tmp_path).get(saved["id"])
+    assert reopened == saved
+    restored = store.save(json.loads(json.dumps(reopened["document"])))
+    assert restored["id"] != saved["id"] and restored["document"] == expected
+    assert campaigns.funding_summary(restored["document"]) == summary
+    assert store.get(saved["id"]) == saved
+
+
+@pytest.mark.parametrize("component,reason", [
+    ("eligibility_evidence", "eligibility_evidence_missing"),
+    ("ceiling_evidence", "ceiling_evidence_missing"),
+    ("window", "window_unconfirmed"),
+])
+def test_url_less_source_cannot_support_available_funding(component, reason):
+    row = route()
+    document = campaign(row)
+    source = {"id": "d" * 32, "title": "Fictional URL-less source record",
+              "url": "", "checked_at": date.today().isoformat()}
+    document["sources"].append(source)
+    if component == "window":
+        row.update(window_source_id=source["id"], window_source_url="",
+                   window_checked_at=source["checked_at"])
+    else:
+        row["funding_tracking"][component].update(
+            source_id=source["id"], source_url="", checked_at=source["checked_at"])
+    before = copy.deepcopy(document)
+    summary = campaigns.funding_summary(document)
+    assert summary["stages"]["available"]["groups"] == []
+    assert any(item["reason"] == reason for item in summary["exclusions"])
+    assert group(summary, "targets")["total"] == "3000.00"
+    assert document == before
+
+
 def test_currencies_cash_and_credits_never_mix_and_unknown_is_not_zero():
     rows = [route("Fictional Birch", status="submitted", application="submitted"),
             route("Fictional Pine", status="submitted", application="submitted"),
