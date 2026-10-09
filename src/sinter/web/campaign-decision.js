@@ -8,6 +8,8 @@ import {campaignSourceSnapshotGuidance,
 import {campaignRequirementSourceComplete as sourceComplete,
   campaignRequirementSourceGuidance as sourceRecordGuidance}
   from './campaign-requirement-policy.js';
+import {isNonApplicationRoute, campaignRoutePurposeConflict,
+  campaignRoutePurposeGuidance} from './campaign-route-purpose.js';
 
 export const CAMPAIGN_DECISION_NOTE = 'Based on your records. Sinter has not verified sources, eligibility or authority; this is not permission to submit.';
 
@@ -107,7 +109,8 @@ export function applicationWindowGaps(opportunity, today, sources = []) {
 }
 
 function routeGaps(opportunity, requirements, today, sources = []) {
-  const gaps = [];
+  const conflict = campaignRoutePurposeConflict(opportunity);
+  const gaps = conflict ? [conflict] : [];
   const checks = requirements.filter(row => row.opportunity === opportunity.name);
   const unmet = firstUnmetRequirement(checks);
   if (unmet) gaps.push(requirementGap(unmet, today, sources));
@@ -160,6 +163,9 @@ function reopenedWhen(document, state, today, focus) {
   const routes = Array.isArray(document?.opportunities) ? document.opportunities : [];
   const notMet = (Array.isArray(document?.requirements) ? document.requirements : [])
     .filter(row => row.status === 'not_met');
+  if (campaignRoutePurposeConflict(focus)) {
+    return 'Reconcile the recorded purpose and application workflow explicitly. Then review the remaining applicant checks, current sources and application window; the existing records and authority checks remain in force.';
+  }
   if (state === 'no_go') {
     const criteria = [];
     if (routes.some(row => row.status === 'closed')) {
@@ -198,6 +204,8 @@ function reopenedWhen(document, state, today, focus) {
 
 function suggestedAction(state, active, document, today, focus) {
   const sources = Array.isArray(document?.sources) ? document.sources : [];
+  const conflict = campaignRoutePurposeConflict(focus);
+  if (conflict) return conflict;
   if (state === 'no_go') return 'Check whether a future round has been published by the funder.';
   if (state === 'awaiting_decision') return 'Record the funder’s decision when it arrives.';
   if (state === 'not_assessed') return 'Record a current official funding route before assessing eligibility.';
@@ -253,6 +261,20 @@ function suggestedAction(state, active, document, today, focus) {
   return 'Review the next unresolved campaign item against current funder guidance.';
 }
 
+function purposeAssessment(focus, requirements, today, sources) {
+  const guidance = campaignRoutePurposeGuidance(focus);
+  if (!guidance || !isOpportunityActionable(focus.status)) return guidance;
+  const checks = requirements.filter(row => row.opportunity === focus.name);
+  const pending = firstUnmetRequirement(checks)
+    || checks.find(row => row.status !== 'met' || !sourceComplete(row, today, sources));
+  if (!pending) return guidance;
+  const gap = requirementGap(pending, today, sources);
+  return {...guidance,
+    detail: `${guidance.detail} Recorded check still needs review: ${gap}`,
+    suggestedTask: `Review the recorded check: ${gap}`,
+    progressCriteria: `${guidance.progressCriteria} Keep the recorded check unresolved until its evidence and assessment are explicitly reviewed.`};
+}
+
 /**
  * Build a display-only decision and one next move from saved campaign fields.
  * It never mutates the document and never claims eligibility is verified.
@@ -268,10 +290,23 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
       String(date.getDate()).padStart(2, '0')].join('-');
   })();
   const active = opportunities.filter(row => isOpportunityActionable(row.status));
-  const focus = routeFocus(active, focusedOpportunityName);
+  let focus = routeFocus(active, focusedOpportunityName);
+  // Inactive informational records keep their explicit status and own context.
+  // Mixed and legacy portfolios retain the existing funding overview behavior.
+  if (!active.length && opportunities.length && opportunities.every(isNonApplicationRoute)) {
+    focus = routeFocus(opportunities, focusedOpportunityName);
+  }
+  const purpose = purposeAssessment(focus, requirements, localToday, sources);
+  const selectedRecord = focusedOpportunityName
+    ? opportunities.find(row => row.name === focusedOpportunityName)
+    : !active.length ? opportunities[0] : null;
+  const historicalConflict = selectedRecord && !isOpportunityActionable(selectedRecord.status)
+    ? campaignRoutePurposeConflict(selectedRecord) : '';
 
   let state, label, detail;
-  if (!opportunities.length) {
+  if (purpose) {
+    ({state, label, detail} = purpose);
+  } else if (!opportunities.length) {
     state = 'not_assessed';
     label = 'NOT ASSESSED';
     detail = 'No funding route is recorded, so there is no go/no-go decision yet.';
@@ -295,6 +330,9 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
       const gap = focusedGaps[0] || 'current programme details or applicant-specific eligibility evidence';
       detail = `“${focus?.name || 'The selected route'}” is not ready for human review. ${gap}`;
     }
+  }
+  if (historicalConflict) {
+    detail += ` Selected historical route “${selectedRecord.name}”: ${historicalConflict} Its recorded status remains unchanged.`;
   }
 
   const openActions = actions.map((action, index) => ({action, index}))
@@ -362,11 +400,12 @@ export function campaignDecision(document, today, focusedOpportunityName = '') {
             ? `Review ${reactivatedRouteReviewCount} open action(s) on reactivated route(s). Reclassify them as before-submission work or keep them held.`
             : inactiveRouteReviewCount
               ? `Review ${inactiveRouteReviewCount} open action(s) on inactive route(s). Move continuing work to a current scope or explicitly put it on hold. Mark Done only when completed.`
-              : suggestedAction(state, active, {requirements, sources}, localToday, focus),
+              : purpose?.suggestedTask
+                || suggestedAction(state, active, {requirements, sources}, localToday, focus),
       ownerNeeded: true, ownerStatus: 'Owner needed — no person is recorded.',
     };
   }
 
   return {state, label, detail, action, focusOpportunity: focus?.name || '',
-    reopenCriteria: reopenedWhen(document, state, localToday, focus)};
+    reopenCriteria: purpose?.progressCriteria || reopenedWhen(document, state, localToday, focus)};
 }

@@ -117,6 +117,8 @@ jobs:
         env:
           TMPDIR: ${{ github.workspace }}/browser-artifacts
       - run: python tools/communication_view_browser.py
+      - name: Explicit route purposes preserve local work and recovery
+        run: python tools/campaign_route_purpose_browser.py --output-dir browser-artifacts/campaign-route-purpose
       - run: python tools/quality_browser.py
       - run: python tools/community_recovery_browser.py
       - run: python tools/report_recovery_browser.py

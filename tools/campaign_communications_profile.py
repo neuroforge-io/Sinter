@@ -128,7 +128,7 @@ def fixture(validate_document) -> dict:
 
 
 def source_hashes(root: Path) -> dict[str, dict]:
-    """Pin runtime/UI files, including the exact Python modules actually loaded."""
+    """Pin exact runtime/UI bytes with portable, source-relative inventory keys."""
     paths = [path for path in (root / "src/sinter").rglob("*")
              if path.is_file() and "__pycache__" not in path.parts
              and path.suffix != ".pyc"]
@@ -138,7 +138,7 @@ def source_hashes(root: Path) -> dict[str, dict]:
         if path.is_symlink() or path.stat().st_size > 8 * 1024 * 1024:
             raise ValueError("Runtime source contains a redirected or unexpectedly large file: " + str(path))
         raw = path.read_bytes()
-        result[str(path.relative_to(root))] = {"bytes": len(raw), "sha256": digest(raw)}
+        result[path.relative_to(root).as_posix()] = {"bytes": len(raw), "sha256": digest(raw)}
     return result
 
 

@@ -38,6 +38,51 @@ def test_preview_sends_only_selected_context_without_network(saved):
     assert store.get(record['id']) == before
 
 
+@pytest.mark.parametrize('purpose', ['discussion', 'research'])
+def test_planning_preview_scopes_context_without_inferred_grant(saved, purpose):
+    store, record, payload = saved
+    record['document']['opportunities'][0]['purpose'] = purpose
+    record['document']['opportunities'][0]['application_mode'] = 'unknown'
+    updated = store.save(record['document'], record['id'], record['revision'])
+    before = copy.deepcopy(updated)
+    with patch.object(client, 'chat') as model:
+        preview = assistant.preview(store, {**payload, 'revision': updated['revision']})
+    model.assert_not_called()
+    assert preview['context']['route']['purpose'] == purpose
+    assert 'Do not assume it is a grant application' in preview['content']
+    assert 'questions for the funder' not in preview['content']
+    assert 'PRIVATE BODY' not in preview['content']
+    assert store.get(record['id']) == before
+
+
+def test_preview_preserves_absent_purpose_and_required_application_scope(saved):
+    store, record, payload = saved
+    original = assistant.preview(store, payload)
+    assert 'purpose' not in original['context']['route']
+    route = record['document']['opportunities'][0]
+    route.update(purpose='research', application_mode='required')
+    updated = store.save(record['document'], record['id'], record['revision'])
+    preview = assistant.preview(store, {**payload, 'revision': updated['revision']})
+    assert preview['context']['route']['purpose'] == 'research'
+    assert 'questions for the funder' in preview['content']
+    assert 'purpose conflicts with the application workflow' in preview['content']
+    assert 'Do not assume it is a grant application' not in preview['content']
+    assert preview['context_hash'] != original['context_hash']
+
+
+def test_application_purpose_does_not_resolve_no_form_workflow_by_assumption(saved):
+    store, record, payload = saved
+    record['document']['opportunities'][0].update(
+        purpose='application', application_mode='not_required')
+    updated = store.save(record['document'], record['id'], record['revision'])
+    with patch.object(client, 'chat') as model:
+        preview = assistant.preview(store, {**payload, 'revision': updated['revision']})
+    model.assert_not_called()
+    assert 'explicit local reconciliation' in preview['content']
+    assert 'do not resolve the conflict by assumption' in preview['content']
+    assert preview['context']['route']['application_mode'] == 'not_required'
+
+
 def test_consent_and_preview_hash_required_before_any_model_request(saved):
     store, _, payload = saved
     with patch.object(client, 'chat') as model:

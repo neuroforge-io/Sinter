@@ -22,6 +22,13 @@ from .campaign_funding import summarize as _funding_summary
 from .campaign_budget import quoted_budget_total as _budget_total
 from .campaign_capacity import text_characters
 from .campaign_source_history import historical_lines, validate_history
+from .campaign_route_purpose import (
+    PURPOSE_LABELS,
+    ROUTE_PURPOSES,
+    non_application_route,
+    purpose_record_notice,
+    purpose_workflow_conflict,
+)
 from .campaign_currency import (
     ceiling_comparison_note,
     ceiling_currency,
@@ -464,7 +471,7 @@ def validate(data: object) -> dict:
         "window_source_id", "window_source_url", "window_source_quote",
         "window_checked_at", "decision_window",
         "ceiling", "ceiling_currency", "fit", "status", "route_type", "application_mode", "applicant",
-        "applicant_confirmed", "funding_tracking",
+        "applicant_confirmed", "funding_tracking", "purpose",
     }):
         name = _text(row.get("name", ""), "Opportunity name", 200, True,
                      strip=True)
@@ -523,6 +530,11 @@ def validate(data: object) -> dict:
                               OPPORTUNITY_STATUSES, "opportunity status"),
         })
         currency = ceiling_currency(row)
+        # Missing remains missing: do not grow or rewrite legacy campaigns.
+        # Purpose is a person's explicit intent, never inferred from a route name.
+        if "purpose" in row:
+            result["opportunities"][-1]["purpose"] = _status(
+                row["purpose"], ROUTE_PURPOSES, "route purpose")
         # Preserve legacy AUD serialization; an explicit different denomination
         # is part of the saved input, never an FX hint.
         if currency != "AUD":
@@ -1015,13 +1027,31 @@ def _budget_summary(document: dict) -> dict:
     return quoted_budget_summary(document, ACTIONABLE_OPPORTUNITY_STATES)
 
 
+def _records_only(document: dict) -> bool:
+    active = [row for row in document["opportunities"]
+              if row["status"] in ACTIONABLE_OPPORTUNITY_STATES]
+    routes = active or document["opportunities"]
+    return bool(routes) and all(non_application_route(row) for row in routes)
+
+
+def _review_notice(document: dict) -> str:
+    if not _records_only(document):
+        return NOTICE
+    return ("This campaign records your research and assessments. Checks and source "
+            "links have not been independently verified. Confirm next steps, "
+            "responsibilities and permissions directly; this record does not "
+            "establish application requirements, eligibility, authority, agreement "
+            "or funding.")
+
+
 def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
     active = [row for row in document["opportunities"]
               if row["status"] in ACTIONABLE_OPPORTUNITY_STATES]
     active_names = {row["name"] for row in active}
+    application_routes = [row for row in active if not non_application_route(row)]
     application_windows_to_check = sum(
         not _application_window_is_current(row, date.today(), document["sources"])
-        for row in active)
+        for row in application_routes)
     current_actions = [row for row in document["actions"]
                        if row["status"] == "open"
                        and _action_is_current(row, document["opportunities"])]
@@ -1061,6 +1091,7 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
     active_by_name = {row["name"]: row for row in active}
     answers_on_unconfirmed_routes = sum(
         bool(row["opportunity"] in active_by_name)
+        and not non_application_route(active_by_name[row["opportunity"]])
         and not _application_route_confirmed(
             active_by_name[row["opportunity"]])
         for row in active_answers)
@@ -1084,7 +1115,7 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
                     if not document[key] or (isinstance(document[key], str)
                                              and not document[key].strip())]
     result = {
-        "status": "human_review", "notice": NOTICE,
+        "status": "human_review", "notice": _review_notice(document),
         "missing_sections": core_missing,
         "requirements_total": len(checks),
         "requirements_archived": archived_checks,
@@ -1096,13 +1127,15 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
         "claims_without_evidence": unsupported,
         "opportunities_without_checks": sum(
             not any(row["opportunity"] == item["name"] for row in checks)
-            for item in active),
+            for item in application_routes),
         "application_workflow_to_confirm": sum(
             row["application_mode"] == "unknown" or (
                 row["application_mode"] == "required"
                 and not _application_route_confirmed(row))
-            for row in active),
-        "opportunities_without_sources": sum(not item["url"] for item in active),
+            for row in application_routes),
+        "purpose_workflow_conflicts": sum(purpose_workflow_conflict(row)
+                                          for row in active),
+        "opportunities_without_sources": sum(not item["url"] for item in application_routes),
         "application_windows_to_check": application_windows_to_check,
         "opportunities_without_answers": sum(
             not any(row["opportunity"] == item["name"]
@@ -1114,7 +1147,8 @@ def _readiness(document: dict, metrics: list[dict], budget: dict) -> dict:
         "answers_unreviewed": sum(row["status"] != "reviewed"
                                   for row in current_answers),
         "answer_limits_unknown": sum(row["limit"] is None for row in active_metrics),
-        "budget_incomplete": not active_budget["complete"],
+        "budget_incomplete": ((not _records_only(document) or bool(active_budget_rows))
+                              and not active_budget["complete"]),
         "unknown_costs": active_budget["unknown_costs"],
         "unquoted_costs": active_budget["unquoted_costs"],
         "unallocated_budget_items": sum(not row["opportunity"]
@@ -1225,7 +1259,28 @@ def _application_route_confirmed(row: dict) -> bool:
             and row["applicant_confirmed"] is True)
 
 
+def _record_route_details(row: dict, sources: list[dict], *, brief=False) -> list[str]:
+    """Show entered record material without asking for an invented grant pack."""
+    lines = [purpose_record_notice(row)]
+    if row["deadline"] or row["application_window"] != "unknown" or any(
+            row[key] for key in ("window_source_id", "window_source_url",
+                                 "window_source_quote", "window_checked_at")):
+        description = (_brief_window_description(row, sources) if brief
+                       else _window_description(row, sources))
+        lines.append("Recorded timing (user-entered): " + description)
+    if row["ceiling"] is not None:
+        lines.append("Recorded funding amount / ceiling (user-entered): " + _route_amount(row))
+    if row["decision_window"]:
+        lines.append("Recorded decision timing: " + _inline(row["decision_window"]))
+    if row["url"]:
+        lines.append(_link(row["url"], "Recorded route reference"))
+    return lines
+
+
 def _answer_hold_reason(row: dict) -> str:
+    if non_application_route(row):
+        return (purpose_record_notice(row) + " Saved application-answer fields "
+                "are retained locally and omitted from this brief.")
     if row["application_mode"] == "not_required":
         return ("This route is recorded as having no formal application. Saved "
                 "answer labels and drafts are held and omitted from this brief.")
@@ -1547,6 +1602,7 @@ def _render_decision_brief(document: dict, readiness: dict,
               if row["status"] in ACTIONABLE_OPPORTUNITY_STATES]
     submitted = [row for row in document["opportunities"]
                  if row["status"] == "submitted"]
+    records_only = _records_only(document)
     lines = ["# " + _inline(document["title"]),
              "**INTERNAL · REVIEW BEFORE SHARING**",
              "## Current recorded status"]
@@ -1554,22 +1610,32 @@ def _render_decision_brief(document: dict, readiness: dict,
         lines.append("Route in focus: " + _inline(focused_opportunity)
                      + " (selected in Sinter; not an eligibility decision).")
     if not active:
-        lines.append("No application route is currently recorded as active.")
+        lines.append("No route is currently recorded as active."
+                     if document["opportunities"] and all(
+                         non_application_route(row) for row in document["opportunities"])
+                     else "No application route is currently recorded as active.")
     for row in active:
         status = {"not_pursuing": "not pursuing this round"}.get(
             row["status"], row["status"])
         lines.extend([
             "### " + _inline(row["name"]),
             "**Status entered:** " + _inline(status)
-            + " · **Funder:** " + _inline(row["funder"] or "Not recorded"),
+            + (" · **Counterpart:** " if non_application_route(row)
+               else " · **Funder:** ")
+            + _inline(row["funder"] or "Not recorded"),
                       "**Route type (user-entered):** "
                       + row["route_type"].replace("_", " "),
-            "**Application workflow (user-entered):** "
-            + _application_workflow_description(row),
-            "**Application window:** " + _brief_window_description(
-                row, document["sources"]),
-            "**Recorded funding amount / ceiling:** " + _route_amount(row),
         ])
+        if "purpose" in row:
+            lines.append("**Purpose (user-entered):** " + PURPOSE_LABELS[row["purpose"]])
+        if non_application_route(row):
+            lines.extend(_record_route_details(row, document["sources"], brief=True))
+        else:
+            lines.extend([
+                "**Application workflow (user-entered):** " + _application_workflow_description(row),
+                "**Application window:** " + _brief_window_description(row, document["sources"]),
+                "**Recorded funding amount / ceiling:** " + _route_amount(row),
+            ])
         comparison = ceiling_comparison_note(row)
         if comparison:
             lines.append("**Currency review:** " + comparison)
@@ -1614,6 +1680,12 @@ def _render_decision_brief(document: dict, readiness: dict,
             + ("needs" if workflow_count == 1 else "need")
             + " a recorded application process, named applicant "
             "and explicit applicant confirmation")
+    if readiness["purpose_workflow_conflicts"]:
+        review_items.append(
+            _brief_count(readiness["purpose_workflow_conflicts"], "route")
+            + (" has" if readiness["purpose_workflow_conflicts"] == 1 else " have")
+            + " conflicting purpose and formal workflow records; reconcile "
+            "them explicitly. Formal application checks remain in force")
     missing_answers = readiness["opportunities_without_answers"]
     if missing_answers:
         review_items.append(
@@ -1665,19 +1737,20 @@ def _render_decision_brief(document: dict, readiness: dict,
             _brief_count(window_count, "active application window")
             + (" needs" if window_count == 1 else " need")
             + " current official wording and a dated check within 90 days")
-    if not budget["items"]:
+    if not budget["items"] and not records_only:
         review_items.append("No recorded costs are linked to active opportunities; "
                             "the current recorded cost subtotal is unknown")
-    elif not budget["complete"]:
+    elif budget["items"] and not budget["complete"]:
         count = budget["unknown_costs"]
         cost_label = "cost remains" if count == 1 else "costs remain"
         review_items.append(
             f"{count} {cost_label} unknown; known recorded cost subtotal "
             f"{_brief_amount(budget['known_total'])}; recorded cost total unknown")
-    else:
+    elif budget["items"]:
         review_items.append(
             "Recorded cost subtotal: " + _brief_amount(budget["total"]))
-    review_items.append(budget["amount_basis_note"])
+    if budget["items"] or not records_only:
+        review_items.append(budget["amount_basis_note"])
     if readiness["budget_amount_basis_review"]:
         review_items.append(
             _brief_count(readiness["budget_amount_basis_review"],
@@ -1756,13 +1829,14 @@ def _render_decision_brief(document: dict, readiness: dict,
                 + " · First public date: "
                 + (asset["first_public_date"] or "Not recorded"))
 
-    lines.extend(["## Review notice", NOTICE])
+    lines.extend(["## Review notice", readiness["notice"]])
     return "\n\n".join(lines) + "\n"
 
 
 def _render(document: dict, readiness: dict, metrics: list[dict],
             budget: dict) -> str:
     lines = ["# " + _inline(document["title"])]
+    records_only = _records_only(document)
     if document["organisation"]:
         lines.append(_inline(document["organisation"]))
     if document["objective"].strip():
@@ -1775,13 +1849,23 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
     else:
         budget_progress = (
             f"{readiness['unquoted_costs']} cost records needing details")
-    lines.extend(["## Work still to complete",
-                  f"{readiness['requirements_unresolved']} requirements unresolved; "
-                  f"{readiness['requirements_not_met']} marked not met; "
-                  f"{readiness['application_workflow_to_confirm']} routes need workflow or applicant confirmation; "
-                  f"{readiness['answers_over_limit']} answers over their limits; "
-                  f"{budget_progress}; "
-                  f"{readiness['open_actions']} open actions (confirmed current scope only).", NOTICE])
+    if records_only:
+        lines.extend(["## Recorded work to review",
+                      f"{readiness['requirements_unresolved']} recorded checks unresolved; "
+                      f"{readiness['requirements_not_met']} marked not met; "
+                      f"{readiness['open_actions']} open actions (confirmed current scope only).", readiness["notice"]])
+    else:
+        lines.extend(["## Work still to complete",
+                      f"{readiness['requirements_unresolved']} requirements unresolved; "
+                      f"{readiness['requirements_not_met']} marked not met; "
+                      f"{readiness['application_workflow_to_confirm']} routes need workflow or applicant confirmation; "
+                      f"{readiness['answers_over_limit']} answers over their limits; "
+                      f"{budget_progress}; "
+                      f"{readiness['open_actions']} open actions (confirmed current scope only).", readiness["notice"]])
+    if readiness["purpose_workflow_conflicts"]:
+        lines.append("Purpose and formal workflow conflict on "
+                     f"{readiness['purpose_workflow_conflicts']} route(s). Reconcile "
+                     "the entered records; formal application checks remain in force.")
     if readiness["budget_amount_basis_review"]:
         lines.append(
             f"{readiness['budget_amount_basis_review']} recorded cost group(s) "
@@ -1831,24 +1915,32 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
         status_label = {"not_pursuing": "not pursuing this round"}.get(
             item["status"], item["status"])
         lines.extend(["## " + _inline(name),
-                      "Funder: " + _inline(item["funder"] or "Not recorded")
+                      ("Counterpart: " if non_application_route(item) else "Funder: ")
+                      + _inline(item["funder"] or "Not recorded")
                       + " · Campaign status entered: " + status_label,
                       "Route type (user-entered): "
                       + item["route_type"].replace("_", " "),
-                      "Application workflow (user-entered): "
-                      + _application_workflow_description(item),
-                      "Application window: " + _window_description(
-                          item, document["sources"])
-                      + " · Recorded funding amount / ceiling: " + _route_amount(item),
-                      "Decision window: " + _inline(item["decision_window"]
-                                                    or "Not confirmed"),
-                      _link(item["url"], "Programme details")])
+                      ])
+        if "purpose" in item:
+            lines.append("Purpose (user-entered): " + PURPOSE_LABELS[item["purpose"]])
+        if non_application_route(item):
+            lines.extend(_record_route_details(item, document["sources"]))
+        else:
+            lines.extend(["Application workflow (user-entered): "
+                          + _application_workflow_description(item),
+                          "Application window: " + _window_description(item, document["sources"])
+                          + " · Recorded funding amount / ceiling: " + _route_amount(item),
+                          "Decision window: " + _inline(item["decision_window"] or "Not confirmed"),
+                          _link(item["url"], "Programme details")])
         if item["fit"].strip():
-            lines.extend(["### Fit with the project", literal(item["fit"])])
+            lines.extend(["### Scope and open questions" if non_application_route(item)
+                          else "### Fit with the project", literal(item["fit"])])
         rows = [row for row in document["requirements"] if row["opportunity"] == name]
-        lines.append("### Requirement checks")
+        lines.append("### Recorded checks" if non_application_route(item) else "### Requirement checks")
         if not rows:
-            lines.append("No requirements have been recorded for this opportunity.")
+            lines.append("No checks have been recorded for this route."
+                         if non_application_route(item)
+                         else "No requirements have been recorded for this opportunity.")
         for row in rows:
             label = {"met": "User-marked met · unverified",
                      "not_met": "User-marked not met · unverified",
@@ -1883,7 +1975,12 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
             lines.extend(historical_lines(row))
         indexes = [index for index, row in enumerate(document["answers"])
                    if row["opportunity"] == name]
-        if not active:
+        if non_application_route(item):
+            if indexes:
+                lines.extend(["### Saved application-answer fields · held",
+                              _answer_hold_reason(item),
+                              f"{len(indexes)} retained answer row(s); labels and text omitted."])
+        elif not active:
             lines.extend([
                 "### Historical answer drafts · inactive route",
                 "These superseded drafts may contain unconfirmed assumptions and are not for submission. Their presence does not show whether anything was submitted; verify the original portal record separately.",
@@ -1898,12 +1995,12 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
             lines.append("### Application answers")
             if not indexes:
                 lines.append("No application answers have been recorded yet.")
-        if active and not _application_route_confirmed(item):
+        if active and not non_application_route(item) and not _application_route_confirmed(item):
             lines.append(_answer_hold_reason(item))
             if indexes:
                 lines.append(
                     f"{len(indexes)} retained answer row(s); labels and text omitted.")
-        elif active:
+        elif active and not non_application_route(item):
             for index in indexes:
                 row, count = document["answers"][index], metrics[index]
                 limit = ("limit not recorded" if count["limit"] is None
@@ -1921,10 +2018,12 @@ def _render(document: dict, readiness: dict, metrics: list[dict],
                           if not row["opportunity"] or row["opportunity"] in active_names]
     historical_budget_rows = [row for row in document["budget"]
                               if row["opportunity"] and row["opportunity"] not in active_names]
-    lines.extend(["## Current recorded cost subtotal", budget["amount_basis_note"]])
+    if active_budget_rows or not records_only:
+        lines.extend(["## Current recorded cost subtotal", budget["amount_basis_note"]])
     if not active_budget_rows:
-        lines.append("No budget items are recorded for active opportunities. "
-                     "The recorded cost total is unknown.")
+        if not records_only:
+            lines.append("No budget items are recorded for active opportunities. "
+                         "The recorded cost total is unknown.")
     else:
         lines.extend(["| Item | Opportunity | Quantity | Recorded unit cost "
                       "| Recorded line amount | Reference (unverified) |",

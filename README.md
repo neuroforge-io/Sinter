@@ -131,6 +131,19 @@ their saved evidence count; open an entry to view or edit the complete record.
 These views preserve original message order and historical evidence in backups.
 Dates and delivery status remain your records and are not independently verified.
 
+In current development, **Route purpose** can explicitly label an application,
+discussion or research case. Older routes stay **Not specified** until you choose;
+Sinter does not infer their purpose from correspondence or programme names.
+Discussion and research offer local planning guidance and an **Add suggested action**
+button. The action remains editable, with no owner or proposed date assigned.
+Application records, evidence and funding history remain accessible. A recorded
+required application keeps all its formal checks, and conflicting purpose/workflow
+records need explicit reconciliation. Clarification drafts use the selected checks
+without adding irrelevant grant questions. These labels establish neither an
+agreement, research conclusion, eligibility nor permission to submit. Backups with
+the optional purpose field require a supporting version; older strict importers
+refuse them rather than remove the field.
+
 Current development shows compact recorded-cost rows and opens the next missing
 price or reference. Open and closed cost rows stay as left when moving between
 pages in the same browser session. Recorded subtotals retain original amounts, unknowns and GST

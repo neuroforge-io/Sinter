@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Choose an explicit campaign route purpose: application, discussion or research.
+  Existing records remain unclassified until edited. Discussion and research
+  show local planning steps and retain application fields and funding history;
+  required applications keep their applicant, evidence and answer gates. Conflicting
+  purpose and workflow records require explicit reconciliation. Suggested actions
+  are added only by a reviewed button click, with no assigned owner or date.
+- Keep discussion and research clarification drafts scoped to entered checks,
+  without automatically adding grant intake or applicant questions. Assistant
+  previews include an explicitly recorded purpose; no mail is sent or campaign
+  record changed by a preview. Backups containing the new optional purpose field
+  require a supporting version; older strict importers refuse them.
 - Filter campaign correspondence by its recorded status, keeping drafts visibly
   separate from sent and received records. Collapsed entries show a literal
   preview and their saved evidence count; opening an entry reveals its editor.

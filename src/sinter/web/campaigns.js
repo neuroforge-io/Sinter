@@ -9,6 +9,9 @@ import {defaultCampaignOpportunityIndex, isCampaignActionCurrent, isCampaignActi
 import {campaignAnswerCounts} from './campaign-answer-counts.js';
 import {applicationWindowGaps, campaignDecision, CAMPAIGN_DECISION_NOTE} from './campaign-decision.js';
 import {campaignRequirementNeedsReview} from './campaign-requirement-policy.js';
+import {CAMPAIGN_ROUTE_PURPOSES, campaignRoutePurpose,
+  campaignRoutePurposeLabel, campaignRoutePurposeConflict, isNonApplicationRoute}
+  from './campaign-route-purpose.js';
 import {campaignActionOwnerState, normalizeCampaignActionOwners} from './campaign-owner.js';
 import {campaignSourceSnapshotGuidance,
   campaignSourceSnapshotIssue} from './campaign-source-state.js';
@@ -532,7 +535,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       rows.splice(rows.indexOf(item), 1); changed(); renderEditor();
     }, 'quiet');
   }
-  function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; newButton.disabled = value; fundingButton.disabled = value || fundingState.pending || fundingState.closed; editor.inert = value; sectionNavigation.inert = value; transfers.inert = value; }
+  function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; newButton.disabled = value; fundingButton.disabled = value || fundingState.pending || fundingState.closed; editor.inert = value; decisionCard.inert = value; sectionNavigation.inert = value; transfers.inert = value; }
   function apply(next, id = null, rev = null, preferActionable = false, focusedRoute = '') {
     const resumeCurrentCampaign = Boolean(id && id === savedId);
     const previousTab = tab;
@@ -871,6 +874,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const quotes = document.budget.filter(row => (!row.opportunity || actionable.has(row.opportunity))
       && (row.unit_cost == null || row.unit_cost === '' || !row.quote_reference?.trim()));
     const windows = document.opportunities.filter(row => isOpportunityActionable(row.status)
+      && !isNonApplicationRoute(row)
       && applicationWindowGaps(row, localDate(), document.sources).length > 0);
     const actionScopesToConfirm = document.actions.filter(row => isCampaignActionOpen(row)
       && row.scope_confirmed !== true).length;
@@ -953,7 +957,25 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const otherActiveRoutes = document.opportunities.filter(row =>
       isOpportunityActionable(row.status) && row.name !== result.focusOpportunity);
     const otherRoutesNeedReview = otherActiveRoutes.filter(row =>
-      campaignDecision(document, undefined, row.name).state !== 'ready_for_review').length;
+      campaignDecision(document, undefined, row.name).state === 'not_ready'
+      || (isNonApplicationRoute(row) && document.requirements.some(check =>
+        check.opportunity === row.name && campaignRequirementNeedsReview(
+          check, localDate(), document.sources)))).length;
+    const focusedRoute = document.opportunities.find(row => row.name === result.focusOpportunity);
+    if (isNonApplicationRoute(focusedRoute) && isOpportunityActionable(focusedRoute.status)
+        && result.action.source === 'suggested') {
+      action.append(button('Add suggested action', () => {
+        if (busy || disposed) return;
+        const row = {opportunity: focusedRoute.name, scope_confirmed: true,
+          submission_phase: 'pre_submission', task: result.action.task,
+          owner: '', owner_kind: 'unassigned', owner_confirmed: false,
+          due: '', status: 'open'};
+        document.actions.push(row);
+        expandedActionRows ||= new WeakSet(); expandedActionRows.add(row);
+        pendingActionFocus = {index: document.actions.length - 1, field: 'task'};
+        tab = 'actions'; changed(); renderEditor();
+      }, 'quiet'));
+    }
     decisionCard.replaceChildren(h('div', {class: 'campaign-decision-main'},
       h('h3', {}, 'Selected route status'), state,
       h('p', {class: 'campaign-decision-campaign'}, document.title || 'New campaign'),
@@ -1112,7 +1134,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   function renderOpportunities(panel) {
     panel.append(h('div', {class: 'campaign-section-heading'}, h('div', {}, h('h3', {}, 'Funding and support routes'),
-      h('p', {class: 'muted'}, 'Compare cash funding, non-cash programmes, timing, fit and open checks. Closed and paused routes stay visible as historical context.')), button('Add opportunity', addOpportunity, 'quiet')));
+      h('p', {class: 'muted'}, 'Compare funding and support, or explicitly record a discussion or research route. Closed and paused routes stay visible as historical context.')), button('Add opportunity', addOpportunity, 'quiet')));
     if (!document.opportunities.length) {
       panel.append(h('div', {class: 'campaign-empty'}, h('h4', {}, 'Start with one opportunity'), h('p', {}, 'Add a funder or programme, then record what you know and what needs checking. No eligibility is assumed.'))); return;
     }
@@ -1154,9 +1176,14 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         }, 'campaign-opportunity');
         choose.setAttribute('aria-pressed', String(index === selected));
         choose.dataset.opportunityIndex = String(index);
-        choose.append(h('strong', {}, row.name), h('span', {}, row.funder || 'Funder to confirm'),
-          h('small', {}, opportunityTypes.find(([key]) => key === row.route_type)?.[1] || 'Not classified'),
-          h('small', {}, routeAmountLabel(row)), h('small', {}, opportunityTiming(row)));
+        const planning = isNonApplicationRoute(row);
+        choose.append(...[h('strong', {}, row.name), h('span', {}, row.funder
+          || (planning ? 'Counterpart not recorded' : 'Funder to confirm')),
+          h('small', {}, planning ? campaignRoutePurposeLabel(row)
+            : opportunityTypes.find(([key]) => key === row.route_type)?.[1] || 'Not classified'),
+          !planning || row.ceiling != null ? h('small', {}, routeAmountLabel(row)) : null,
+          h('small', {}, planning ? opportunityStates.find(([key]) => key === row.status)?.[1]
+            || 'Recorded status' : opportunityTiming(row))].filter(child => child != null));
         return choose;
       }));
       count.textContent = view.matched
@@ -1185,6 +1212,22 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       h('div', {class: 'campaign-opportunity-pagination button-row'}, previous, next),
       selection, showSelected);
     const item = document.opportunities[selected], focus = h('section', {class: 'campaign-focus', 'aria-label': 'Selected opportunity'});
+    const planning = isNonApplicationRoute(item);
+    function rerenderRouteField(key) {
+      const editOpen = focus.querySelector('.campaign-opportunity-editor')?.open;
+      const recordsOpen = focus.querySelector('.campaign-application-records')?.open;
+      renderEditor();
+      const nextEditor = editor.querySelector('.campaign-opportunity-editor');
+      if (nextEditor && editOpen !== undefined) nextEditor.open = editOpen;
+      const nextRecords = editor.querySelector('.campaign-application-records');
+      if (nextRecords && recordsOpen !== undefined) nextRecords.open = recordsOpen;
+      const nextField = editor.querySelector(`[data-campaign-field="${key}"]`);
+      if (key === 'application_mode') {
+        for (let ancestor = nextField?.closest('details'); ancestor;
+          ancestor = ancestor.parentElement?.closest('details')) ancestor.open = true;
+      }
+      nextField?.focus({preventScroll: true});
+    }
     const headerFunder = h('span', {class: 'eyebrow'}), headerName = h('h3', {}), programme = h('div');
     const windowSourceInfo = h('p', {class: 'campaign-window-source', role: 'status'});
     const maximum = h('dd', {}), deadlineLabel = h('dt', {}), deadlineValue = h('dd', {});
@@ -1196,10 +1239,10 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const applicantConfirmationStatus = h('small', {class: 'campaign-action-meta'});
     function updateOpportunityView() {
       renderOpportunityRail();
-      headerFunder.textContent = item.funder || 'FUNDER TO CONFIRM';
+      headerFunder.textContent = item.funder || (planning ? 'COUNTERPART NOT RECORDED' : 'FUNDER TO CONFIRM');
       headerName.textContent = item.name || 'Untitled opportunity';
-      programme.replaceChildren(item.url ? safeLink(item.url, 'Open programme guidance')
-        : h('p', {class: 'fine'}, 'Programme link not added yet.'));
+      programme.replaceChildren(item.url ? safeLink(item.url, planning ? 'Open route reference' : 'Open programme guidance')
+        : h('p', {class: 'fine'}, planning ? 'Reference link not added yet.' : 'Programme link not added yet.'));
       const linkedWindowSource = document.sources.find(source =>
         source.id === item.window_source_id);
       if (linkedWindowSource) {
@@ -1259,7 +1302,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       } else {
         applicantConfirmationStatus.textContent = 'Confirm the named applicant directly with the person responsible for applying. This does not establish programme eligibility or authority to submit.';
       }
-      fitValue.textContent = item.fit || 'Record which project option this opportunity could support and what needs checking.';
+      fitValue.textContent = item.fit || (planning
+        ? 'Record the scope, what is known and the next question to check.'
+        : 'Record which project option this opportunity could support and what needs checking.');
     }
     const name = input('Opportunity name', 'text', item, 'name', '', {required: true, maxLength: 200}, () => {
       for (const collection of ['requirements', 'answers', 'budget', 'actions', 'communications']) {
@@ -1274,8 +1319,14 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       previousName = item.name; updateOpportunityView();
     });
     let previousName = item.name;
-    const funder = input('Funder', 'text', item, 'funder', '', {maxLength: 300}, updateOpportunityView);
-    const url = input('Programme page', 'url', item, 'url', '', {maxLength: 2000}, updateOpportunityView);
+    const funder = input(planning ? 'Contact / counterpart' : 'Funder', 'text', item, 'funder', '', {maxLength: 300}, updateOpportunityView);
+    const url = input(planning ? 'Reference page' : 'Programme page', 'url', item, 'url', '', {maxLength: 2000}, updateOpportunityView);
+    const purpose = selectField('Route purpose', CAMPAIGN_ROUTE_PURPOSES,
+      campaignRoutePurpose(item), 'Choose explicitly. Existing records are not classified automatically; this label does not confirm eligibility or an exemption from applying.');
+    purpose.input.dataset.campaignField = 'purpose';
+    purpose.input.addEventListener('change', () => {
+      item.purpose = purpose.input.value; changed(); rerenderRouteField('purpose');
+    });
     const windowKind = choice('Application window', applicationWindows, item, 'application_window', updateOpportunityView);
     const deadline = input('Recorded closing date', 'date', item, 'deadline', 'User-entered only. Link and recheck the official wording; leave blank for rolling applications.', {}, updateOpportunityView);
     const windowQuote = input('Exact official wording for this window', 'textarea', item, 'window_source_quote', 'Copy the short sentence that confirms the closing date or rolling window. Sinter does not verify the quote.', {rows: 2, maxLength: 2000}, updateOpportunityView);
@@ -1309,6 +1360,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         changed();
       }
       updateOpportunityView();
+      if (['discussion', 'research', 'application'].includes(campaignRoutePurpose(item))) rerenderRouteField('application_mode');
     });
     const applicant = input('Applicant / programme lead', 'text', item,
       'applicant',
@@ -1335,29 +1387,38 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       changed(); updateOpportunityView();
     });
     const state = choice('Opportunity status', opportunityStates, item, 'status', updateOpportunityView);
-    const fit = input('Project fit and timing', 'textarea', item, 'fit', 'Which project option could this support? Record any exclusions or conditions before committing costs.', {rows: 3, maxLength: 6000}, updateOpportunityView);
-    const opportunityEditor = h('details', {class: 'campaign-opportunity-editor', open: !item.funder && !item.fit},
-      h('summary', {}, 'Edit opportunity details'), h('div', {class: 'form-grid'}, name.wrap, funder.wrap, routeType.wrap), url.wrap,
-      windowSourceInfo,
+    const fit = input(planning ? 'Scope and open questions' : 'Project fit and timing', 'textarea', item, 'fit', planning
+      ? 'Record the discussion or research scope and uncertainty. Internal notes are not automatically added to outgoing drafts.'
+      : 'Which project option could this support? Record any exclusions or conditions before committing costs.', {rows: 3, maxLength: 6000}, updateOpportunityView);
+    const applicationFields = h('div', {}, windowSourceInfo,
       h('p', {class: 'fine'}, 'Choose the official source before adding its exact window wording and check date. Changing or clearing the source resets both.'),
       windowSource.wrap, windowSourceChange,
       h('div', {class: 'form-grid'}, applicationMode.wrap, applicant.wrap),
       applicantConfirmation.wrap,
-      h('div', {class: 'form-grid'}, windowKind.wrap, deadline.wrap, windowChecked.wrap, decision.wrap, ceiling.wrap, ceilingCurrency.wrap, state.wrap), windowQuote.wrap, fit.wrap);
+      h('div', {class: 'form-grid'}, windowKind.wrap, deadline.wrap, windowChecked.wrap, decision.wrap, ceiling.wrap, ceilingCurrency.wrap), windowQuote.wrap);
+    const opportunityEditor = h('details', {class: 'campaign-opportunity-editor', open: !item.funder && !item.fit},
+      h('summary', {}, 'Edit opportunity details'), h('div', {class: 'form-grid'}, name.wrap, funder.wrap, routeType.wrap), url.wrap,
+      state.wrap, fit.wrap, planning ? h('details', {class: 'campaign-application-records'},
+        h('summary', {}, 'Retained application and funding records'),
+        h('p', {class: 'fine'}, 'These records remain intact. A discussion or research label does not establish that an application is unnecessary. Record a required application explicitly to restore its full checks.'), applicationFields) : applicationFields);
+    const purposeConflict = campaignRoutePurposeConflict(item);
     const copyRoute = button('Make focused campaign…', () => focusedCopy(item.name, copyRoute), 'quiet');
-    focus.append(h('header', {class: 'campaign-focus-heading'}, headerFunder, headerName, programme),
+    focus.append(...[h('header', {class: 'campaign-focus-heading'}, headerFunder, headerName, programme),
       copyRoute,
+      purpose.wrap,
+      purposeConflict ? notice(purposeConflict, 'warning') : null,
       h('dl', {class: 'campaign-opportunity-facts'},
-        h('div', {}, h('dt', {}, 'Recorded funding amount / ceiling'), maximum),
-        h('div', {}, deadlineLabel, deadlineValue), recordedDeadline,
-        h('div', {}, h('dt', {}, 'Application lead'), workflowValue),
+        !planning || item.ceiling != null ? h('div', {}, h('dt', {}, 'Recorded funding amount / ceiling'), maximum) : null,
+        !planning ? h('div', {}, deadlineLabel, deadlineValue) : null, !planning ? recordedDeadline : null,
+        !planning ? h('div', {}, h('dt', {}, 'Application lead'), workflowValue) : null,
         h('div', {}, h('dt', {}, 'Decision timing'), decisionValue),
         h('div', {}, h('dt', {}, 'Status'), statusValue)),
       currencyComparison,
-      h('div', {class: 'campaign-fit'}, h('strong', {}, 'Project fit and timing'), fitValue),
+      h('div', {class: 'campaign-fit'}, h('strong', {}, planning ? 'Scope and open questions' : 'Project fit and timing'), fitValue),
       opportunityEditor,
-      fundingTrackingEditor(item, {sources: document.sources,
-        sourcePicker: campaignSourcePicker, changed}));
+      planning ? h('details', {}, h('summary', {}, 'Retained funding history'),
+        fundingTrackingEditor(item, {sources: document.sources, sourcePicker: campaignSourcePicker, changed}))
+        : fundingTrackingEditor(item, {sources: document.sources, sourcePicker: campaignSourcePicker, changed})].filter(child => child != null));
     updateOpportunityView();
     const requirements = h('div', {class: 'campaign-checks'});
     function addRequirement() {
@@ -1367,7 +1428,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       document.requirements.push({opportunity: item.name, rule: '', status: 'unknown', evidence: '', source_id: '', source_url: '', source_quote: '', checked_at: ''}); changed(); renderEditor();
     }
     requirements.append(h('div', {class: 'campaign-section-heading'}, h('h4', {}, 'What must be true?'), button('Add requirement', addRequirement, 'quiet')),
-      h('p', {class: 'fine'}, 'Check each condition against current official guidance. These records do not determine overall eligibility.'));
+      h('p', {class: 'fine'}, planning
+        ? 'Retain the conditions and questions relevant to this route. Review their original source and uncertainty; no agreement or research conclusion is established.'
+        : 'Check each condition against current official guidance. These records do not determine overall eligibility.'));
     for (const row of document.requirements.filter(row => row.opportunity === item.name)) {
       const proof = h('p', {class: 'campaign-proof-status', role: 'status'});
       const stateLabel = h('span', {class: 'campaign-check-state'}), preview = h('span', {class: 'campaign-check-preview'});
@@ -1463,7 +1526,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           sourcePicker.wrap, sourceChange, sourcePreview, source.wrap, quote.wrap, date.wrap), sourceHistory,
         remove(document.requirements, row, 'Remove requirement'))));
     }
-    if (!document.requirements.some(row => row.opportunity === item.name)) requirements.append(h('p', {class: 'fine'}, 'No requirements checked yet. Start with applicant type, timing and permitted costs.'));
+    if (!document.requirements.some(row => row.opportunity === item.name)) requirements.append(h('p', {class: 'fine'}, planning
+      ? 'No checks recorded yet. Start with the question to clarify and the source or counterpart that could resolve it.'
+      : 'No requirements checked yet. Start with applicant type, timing and permitted costs.'));
     const existingDraftCount = document.communications.filter(row =>
       row.opportunity === item.name && row.direction === 'outgoing' && row.status === 'draft').length;
     if (existingDraftCount) {
@@ -1471,6 +1536,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         `${existingDraftCount} unsent clarification draft${existingDraftCount === 1 ? '' : 's'} already recorded for this route. Review them in Communications before creating another; a new draft will be saved as a separate record.`));
     }
     requirements.append(button(existingDraftCount ? 'Create another clarification letter' : 'Draft clarification letter', () => {
+      const conflict = campaignRoutePurposeConflict(item);
+      if (conflict) { error(conflict + ' Resolve this local record before creating a clarification letter.'); return; }
       const campaignLink = {id: savedId, revision, opportunity: item.name,
         dirty: dirty || !savedId};
       let draft;
@@ -2303,7 +2370,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         try { await request('/api/campaigns/delete', {data: {id: savedId, revision}}); apply(blank()); await refreshShelf(); }
         catch (problem) { error(problem.message); }
       }, 'danger')), backupControls);
-  root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'CAMPAIGNS'), h('h2', {}, 'Keep the whole application together.'),
+  root.append(h('header', {class: 'page-intro'}, h('span', {class: 'eyebrow'}, 'CAMPAIGNS'), h('h2', {}, 'Keep the whole campaign together.'),
     h('p', {}, 'Compare opportunities, map products and IP questions to funding routes, prepare answers and turn missing details into next actions. Saved locally, with your sources beside the work.')),
     h('div', {class: 'campaign-save-bar non-print', role: 'region', 'aria-label': 'Campaign save and preview'},
       h('div', {class: 'button-row'}, saveButton, prepareButton), status, feedbackView.panel),

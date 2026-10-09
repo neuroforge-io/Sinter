@@ -6,7 +6,7 @@ import hashlib
 import importlib.util
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -116,6 +116,29 @@ def test_runtime_source_pins_include_both_extracted_web_modules(profile):
             "bytes": len(original),
             "sha256": hashlib.sha256(original).hexdigest(),
         }
+
+
+def test_runtime_inventory_keys_are_portable_for_windows_relative_paths(
+    profile, tmp_path, monkeypatch
+):
+    name = NEW_WEB_MODULES[0]
+    original = b"// fictional Windows source inventory\n"
+    target = tmp_path / name
+    target.parent.mkdir(parents=True)
+    target.write_bytes(original)
+    path_type = type(tmp_path)
+    relative_to = path_type.relative_to
+
+    def windows_relative(path, *args, **kwargs):
+        return PureWindowsPath(*relative_to(path, *args, **kwargs).parts)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(path_type, "relative_to", windows_relative)
+        pinned = profile.source_hashes(tmp_path)
+
+    assert pinned == {
+        name: {"bytes": len(original), "sha256": hashlib.sha256(original).hexdigest()}
+    }
 
 
 def test_runtime_module_drift_changes_the_before_after_pins(profile, tmp_path):

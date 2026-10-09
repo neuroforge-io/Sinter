@@ -2,6 +2,66 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as letters from '../src/sinter/web/campaign-letter.js';
 
+test('explicit discussion and research drafts retain checks without grant boilerplate', () => {
+  for (const purpose of ['discussion', 'research']) {
+    const route = {name: 'nbn Grants Program — exploratory conversation',
+      purpose, application_mode: 'unknown', funder: 'Recorded counterpart'};
+    const campaign = {objective: 'PRIVATE OBJECTIVE', requirements: [
+      {opportunity: route.name, rule: 'Who can review the proposed scope?', status: 'unknown'},
+      {opportunity: route.name, rule: 'Background IP permission', status: 'not_met'},
+    ]};
+    const before = structuredClone(campaign);
+    const draft = letters.campaignClarificationDraft(campaign, route);
+    assert.equal(draft.recipient, 'Recorded counterpart');
+    assert.match(draft.questions, /Who can review the proposed scope\?/);
+    assert.match(draft.questions, /Background IP permission/);
+    assert.doesNotMatch(draft.questions, /applicant|application|registration|intake|permitted costs|We will obtain/);
+    assert.doesNotMatch(JSON.stringify(draft), /PRIVATE OBJECTIVE/);
+    assert.deepEqual(campaign, before);
+    const empty = letters.campaignClarificationDraft({requirements: []},
+      {...route, funder: ''});
+    assert.equal(empty.recipient, '');
+    assert.doesNotMatch(empty.questions, /eligibility|application timetable/);
+    assert.match(empty.questions, purpose === 'research' ? /sources and scope/ : /useful next step/);
+  }
+});
+
+test('required workflow retains formal clarification despite a planning purpose', () => {
+  for (const purpose of ['discussion', 'research']) {
+    const route = {name: 'Formal programme', purpose, application_mode: 'required'};
+    const draft = letters.campaignClarificationDraft({requirements: []}, route);
+    assert.match(draft.questions, /legal entity types may apply/);
+    assert.match(draft.questions, /fixed or rolling intake/);
+    assert.match(draft.questions, /official programme guidance/);
+  }
+});
+
+test('missing purpose does not infer discussion from no formal application recorded', () => {
+  const route = {name: 'Customer conversation', application_mode: 'not_required'};
+  const draft = letters.campaignClarificationDraft({requirements: []}, route);
+  assert.match(draft.questions, /fixed or rolling intake/);
+  assert.equal(Object.hasOwn(route, 'purpose'), false);
+});
+
+test('private and store-only checks remain local for every route purpose', () => {
+  for (const purpose of [undefined, 'application', 'discussion', 'research']) {
+    const route = {name: 'Fictional route', application_mode: 'unknown',
+      ...(purpose ? {purpose} : {})};
+    const rule = 'PRIVATE INTERNAL CHECK — do not include: confidential pricing floor with our lawyer';
+    const campaign = {requirements: [{opportunity: route.name, rule, status: 'unknown'},
+      {opportunity: route.name, rule: 'Background IP permission',
+        evidence: 'Store only; confidential agreement discussion', status: 'not_met'},
+      {opportunity: route.name, rule: 'Privately confirm director authority with counsel', status: 'unknown'},
+      {opportunity: route.name, rule: 'PRIVATE: keep this pricing ceiling local', status: 'unknown'},
+      {opportunity: route.name, rule: 'INTERNAL ONLY: do not send this negotiation floor', status: 'unknown'}]};
+    const before = structuredClone(campaign);
+    const draft = letters.campaignClarificationDraft(campaign, route);
+    assert.equal(draft.openCount, 5);
+    assert.doesNotMatch(draft.questions, /pricing|confidential|PRIVATE|Background IP|licence|Privately|negotiation floor/);
+    assert.deepEqual(campaign, before);
+  }
+});
+
 test('clarification drafts contain only the selected opportunity and its open checks', () => {
   const campaign = {
     objective: 'CAMPAIGN_WIDE_SECRET_CONTEXT',

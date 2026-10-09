@@ -3599,3 +3599,52 @@ prior-preview replacement were never run. RC4 remains unpublished; published
 RC3 and its receipts remain unchanged. These useful installed local-workflow
 and recovery results do not establish other-platform, customer-device or
 whole-product 10/10 acceptance.
+
+### 9 October: explicit route purposes and retained local work
+
+Unreleased development now supports an optional, explicitly selected route purpose:
+application, discussion or research. Missing legacy purpose remains missing during
+opening, validation, saving, preparation, focused copies and backup restoration.
+Discussion and research guidance describes local planning; it establishes neither
+an agreement, research conclusion nor exemption from applying. Required application
+workflows retain their original applicant, evidence, window and answer gates.
+Conflicting purpose/workflow records require explicit reconciliation. Historical
+statuses, source snapshots, held answers and actions stay recorded as entered.
+
+The final campaign/assistant batch passed 525 Python checks. Nine general campaign
+browser journeys and seven focused purpose/recovery groups passed. The latter
+checks delayed-save protection, real optimistic conflicts, exact selected draft
+questions in the visible offline result, staleness and complete saved-data recovery.
+Its 132 runtime/harness pins matched before and after; it recorded no hosted call,
+external browser request or page error and closed its owned browser/server.
+
+A separate human-operated browser journey imported a fictional garden discussion,
+saved it, explicitly selected Discussion, added and edited a scoped action, saved,
+closed the app, reopened, exported and restored a separate saved copy. Both saved
+documents equal the complete GUI backup. Only purpose and the added action differ
+from the admitted original. Source evidence, held answers and earlier actions remain
+exact. This fixture's blank unknown owner was normalized to unassigned by existing
+import admission; it does not prove distinct nonblank unknown-owner preservation.
+The focused suites cover that separately. The editing lifetimes predate a final
+conflict-copy wording correction; a separate final-source read-only proof retained
+all 129 runtime pins and both full saved records unchanged. All three lifetimes
+closed with zero hosted model attempts.
+
+Independent scoped ratings remain UX 7/10, functionality 8.5/10 and aesthetics
+6.5/10. At 390 × 844, ordinary sticky save/status and tabs occupy 256.6 pixels,
+above the 160-pixel target. The task is visible and there is no positive horizontal
+overflow, but persistent notices, hidden active tabs after resize and covered
+headings need improvement. Selected discussion/research work in mixed portfolios
+and readable separators in clarification evidence metadata remain next priorities.
+These checks do not qualify an installed release, live AI or the whole product.
+
+Both Windows jobs for pushed `818c58a` failed only two profiling-inventory tests:
+platform-native path keys did not match the consumers' slash-separated keys.
+Original logs were retained; six focused checks pass after portable-key repair.
+Fresh Windows CI is required. Read-only site-source comparison at
+`c21129ec4d7a71c40f74d6d321502dfbca392b46` found the shared 57-case native contract
+fixture byte-identical, SHA-256
+`711feb4f774674d4e4c6ab7dbe77dada7668004d4be0014445256a03a0f5edc4`.
+Public token preflight remains unavailable. No live endpoint or platform pass is
+inferred from that source comparison. RC4 remains unpublished and unqualified;
+published RC3 is unchanged. Backups with purpose require a supporting preview.

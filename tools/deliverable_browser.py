@@ -428,7 +428,7 @@ class DeliverableChecks:
         }''', document)
         self.goto(page, 'explore')
         page.get_by_label('Saved campaign', exact=True).select_option(saved['id'])
-        expect(page.get_by_label('Funding route', exact=True)).to_have_value(route)
+        expect(page.get_by_label('Campaign route', exact=True)).to_have_value(route)
         page.get_by_label('Help me with', exact=True).select_option('enquiry')
         for rule in ('Confirm applicant type', 'Recheck supported costs', 'Review the unlinked quotation'):
             page.get_by_label(rule + ' · unknown', exact=True).check()

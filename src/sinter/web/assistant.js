@@ -8,13 +8,13 @@ import {campaignActionPhaseLabel} from './campaign-plan.js';
 export async function campaignAssistant({setBusy = () => {}} = {}) {
   const {campaigns} = await request('/api/campaigns');
   if (!campaigns.length) return h('section', {class: 'card'}, h('h3', {}, 'Start with a saved campaign'),
-    h('p', {}, 'Save a campaign with a funding route and recorded checks, then ask your model to help with the next step.'),
+    h('p', {}, 'Save a campaign with a route and recorded checks, then ask your model to help with the next step.'),
     h('a', {href: '#campaigns', class: 'button primary'}, 'Open funding campaigns'));
   const settings = (await request('/api/settings')).settings;
   const campaign = selectField('Saved campaign', campaigns.map(item => [item.id, item.title]));
-  const route = selectField('Funding route', []);
+  const route = selectField('Campaign route', []);
   const task = selectField('Help me with', [['next_actions', 'Prioritise next actions'],
-    ['eligibility', 'Understand eligibility gaps'], ['enquiry', 'Draft an enquiry']]);
+    ['eligibility', 'Understand recorded checks'], ['enquiry', 'Draft an enquiry']]);
   const question = field('Anything else to focus on?', 'textarea', '', 'Optional. This is included in the model request.', {maxLength: 2000, rows: 2});
   const checks = h('div', {class: 'stack'}), actions = h('div', {class: 'stack'}), preview = h('div'), output = h('div');
   const feedback = h('div', {'aria-live': 'polite'});
@@ -71,7 +71,7 @@ export async function campaignAssistant({setBusy = () => {}} = {}) {
       entry.input.addEventListener('change', invalidate);
       selected.push({index, entry}); checks.append(entry.wrap);
     });
-    if (!selected.length) checks.append(notice('No eligibility checks are recorded for this route. You can still ask for the next step using its saved details.'));
+    if (!selected.length) checks.append(notice('No checks are recorded for this route. You can still ask for the next step using its saved details.'));
     actions.replaceChildren(h('h4', {}, 'Choose actions to include'), h('p', {class: 'fine'}, 'Include relevant existing actions so the assistant can avoid repeating completed work. On hold actions are retained, not completed, and cannot be selected for next-action suggestions.'));
     saved.document.actions.forEach((row, index) => {
       if (row.opportunity && row.opportunity !== route.input.value) return;

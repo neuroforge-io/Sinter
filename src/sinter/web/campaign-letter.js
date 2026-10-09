@@ -1,4 +1,5 @@
 import {hasCurrentApplicationWindowEvidence} from './campaign-state.js';
+import {campaignRoutePurpose, isNonApplicationRoute} from './campaign-route-purpose.js';
 import {campaignSourceSnapshotGuidance,
   campaignSourceSnapshotIssue} from './campaign-source-state.js';
 
@@ -47,6 +48,7 @@ export function clarificationQuestion(requirement, context = {}) {
 function campaignRecipient(opportunity) {
   const name = String(opportunity?.name || '').trim();
   const funder = String(opportunity?.funder || '').trim();
+  if (isNonApplicationRoute(opportunity)) return funder;
   if (/^nbn Grants Program\b/i.test(name)) return 'nbn Grants Program team';
   if (/CSIRO/i.test(name) && /\bRUIC\b/i.test(name)) return 'CSIRO RUIC programme team';
   if (/CSIRO/i.test(name) && /Kick-Start/i.test(name)) return 'CSIRO Kick-Start programme team';
@@ -137,7 +139,13 @@ function opportunityLabel(opportunity) {
     /\s+[—–-]\s+(?:closing|closes|closed|programme closes)\s+.+$/i, '').trim();
 }
 
+function privateCheck(row) {
+  const record = `${row.rule || ''} ${row.evidence || ''} ${row.source_quote || ''}`;
+  return /\bprivately\b|\bprivate\s*(?::|internal|check|note|record)|\binternal only\b|\bconfidential\b|\bstore only\b|\bdo not (?:include|place|share|send)\b/i.test(record);
+}
+
 function groupedQuestion(row) {
+  if (privateCheck(row)) return ['', ''];
   const record = `${row.rule || ''} ${row.evidence || ''} ${row.source_quote || ''}`;
   // Classify rights before location: long official quotes can mention regional
   // eligibility even when the actual unresolved item is an IP licence.
@@ -153,9 +161,7 @@ function groupedQuestion(row) {
   if (/\babn\b|bank account|financial account|signatory authority|company authority/i.test(record)) {
     return ['entity', 'Could you confirm which legal entity types may apply and what evidence is required for its ABN, ABN-linked Australian bank account and signatory authority? Please also confirm whether account details should only be provided through the secure application process.'];
   }
-  if (/privately|private|director.{0,24}lawyer|lawyer|counsel|accountant|store only|do not (?:include|place|share)/i.test(record)) {
-    return ['', ''];
-  }
+  if (/privately|private|director.{0,24}lawyer|lawyer|counsel|accountant/i.test(record)) return ['', ''];
   return null;
 }
 
@@ -170,6 +176,7 @@ function currentCheckDate(value, today) {
 }
 
 export function campaignClarificationDraft(campaign, opportunity, campaignLink = null, today = localToday()) {
+  const planning = isNonApplicationRoute(opportunity);
   const sources = Array.isArray(campaign.sources) ? campaign.sources : [];
   const open = (campaign.requirements || []).filter(row => row.opportunity === opportunity.name && (
     row.status !== 'met' || ![row.evidence, row.source_url, row.source_quote]
@@ -183,6 +190,17 @@ export function campaignClarificationDraft(campaign, opportunity, campaignLink =
   const questionGroups = new Set();
   const addRouteQuestion = question => { if (question && !routeQuestions.includes(question)) routeQuestions.push(question); };
   for (const row of open) {
+    if (privateCheck(row)) continue;
+    if (planning) {
+      const topic = String(row.rule || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (/^(what|when|where|who|which|how|whether|does|do|is|are|can|could|will|would|should|has|have)\b/i.test(topic)) {
+        addRouteQuestion(topic.endsWith('?') ? topic : topic + '?');
+      } else if (topic) {
+        const label = topic.length > 240 ? topic.slice(0, 237).trimEnd() + '…' : topic;
+        addRouteQuestion(`Could you clarify “${label}” and point us to the information needed to check it?`);
+      }
+      continue;
+    }
     const grouped = groupedQuestion(row);
     if (grouped) {
       const [key, question] = grouped;
@@ -194,7 +212,7 @@ export function campaignClarificationDraft(campaign, opportunity, campaignLink =
     }
     addRouteQuestion(clarificationQuestion(row.rule, row));
   }
-  if ((opportunity.application_mode || 'unknown') === 'unknown') {
+  if (!planning && (opportunity.application_mode || 'unknown') === 'unknown') {
     addRouteQuestion('Does this route require a formal application or registration, and which organisation or person is allowed to apply?');
   } else if (opportunity.application_mode === 'required'
       && (!String(opportunity.applicant || '').trim()
@@ -205,14 +223,14 @@ export function campaignClarificationDraft(campaign, opportunity, campaignLink =
   const windowKind = opportunity.application_window
     || (opportunity.deadline ? 'fixed' : 'unknown');
   const currentWindow = hasCurrentApplicationWindowEvidence(opportunity, today, sources);
-  if (windowKind === 'unknown') {
+  if (!planning && windowKind === 'unknown') {
     addRouteQuestion('Please confirm whether this route has a fixed or rolling intake, its current dates and any next closing date.');
-  } else if (!currentWindow && windowKind === 'fixed') {
+  } else if (!planning && !currentWindow && windowKind === 'fixed') {
     addRouteQuestion('Please confirm the current closing date and whether the published intake is still accepting applications.');
-  } else if (!currentWindow && windowKind === 'rolling') {
+  } else if (!planning && !currentWindow && windowKind === 'rolling') {
     addRouteQuestion('Please confirm that the route still accepts applications on a rolling basis and whether any current intake conditions apply.');
   }
-  if (!String(opportunity.url || '').trim()) {
+  if (!planning && !String(opportunity.url || '').trim()) {
     addRouteQuestion('Please direct us to the current official programme guidance and application or registration page.');
   }
   const questions = [...new Set(routeQuestions.filter(Boolean))];
@@ -227,7 +245,10 @@ export function campaignClarificationDraft(campaign, opportunity, campaignLink =
     // Campaign fit notes and actions are internal evidence, not approved prose.
     // Keep them out of the letter; source snapshots remain in the linked log.
     notes: '',
-    questions: hasQuestions ? questions.join('\n')
+    questions: hasQuestions ? questions.join('\n') : planning
+      ? campaignRoutePurpose(opportunity) === 'research'
+        ? 'Which sources and scope should we use to check this research question, and are there any access or permission conditions to clarify first?'
+        : 'What information would help you assess this discussion, who is the appropriate contact, and what would be a useful next step?'
       : 'Could you confirm the current applicant eligibility, permitted costs and application timetable for this opportunity?',
     organisation: campaign.organisation || '',
     signatory: campaign.signatory || '',
