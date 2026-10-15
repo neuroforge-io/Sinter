@@ -2,6 +2,9 @@
 
 Start with [development and tests](docs/DEVELOPMENT.md). Keep changes focused and
 include regression coverage for failures as well as the successful workflow.
+Follow the [shared-machine and cleanup rules](AGENTS.md): keep local workloads
+sequential and low priority, preserve interruption receipts, and retire temporary
+working copies after their changes and useful evidence are secured.
 Use fictional or explicitly licensed fixtures, never private recordings, meeting
 notes, credentials or proprietary ERAIS/Fracture implementation.
 
