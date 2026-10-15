@@ -22,9 +22,10 @@ evidence; a successful source test does not qualify an installed release.
 
 ## Interruption and recovery
 
-- Use one private operation directory with the source commit, intent, exact
-  commands, logs, child process identities and completion status. Flush durable
-  checkpoints before destructive boundaries. Never commit private runtime data.
+- Use one private operation directory (mode 0700, files 0600) with the source
+  commit, intent, commands, logs, child process identities and completion status.
+  Redact secrets from command and log receipts. Flush durable checkpoints before
+  destructive boundaries. Never commit private runtime data.
 - A yielded tool call or observation timeout is not a terminated process. Resume
   its existing handle; establish whether it finished before launching a retry.
   Signal only a process owned by this operation after verifying its identity.
@@ -41,9 +42,10 @@ evidence; a successful source test does not qualify an installed release.
 - Preserve needed ignored files before archiving a managed worktree. Keep useful
   failure reports and qualification receipts; dispose of reproducible scratch
   promptly after the evidence is secured.
-- Inventory exact paths before deletion. Verify a recovery copy's contents and
-  checksum, and recheck source identity, changes, mounts and active use before
-  removal. Do not use broad temporary-directory globs or global prune commands.
+- Inventory exact paths before deletion. Verify complete source-to-copy coverage,
+  contents, metadata and checksum; a checksum alone does not prove coverage.
+  Recheck source identity, changes, mounts and active use before removal. Do not
+  use broad temporary-directory globs or global prune commands.
 - Protect live workspaces, credentials, browser profiles, models and other
   projects. Report held paths honestly. End with the source commit, push status,
   remaining worktrees/branches, recovery locations and measured free space.
