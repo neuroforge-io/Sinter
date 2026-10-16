@@ -66,6 +66,32 @@ in the private operation directory, use a separate short private runtime path,
 and consolidate retained evidence after the owned browsers have closed. Do not
 change browser security settings to work around a setup failure.
 
+On a shared machine, keep local authoring, checks, builds and browser rehearsals
+sequential. Use explicit CPU/memory limits, low scheduling priority, finite
+deadlines and owned process handles. Persist intent before mutation; after an
+observation timeout, inspect the same handle rather than starting a replacement.
+Return resources as soon as the actual child is terminal. Keep one primary
+checkout, close owned tabs and retire only verified disposable work.
+
+Treat source transport as part of qualification. A transient service launcher
+expanded JavaScript interpolation in an earlier authoring packet. Send an encoded
+program/payload when a launcher may expand code arguments, and compare independent
+expected byte lengths and SHA-256 hashes before writing, after atomic replacement,
+and against staged/committed blobs and the pushed source. Hashing only the already
+transported payload cannot detect that corruption.
+
+In the recorded Node 22.23.1 environment, a file-only syntax check returned zero
+for an ES module that an actual import rejected. Parse the exact bytes explicitly
+as a module, and retain an invalid-input control before trusting that check:
+
+```sh
+node --input-type=module --check < src/sinter/web/workbench-draft-switcher.js
+```
+
+Module import and the relevant real browser journey remain separate requirements.
+Browser failure receipts include bounded source locations; preserve failed
+receipts and screenshots before changing a check or trying again.
+
 For a repeatable local portfolio measurement, run
 `python tools/campaign_portfolio_profile.py --chromium /path/to/chromium`.
 It uses the same fictional 170,000-character fixture as the recorded baseline

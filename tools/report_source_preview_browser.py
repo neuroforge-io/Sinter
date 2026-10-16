@@ -517,7 +517,7 @@ class PreviewChecks(PurposeChecks):
         expect(page.get_by_role("dialog")).to_have_count(0)
         expect(nav.locator(".draft-switcher-current")).to_have_text("Draft 2 · Not saved")
 
-        # Delay only a real local-save acknowledgement. Its exact HTTP 200 is
+        # Delay only a real local-save acknowledgement. Its exact HTTP 201 is
         # fulfilled once, without another write; disclosure and focus stay put.
         held = []
 
@@ -533,7 +533,11 @@ class PreviewChecks(PurposeChecks):
                 if held:
                     break
                 page.wait_for_timeout(20)
-            assert len(held) == 1 and held[0]["response"].status == 200
+            assert len(held) == 1, f"Expected one held save response, observed {len(held)}"
+            assert held[0]["response"].status == 201, (
+                "Report creation must return 201; observed "
+                + str(held[0]["response"].status)
+            )
             picker.locator("summary").click()
             saved_a = nav.get_by_role("button", name="Open draft 1", exact=True)
             saved_a.focus()

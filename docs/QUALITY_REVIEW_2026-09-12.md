@@ -40,6 +40,36 @@ saves and one delayed real local-save acknowledgement. It checks stable controls
 evidence. These controls are test fixtures, not hosted task or installed-app proof.
 Untracked auxiliary correction/screening/log forms remain a separate gap.
 
+### Exact-source CI follow-up and retained create receipt
+
+At `47b83465ba345428b9e77375b56b884f4e386b51`, the quality workflow finished
+with nine successful jobs, Chromium and Windows 3.10 failures, and portable
+qualification skipped. The separate WebAssembly workflow passed all 62 tests
+in each of Chromium, Firefox and WebKit. These are source-suite results, not
+installed-app qualification.
+
+The retained [browser artifact](https://github.com/neuroforge-io/Sinter/actions/runs/38861006838/artifacts/12029615113)
+is 42,755,382 bytes with SHA-256
+`25f1fe4cf52e4b6014e90924813a4b8004ec9f840670127d233884fa9d20e333`.
+Six report journeys passed. The new replacement journey retained original,
+applied, cancelled, completed-B and recovered-A backups before failing its
+delayed-save assertion. Both actual report creations returned the documented
+201; the assertion incorrectly required 200. Its `finally` delivered that same
+201 response, so the final “Saved locally” screenshot does not prove the earlier
+assertion or the remaining focus checks passed. No hosted operation ran, and
+source pins stayed unchanged.
+
+The correction requires one held response and exactly 201, with separate count
+and status diagnostics. It preserves every persistence, focus, evidence and
+no-replay assertion. Shared browser failures now retain bounded basename/line/
+function locations without source snippets, locals or full paths. A new run is
+required; no score increase follows from correcting the harness contract.
+
+Windows 3.10 still failed two five-second registered-runtime startup cases.
+Parent exit did not establish descendant termination. Its native pending-save
+case passed this time, which does not repair the earlier fixture ownership gap.
+Those are separate qualification blockers; admission bounds remain unchanged.
+
 ## 16 October draft replacement — operator check complete, CI and installed checks pending
 
 Actual in-app browser use of source `3056fd430efd2243a4d663c66a9e44cca26fd36e`

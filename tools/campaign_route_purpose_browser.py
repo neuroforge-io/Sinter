@@ -17,6 +17,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from contextlib import ExitStack
 from datetime import date
 from pathlib import Path
@@ -207,6 +208,17 @@ class PurposeChecks(CampaignChecks):
             result["passed"] = True
         except Exception as problem:
             result["error"] = type(problem).__name__ + ": " + str(problem)
+            try:
+                frames = traceback.extract_tb(problem.__traceback__, limit=-6)
+                result["failure_location"] = [
+                    {"file": Path(frame.filename).name, "line": frame.lineno, "function": frame.name}
+                    for frame in frames
+                ]
+                if frames:
+                    frame = result["failure_location"][-1]
+                    result["error"] += f" ({frame['file']}:{frame['line']} in {frame['function']})"
+            except Exception:
+                result["diagnostic_unavailable"] = True
             if page:
                 try:
                     self.screenshot(page, name + "-FAILED", full_page=True)
