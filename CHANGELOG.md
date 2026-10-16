@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve explicit clarification requests such as “Please provide the current
+  terms” in application, discussion and research drafts. Normalize whitespace and
+  supply missing punctuation without nesting the request inside another question;
+  evidence, private-note exclusions and review status remain unchanged.
 - Bring the first campaign action into view sooner on phones. Keep general help
   after the tasks, preserve its open state during work and recovery, and label
   recorded dates as proposed targets. Unconfirmed scope wording now applies

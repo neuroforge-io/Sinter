@@ -3,13 +3,27 @@ import {campaignRoutePurpose, isNonApplicationRoute} from './campaign-route-purp
 import {campaignSourceSnapshotGuidance,
   campaignSourceSnapshotIssue} from './campaign-source-state.js';
 
+function clarificationTopic(value) {
+  return String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function explicitClarificationRequest(topic) {
+  if (!/^please\s+(?:provide|send|confirm|clarify|explain|share|advise)\b/i.test(topic)) return '';
+  return /[.!?]$/.test(topic) ? topic : topic + '.';
+}
+
 /** Build a funder-specific clarification draft without campaign-wide context. */
 export function clarificationQuestion(requirement, context = {}) {
-  const topic = String(requirement || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  const topic = clarificationTopic(requirement);
   if (!topic) return '';
   if (/^(what|when|where|who|which|how|whether|does|do|is|are|can|could|will|would|should|has|have)\b/i.test(topic)) {
     return topic.endsWith('?') ? topic : topic + '?';
   }
+  // An explicit request already says what the sender needs. Keep it intact
+  // rather than quoting it inside another question. This changes draft wording
+  // only; the requirement, evidence and review state remain untouched.
+  const request = explicitClarificationRequest(topic);
+  if (request) return request;
   const evidence = String(context.evidence || '');
   const source = String(context.source_quote || '');
   const record = `${topic} ${evidence} ${source}`;
@@ -192,8 +206,11 @@ export function campaignClarificationDraft(campaign, opportunity, campaignLink =
   for (const row of open) {
     if (privateCheck(row)) continue;
     if (planning) {
-      const topic = String(row.rule || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
-      if (/^(what|when|where|who|which|how|whether|does|do|is|are|can|could|will|would|should|has|have)\b/i.test(topic)) {
+      const topic = clarificationTopic(row.rule);
+      const request = explicitClarificationRequest(topic);
+      if (request) {
+        addRouteQuestion(request);
+      } else if (/^(what|when|where|who|which|how|whether|does|do|is|are|can|could|will|would|should|has|have)\b/i.test(topic)) {
         addRouteQuestion(topic.endsWith('?') ? topic : topic + '?');
       } else if (topic) {
         const label = topic.length > 240 ? topic.slice(0, 237).trimEnd() + '…' : topic;
@@ -204,7 +221,13 @@ export function campaignClarificationDraft(campaign, opportunity, campaignLink =
     const grouped = groupedQuestion(row);
     if (grouped) {
       const [key, question] = grouped;
-      if (question && !questionGroups.has(key)) {
+      // Keep suppressed private/legal notes suppressed. For a public-facing
+      // grouped check, preserve the user's explicit request before the generic
+      // topic wording; source keywords must not replace that request.
+      const request = question && explicitClarificationRequest(clarificationTopic(row.rule));
+      if (request) {
+        addRouteQuestion(request);
+      } else if (question && !questionGroups.has(key)) {
         questionGroups.add(key);
         addRouteQuestion(question);
       }

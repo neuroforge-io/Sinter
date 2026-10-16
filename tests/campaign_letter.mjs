@@ -188,6 +188,47 @@ test('question titles are grammatical, bounded and sanitized', () => {
   assert.equal(long.includes('\n'), false);
 });
 
+test('explicit clarification requests stay useful without nested question wrappers', () => {
+  const request = 'Please provide the terms that apply before we submit.';
+  const original = {rule: request, status: 'clarification', evidence: 'Unresolved fictional terms.'};
+  assert.equal(letters.clarificationQuestion(original.rule, original), request);
+  assert.equal(letters.clarificationQuestion('Please send the current guidance'),
+    'Please send the current guidance.');
+  assert.equal(letters.clarificationQuestion('PLEASE clarify the recorded condition?'),
+    'PLEASE clarify the recorded condition?');
+  assert.equal(letters.clarificationQuestion('Please\nprovide\u0000the current terms.'),
+    'Please provide the current terms.');
+  const full = 'Please explain ' + 'the recorded condition '.repeat(30) + 'before we proceed.';
+  assert.equal(letters.clarificationQuestion(full), full);
+  for (const purpose of ['application', 'discussion', 'research']) {
+    const route = {name: 'Fictional terms review', funder: 'Fictional Programme', purpose};
+    const cases = [original,
+      {...original, rule: 'Please provide the exact background IP licence clause.'},
+      {...original, rule: 'Please confirm the regional address and nbn connection requirement.'},
+      {...original, rule: 'Please explain which ABN-linked bank account evidence is required.'},
+      {...original, source_quote: 'The background IP licence requires further review.'},
+      {...original, evidence: 'The regional address requires further review.'},
+      {...original, evidence: 'ABN and signatory authority require further review.'}];
+    for (const row of cases) {
+      const campaign = {organisation: 'Fictional Association',
+        requirements: [{...row, opportunity: route.name}]};
+      const draft = letters.campaignClarificationDraft(campaign, route);
+      assert.ok(draft.questions.split('\n').includes(row.rule), `${purpose}: ${row.rule}`);
+      assert.equal(draft.questions.includes('“Please'), false, purpose);
+      assert.deepEqual(campaign.requirements, [{...row, opportunity: route.name}]);
+      const privateCampaign = {...campaign,
+        requirements: [{...campaign.requirements[0], evidence: 'Private: do not include in letters.'}]};
+      assert.equal(letters.campaignClarificationDraft(privateCampaign, route).questions.includes(row.rule), false);
+    }
+  }
+  const route = {name: 'Fictional internal review', purpose: 'application'};
+  for (const adviser of ['lawyer', 'counsel', 'accountant']) {
+    const rule = `Please provide the ${adviser} note.`;
+    const campaign = {requirements: [{...original, rule, opportunity: route.name}]};
+    assert.equal(letters.campaignClarificationDraft(campaign, route).questions.includes(rule), false);
+  }
+});
+
 test('RUIC clarification drafts use only current campaign facts and attach stable route evidence', () => {
   const opportunity = {name: 'CSIRO RUIC — matched Digital Tech & AI research voucher',
     funder: 'CSIRO / Queensland Government',

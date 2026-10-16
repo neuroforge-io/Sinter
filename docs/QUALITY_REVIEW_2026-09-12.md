@@ -1,5 +1,35 @@
 # Sinter user-testing closeout — 12 September 2026
 
+## 16 October explicit requests in clarification drafts
+
+A recorded request such as “Please provide the current fictional terms before
+we proceed.” was previously quoted inside a generic question. Application,
+discussion and research drafts now preserve this explicit wording, normalize
+whitespace and add a final period only when punctuation is absent. This narrow
+change does not reinterpret source passages, copy private campaign notes into
+letters, change eligibility or mark a draft as sent.
+
+The focused Python/JavaScript wrappers passed 31 checks. Three source-browser
+journeys passed: actual local discussion and research drafts through preview,
+copy, export and unsent campaign logging, plus a renderer-only unsafe/missing
+link boundary. The actual journeys retained exact source quotes and links and
+changed only the explicitly saved unsent draft. All owned browsers and servers
+closed; no external request or model operation occurred. The first failed run
+is retained: its textarea observation used text content instead of the input
+value, and it exposed a separate discussion/research request wrapper that also
+needed repair. The passing run used a new evidence directory.
+
+Adversarial review then caught application topic grouping replacing explicit
+requests about rights, location or applicant evidence. The final repair prefers
+the explicit request over nonempty generic group wording while preserving
+existing private/legal-note suppressions. Regressions cover all three purposes,
+keywords occurring only in supporting evidence, and private/adviser exclusions.
+The 31 focused checks and all three browser journeys passed again after that
+repair; earlier failures and the initial no-go review remain retained.
+
+These are source workflow checks. They do not qualify an installed release,
+improve every generated opening paragraph or establish whole-product quality.
+
 ## 9 October correspondence reading, evidence navigation and review counts
 
 The source workbench now filters correspondence by recorded draft, sent or

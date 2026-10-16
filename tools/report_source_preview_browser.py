@@ -76,7 +76,8 @@ def fixture(purpose="discussion"):
     document["requirements"] = []
     for index, source in enumerate(document["sources"]):
         document["requirements"].append({
-            "opportunity": route, "rule": f"Could you clarify fictional source {index + 1}?",
+            "opportunity": route, "rule": ("Please provide the current fictional terms before we proceed."
+                if index == 0 else f"Could you clarify fictional source {index + 1}?"),
             "status": "unknown", "evidence": "No commitment or approval established.",
             "source_id": source["id"], "source_url": source["url"],
             "source_quote": f"Exact fictional quote {index + 1}: café e\u0301 🐝\r\n<literal> retained.",
@@ -158,11 +159,14 @@ class PreviewChecks(PurposeChecks):
         label_prefix = "" if purpose == "discussion" else "research-"
         baseline = saved["document"]
         page.get_by_role("button", name="Draft clarification letter", exact=True).click()
+        request_wording = baseline["requirements"][0]["rule"]
+        assert request_wording in page.get_by_label("Questions you need answered", exact=True).input_value()
         page.get_by_role("button", name="Prepare my draft", exact=True).click()
         report = page.get_by_role("region", name="Your draft report")
         expect(report).to_be_visible()
         document = report.locator(".document-paper")
-        expect(document).to_contain_text("Could you clarify fictional source 1?")
+        expect(document).to_contain_text(request_wording)
+        expect(document).not_to_contain_text('requirement for “Please provide')
         opening = ("We would appreciate clarification on the points below "
                    + ("before deciding on a next step for this discussion." if purpose == "discussion"
                       else "to help us check the research question and its scope."))
@@ -197,7 +201,7 @@ class PreviewChecks(PurposeChecks):
         page.get_by_role("button", name="Copy draft text", exact=True).click()
         expect(page.get_by_text("Copied. Ready to paste into your email or document.", exact=True)).to_be_visible()
         copied = page.evaluate("navigator.clipboard.readText()")
-        assert "Could you clarify fictional source 1?" in copied
+        assert request_wording in copied
         assert opening in copied
         assert "programme could support a defined project" not in copied
         assert "Fictional Example Coordinator" in copied
@@ -219,6 +223,7 @@ class PreviewChecks(PurposeChecks):
         self.goto(page, "campaigns")
         assert self.export(page, label_prefix + "campaign-after-source-draft-log") == expected
         self.content_checks.append({"purpose": purpose, "actual_draft_question_visible": True,
+            "explicit_request_preserved_in_form_draft_copy_and_log": True,
             "explicit_purpose_opening_visible_copied_and_logged": True,
             "copy_matches_complete_logged_letter": True,
             "evidence_quotes_and_links_exact": True, "original_campaign_unchanged_except_one_unsent_draft": True})
