@@ -140,6 +140,23 @@ version literal in `pyproject.toml`.
 
 ## Configuration
 
+Local `brief` requests accept an optional `opening_paragraph`, up to 1,200 Unicode
+code points. It replaces the default enquiry introduction, introduces a briefing
+note, or supplies an agenda's explicitly labelled purpose. The form retains the
+text across format changes and asks the operator to review its role. Blank input
+keeps existing defaults. Invalid text is rejected before optional search/ranking;
+the client counts code points and retains oversized pasted input without trimming.
+Other workflows reject this field rather than ignore it.
+
+Reports retain the raw value as `document_opening`; the form's `input_snapshot`
+retains preparation inputs, while original document text and later human edits remain
+separate. Literal prose cannot create headings, links, lists or page breaks.
+Campaign sender review keeps background in evidence for all three local formats
+and requires explicit questions rather than extracting them from internal notes.
+Optional model drafting is a separate reviewed handoff: its visible context
+includes the raw opening and the supplied notes/references. The model may rewrite
+the draft opening. This does not extend the native profile to long letter recipes.
+
 | Variable | Purpose |
 | --- | --- |
 | `NEUROFORGE_BASE_URL` | Public API base; default `https://neuroforge.io/v1`. Remote URLs require HTTPS; loopback HTTP is allowed for local integrations. |

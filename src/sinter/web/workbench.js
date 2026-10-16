@@ -4,6 +4,7 @@ import {renderReport} from './reports.js';
 import {audioForm} from './audio.js';
 import {senderFields} from './profile.js';
 import {campaignLetterReviewCopy} from './campaign-letter.js';
+import {briefOpeningCopy, openingParagraphProblem, OPENING_LIMIT} from './brief-opening.js';
 
 const titles = {research: 'Research a topic.', grants: 'Find funding for good ideas.', brief: 'Prepare a letter for review.', meeting: 'Prepare a clear meeting record.'};
 const descriptions = {
@@ -18,12 +19,16 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   const settings = example ? {} : preferences.settings;
   const root = h('div', {class: 'workbench-page'});
   const demo = Boolean(data.demo);
+  const campaignSenderReview = data.campaign_sender_review === true;
   const sources = [...(data.sources || [])];
   let speakerMap = {...(data.speaker_map || {})}, corrections = [...(data.corrections || [])];
-  let running = false, lastPayload, jobId;
+  let running = false, lastPayload, jobId, preparedInputKey = null;
   const title = field(kind === 'research' ? 'Research topic' : 'Project name', 'text', data.title || '', 'A name you will recognise later.', {required: true, maxLength: 200});
-  const notes = field(kind === 'meeting' ? 'Transcript' : 'Your notes and context', 'textarea', data.notes || '',
+  const campaignNotes = kind === 'brief' && campaignSenderReview;
+  const notes = field(kind === 'meeting' ? 'Transcript' : campaignNotes ? 'Internal notes and evidence context' : 'Your notes and context', 'textarea', data.notes || '',
     kind === 'meeting' ? 'Paste Speaker: words, or import TXT, SRT, VTT or JSON segments. Unlabelled turns remain unidentified.'
+      : campaignNotes ? 'When preparing locally, campaign notes and reference quotations stay in the evidence pack in every format. Use the opening paragraph and explicit questions for text the recipient should read.'
+        + (onDraftWithModel && !demo ? ' Draft with your model lets you review this context before sending it to the model.' : '')
       : 'Keep original wording where it matters. Notes are labelled as notes, not verified facts.', {rows: 7, maxLength: kind === 'meeting' ? 1000000 : 200000});
   const questions = field('Questions you need answered', 'textarea', data.questions || '', 'One question per line works well.', {rows: 4, maxLength: 12000});
   const query = field('Exact web search query', 'text', data.query || '', 'Only this query is sent to NeuroForge search. Avoid names and private details.', {maxLength: 1024});
@@ -44,15 +49,33 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     use_model: kind !== 'meeting' && !demo && ranking.input.checked,
     demo, sources: [...sources], speaker_map: {...speakerMap}, corrections,
     document_type: documentType.input.value, recipient: recipient.input.value, ...sender.values(),
+    ...(kind === 'brief' ? {opening_paragraph: opening.input.value} : {}),
     campaign_sender_review: campaignSenderReview,
     ...(Object.hasOwn(data, 'campaign_route_purpose')
       ? {campaign_route_purpose: data.campaign_route_purpose} : {}),
     campaign_link: data.campaign_link || null,
     profile: {organisation_type: org.input.value, location: location.input.value, budget: budget.input.value}});
   const documentType = selectField('What are you preparing?', [['enquiry', 'Enquiry letter'], ['briefing', 'Briefing note'], ['agenda', 'Agenda item for discussion']], data.document_type || 'enquiry');
+  const openingCopy = briefOpeningCopy(documentType.input.value);
+  const opening = field(openingCopy.label, 'textarea', data.opening_paragraph ?? '', openingCopy.help,
+    {rows: 3});
+  const openingHelp = opening.wrap.querySelector('small');
+  const openingCount = h('small', {id: opening.input.id + '-count'});
+  opening.wrap.append(openingCount);
+  opening.input.setAttribute('aria-describedby', opening.input.id + '-help ' + openingCount.id);
+  function updateOpening() {
+    const copy = briefOpeningCopy(documentType.input.value);
+    opening.wrap.querySelector('label').textContent = copy.label;
+    openingHelp.textContent = copy.help + ` Plain text, up to ${OPENING_LIMIT.toLocaleString()} characters.`
+      + (onDraftWithModel && !demo ? ' A model may revise it if you choose Draft with your model.' : '');
+    openingCount.textContent = `${Array.from(opening.input.value).length.toLocaleString()} / ${OPENING_LIMIT.toLocaleString()} characters`;
+    opening.input.setCustomValidity(openingParagraphProblem(opening.input.value));
+  }
+  opening.input.addEventListener('input', updateOpening);
+  documentType.input.addEventListener('change', updateOpening);
+  updateOpening();
   const recipient = field('Recipient or audience', 'text', data.recipient || '', '', {maxLength: 200});
   const sender = senderFields(data, settings);
-  const campaignSenderReview = data.campaign_sender_review === true;
   const campaignCopy = campaignSenderReview ? campaignLetterReviewCopy(data) : null;
   if (campaignSenderReview) sender.panel.open = true;
   const missingCampaignSigner = !data.signatory?.trim();
@@ -70,6 +93,14 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   const inputPanel = h('details', {class: 'project-inputs non-print', open: true}, inputSummary, form);
   const fields = h('fieldset', {}, h('legend', {class: 'sr-only'}, 'Project inputs'));
   const feedback = h('div', {'aria-live': 'polite'}), results = h('div');
+  const preparedState = h('p', {class: 'notice', role: 'status', hidden: true});
+  function rememberInputs() {
+    remember(kind, state());
+    const changed = preparedInputKey !== null && preparedInputKey !== JSON.stringify(state());
+    preparedState.hidden = !changed;
+    preparedState.textContent = changed
+      ? 'The draft below uses earlier inputs. Your changes are kept here; prepare again when you want an updated draft. The earlier document has not been changed.' : '';
+  }
   const scope = h('p', {class: 'run-scope'});
   function updateScope() {
     scope.textContent = demo ? 'Offline example · No external requests' : kind === 'meeting' || (!search.input.checked && !ranking.input.checked) ?
@@ -112,6 +143,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
           });
         },
       }));
+      preparedInputKey = JSON.stringify(payload);
       const reviewCopy = payload.campaign_sender_review
         ? campaignLetterReviewCopy(payload) : null;
       status.textContent = reviewCopy?.status || 'Draft ready. Review sources before using it.';
@@ -126,11 +158,11 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
         }, 'quiet'));
       status.textContent = 'Not completed. Your inputs and previous report are unchanged.';
     } finally {
-      fields.disabled = false; cancel.hidden = true; jobId = null; running = false; setBusy(false); remember(kind, state());
+      fields.disabled = false; cancel.hidden = true; jobId = null; running = false; setBusy(false); rememberInputs();
     }
   }
   form.addEventListener('submit', event => { event.preventDefault(); perform(state()); });
-  form.addEventListener('input', () => remember(kind, state()));
+  form.addEventListener('input', rememberInputs);
   fields.append(h('h3', {class: 'form-section-title'}, '1. Set the context'));
   if (kind === 'brief') fields.append(documentType.wrap);
   fields.append(title.wrap);
@@ -142,7 +174,8 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   }
   if (kind === 'grants') fields.append(h('details', {}, h('summary', {}, 'About your organisation (optional)'),
     h('div', {class: 'form-grid'}, org.wrap, location.wrap, budget.wrap)));
-  fields.append(kind === 'research' ? h('details', {}, h('summary', {}, 'Add your notes (optional)'), notes.wrap) : notes.wrap);
+  fields.append(kind === 'research' ? h('details', {}, h('summary', {}, 'Add your notes (optional)'), notes.wrap)
+    : campaignNotes ? h('details', {}, h('summary', {}, 'Internal notes and evidence context'), notes.wrap) : notes.wrap);
   const imported = field(kind === 'meeting' ? 'Import a transcript file' : 'Add text files as context', 'file', '',
     'Text and Markdown are supported. Meeting imports also accept JSON, VTT and SRT. Imports remain local unless you enable excerpt ranking.',
     {accept: kind === 'meeting' ? '.txt,.md,.json,.vtt,.srt' : '.txt,.md', multiple: kind !== 'meeting'});
@@ -150,7 +183,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   function refreshSources() {
     sourceList.replaceChildren(...sources.map((source, index) => h('div', {class: 'reference-chip'},
       h('span', {}, source.title + ' / ' + source.content.length.toLocaleString() + ' characters'),
-      button('Remove', () => { sources.splice(index, 1); refreshSources(); remember(kind, state()); }, 'quiet'))));
+      button('Remove', () => { sources.splice(index, 1); refreshSources(); rememberInputs(); }, 'quiet'))));
   }
   imported.input.addEventListener('change', async () => {
     try {
@@ -161,15 +194,16 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
       const contents = await Promise.all(files.map(file => file.text()));
       if (kind === 'meeting') { notes.input.value = contents[0]; speakerMap = {}; corrections = []; }
       else files.forEach((file, index) => sources.push({title: file.name, content: contents[index], kind: 'user_note'}));
-      refreshSources(); remember(kind, state());
+      refreshSources(); rememberInputs();
       feedback.replaceChildren(notice('Imported locally. Review the text before continuing.', 'success'));
     } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
   });
   fields.append(kind === 'research' ? h('details', {}, h('summary', {}, 'Import text files (optional)'), imported.wrap) : imported.wrap); refreshSources();
   if (kind !== 'meeting') {
     fields.append(h('h3', {class: 'form-section-title'}, kind === 'research' ? '2. Focus your research (optional)' : '2. Add questions and references'),
+      ...(kind === 'brief' ? [opening.wrap] : []),
       kind === 'research' ? h('details', {}, h('summary', {}, 'Add focus questions'), questions.wrap) : questions.wrap,
-      referenceForm(sources, refreshSources, () => remember(kind, state())), sourceList,
+      referenceForm(sources, refreshSources, rememberInputs), sourceList,
       h('details', {open: kind === 'grants'}, h('summary', {}, kind === 'research' ? 'Optional source ranking' : 'Search & public API options'),
         kind === 'research' ? null : [search.wrap, query.wrap],
         ranking.wrap, notice('Search sends the query above. Optional model ranking sends up to six source excerpts and the project question to the configured service. '
@@ -186,7 +220,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
           const mapped = field(`Confirmed name for ${label}`, 'text', speakerMap[label] || '', 'Leave blank unless you checked the identity.', {maxLength: 100});
           mapped.input.addEventListener('input', () => {
             if (mapped.input.value.trim()) speakerMap[label] = mapped.input.value; else delete speakerMap[label];
-            remember(kind, state());
+            rememberInputs();
           });
           speakerFields.append(mapped.wrap);
         }
@@ -203,7 +237,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
       if (serialized.length > 1000000) throw new Error('This transcript is too large for one report. Export the JSON and split it into sessions.');
       notes.input.value = serialized; audioInputSnapshot = serialized;
       speakerMap = {}; corrections = []; speakerFields.replaceChildren();
-      remember(kind, state()); feedback.replaceChildren(notice('Transcript inserted. Check names, numbers, negation and unclear words against the recording.', 'success'));
+      rememberInputs(); feedback.replaceChildren(notice('Transcript inserted. Check names, numbers, negation and unclear words against the recording.', 'success'));
     }, value => { if (value) audioInputSnapshot = notes.input.value; running = value; setBusy(value); }, () => running));
   }
   const prepare = h('div', {class: 'prepare-bar'}, scope,
@@ -222,7 +256,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     h('div', {class: 'non-print'}, demo ? notice('OFFLINE EXAMPLE / All people, programmes and details are fictional. Start a new project from Home for real data.') :
       h('p', {class: 'workspace-hint'}, campaignSenderReview
         ? 'Save this unsent draft to My workspace or record it in the linked campaign log. Sinter will not contact the recipient. '
-        : 'Save your finished draft to keep it in My workspace. ', h('a', {href: '#settings'}, 'Set up your details'))), inputPanel, results);
+        : 'Save your finished draft to keep it in My workspace. ', h('a', {href: '#settings'}, 'Set up your details'))), inputPanel, preparedState, results);
   root.dispose = () => root.querySelectorAll('[data-audio-panel]').forEach(panel => panel.dispose?.());
   return root;
 }

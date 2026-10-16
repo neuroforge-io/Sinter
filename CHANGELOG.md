@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a recipient-facing opening to local letters and briefing notes, or an
+  explicitly labelled agenda purpose. Retain raw wording, originals and edits;
+  show when changed inputs no longer match the prepared draft. During local
+  preparation, campaign notes and reference quotations stay in evidence across
+  formats, and private notes no longer supply implicit questions. Optional model previews include the opening
+  and explain that the model may revise it.
 - Preserve explicit clarification requests such as “Please provide the current
   terms” in application, discussion and research drafts. Normalize whitespace and
   supply missing punctuation without nesting the request inside another question;

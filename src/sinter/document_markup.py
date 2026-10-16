@@ -48,7 +48,7 @@ class PageBreak:
 PAGE_BREAK_MARKER = "<!-- sinter-page-break -->"
 Block = Paragraph | Table | PageBreak
 _INLINE = re.compile(
-    r"\\[\\`*_{}\[\]#!|>]|\*\*([^\n]+?)\*\*|(?<!\w)__([^\n]+?)__(?!\w)"
+    r"\\[\\`*_{}\[\]#!|>+.~)\-]|\*\*([^\n]+?)\*\*|(?<!\w)__([^\n]+?)__(?!\w)"
     r"|(?<!`)(`+)(?!`)([^\n]*?)(?<!`)\3(?!`)"
     r"|(?<!!)\[([^\[\]\n]+)\]\((<[^<>\s]+>|(?:\\.|[^\s()\\]|\((?:\\.|[^\s()\\])*\))+)\)"
     r"|\*([^*\n]+)\*|(?<!\w)_([^_\n]+)_(?!\w)"
@@ -61,7 +61,7 @@ _BLOCK = re.compile(
 
 
 def literal(value: str) -> str:
-    value = re.sub(r"\\([\\`*_{}\[\]#!|>])", r"\1", value)
+    value = re.sub(r"\\([\\`*_{}\[\]#!|>+.~)\-])", r"\1", value)
     return value.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
 
 

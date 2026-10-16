@@ -3,7 +3,7 @@ import {h, safeLink} from './dom.js';
 import {isDocumentPageBreak} from './document-page-break.js';
 
 function literal(value) {
-  return value.replace(/\\([\\`*_{}\[\]#!|>])/g, '$1')
+  return value.replace(/\\([\\`*_{}\[\]#!|>+.~)\-])/g, '$1')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
 
@@ -12,7 +12,7 @@ function inline(value, depth = 0) {
   const parts = [];
   // Underscores inside identifiers are literal. URL parentheses may be balanced;
   // unmatched or unsupported link syntax remains visible instead of losing text.
-  const pattern = /\\[\\`*_{}\[\]#!|>]|\*\*([^\n]+?)\*\*|(?<![\p{L}\p{N}_])__([^\n]+?)__(?![\p{L}\p{N}_])|(?<!`)(`+)(?!`)([^\n]*?)(?<!`)\3(?!`)|(?<!!)\[([^\[\]\n]+)\]\((<[^<>\s]+>|(?:\\.|[^\s()\\]|\((?:\\.|[^\s()\\])*\))+)\)|\*([^*\n]+)\*|(?<![\p{L}\p{N}_])_([^_\n]+)_(?![\p{L}\p{N}_])/gu;
+  const pattern = /\\[\\`*_{}\[\]#!|>+.~)\-]|\*\*([^\n]+?)\*\*|(?<![\p{L}\p{N}_])__([^\n]+?)__(?![\p{L}\p{N}_])|(?<!`)(`+)(?!`)([^\n]*?)(?<!`)\3(?!`)|(?<!!)\[([^\[\]\n]+)\]\((<[^<>\s]+>|(?:\\.|[^\s()\\]|\((?:\\.|[^\s()\\])*\))+)\)|\*([^*\n]+)\*|(?<![\p{L}\p{N}_])_([^_\n]+)_(?![\p{L}\p{N}_])/gu;
   let start = 0;
   for (const match of value.matchAll(pattern)) {
     if (match.index > start) parts.push(literal(value.slice(start, match.index)));

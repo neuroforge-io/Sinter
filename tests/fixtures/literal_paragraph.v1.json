@@ -1,0 +1,18 @@
+{
+  "schema": "sinter.literal-paragraph-fixture.v1",
+  "cases": [
+    ["Following up: café é 🐝 & <literal>.", "Following up: café é 🐝 &amp; &lt;literal&gt;."],
+    ["- Keep the condition.", "\\- Keep the condition."],
+    ["+ Not approved.", "\\+ Not approved."],
+    ["1. Date unconfirmed.", "1\\. Date unconfirmed."],
+    ["2) Owner unknown.", "2\\) Owner unknown."],
+    ["---", "\\---"],
+    ["~~~text", "\\~~~text"],
+    ["# Not a heading.", "\\# Not a heading."],
+    ["[link](https://example.invalid/terms)", "\\[link\\](https://example.invalid/terms)"],
+    ["**not bold** _literal_ `not code`", "\\*\\*not bold\\*\\* \\_literal\\_ \\`not code\\`"],
+    ["> Not a quote.", "&gt; Not a quote."],
+    ["Backslashes: \\- \\* C:\\notes\\draft", "Backslashes: \\\\- \\\\\\* C:\\\\notes\\\\draft"],
+    ["<!-- sinter-page-break -->", "&lt;\\!-- sinter-page-break --&gt;"]
+  ]
+}

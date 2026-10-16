@@ -37,6 +37,18 @@ def literal(value: str) -> str:
     return re.sub(r"([\\`*_{}\[\]#!|])", r"\\\1", value)
 
 
+def literal_paragraph(value: str) -> str:
+    """Keep entered prose literal, including lines that resemble block markup."""
+    rendered = literal(value.replace("\r\n", "\n").replace("\r", "\n"))
+
+    def escape_start(match):
+        marker = match[2]
+        escaped = marker[:-1] + "\\" + marker[-1]
+        return match[1] + escaped
+
+    return re.sub(r"(?m)^([ \t]*)([-+~]|\d{1,9}[.)])", escape_start, rendered)
+
+
 @dataclass(frozen=True)
 class Source:
     id: str

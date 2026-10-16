@@ -2,6 +2,7 @@ import {hasCurrentApplicationWindowEvidence} from './campaign-state.js';
 import {campaignRoutePurpose, isNonApplicationRoute} from './campaign-route-purpose.js';
 import {campaignSourceSnapshotGuidance,
   campaignSourceSnapshotIssue} from './campaign-source-state.js';
+import {openingParagraphProblem} from './brief-opening.js';
 
 function clarificationTopic(value) {
   return String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -291,7 +292,17 @@ export function campaignClarificationDraft(campaign, opportunity, campaignLink =
 
 /** Preserve the complete optional-model context and explicitly recorded scope. */
 export function campaignLetterModelContext(payload = {}) {
-  const context = [payload.title, payload.notes, ...(payload.sources || [])
+  let opening = '';
+  if (Object.hasOwn(payload, 'opening_paragraph')) {
+    const problem = openingParagraphProblem(payload.opening_paragraph);
+    if (problem) throw new Error(problem);
+    if (payload.workflow !== undefined && payload.workflow !== 'brief') {
+      throw new Error('An opening paragraph is available for briefing documents only. Your local inputs are unchanged.');
+    }
+    if (payload.opening_paragraph.trim()) opening =
+      'Opening paragraph entered by you (the model may revise it):\n' + payload.opening_paragraph;
+  }
+  const context = [payload.title, opening, payload.notes, ...(payload.sources || [])
     .map(source => `${source.title}\n${source.content}\n${source.url || ''}`)]
     .filter(Boolean).join('\n\n');
   if (!Object.hasOwn(payload, 'campaign_route_purpose')) return context;

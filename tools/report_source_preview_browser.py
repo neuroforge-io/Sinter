@@ -15,6 +15,9 @@ import os
 import sys
 import tempfile
 import threading
+import io
+import zipfile
+from xml.etree import ElementTree as ET
 from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
@@ -57,10 +60,10 @@ def arguments(argv=None):
 
 def pins():
     result = source_pins()
-    path = Path(__file__).resolve()
-    raw = path.read_bytes()
-    result[path.relative_to(ROOT).as_posix()] = {
-        "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+    for path in [Path(__file__).resolve(), ROOT / "tests/fixtures/literal_paragraph.v1.json"]:
+        raw = path.read_bytes()
+        result[path.relative_to(ROOT).as_posix()] = {
+            "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
     return result
 
 
@@ -228,6 +231,143 @@ class PreviewChecks(PurposeChecks):
             "copy_matches_complete_logged_letter": True,
             "evidence_quotes_and_links_exact": True, "original_campaign_unchanged_except_one_unsent_draft": True})
 
+    def followup_opening_recovery(self, page):
+        from playwright.sync_api import expect
+        saved = self.start(page, fixture())
+        baseline = saved["document"]
+        page.get_by_role("button", name="Draft clarification letter", exact=True).click()
+        opening = "I'm following up on our recorded enquiry. Café e\u0301 🐝.\nNo submission or approval is confirmed."
+        control = page.get_by_label("Opening paragraph for the recipient", exact=True)
+        control.fill(opening)
+        page.locator("summary").filter(has_text="Internal notes and evidence context").click()
+        page.get_by_label("Internal notes and evidence context", exact=True).fill("PRIVATE_FOLLOWUP_NOTE_SENTINEL")
+        page.get_by_role("button", name="Prepare my draft", exact=True).click()
+        report = page.get_by_role("region", name="Your draft report")
+        document = report.locator(".document-paper")
+        expect(document).to_contain_text(opening)
+        expect(document).not_to_contain_text("PRIVATE_FOLLOWUP_NOTE_SENTINEL")
+        original = self.evidence_export(page, "followup-original")
+        assert original["document_opening"] == original["input_snapshot"]["opening_paragraph"] == opening
+        assert any(row["content"] == "PRIVATE_FOLLOWUP_NOTE_SENTINEL" for row in original["sources"])
+        page.get_by_role("button", name="Edit draft", exact=True).click()
+        edited = original["document_markdown"] + "\n\nHuman correction: keep this as an unsent enquiry."
+        page.get_by_label("Edit your draft", exact=True).fill(edited)
+        page.get_by_role("button", name="Apply edits", exact=True).click()
+        prepared = self.evidence_export(page, "followup-edited")
+        assert prepared["document_markdown"] == original["document_markdown"]
+        assert prepared["document_edits"]["markdown"] == edited
+        page.get_by_text("Review or edit project inputs", exact=True).click()
+        control.fill("🐝" * 1200)
+        assert control.input_value() == "🐝" * 1200 and control.evaluate("node => node.validity.valid")
+        expect(page.get_by_text("1,200 / 1,200 characters", exact=True)).to_be_visible()
+        oversized = "🐝" * 1201
+        control.fill(oversized)
+        assert control.input_value() == oversized and not control.evaluate("node => node.validity.valid")
+        before_requests = sum(row["path"] == "/api/workbench" for row in self.local_responses)
+        page.get_by_role("button", name="Prepare my draft", exact=True).click()
+        assert sum(row["path"] == "/api/workbench" for row in self.local_responses) == before_requests
+        assert self.evidence_export(page, "followup-invalid-retained") == prepared
+        changed = "A changed opening for the next preparation. No commitment is established."
+        control.fill(changed)
+        stale = page.get_by_text("The draft below uses earlier inputs.", exact=False)
+        expect(stale).to_be_visible()
+        page.get_by_label("What are you preparing?", exact=True).select_option("agenda")
+        expect(page.get_by_label("Purpose paragraph for this agenda", exact=True)).to_have_value(changed)
+        expect(page.get_by_text("Optional. Used as the agenda’s purpose.", exact=False)).to_be_visible()
+        page.get_by_label("What are you preparing?", exact=True).select_option("enquiry")
+        # Explicitly injected failed local job: no work reaches the server and
+        # no hosted operation is replayed. The earlier successful basis stays.
+        failed_id = "f" * 32
+        posts, polls = [], []
+        def reject_job(route):
+            posts.append(route.request.post_data_json)
+            route.fulfill(status=200, json={"id": failed_id})
+        def failed_job(route):
+            polls.append(route.request.url)
+            route.fulfill(status=200, json={"id": failed_id, "status": "failed",
+                                          "error": "Fictional local preparation unavailable."})
+        page.route(self.base + "/api/workbench", reject_job)
+        page.route(self.base + "/api/jobs/" + failed_id, failed_job)
+        try:
+            page.get_by_role("button", name="Prepare my draft", exact=True).click()
+            expect(page.get_by_text("Not completed. Your inputs and previous report are unchanged.", exact=True)).to_be_visible()
+        finally:
+            page.unroute(self.base + "/api/workbench", reject_job)
+            page.unroute(self.base + "/api/jobs/" + failed_id, failed_job)
+        assert len(posts) == len(polls) == 1 and posts[0]["opening_paragraph"] == changed
+        assert control.input_value() == changed
+        expect(stale).to_be_visible()
+        assert self.evidence_export(page, "followup-failure-retained") == prepared
+        control.fill(opening)
+        expect(stale).to_be_hidden()  # Failure did not replace the successful basis.
+        page.set_viewport_size({"width": 390, "height": 844})
+        self.screenshot(page, "followup-inputs-phone", full_page=True)
+        page.get_by_role("button", name="Save to My workspace", exact=True).click()
+        expect(page.get_by_text("Saved in My workspace, including your edits and original evidence.", exact=True)).to_be_visible()
+        page.reload()
+        self.goto(page, "library")
+        card = page.locator("article.card").filter(has=page.get_by_role("heading", name=original["title"], exact=True))
+        card.get_by_role("button", name="Open draft", exact=True).click()
+        reopened = self.evidence_export(page, "followup-reopened")
+        assert reopened == prepared
+        page.context.grant_permissions(["clipboard-read", "clipboard-write"], origin=self.base)
+        page.get_by_role("button", name="Copy draft text", exact=True).click()
+        expect(page.get_by_text("Copied. Ready to paste into your email or document.", exact=True)).to_be_visible()
+        copied = page.evaluate("navigator.clipboard.readText()")
+        assert opening in copied and "Human correction:" in copied and "PRIVATE_FOLLOWUP_NOTE_SENTINEL" not in copied
+        with page.expect_response(self.base + "/api/campaigns/save") as pending:
+            page.get_by_role("button", name="Save draft to campaign log", exact=True).click()
+        assert pending.value.status == 200
+        logged = pending.value.json()
+        expected = copy.deepcopy(baseline)
+        communication = logged["document"]["communications"][-1]
+        assert communication["content"] == copied.strip() and communication["status"] == "draft"
+        assert communication["date"] == "" and communication["evidence_links"] == prepared["campaign_link"]["evidence_links"]
+        expected["communications"].append(communication)
+        assert logged["document"] == expected
+        self.goto(page, "campaigns")
+        assert self.export(page, "followup-campaign-after-log") == expected
+        self.content_checks.append({"scope": "Actual opening/edit/save/browser-reload/reopen/export/copy/log; injected local failed job only",
+            "raw_opening_retained": True, "internal_notes_not_in_letter": True,
+            "oversized_unicode_retained_without_request": True, "failed_job_not_replayed": True,
+            "successful_input_basis_unchanged_after_failure": True, "original_and_edits_distinct": True,
+            "campaign_changes_exactly_one_unsent_log": True})
+
+    def literal_opening_copy_and_word(self, page):
+        from playwright.sync_api import expect
+        saved = self.start(page, fixture("research"))
+        page.get_by_role("button", name="Draft clarification letter", exact=True).click()
+        cases = json.loads((ROOT / "tests/fixtures/literal_paragraph.v1.json").read_text())["cases"]
+        raw = "\n".join(row[0] for row in cases)
+        page.get_by_label("Opening paragraph for the recipient", exact=True).fill(raw)
+        page.get_by_role("button", name="Prepare my draft", exact=True).click()
+        paragraph = page.locator(".document-paper p").filter(has_text="Following up: café")
+        expect(paragraph).to_be_visible()
+        assert paragraph.inner_text() == raw
+        assert paragraph.locator("a,code,strong,em,script,hr").count() == 0
+        assert paragraph.locator("br").count() == len(cases) - 1
+        original = self.evidence_export(page, "literal-opening-evidence")
+        assert original["document_opening"] == original["input_snapshot"]["opening_paragraph"] == raw
+        page.context.grant_permissions(["clipboard-read", "clipboard-write"], origin=self.base)
+        page.get_by_role("button", name="Copy draft text", exact=True).click()
+        expect(page.get_by_text("Copied. Ready to paste into your email or document.", exact=True)).to_be_visible()
+        assert raw in page.evaluate("navigator.clipboard.readText()")
+        path = self.artifacts / "literal-opening.docx"
+        with page.expect_download() as pending:
+            page.get_by_role("button", name="Download Word (.docx)", exact=True).click()
+        pending.value.save_as(path)
+        with zipfile.ZipFile(io.BytesIO(path.read_bytes())) as archive:
+            document = ET.fromstring(archive.read("word/document.xml"))
+        ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        exported = "".join((node.text or "") if node.tag == ns + "t" else "\n" if node.tag == ns + "br" else ""
+                           for node in document.iter())
+        assert raw in exported
+        assert self.store.get(saved["id"]) == saved
+        self.screenshot(page, "literal-opening-visible", full_page=True)
+        self.content_checks.append({"scope": "Actual plain opening through HTML/copy/Word export",
+            "raw_unicode_and_line_breaks_exact": True, "markup_not_interpreted": True,
+            "canonical_campaign_unchanged": True})
+
     def unsafe_or_missing_link_retains_title(self, page):
         self.goto(page, "brief")
         links = [{"title": "Exact unsafe title café e\u0301 🐝 <literal>",
@@ -291,6 +431,8 @@ def main(argv=None):
                         checks.check("actual-local-draft-copy-export-log", checks.actual_draft_copy_export_log)
                         checks.check("actual-research-draft-copy-export-log",
                                      lambda page: checks.actual_draft_copy_export_log(page, "research"))
+                        checks.check("followup-opening-recovery", checks.followup_opening_recovery)
+                        checks.check("literal-opening-copy-word", checks.literal_opening_copy_and_word)
                         checks.check("renderer-only-unsafe-and-missing-link", checks.unsafe_or_missing_link_retains_title)
                     finally:
                         if browser:
@@ -322,7 +464,7 @@ def main(argv=None):
             "local_responses": checks.local_responses if checks else [], "fatal_errors": fatal, "resources": resources,
             "hosted_operation_attempts": counts, "model_operations_requested": sum(counts.get(n, 0) for n in ("chat", "search")),
             "source_files_before": before, "source_files_after": after, "source_unchanged": before is not None and before == after})
-        receipt["passed"] = (bool(checks) and len(checks.results) == 3
+        receipt["passed"] = (bool(checks) and len(checks.results) == 5
             and all(row["passed"] and row["context_closed"] for row in checks.results)
             and not checks.errors and not checks.external and not fatal and all(resources.values())
             and all(value == 0 for value in counts.values()) and before is not None and before == after)

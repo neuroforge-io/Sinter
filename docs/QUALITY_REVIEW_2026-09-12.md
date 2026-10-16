@@ -1,5 +1,31 @@
 # Sinter user-testing closeout — 12 September 2026
 
+## 16 October recipient opening — source qualification in progress
+
+The Brief form now accepts explicit recipient-facing prose rather than requiring
+the operator to replace a generic introduction after every local preparation.
+Letters, briefing notes and agendas label its role; changing format retains the
+input and asks for review. Raw opening text, original output and later edits stay
+separate. Changed preparation inputs leave the earlier document intact with a
+visible notice; a failed preparation must not replace its successful input basis.
+
+The initial static critic rejected two privacy paths: campaign notes could enter
+agenda/briefing background after a format change, and blank explicit questions
+could cause private questions to be extracted from those notes. Local campaign
+preparation now keeps background in evidence in all three formats and uses only
+explicit questions. Complete original sources remain attached. Other local
+projects retain their existing note and question behavior. Optional model drafting
+still exposes its context for review and may revise the supplied opening.
+
+The document/privacy suite passed 171 checks, including 13 shared literal-text
+cases through Python parsing, Word text and inert browser-renderer structure.
+Another 70 workbench, identity and browser-adapter checks passed. These are not
+actual browser interaction receipts. Five browser journeys are prepared, including
+save/reopen/log, literal HTML/copy/Word, oversized Unicode admission and an
+explicit injected failed local job. Local execution remains pending because
+available memory did not meet the admission bound for a new browser process.
+No visual or installed-release qualification is claimed by this checkpoint.
+
 ## 16 October explicit requests in clarification drafts
 
 A recorded request such as “Please provide the current fictional terms before

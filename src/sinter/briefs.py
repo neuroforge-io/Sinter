@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from .evidence import Excerpt, Source, excerpts, literal, text, tokens, validate_excerpt
+from .evidence import Excerpt, Source, excerpts, literal, literal_paragraph, text, tokens, validate_excerpt
 
 FORMATS = {"enquiry": "Enquiry letter", "briefing": "Briefing note", "agenda": "Agenda item"}
 QUESTION_WORDS = set("what when where who which how could would should please confirm provide does have has are can need available information about still stated supplied evidence source material relevant say says tell know".split())
@@ -38,6 +38,23 @@ DOCUMENT_FIELDS = {
     "organisation": ("Organisation", 1024), "sender_role": ("Your role", 200),
     "contact_details": ("Contact details", 4096),
 }
+OPENING_LIMIT = 1200
+
+
+def document_opening(payload: dict) -> str:
+    """Admit explicit recipient prose before any optional hosted operation."""
+    if "opening_paragraph" not in payload:
+        return ""
+    if payload.get("workflow", "brief") != "brief":
+        raise ValueError("An opening paragraph is available for briefing documents only.")
+    value = text(payload["opening_paragraph"], "Opening paragraph", OPENING_LIMIT)
+    if re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", value):
+        raise ValueError("Opening paragraph contains unsupported control characters.")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise ValueError("Opening paragraph contains invalid Unicode text.") from exc
+    return value
 
 
 def campaign_route_purpose(payload: dict) -> str | None:
@@ -67,6 +84,10 @@ def document_questions(payload: dict) -> list[str]:
     if entered.strip():
         questions = [line.strip().lstrip("-* ").strip() for line in entered.splitlines()
                      if line.strip()]
+    elif payload.get("campaign_sender_review") is True:
+        # Internal campaign notes are evidence, never an implied request to the
+        # recipient. Missing explicit questions must remain visibly missing.
+        questions = []
     else:
         notes = text(payload.get("notes", ""), "Notes")
         questions = [match.group().strip().lstrip("-* ").strip()
@@ -85,9 +106,10 @@ def _context(payload: dict, sources: list[Source], selected: list[Excerpt],
              *, letter: bool) -> list[str]:
     """Keep short, exact source passages in the usable document, with plain attribution."""
     notes = text(payload.get("notes", ""), "Notes").strip()
-    if letter and payload.get("campaign_sender_review") is True:
+    if payload.get("campaign_sender_review") is True:
         # Campaign notes contain internal checks, actions and unverified fit.
-        # Keep them in the evidence view, never copy them into funder-facing prose.
+        # Keep all background in evidence across format changes. Only explicit
+        # recipient prose and questions enter the document.
         return []
     if letter and notes:
         if len(notes) <= 1600:
@@ -126,6 +148,7 @@ def prepare_document(payload: dict, sources: list[Source],
     purpose = campaign_route_purpose(payload)
     title = text(payload.get("title", ""), "Title", 200, True)
     details = document_details(payload)
+    opening_text = document_opening(payload)
     questions = document_questions(payload)
     selected = excerpts(sources)[:4] if not selected else selected
     context = _context(payload, sources, selected, letter=kind == "enquiry")
@@ -163,6 +186,8 @@ def prepare_document(payload: dict, sources: list[Source],
             opening = ("I am writing on behalf of " + literal(details["organisation"]) + " about "
                        if details["organisation"] else "I am writing about ") + literal(title) + "."
             reference_title = title
+        if opening_text.strip():
+            opening = literal_paragraph(opening_text)
         lines = [greeting, "Re: " + literal(reference_title), opening, *context]
         if questions:
             lines.extend(["Could you please clarify the following?", question_list,
@@ -176,7 +201,8 @@ def prepare_document(payload: dict, sources: list[Source],
         if details["signatory"] or details["contact_details"]:
             lines.extend(["Kind regards,", "\n".join(literal(value) for value in dict.fromkeys(signature))])
     elif kind == "agenda":
-        lines = ["# " + literal(title), "## Purpose", "Discuss the supplied background and agree the next steps."]
+        lines = ["# " + literal(title), "## Purpose", literal_paragraph(opening_text)
+                 if opening_text.strip() else "Discuss the supplied background and agree the next steps."]
         if details["signatory"]:
             lines.append("Prepared by: " + literal(details["signatory"]))
         if context:
@@ -195,6 +221,8 @@ def prepare_document(payload: dict, sources: list[Source],
             lines.append("Prepared by: " + literal(details["signatory"]))
         if details["organisation"]:
             lines.append(literal(details["organisation"]))
+        if opening_text.strip():
+            lines.append(literal_paragraph(opening_text))
         if context:
             lines.extend(["## Background", *context])
         if questions:
@@ -207,6 +235,7 @@ def prepare_document(payload: dict, sources: list[Source],
             "document_type": kind, "document_details": details,
             "document_questions": questions, "missing_fields": missing,
             "document_ready": not missing,
+            **({"document_opening": opening_text} if "opening_paragraph" in payload else {}),
             **({"campaign_route_purpose": purpose} if purpose is not None else {})}
 
 

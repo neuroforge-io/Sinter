@@ -121,8 +121,9 @@ def run(payload: dict, progress=lambda message: None) -> dict:
     if not isinstance(kind, str) or kind not in WORKFLOWS:
         raise ValueError("Choose a research, funding, briefing or meeting workflow.")
     title = text(payload.get("title", ""), "Project title", 200, True)
-    from .briefs import campaign_route_purpose, document_details
+    from .briefs import campaign_route_purpose, document_details, document_opening
     details = document_details(payload)
+    document_opening(payload)
     notes = text(payload.get("notes", ""), "Notes", 1000000 if kind == "meeting" else MAX_CONTEXT)
     query = text(payload.get("query", ""), "Search query", 1024)
     questions = text(payload.get("questions", ""), "Questions", 12000)
