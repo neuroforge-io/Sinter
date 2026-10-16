@@ -21,7 +21,7 @@ import {gardenGuide, GARDEN_PRACTICE} from './garden-practice.js';
 import {COMMUNICATION_ORDERS, COMMUNICATION_STATUSES}
   from './campaign-communication-view.js';
 import {renderCampaignCommunications} from './campaign-communications.js';
-import {arrangeCampaignEditor, isCampaignWorkSection, renderCampaignWorkContext}
+import {arrangeCampaignEditor, campaignActionGuidance, isCampaignWorkSection, renderCampaignWorkContext}
   from './campaign-layout.js';
 import {campaignCapacity, CAMPAIGN_TEXT_LIMIT, CAMPAIGN_BYTE_LIMIT}
   from './campaign-capacity.js';
@@ -217,6 +217,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   let communicationStatus = COMMUNICATION_STATUSES.some(([value]) => value === seed.communicationStatus)
     ? seed.communicationStatus : 'all';
   let communicationFiltersOpen = seed.communicationFiltersOpen === true;
+  let actionGuidanceOpen = seed.actionGuidanceOpen === true;
   let communicationOpenState = new WeakMap();
   let pendingAssetOpenId = '';
   let pendingFocus = null;
@@ -285,11 +286,12 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
 
   function rememberCampaign() {
     if (admittingSave) return;
-    captureCommunicationFilters();
+    captureSectionDisclosures();
     remember('campaigns', {document: structuredClone(document), id: savedId, revision,
       dirty, selected, tab, sourceQuery, assetQuery, communicationQuery,
       opportunityQuery, opportunityStatus, opportunityPage,
-      communicationRoute, communicationOrder, communicationStatus, communicationFiltersOpen, practice,
+      communicationRoute, communicationOrder, communicationStatus, communicationFiltersOpen,
+      actionGuidanceOpen, practice,
       budgetDisclosures: document.budget.map(row => budgetOpenState.get(row) ?? null)});
   }
   function captureBudgetDisclosures() {
@@ -304,11 +306,19 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     }
     return updated;
   }
-  function captureCommunicationFilters() {
+  function captureSectionDisclosures() {
+    let updated = false;
     const filters = editor.querySelector('.campaign-communication-filters');
-    if (!filters || filters.open === communicationFiltersOpen) return false;
-    communicationFiltersOpen = filters.open;
-    return true;
+    if (filters && filters.open !== communicationFiltersOpen) {
+      communicationFiltersOpen = filters.open;
+      updated = true;
+    }
+    const guidance = editor.querySelector('.campaign-action-guidance');
+    if (guidance && guidance.open !== actionGuidanceOpen) {
+      actionGuidanceOpen = guidance.open;
+      updated = true;
+    }
+    return updated;
   }
   function setBudgetDisclosure(row, open) {
     budgetOpenState.set(row, open);
@@ -547,13 +557,14 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; newButton.disabled = value; fundingButton.disabled = value || fundingState.pending || fundingState.closed; editor.inert = value; decisionCard.inert = value; sectionNavigation.inert = value; transfers.inert = value; }
   function apply(next, id = null, rev = null, preferActionable = false, focusedRoute = '') {
-    captureCommunicationFilters();
+    captureSectionDisclosures();
     const resumeCurrentCampaign = Boolean(id && id === savedId);
     const previousTab = tab;
     const previousSelection = selected;
     const previousOpportunityName = document.opportunities?.[previousSelection]?.name || '';
     const previousSourceQuery = sourceQuery;
     const previousAssetQuery = assetQuery;
+    const previousActionGuidanceOpen = actionGuidanceOpen;
     const previousCommunicationView = {query: communicationQuery,
       route: communicationRoute, order: communicationOrder, status: communicationStatus,
       filtersOpen: communicationFiltersOpen};
@@ -583,6 +594,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     communicationOrder = resumeCurrentCampaign ? previousCommunicationView.order : 'record';
     communicationStatus = resumeCurrentCampaign ? previousCommunicationView.status : 'all';
     communicationFiltersOpen = resumeCurrentCampaign && previousCommunicationView.filtersOpen;
+    actionGuidanceOpen = resumeCurrentCampaign && previousActionGuidanceOpen;
     status.textContent = id ? 'Saved on this computer' : 'Not saved yet'; output.replaceChildren();
     delete output.dataset.stale; output.classList.remove('campaign-output-stale');
     editor.replaceChildren();
@@ -618,10 +630,11 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     // Some renderers add local defaults. Keep the decoded reply untouched as
     // evidence if a later renderer refuses the candidate.
     const saved = structuredClone(acknowledgedCampaign(reply));
-    captureCommunicationFilters();
+    captureSectionDisclosures();
     const before = {document, savedId, revision, dirty, selected, tab,
       sourceQuery, opportunityQuery, opportunityStatus, opportunityPage, assetQuery,
       communicationQuery, communicationRoute, communicationOrder, communicationStatus, communicationFiltersOpen, communicationOpenState,
+      actionGuidanceOpen,
       budgetOpenState, expandedActionRows, pendingFocus, pendingActionFocus,
       pendingBudgetFocus, pendingAssetOpenId};
     const areas = [editor, sectionNavigation, shelf, summary, decisionCard];
@@ -654,6 +667,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       ({document, savedId, revision, dirty, selected, tab,
         sourceQuery, opportunityQuery, opportunityStatus, opportunityPage, assetQuery,
         communicationQuery, communicationRoute, communicationOrder, communicationStatus, communicationFiltersOpen, communicationOpenState,
+        actionGuidanceOpen,
         budgetOpenState, expandedActionRows, pendingFocus, pendingActionFocus,
         pendingBudgetFocus, pendingAssetOpenId} = before);
       let rollbackError;
@@ -1080,8 +1094,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   function renderEditor() {
     const budgetChanged = captureBudgetDisclosures();
-    const filtersChanged = captureCommunicationFilters();
-    if (budgetChanged || filtersChanged) rememberCampaign();
+    const disclosuresChanged = captureSectionDisclosures();
+    if (budgetChanged || disclosuresChanged) rememberCampaign();
     const detailsOpen = editor.querySelector('.campaign-details')?.open ?? !document.title;
     const title = input('Campaign name', 'text', document, 'title', '', {required: true, maxLength: 200});
     const organisation = input('Applicant organisation', 'text', document, 'organisation', 'Use the applicant’s legal name, which may differ from the school or venue.', {maxLength: 1024});
@@ -1777,7 +1791,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         expandedActionRows.add(document.actions[nextIndex]);
       }
     }
-    panel.append(h('h3', {}, 'The next useful step'), h('p', {class: 'muted'}, 'Turn missing quotes, approvals and unanswered conditions into actions. New actions use the selected active route by default; change the scope for campaign-wide work. Submitted-route tasks only return to current work when marked as after-submission follow-up. A name or date is a planning note until the person agrees and timing is confirmed.'),
+    panel.append(h('h3', {}, 'The next useful step'),
+      h('p', {class: 'campaign-action-introduction muted'}, 'Record the next task, then confirm its scope, owner and timing.'),
       button('Add next action', () => {
         const selectedRoute = document.opportunities[selected];
         const scopedRoute = selectedRoute && (isOpportunityActionable(selectedRoute.status)
@@ -1859,7 +1874,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           changed(); renderEditor();
         });
         if (row.scope_confirmed !== true) {
-          scope.wrap.append(notice('This older action has no recorded scope. Confirm whether it belongs to the whole campaign or a specific opportunity before using it as current work.', 'warning'));
+          scope.wrap.append(notice('This action has no confirmed scope. Choose whether it belongs to the whole campaign or a specific opportunity before using it as current work.', 'warning'));
         }
         const scopedOpportunity = document.opportunities.find(item => item.name === row.opportunity);
         const inactiveRoute = ['closed', 'paused', 'not_pursuing'].includes(scopedOpportunity?.status);
@@ -2014,7 +2029,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
           const currentScope = row.scope_confirmed === true
             ? row.opportunity || 'Campaign-wide' : 'Scope needs confirmation';
           const currentDate = row.due
-            ? `${row.status === 'held' ? 'Retained target' : row.due < localDate() ? 'Past target' : 'Target'} ${displayDate(row.due)}`
+            ? `${row.status === 'held' ? 'Retained proposed target' : row.due < localDate() ? 'Past proposed target' : 'Proposed target'} ${displayDate(row.due)}`
             : 'No target date';
           const currentStatus = row.status === 'done' ? 'Done'
             : row.status === 'held' ? 'On hold · not completed' : 'To do';
@@ -2062,6 +2077,13 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     if (document.actions.length) panel.append(
       h('p', {class: 'fine'}, 'CSV keeps all actions, including On hold records (status held), for audit. The calendar includes only dated To do actions with a confirmed current scope; held and completed actions are excluded.'),
       h('div', {class: 'button-row'}, button('Download actions CSV', () => exportPlan('csv'), 'quiet'), button('Download action dates', () => exportPlan('calendar'), 'quiet')));
+    const guidance = campaignActionGuidance(actionGuidanceOpen);
+    guidance.addEventListener('toggle', () => {
+      if (!editor.contains(guidance)) return;
+      actionGuidanceOpen = guidance.open;
+      rememberCampaign();
+    });
+    panel.append(guidance);
   }
   function renderCommunications(panel) {
     const view = {

@@ -23,3 +23,14 @@ export function renderCampaignWorkContext(context, decision, onStatus, scope) {
     h('p', {class: 'campaign-context-scope'}, scope)),
   button('Campaign status', onStatus, 'quiet'));
 }
+
+export function campaignActionGuidance(open) {
+  return h('details', {class: 'campaign-action-guidance', open},
+    h('summary', {}, 'How action scope, owners and dates work'),
+    h('p', {}, 'Turn missing quotes, approvals and unanswered conditions into actions. '
+      + 'New actions use the selected active route by default; change the scope for campaign-wide work.'),
+    h('p', {}, 'Submitted-route tasks only return to current work when marked as after-submission '
+      + 'follow-up. Each affected action shows its own hold reason.'),
+    h('p', {}, 'A name or date is a planning note until the person agrees and timing is confirmed. '
+      + 'Suggested roles and unknown owners are not accepted assignments.'));
+}

@@ -55,6 +55,10 @@
 .campaign-action>details>summary:focus-visible{outline:2px solid var(--focus);outline-offset:4px;border-radius:4px}
 .campaign-action-group-heading{margin:26px 0 8px;padding-top:14px;border-top:1px solid var(--line);font-size:.95rem;color:var(--muted)}
 .campaign-action-meta[data-state=suggested]{color:var(--text)}
+.campaign-action-guidance{margin-top:20px;padding:0;border:0;border-top:1px solid var(--line)}
+.campaign-action-guidance>summary{display:list-item;list-style:disclosure-closed inside;min-height:44px;box-sizing:border-box;padding:10px 0;line-height:24px;font-size:.82rem;font-weight:650;scroll-margin-block-start:var(--campaign-scroll-clearance,0px);scroll-margin-block-end:16px}
+.campaign-action-guidance[open]>summary{list-style-type:disclosure-open}
+.campaign-action-guidance>p{max-width:65ch;color:var(--muted);font-size:.82rem;line-height:1.55}
 
 .campaign-budget-row>details{margin:0}
 .campaign-budget-row>details>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 18px;margin:0;list-style:none;cursor:pointer;font-size:.9rem}

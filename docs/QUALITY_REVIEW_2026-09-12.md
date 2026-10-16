@@ -3857,3 +3857,53 @@ These are neither whole-product nor live-AI or installed-release scores.
 Exact-source hosted CI and the installed workflow, recovery, native handoff,
 cold-install and four prior-preview upgrade gates remain outstanding for a new
 candidate. RC4 remains unpublished and unqualified; published RC3 is unchanged.
+
+### 16 October: action-first phone use, verified through the editor
+
+The Actions introduction now gives one immediate instruction; general guidance
+follows all action rows and export controls in a native disclosure. Owner, scope,
+hold and proposed-date meaning remain on the rows. Help is presentation state:
+opening it does not dirty the campaign or change its saved document. The existing
+save lock covers it; same-campaign view replacement and failed acknowledgement
+rollback retain its open state. New campaigns start with help closed. This is
+session presentation, not a promise to preserve help state after closing the app.
+
+At 390 × 844, the same fictional fixture's first action starts at y=587.125 rather
+than y=766.28125, about 179 pixels earlier. Its task preview, unconfirmed named
+person and proposed target fit below the sticky controls. The complete blocker
+remains visible; longer records can still require scrolling. At 320 × 400, the
+help summary is an uncovered 68-pixel pointer target. These are geometry checks,
+not speed or physical-device qualifications.
+
+The final browser run passed all 130 checks. It verifies unknown versus unassigned
+owners, suggested-role acceptance restrictions, blank dates, scope/closed-route
+hold reasons, help-only canonical equality, tab/save presentation and new-action
+defaults. An injected failure occurs after actual editor replacement following
+one genuine save; the restored help and inputs remain usable, and exported backup
+equals both retained inputs and the server document, with no automatic replay.
+The first expanded run executed 117 passing checks but ended incomplete because
+its new fixture became the latest saved campaign for a later fresh-context test.
+The extra journey now runs after those existing journeys; that original harness
+failure is preserved separately from the complete successor.
+
+A human-operated @Browser journey created, saved and reopened a fictional workshop
+task, explicitly selected campaign-wide scope and retained an unaccepted role and
+blank date. It exposed the misleading phrase “this older action” on a new action;
+neutral scope wording and focused assertions now cover both new and old records.
+Read-only SQLite inspection confirmed the exact saved task, scope, role and date.
+The owned tab, viewport override and outbound-disabled local server were closed.
+No real campaign, private correspondence or hosted generation was involved.
+
+Related source checks passed eight correspondence journeys, eight action-bar
+layouts, 70 Python checks, fatal Ruff and the public boundary. Those checks preceded
+the final neutral scope wording; the complete 130-check layout journey was rerun
+after it. A separate 47-message/76-source/12-route portfolio run retained 23 timings,
+including five driver measurements, exact saved/reopened edits and closed resources.
+One sample per operation supports no speed or latency guarantee.
+The independent reviewer verified exact final hashes and found no blocking
+regression. Strict surface scores are **UX 7.5/10, functionality 7.5/10, aesthetics
+7/10**. The next recommended case is a real funding-source update through stale
+eligibility review, clarification drafting and logging, preserving prior snapshots.
+Whole-product, live-provider and installed-release acceptance remain unproven.
+RC4 remains unpublished and unqualified; the exact-source release gates above
+still apply.

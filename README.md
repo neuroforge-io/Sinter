@@ -134,6 +134,9 @@ In current development, **Filter and order** opens the selectors; the active sco
 status, ordering and result count remain visible when they are closed. Actions and
 Communications place the work first and retain the complete selected-route blocker.
 **Campaign status** opens the full overview. Capacity warnings remain before work.
+Actions keep owner, scope and proposed-date uncertainty beside each task.
+**How action scope, owners and dates work** opens optional guidance below the list;
+opening it does not change the campaign or mark it unsaved.
 
 In current development, **Route purpose** can explicitly label an application,
 discussion or research case. Older routes stay **Not specified** until you choose;

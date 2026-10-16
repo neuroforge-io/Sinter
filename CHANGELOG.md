@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bring the first campaign action into view sooner on phones. Keep general help
+  after the tasks, preserve its open state during work and recovery, and label
+  recorded dates as proposed targets. Unconfirmed scope wording now applies
+  honestly to new actions as well as historical ones.
 - Put Actions and Communications before the campaign overview, with the complete
   selected-route blocker beside the work. Keep capacity warnings visible before
   editing, and restore the earlier layout and inputs if opening a save reply fails.

@@ -206,6 +206,152 @@ def fictional_fixture() -> dict:
     }
 
 
+def action_guidance_journey(page, checks, server, check, geometry, shot):
+    """Use the action editor while keeping help separate from work and evidence."""
+    from playwright.sync_api import expect
+
+    fixture = fictional_fixture()
+    fixture["title"] = "Fictional action ownership and recovery"
+    fixture["actions"].extend([
+        {"task": "Confirm whether Fictional contact desk names a person or a role.",
+         "opportunity": "Fictional application fund", "scope_confirmed": True,
+         "owner": "Fictional contact desk", "owner_kind": "unknown",
+         "owner_confirmed": False, "due": "", "status": "open"},
+        {"task": "Find someone to request the fictional access quote.",
+         "opportunity": "", "scope_confirmed": True,
+         "owner": "", "owner_kind": "unassigned", "owner_confirmed": False,
+         "due": "", "status": "open"},
+    ])
+    checks.import_fixture(page, fixture)
+    checks.save(page)
+    record = next(row for row in server.app.campaigns.list()
+                  if row["title"] == fixture["title"])
+    before = server.app.campaigns.get(record["id"])
+    page.get_by_role("tab", name="Next actions", exact=True).click()
+    help_box = page.locator(".campaign-action-guidance")
+    help_toggle = help_box.locator("summary")
+    expect(help_box).not_to_have_attribute("open", "")
+    check("action-guidance-follows-every-action", help_box.evaluate("""help =>
+        [...document.querySelectorAll('.campaign-action')].every(row =>
+          row.compareDocumentPosition(help) & Node.DOCUMENT_POSITION_FOLLOWING)
+    """))
+    unknown = page.locator('[data-action-index="4"]')
+    unassigned = page.locator('[data-action-index="5"]')
+    expect(unknown.locator(".campaign-action-summary-meta")).to_contain_text(
+        "Owner type not confirmed: Fictional contact desk")
+    expect(unassigned.locator(".campaign-action-summary-meta")).to_contain_text(
+        "No person named; owner needed")
+    expect(unknown.locator(".campaign-action-summary-meta")).to_contain_text("No target date")
+    expect(page.locator('[data-action-index="0"] .campaign-action-summary-meta')).to_contain_text(
+        "proposed target", ignore_case=True)
+    expect(page.locator('[data-action-index="1"] .campaign-action-summary-meta')).to_contain_text(
+        "Hold reason: scope is not confirmed.")
+    expect(page.locator('[data-action-index="2"] .campaign-action-summary-meta')).to_contain_text(
+        "Hold reason: route recorded as closed.")
+    check("action-owner-date-and-hold-uncertainty-stays-on-rows", True)
+    # This is a real pointer hit after scrolling at the short-window size,
+    # not only keyboard activation of a covered disclosure.
+    page.set_viewport_size({"width": 320, "height": 400})
+    help_toggle.evaluate("el => el.scrollIntoView({block:'start'})")
+    hit = help_toggle.evaluate("""el => {
+        const r = el.getBoundingClientRect();
+        const target = document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+        return {height:r.height,top:r.top,bottom:r.bottom,
+          hit:!!target && (el.contains(target)||target.contains(el)),viewport:innerHeight};
+    }""")
+    check("320x400-help-target-visible-and-uncovered",
+          hit["height"] >= 44 and hit["top"] >= 0
+          and hit["bottom"] <= hit["viewport"] and hit["hit"], hit)
+    help_toggle.click()
+    expect(help_box).to_have_attribute("open", "")
+    shot(page, "320x400-action-help-open")
+    check("opening-help-does-not-mark-record-unsaved",
+          page.locator(".campaign-save-bar [role=status]").inner_text() == "Saved on this computer"
+          and server.app.campaigns.get(record["id"]) == before)
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.get_by_role("tab", name="Sources", exact=True).click()
+    page.get_by_role("tab", name="Next actions", exact=True).click()
+    expect(help_box).to_have_attribute("open", "")
+    checks.save(page)
+    expect(help_box).to_have_attribute("open", "")
+    after = server.app.campaigns.get(record["id"])
+    check("help-open-tab-switch-save-retains-exact-record",
+          after["document"] == before["document"]
+          and after["revision"] == before["revision"] + 1)
+    help_toggle.press("Enter")
+    expect(help_box).not_to_have_attribute("open", "")
+    page.get_by_role("tab", name="Opportunities", exact=True).click()
+    page.get_by_role("button", name="Fictional archived fund", exact=False).click()
+    page.get_by_role("tab", name="Next actions", exact=True).click()
+    page.get_by_role("button", name="Add next action", exact=True).click()
+    closed_added = page.locator('[data-action-index="6"]')
+    expect(closed_added.get_by_label("Programme or scope", exact=True)).to_have_value(
+        "__confirm_scope__")
+    expect(closed_added).to_contain_text("Scope needs confirmation")
+    expect(closed_added).to_contain_text("This action has no confirmed scope.")
+    expect(closed_added).not_to_contain_text("older action")
+    check("new-action-does-not-inherit-inactive-route-as-current-work", True)
+    closed_added.get_by_role("button", name="Remove action", exact=True).click()
+    page.get_by_role("tab", name="Opportunities", exact=True).click()
+    page.get_by_role("button", name="Fictional application fund", exact=False).click()
+    page.get_by_role("tab", name="Next actions", exact=True).click()
+    page.get_by_role("button", name="Add next action", exact=True).click()
+    added = page.locator('[data-action-index="6"]')
+    expect(added.get_by_label("Next action", exact=True)).to_be_focused()
+    expect(help_box).not_to_have_attribute("open", "")
+    expect(added.get_by_label("Programme or scope", exact=True)).to_have_value("route:0")
+    expect(added.get_by_label("Proposed target date", exact=True)).to_have_value("")
+    added.get_by_label("Next action", exact=True).fill("Ask for a fictional access quote.")
+    added.get_by_label("Owner name or role", exact=True).fill("Venue coordinator")
+    added.get_by_label("Owner type", exact=True).select_option("role")
+    expect(added.get_by_label("This person has accepted this action", exact=True)).to_be_disabled()
+    expect(added.locator(".campaign-action-summary-meta")).to_contain_text("Suggested role only")
+    help_toggle.press("Enter")
+    expect(help_box).to_have_attribute("open", "")
+    checks.transfers(page)
+    _, local_backup = checks.download(page, "Export campaign backup")
+    retained = json.loads(local_backup)
+    assert retained["actions"][:-1] == before["document"]["actions"]
+    assert retained["actions"][-1]["owner_kind"] == "role"
+    assert retained["actions"][-1]["owner_confirmed"] is False
+    assert retained["actions"][-1]["due"] == ""
+    check("new-action-defaults-and-role-remain-unconfirmed", True)
+    # Interrupt acknowledgement rendering after it actually replaced the editor.
+    # The server receives one genuine save. It must never be replayed implicitly.
+    saves = []
+    def genuine_save(route):
+        response = route.fetch()
+        saves.append(response.json()["revision"])
+        route.fulfill(response=response)
+    page.route("**/api/campaigns/save", genuine_save)
+    page.evaluate("""() => {
+        const original = Element.prototype.replaceChildren;
+        Element.prototype.replaceChildren = function(...nodes) {
+            const result = original.apply(this,nodes);
+            if (this.matches?.('.campaign-editor')) {
+                Element.prototype.replaceChildren = original;
+                window.actionViewInterrupted = true;
+                throw new Error('Fictional interrupted action acknowledgement');
+            }
+            return result;
+        };
+    }""")
+    page.get_by_role("button", name="Save campaign", exact=True).click()
+    expect(page.locator(".campaign-save-feedback")).to_contain_text(
+        "Your earlier campaign inputs are retained.")
+    expect(help_box).to_have_attribute("open", "")
+    expect(added.get_by_label("Next action", exact=True)).to_have_value(
+        "Ask for a fictional access quote.")
+    checks.transfers(page)
+    _, recovered = checks.download(page, "Export campaign backup")
+    check("interrupted-action-view-preserves-help-inputs-and-no-replay",
+          page.evaluate("window.actionViewInterrupted === true")
+          and len(saves) == 1 and json.loads(recovered) == retained
+          and server.app.campaigns.get(record["id"])["document"] == retained)
+    shot(page, "action-help-interrupted-view-restored")
+    page.unroute("**/api/campaigns/save", genuine_save)
+
+
 def main(argv: Sequence[str] | None = None) -> dict:
     """Handle optional browser setup before opening any resource or artifact."""
     args = browser_arguments(__doc__, argv)
@@ -476,6 +622,10 @@ def main(argv: Sequence[str] | None = None) -> dict:
                         page.get_by_role("tab", name="Next actions", exact=True).click()
                         geometry(page, prefix + "-actions-selected")
                         shot(page, prefix + "-actions-selected")
+                        if width == 390:
+                            first_summary = page.locator(".campaign-action summary").first
+                            check("390-first-action-task-owner-and-date-in-first-viewport",
+                                  visible_clear(first_summary), first_summary.bounding_box())
                         page.get_by_role(
                             "button", name="Campaign status", exact=True
                         ).click()
@@ -760,6 +910,18 @@ def main(argv: Sequence[str] | None = None) -> dict:
                         server.app.campaigns.get(saved["id"]) == saved,
                     )
                     page.unroute("**/api/campaigns/save", reject_save)
+                    action_context = browser.new_context(
+                        viewport={"width": 390, "height": 844}, reduced_motion="reduce",
+                        accept_downloads=True)
+                    try:
+                        action_context.route("**/*", network)
+                        action_page = action_context.new_page()
+                        action_page.on("dialog", lambda dialog: dialog.accept())
+                        action_page.on("pageerror", lambda error: receipt["errors"].append(str(error)))
+                        action_guidance_journey(action_page, checks, server, check, geometry, shot)
+                    finally:
+                        action_context.close()
+                        receipt["resources"]["action_journey_context_closed"] = True
                     receipt["completed"] = True
                 except Exception:
                     receipt["completed"] = False
