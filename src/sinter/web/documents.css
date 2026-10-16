@@ -114,3 +114,36 @@
   .report-print-target .document .citation-link{color:black}
   .document-review-warning{padding:0 0 12pt;margin:0 0 12pt;font:600 11pt/1.5 sans-serif}
 }
+
+/* Stable, compact draft navigation; state remains owned by the report registry. */
+.workbench-page .draft-switcher{max-width:1080px;margin:18px 0 0;border-bottom:1px solid var(--line);padding-bottom:10px;scroll-margin-top:18px}
+.draft-switcher-heading{margin:0;font-size:.9rem}
+.draft-switcher-current{font-weight:650}
+.draft-switcher-durability{color:var(--muted);font-size:.875rem;margin:5px 0 0}
+.draft-switcher-disclosure{padding:6px 0 0;border:0}
+.draft-switcher-disclosure>summary{display:flex;align-items:center;gap:8px;min-height:44px;width:fit-content;padding:7px 10px;border:1px solid var(--line);border-radius:10px;font-size:.875rem}
+.draft-switcher-disclosure>summary::before{content:'▸';color:var(--muted)}
+.draft-switcher-disclosure[open]>summary::before{content:'▾'}
+.draft-switcher-disclosure[open]>summary{margin-bottom:10px}
+.draft-switcher-disclosure>summary::-webkit-details-marker{display:none}
+.draft-switcher-disclosure>.fine{margin:0 0 8px;font-size:.875rem}
+.draft-switcher-list{display:grid;gap:6px;list-style:none;margin:0;padding:0}
+.draft-switcher-row{width:100%;min-height:44px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;text-align:left;white-space:normal;overflow-wrap:anywhere;padding:10px 12px;font-size:.875rem}
+.draft-switcher-row[aria-current=true]{opacity:1;border-color:var(--edge);background:var(--raised);cursor:default}
+.draft-switcher-number{font-weight:650}
+.draft-switcher-state{color:var(--muted)}
+.draft-switcher-title{grid-column:1/-1;color:var(--muted);font-size:.875rem}
+.draft-switcher-prepared{margin-top:10px}
+.draft-switcher-prepared>h3{font-size:.875rem;margin:0 0 7px}
+.workbench-input-state{max-width:1080px;margin:12px 0;font-size:.875rem;color:var(--muted);overflow-wrap:anywhere}
+.workbench-page .document-toolbar .button,.workbench-page .export-menu>summary,.document-editor-actions>.button{min-height:44px}
+@media(max-width:650px){
+ .workbench-page .draft-switcher{margin-top:12px}
+ .draft-switcher-row{grid-template-columns:minmax(0,1fr);gap:3px}
+ .draft-switcher-title{grid-column:auto}
+ .workbench-page .document-editor textarea{height:clamp(160px,38dvh,320px);min-height:160px}
+ .document-editor-actions{gap:7px}
+ .document-editor-actions>.button{min-width:0;white-space:normal}
+}
+
+.workbench-page .document-save-state{font-size:.875rem}

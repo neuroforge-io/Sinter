@@ -148,16 +148,38 @@ The registry provides an opaque identity/change token, checked both after the
 decision and when the new result arrives. Later edits or save changes leave the
 displayed draft in place and retain the completed result for explicit opening.
 
-**Other drafts in this session** opens each specific earlier or newly prepared
-result, restores pending text and keeps original inputs/evidence distinct.
-Corrections use that result's captured payload rather than another attempt's
-inputs. Adopting a corrected result also adopts its correction metadata, so an
-unchanged meeting does not incorrectly appear stale. This registry is session-only; explicitly save applied edits in My
-workspace for persistence. Cancelling or leaving a replacement decision starts no
-preparation. Neither recovery nor replacement automatically retries a save or
-model request. `tests/report_replacement.mjs` checks the state policy;
-`tools/report_source_preview_browser.py` adds actual-interface recovery and an
-explicitly synthetic delayed local completion to the existing offline CI run.
+**Drafts** lists the numbered results from this preparation view, with each
+result's observed save state and its own inputs/evidence. Completed results that
+could not replace a later edit remain directly visible outside the disclosure;
+opening one requires an explicit action. Current, prepared, pending, saving,
+rejected and unconfirmed states are not inferred from report names or IDs.
+Keyed controls retain their disclosure state and identity during edit and save
+notifications. Each notification refreshes only that draft's observed presentation;
+unrelated reports are not reserialized to update a badge. A missing/failed snapshot
+shows unavailable state, never an inferred save. Replacement guards still read the
+actual registry. Reads and identical edit mutations do not notify recursively.
+
+Preparing another draft and opening a specific draft use distinct decisions.
+Cancel/Escape preserve the current document and return focus and scroll to the
+initiating control. Successful adoption collapses Drafts and focuses the selected
+report heading. Disposed Workbench views unsubscribe; a late completion stays in
+Pending work without subscribing to a removed view. An acknowledged earlier save
+is retained even when its displayed view has been replaced.
+
+Corrections use the selected result's captured payload and correction metadata.
+Save remains disabled while document text is waiting to be applied, with visible
+Apply/Cancel guidance; this does not disable saving every generic pending record.
+On phones the editor keeps its full value in a bounded-height textarea, followed
+by the same Apply, Cancel and page-break controls in keyboard order.
+
+The registry is session-only. Apply document edits and save to My workspace for
+persistence; this picker is not a durable backup. Untracked auxiliary correction,
+screening and campaign-log form fields are not newly qualified by this change.
+Neither recovery nor replacement automatically retries a save or model request.
+`tests/report_drafts.mjs` and `tests/report_replacement.mjs` check state policy.
+`tools/report_source_preview_browser.py` covers two deliberately delayed local
+completions and one delayed real local-save acknowledgement through the interface;
+those timing controls are disclosed as test fixtures.
 
 Meeting corrections also retain the original transcript source's capture time;
 the derived report receives its own new `created_at`. Local meeting requests may
@@ -317,6 +339,7 @@ can be downloaded with its incomplete label. No generation is automatically repl
 | `store.py`, `jobs.py`, `server.py` | Persistence, bounded work, cancellation and local HTTP. |
 | `web/home.js`, `web/app.js`, `web/workbench.js` | Overview, routing and guided tasks. |
 | `web/report-drafts.js`, `web/report-replacement.js` | Session draft/save observations, exact-state replacement decisions and per-result preparation inputs. |
+| `web/workbench-draft-switcher.js`, `web/workbench-draft-observations.js` | Stable draft controls and per-entry observed-state snapshots; no request, adoption or persistence authority. |
 | `web/navigation.js` | One tool registry for navigation, page labels and the keyboard finder. |
 | `web/audio.js`, `web/transcription.js` | Local playback, transcription controls and passage review. |
 

@@ -229,3 +229,73 @@ test('reopening prunes disconnected report views before another save is attempte
   assert.equal(state.views.size, 1); assert.equal(staleCalls, 0);
   markReportSaving(report); assert.equal(staleCalls, 0);
 });
+
+test('edit and form observations change once; reads and identical mutations stay silent', () => {
+  clearReportDrafts(); const report = {};
+  registerReportDraft(report, 'Original', {saved: true});
+  const events = [];
+  observeReportSaveState(report, () => events.push({
+    kind: reportSaveState(report).kind, editor: reportEditorDraft(report)?.text ?? null,
+  }));
+  reportSaveState(report); reportEditorDraft(report); registerReportDraft(report, 'Original');
+  assert.equal(events.length, 0);
+  trackReportEditor(report, 'Pending');
+  assert.deepEqual(events.at(-1), {kind: 'pending', editor: 'Pending'});
+  trackReportEditor(report, 'Pending'); assert.equal(events.length, 1);
+  trackReportEditor(report, '', false); assert.equal(events.length, 2);
+  assert.equal(events.at(-1).kind, 'saved');
+  trackReportEdits(report, 'Applied'); assert.equal(events.length, 3);
+  trackReportEdits(report, 'Applied'); assert.equal(events.length, 3);
+  trackReportForm(report, 'handover-summary', {rows: [{owner: null}]});
+  assert.equal(events.length, 4);
+  trackReportForm(report, 'handover-summary', {rows: [{owner: null}]});
+  clearReportForm(report, 'absent'); assert.equal(events.length, 4);
+  clearReportForm(report, 'handover-summary'); assert.equal(events.length, 5);
+  assert.equal(events.at(-1).kind, 'pending');
+});
+
+test('edit notifications snapshot observers and respect removal during dispatch', () => {
+  clearReportDrafts(); const report = {}; registerReportDraft(report, 'Original');
+  let stopLater, later = 0, added = 0, attached = false, stable = 0;
+  observeReportSaveState(report, () => {
+    stopLater();
+    if (!attached) {
+      attached = true;
+      observeReportSaveState(report, () => { added++; reportSaveState(report); });
+    }
+  });
+  stopLater = observeReportSaveState(report, () => { later++; });
+  observeReportSaveState(report, () => { throw new Error('Fictional broken view'); });
+  const stopStable = observeReportSaveState(report, () => { stable++; });
+  trackReportEditor(report, 'First edit');
+  assert.equal(later, 0); assert.equal(added, 0); assert.equal(stable, 1);
+  trackReportEditor(report, 'Second edit');
+  assert.equal(later, 0); assert.equal(added, 1); assert.equal(stable, 2);
+  stopStable();
+  trackReportEditor(report, 'Third edit');
+  assert.equal(stable, 2); assert.equal(added, 2);
+  assert.equal(reportEditorDraft(report).text, 'Third edit');
+});
+
+test('mutations notify retained records without changing save uncertainty or pending text', () => {
+  clearReportDrafts(); const report = {screening: {checks: []}};
+  registerReportDraft(report, 'Original', {saved: true});
+  const events = [];
+  observeReportSaveState(report, () => events.push(reportSaveState(report).kind));
+  report.screening.checks.push({status: 'unknown'});
+  trackReportEdits(report, 'Original');
+  assert.deepEqual(events, ['pending']);
+  reportSaveState(report); trackReportEdits(report, 'Original');
+  assert.deepEqual(events, ['pending']);
+  markReportSaving(report);
+  markReportSaveFailed(report, {requestState: {outcome: 'unconfirmed'}});
+  trackReportEditor(report, 'Later pending text');
+  assert.equal(events.at(-1), 'unconfirmed');
+  const count = events.length;
+  trackReportEditor(report, 'Later pending text');
+  assert.equal(events.length, count);
+  markReportSaved(report, 'Original', structuredClone(report));
+  assert.equal(events.at(-1), 'pending');
+  assert.equal(reportEditorDraft(report).text, 'Later pending text');
+  assert.equal(report.screening.checks[0].status, 'unknown');
+});

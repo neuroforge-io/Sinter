@@ -282,7 +282,7 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
     h('summary', {}, 'Word save options'),
     h('p', {class: 'fine'}, 'If your browser does not deliver a download, save a distinct Word copy directly in Sinter’s private exports folder on the computer running Sinter. This is an explicit local save; it does not send your text to a model or overwrite an existing file.'),
     localSave, localCopy);
-  const input = field(isCampaign ? 'Edit the decision brief' : 'Edit your draft', 'textarea', editorSeed?.text || '', 'Apply edits, then save the draft to keep them after closing Sinter. Use Insert page break at your cursor to start the following content on a new exported page. The original output and source evidence are retained.', {rows: 18, maxLength: 500000});
+  const input = field(isCampaign ? 'Edit the decision brief' : 'Edit your draft', 'textarea', editorSeed?.text || '', 'Apply your edits, then save to My workspace. Original text and sources are retained. Insert page break starts the next content on a new exported page.', {rows: 18, maxLength: 500000});
   function canUseDocument(operation = 'copying, downloading or printing') {
     if (!hasUnappliedDocumentEdits(documentMarkdown(report), input.input.value, !editor.hidden)) return true;
     const message = `Apply or cancel your pending draft edits before ${operation}. Your text is still in the editor.`;
@@ -316,7 +316,7 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
     feedback.replaceChildren(notice('Page break inserted. Apply edits, then save the draft to keep it.'));
     announce('Page break inserted at your cursor. Apply edits to use it.');
   }, 'quiet');
-  editor.append(input.wrap, h('div', {class: 'button-row'}, apply, pageBreak, button('Cancel edits', () => { editor.hidden = true; onEditorChange('', false); refreshLocalCopy(); exports.querySelector('summary').focus(); })));
+  editor.append(input.wrap, h('div', {class: 'button-row document-editor-actions'}, apply, button('Cancel edits', () => { editor.hidden = true; onEditorChange('', false); refreshLocalCopy(); exports.querySelector('summary').focus(); }), pageBreak));
   const evidencePack = button(
     isCampaign ? 'Download redacted evidence pack' : 'Download evidence pack', () => {
     if (!canUseDocument()) return;

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Keep numbered Workbench drafts in a compact, stable picker with their actual
+  save states. Retain every deferred result outside the disclosure, preserve
+  Cancel focus/scroll and move successful switches to the selected document.
+  Make pending text visibly block Save and keep phone editing actions reachable
+  in the existing keyboard order. Original evidence stays attached; requests and
+  saves are never automatically replayed.
+
 - Refuse optimised recovery-rehearsal execution before importing browser tooling,
   retaining the assertion-based safety gate and the existing subprocess deadline.
 

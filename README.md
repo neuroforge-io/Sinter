@@ -116,6 +116,13 @@ silently replay a request. Funding campaigns keep opportunities, quotes and next
 actions in a revisioned local record. Readable drafts can be edited and exported
 to Word while their original sources remain in the evidence pack.
 
+Development Workbench drafts have a compact **Drafts** list with a separate
+saved/unsaved state for each version. Later results stay available when you edit
+during preparation. Opening a different draft preserves the earlier document
+edits and original sources; apply edits and save each draft before closing the
+page. Unapplied text visibly blocks Save. This is development source, with fresh
+browser and installed qualification still required.
+
 In the development browser workbench, choose a route and **Make focused campaign…**
 to work on a smaller case. Preview the complete included and omitted material,
 and choose explicitly whether to include shared work, linked products and other

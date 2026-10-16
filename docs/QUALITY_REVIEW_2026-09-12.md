@@ -1,5 +1,36 @@
 # Sinter user-testing closeout — 12 September 2026
 
+## 16 October compact draft navigation — qualification in progress
+
+The earlier operator evidence rated the draft-recovery flow 6.5/10 for user
+experience, 7.5/10 for functionality and 6.5/10 for appearance. Repeated recovery
+notices crowded phones, and identical titles made version state difficult to
+follow. Those are the baseline scores; source changes alone do not revise them.
+
+The source change uses stable numbered draft controls and observed per-report
+save states. Each deferred result remains available outside the collapsed list.
+Cancel/Escape preserve the initiating control and scroll; a successful switch
+focuses the new document heading. Per-result input keys, transcript pins, source
+records and explicit replacement decisions remain authoritative. Workbench
+observers are disposed without cancelling acknowledged or in-flight saves. A small
+per-entry presentation cache prevents a keystroke from reserializing every other
+report; it has no replacement authority and shows unavailable state on read failure.
+This is a design boundary, not a measured whole-app typing speedup.
+
+Save is disabled specifically for unapplied document text, with an explanation.
+The phone textarea retains its complete value at a bounded visual height; Apply,
+Cancel and page-break actions keep their logical keyboard order. The generic
+Library recovery warning and actual stale-source/review warnings remain.
+
+The bounded source checks passed 48 Node regressions with no skips, six
+JavaScript syntax checks, Python AST parsing, fatal Ruff and the whitespace guard.
+Every child process and resource group terminated before the machine slot was
+returned. Actual operator phone use still needs a fresh receipt. The updated
+offline browser journey exercises two deliberately delayed fictional completions,
+independent version saves and one delayed real local-save acknowledgement. It checks stable controls, focus, scroll, full text and original
+evidence. These controls are test fixtures, not hosted task or installed-app proof.
+Untracked auxiliary correction/screening/log forms remain a separate gap.
+
 ## 16 October draft replacement — operator check complete, CI and installed checks pending
 
 Actual in-app browser use of source `3056fd430efd2243a4d663c66a9e44cca26fd36e`
@@ -87,7 +118,7 @@ one quarter of a CPU and a finite runtime; no virtual-address cap was imposed.
 [Source CI 38853125235](https://github.com/neuroforge-io/Sinter/actions/runs/38853125235)
 at `c7706120a3afc2db83f7e7ab51d57ff9afaaecd5` subsequently passed Chromium,
 including the strict full-source comparison, visible rejected-pin recovery and
-explicit retry. Eleven quality jobs passed. The full workflow failed because
+explicit retry. Ten quality jobs passed. The full workflow failed because
 Windows Python 3.10's optimised-rehearsal refusal subprocess exceeded its unchanged
 10-second deadline (10.15 seconds observed); the portable/source job was skipped.
 That failure is retained, rather than rerunning unchanged source or treating the
@@ -102,6 +133,17 @@ on an arbitrarily overloaded host. The final focused recovery module passed all
 53 tests; fatal Python lint, ordinary isolated --help and the whitespace check
 also passed. A new full CI receipt is required. No installed release or broader
 UI score is qualified by this repair.
+
+
+At `d9e7d447bfba4f9880d550ca69c9f4d03853b3c7`, the original refusal test and
+both import-tripwire cases passed Windows Python 3.10. The
+[full source run 38855227356](https://github.com/neuroforge-io/Sinter/actions/runs/38855227356)
+still failed: that job recorded three different failures, with 5,301 passed and
+778 skipped. Two registered-runtime fallback fixtures exceeded their unchanged
+five-second deadlines; the separate-answer-draft/refused-close recovery check also
+failed. Across the workflow, ten jobs passed, one failed and the portable/source
+job was skipped. These are retained qualification blockers; the guard fix does
+not qualify Windows startup or an installed release.
 
 ## 16 October explicit clean-result admission and historical recovery
 

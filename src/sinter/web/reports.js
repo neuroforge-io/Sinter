@@ -12,17 +12,23 @@ import {casebookQuestionEvidence} from './casebook-question-evidence.js';
 import {retainedCasebookSource, retainedQuestionContext} from './casebook-retained-context.js';
 import {handoverSummaryEditor, handoverSummaryAvailable, presentHandoverSummaryTable} from './handover-summary.js';
 
+let reportViewSequence = 0;
+
 /** The document is the default view; provenance remains one click away. */
 export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated, onSaved, recovered = false, saved = false} = {}) {
   registerReportDraft(report, documentMarkdown(report), {saved});
   const result = h('section', {class: 'report-area', 'aria-label': 'Your draft report'});
   const message = h('div', {class: 'non-print', 'aria-live': 'polite'});
-  const saveState = h('p', {class: 'document-save-state non-print', role: 'status', 'aria-label': 'Document save state'});
-  let savePending = false;
+  const saveState = h('p', {class: 'document-save-state non-print', role: 'status', 'aria-label': 'Document save state',
+    id: `report-save-state-`});
+  let savePending = false, viewDisposed = false;
   function refreshSaveState() {
     const state = reportSaveState(report);
-    saveState.textContent = state.message; saveState.dataset.state = state.kind;
-    save.disabled = savePending || state.kind === 'saving' || state.kind === 'saved';
+    const pendingText = Boolean(reportEditorDraft(report));
+    const text = state.message + (pendingText ? ' Apply or cancel the text in the editor before saving.' : '');
+    if (saveState.textContent !== text) saveState.textContent = text;
+    saveState.dataset.state = state.kind;
+    save.disabled = savePending || pendingText || state.kind === 'saving' || state.kind === 'saved';
   }
   const campaignLog = report.campaign_link ? campaignDraftLog(report, message,
     onCampaignUpdated, () => actions.canUseDocument('saving to the campaign log'),
@@ -74,6 +80,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
         : 'The submitted document was saved, but refreshing the view failed: ' + error.message, 'warning'));
     }
   }, 'primary');
+  save.setAttribute('aria-describedby', saveState.id);
   const paper = h('div', {class: 'document-paper'});
   const isCampaign = report.workflow === 'campaign';
   const isAssistant = report.workflow === 'assistant';
@@ -179,7 +186,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     : 'Review the wording, make it yours, then copy or download.');
   result.append(...[recovered ? notice('Recovered draft from an earlier preparation. It retains the original inputs and evidence; later project changes are not included. Check the current saved project before using this draft.', 'warning') : null,
     h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'CAMPAIGN PREVIEW' : 'YOUR DOCUMENT'),
-    h('h2', {}, isCampaign ? 'Decision brief' : (report.document_title || report.title)), guidance)),
+    h('h2', {tabIndex: -1}, isCampaign ? 'Decision brief' : (report.document_title || report.title)), guidance)),
     missing.length ? completion : null,
     saveState, actions.controls, message, actions.feedback, actions.editor, summaryEditor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel, campaignLog].filter(Boolean));
   select('document'); updateDocument();
@@ -195,7 +202,8 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     }));
   }
   if (onCorrect && report.segments?.length) documentPanel.append(correctionForm(report, onCorrect));
-  observeReportSaveState(report, refreshSaveState, () => result.isConnected);
+  const unsubscribe = observeReportSaveState(report, refreshSaveState, () => !viewDisposed && result.isConnected);
+  result.dispose = () => { viewDisposed = true; unsubscribe(); };
   return result;
 }
 

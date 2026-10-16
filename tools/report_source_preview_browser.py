@@ -293,8 +293,8 @@ class PreviewChecks(PurposeChecks):
         page.route(self.base + "/api/jobs/" + failed_id, failed_job)
         try:
             page.get_by_role("button", name="Prepare my draft", exact=True).click()
-            page.get_by_role("dialog", name="Keep your earlier edits?", exact=True).get_by_role(
-                "button", name="Keep edits and change draft", exact=True).click()
+            page.get_by_role("dialog", name="Prepare another draft?", exact=True).get_by_role(
+                "button", name="Keep edits and prepare", exact=True).click()
             expect(page.get_by_text("Not completed. Your inputs and previous report are unchanged.", exact=True)).to_be_visible()
         finally:
             page.unroute(self.base + "/api/workbench", reject_job)
@@ -339,7 +339,7 @@ class PreviewChecks(PurposeChecks):
             "campaign_changes_exactly_one_unsent_log": True})
 
     def draft_replacement_recovery(self, page):
-        """Actual view changes; one explicitly delayed synthetic local completion."""
+        """Actual draft controls; two explicitly delayed fictional completions."""
         from playwright.sync_api import expect
         baseline = self.start(page, fixture())["document"]
         page.get_by_role("button", name="Draft clarification letter", exact=True).click()
@@ -349,13 +349,20 @@ class PreviewChecks(PurposeChecks):
         prepare = page.get_by_role("button", name="Prepare my draft", exact=True)
         prepare.click()
         report = page.get_by_role("region", name="Your draft report", exact=True)
+        nav = page.get_by_role("region", name="Workbench drafts", exact=True)
+        picker = nav.locator(".draft-switcher-disclosure")
         expect(report).to_have_count(1)
         first = self.evidence_export(page, "replacement-original-a")
         page.get_by_role("button", name="Edit draft", exact=True).click()
         applied = first["document_markdown"] + "\n\nHuman wording that must remain available."
         editor = page.get_by_label("Edit your draft", exact=True)
         editor.fill(applied)
+        save = report.get_by_role("button", name="Save to My workspace", exact=True)
+        expect(save).to_be_disabled()
+        expect(report.get_by_role("status", name="Document save state", exact=True)).to_contain_text(
+            "Apply or cancel the text in the editor before saving.")
         page.get_by_role("button", name="Apply edits", exact=True).click()
+        expect(save).to_be_enabled()
         first_edited = self.evidence_export(page, "replacement-applied-a")
         page.get_by_text("Review or edit project inputs", exact=True).click()
         next_opening = "A separate fictional follow-up with a different opening."
@@ -363,17 +370,22 @@ class PreviewChecks(PurposeChecks):
         attempts = []
         page.on("request", lambda request: attempts.append(request.url)
                 if request.method == "POST" and request.url == self.base + "/api/workbench" else None)
+        prepare.scroll_into_view_if_needed()
+        before_cancel = page.evaluate("({x:scrollX,y:scrollY})")
         prepare.click()
-        decision = page.get_by_role("dialog", name="Keep your earlier edits?", exact=True)
+        decision = page.get_by_role("dialog", name="Prepare another draft?", exact=True)
         expect(decision).to_be_visible()
         page.keyboard.press("Escape")
         expect(decision).to_have_count(0)
         expect(prepare).to_be_focused()
+        after_cancel = page.evaluate("({x:scrollX,y:scrollY})")
+        assert abs(after_cancel["x"] - before_cancel["x"]) <= 1
+        assert abs(after_cancel["y"] - before_cancel["y"]) <= 1
         assert attempts == []
         assert self.evidence_export(page, "replacement-cancel-keeps-a") == first_edited
 
-        # Hold only a fictional local result. No model is called and no existing
-        # request is replayed; edit the current document while this one runs.
+        # Each click starts one separately authorised fictional completion.
+        # Editing while each result is pending must retain both outside Drafts.
         delayed_id = "e" * 32
         released = {"value": False}
         posts, polls = [], []
@@ -381,70 +393,180 @@ class PreviewChecks(PurposeChecks):
         completed.update(id="d" * 32, document_opening=next_opening,
                          document_markdown=first["document_markdown"].replace(first_opening, next_opening))
         completed.pop("document_edits", None)
+
         def delayed_start(route):
             posts.append(route.request.post_data_json)
             route.fulfill(status=200, json={"id": delayed_id})
+
         def delayed_result(route):
             polls.append(route.request.url)
             route.fulfill(status=200, json={"id": delayed_id,
                 "status": "done" if released["value"] else "running",
                 "message": "Fictional replacement held for the edit check.",
                 **({"result": completed} if released["value"] else {})})
+
         page.route(self.base + "/api/workbench", delayed_start)
         page.route(self.base + "/api/jobs/" + delayed_id, delayed_result)
         try:
             prepare.click()
-            decision.get_by_role("button", name="Keep edits and change draft", exact=True).click()
+            decision.get_by_role("button", name="Keep edits and prepare", exact=True).click()
             expect(page.get_by_text("Fictional replacement held for the edit check.", exact=True)).to_be_visible()
             page.get_by_role("button", name="Edit draft", exact=True).click()
             pending = applied + "\n\nUnapplied last keystrokes while preparation runs."
             editor.fill(pending)
             released["value"] = True
-            expect(page.get_by_text("New draft prepared. Your displayed draft changed while preparation was running.", exact=False)).to_be_visible()
+            ready_b = nav.get_by_role("button", name="Open prepared draft 2", exact=True)
+            expect(ready_b).to_be_enabled()
+            expect(nav.locator(".draft-switcher-current")).to_have_text("Draft 1 · Text waiting to apply")
+            picker.locator("summary").click()
+            row_b = nav.get_by_role("button", name="Open draft 2", exact=True)
+            old_row = row_b.element_handle()
+
+            third_opening = "A third fictional draft, still requiring a separate decision."
+            opening.fill(third_opening)
+            completed = copy.deepcopy(first)
+            completed.update(id="c" * 32, document_opening=third_opening,
+                document_markdown=first["document_markdown"].replace(first_opening, third_opening))
+            completed.pop("document_edits", None)
+            released["value"] = False
+            prepare.click()
+            decision.get_by_role("button", name="Keep edits and prepare", exact=True).click()
+            expect(page.get_by_text("Fictional replacement held for the edit check.", exact=True)).to_be_visible()
+            pending += "\n\nAnother exact edit while the third draft is prepared."
+            editor.fill(pending)
+            assert row_b.evaluate("(node, previous) => node === previous", old_row)
+            expect(picker).to_have_attribute("open", "")
+            released["value"] = True
+            ready_c = nav.get_by_role("button", name="Open prepared draft 3", exact=True)
+            expect(ready_c).to_be_enabled()
+            expect(ready_b).to_be_enabled()
+            expect(picker).to_have_attribute("open", "")
         finally:
             page.unroute(self.base + "/api/workbench", delayed_start)
             page.unroute(self.base + "/api/jobs/" + delayed_id, delayed_result)
-        assert len(posts) == 1 and posts[0]["opening_paragraph"] == next_opening
-        assert polls and len(attempts) == 1
-        expect(report).to_have_count(1)
+        assert len(posts) == len(attempts) == 2
+        assert [row["opening_paragraph"] for row in posts] == [next_opening, third_opening]
+        assert polls
         expect(editor).to_have_value(pending)
-        other = page.get_by_role("region", name="Other drafts in this session", exact=True)
-        expect(other).to_contain_text("Unsaved work stays in this browser session only.")
-        other.get_by_role("button", name="Open prepared draft 2", exact=True).click()
-        decision.get_by_role("button", name="Keep editing", exact=True).click()
+        expect(nav).to_contain_text("Unsaved work is kept only in this open page.")
+        ready_b.scroll_into_view_if_needed()
+        before_cancel = page.evaluate("({x:scrollX,y:scrollY})")
+        ready_b.click()
+        open_b = page.get_by_role("dialog", name="Open draft 2?", exact=True)
+        expect(open_b).to_be_visible()
+        open_b.get_by_role("button", name="Keep editing", exact=True).click()
         expect(editor).to_have_value(pending)
-        expect(other.get_by_role("button", name="Open prepared draft 2", exact=True)).to_be_focused()
-        other.get_by_role("button", name="Open prepared draft 2", exact=True).click()
-        decision.get_by_role("button", name="Keep edits and change draft", exact=True).click()
-        expect(report).to_have_count(1)
-        expect(report.locator(".document-paper")).to_contain_text(next_opening)
+        expect(ready_b).to_be_focused()
+        expect(picker).to_have_attribute("open", "")
+        after_cancel = page.evaluate("({x:scrollX,y:scrollY})")
+        assert abs(after_cancel["x"] - before_cancel["x"]) <= 1
+        assert abs(after_cancel["y"] - before_cancel["y"]) <= 1
+        ready_b.click()
+        open_b.get_by_role("button", name="Open draft 2", exact=True).click()
+        expect(nav.locator(".draft-switcher-current")).to_have_text("Draft 2 · Not saved")
+        expect(picker).not_to_have_attribute("open", "")
+        expect(report.locator(".report-heading h2")).to_be_focused()
+        expect(ready_c).to_be_visible()
         second = self.evidence_export(page, "replacement-completed-b")
         assert second["input_snapshot"]["opening_paragraph"] == next_opening
         assert second["sources"] == first["sources"]
-        # The untouched new result needs no second decision. Direct recovery
-        # restores the exact old editor text and the old preparation basis.
-        other.get_by_role("button", name="Open earlier draft 1", exact=True).click()
-        expect(decision).to_have_count(0)
+        picker.locator("summary").click()
+        nav.get_by_role("button", name="Open draft 1", exact=True).click()
+        expect(page.get_by_role("dialog")).to_have_count(0)
         expect(editor).to_have_value(pending)
+        expect(report.locator(".report-heading h2")).to_be_focused()
         stale = page.get_by_text("The draft below uses earlier inputs.", exact=False)
         expect(stale).to_be_visible()
         page.get_by_text("Review or edit project inputs", exact=True).click()
         opening.fill(first_opening)
         expect(stale).to_be_hidden()
-        page.get_by_role("button", name="Apply edits", exact=True).click()
+
+        page.get_by_text("Review or edit project inputs", exact=True).click()
+
+        # Full text stays in the bounded-height phone editor. Tab reaches the
+        # actual Apply and Cancel controls in logical order.
+        page.set_viewport_size({"width": 390, "height": 844})
+        editor.focus()
+        page.keyboard.press("Tab")
+        apply = page.get_by_role("button", name="Apply edits", exact=True)
+        expect(apply).to_be_focused()
+        page.keyboard.press("Tab")
+        expect(page.get_by_role("button", name="Cancel edits", exact=True)).to_be_focused()
+        apply.scroll_into_view_if_needed()
+        geometry = apply.evaluate("""node => {
+            const r=node.getBoundingClientRect(), hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
+            return {width:r.width,height:r.height,hit:!!hit&&(hit===node||node.contains(hit)),
+                overflow:document.documentElement.scrollWidth-innerWidth};
+        }""")
+        assert geometry["width"] >= 44 and geometry["height"] >= 44 and geometry["hit"]
+        assert geometry["overflow"] <= 1
+        self.layouts.append({"label": "replacement-phone-apply", **geometry})
+        self.screenshot(page, "replacement-phone-editor", full_page=True)
+        apply.click()
         recovered = self.evidence_export(page, "replacement-recovered-a")
         assert recovered["document_markdown"] == first["document_markdown"]
         assert recovered["document_edits"]["markdown"] == pending
-        assert recovered["input_snapshot"] == first["input_snapshot"] and recovered["sources"] == first["sources"]
-        assert len(attempts) == 1  # Opening retained results sends no preparation request.
-        page.set_viewport_size({"width": 390, "height": 844})
-        self.screenshot(page, "replacement-recovered-phone", full_page=True)
+        assert recovered["input_snapshot"] == first["input_snapshot"]
+        assert recovered["sources"] == first["sources"]
+        save.click()
+        state = report.get_by_role("status", name="Document save state", exact=True)
+        expect(state).to_have_attribute("data-state", "saved")
+        expect(nav.locator(".draft-switcher-current")).to_have_text("Draft 1 · Saved locally")
+        picker.locator("summary").click()
+        nav.get_by_role("button", name="Open draft 2", exact=True).click()
+        expect(page.get_by_role("dialog")).to_have_count(0)
+        expect(nav.locator(".draft-switcher-current")).to_have_text("Draft 2 · Not saved")
+
+        # Delay only a real local-save acknowledgement. Its exact HTTP 200 is
+        # fulfilled once, without another write; disclosure and focus stay put.
+        held = []
+
+        def hold_save_reply(route):
+            response = route.fetch()
+            held.append({"route": route, "response": response, "fulfilled": False})
+
+        page.route(self.base + "/api/reports", hold_save_reply)
+        try:
+            save.click()
+            expect(state).to_have_attribute("data-state", "saving")
+            for _ in range(500):
+                if held:
+                    break
+                page.wait_for_timeout(20)
+            assert len(held) == 1 and held[0]["response"].status == 200
+            picker.locator("summary").click()
+            saved_a = nav.get_by_role("button", name="Open draft 1", exact=True)
+            saved_a.focus()
+            saved_a_node = saved_a.element_handle()
+            held[0]["route"].fulfill(response=held[0]["response"])
+            held[0]["fulfilled"] = True
+            expect(state).to_have_attribute("data-state", "saved")
+            expect(saved_a).to_be_focused()
+            expect(picker).to_have_attribute("open", "")
+            assert saved_a.evaluate("(node, previous) => node === previous", saved_a_node)
+            expect(nav.locator(".draft-switcher-current")).to_have_text("Draft 2 · Saved locally")
+            expect(ready_c).to_be_visible()
+        finally:
+            for row in held:
+                if not row["fulfilled"]:
+                    row["route"].fulfill(response=row["response"])
+            page.unroute(self.base + "/api/reports", hold_save_reply)
+        assert len(attempts) == 2  # Switching and saving do not prepare again.
+        self.screenshot(page, "replacement-saved-phone", full_page=True)
         self.goto(page, "campaigns")
         assert self.export(page, "replacement-campaign-unchanged") == baseline
-        self.content_checks.append({"scope": "Actual cancel/recovery plus injected delayed fictional completion",
-            "cancel_no_request_and_focus_restored": True, "applied_and_pending_edits_retained": True,
-            "late_result_never_replaces_later_edit": True, "specific_a_b_a_recovery": True,
-            "each_input_basis_and_sources_preserved": True, "one_preparation_no_replay": True,
+        self.content_checks.append({"scope": "Actual draft controls plus two delayed fictional completions and one delayed real-save acknowledgement",
+            "cancel_no_request_focus_and_scroll_preserved": True,
+            "applied_and_pending_edits_retained": True,
+            "both_deferred_results_visible_outside_disclosure": True,
+            "keyed_nodes_and_disclosure_retained_on_edit_and_save": True,
+            "successful_switch_focuses_new_heading": True,
+            "pending_text_blocks_save_with_visible_instruction": True,
+            "phone_editor_tab_order_and_apply_target": True,
+            "specific_a_b_a_recovery": True,
+            "each_input_basis_and_sources_preserved": True,
+            "two_explicit_preparations_no_replay": True,
+            "separate_drafts_saved_with_independent_states": True,
             "canonical_fixture_campaign_unchanged": True})
 
     def meeting_correction_input_basis(self, page):
@@ -489,15 +611,17 @@ class PreviewChecks(PurposeChecks):
             page.unroute("**/api/workbench", mismatched_pin)
         # The next click is an explicit retry of a known rejected request.
         page.get_by_role("button", name="Apply reviewed correction", exact=True).click()
-        expect(page.get_by_role("dialog", name="Keep your earlier edits?", exact=True)).to_have_count(0)
-        expect(page.get_by_role("button", name="Open earlier draft 1", exact=True)).to_be_visible()
+        expect(page.get_by_role("dialog", name="Prepare another draft?", exact=True)).to_have_count(0)
+        nav = page.get_by_role("region", name="Workbench drafts", exact=True)
+        expect(nav.locator(".draft-switcher-current")).to_have_text("Draft 2 · Not saved")
         corrected = self.evidence_export(page, "correction-reviewed-basis")
         assert corrected["input_snapshot"]["notes"] == transcript, "Correction changed raw transcript input"
         assert corrected["input_snapshot"]["corrections"][0]["replacement"] == replacement, "Reviewed correction missing"
         assert corrected["sources"] == first["sources"], "Correction changed original transcript source snapshot"
         stale = page.get_by_text("The draft below uses earlier inputs.", exact=False)
         expect(stale).to_be_hidden()
-        page.get_by_role("button", name="Open earlier draft 1", exact=True).click()
+        nav.locator(".draft-switcher-disclosure > summary").click()
+        nav.get_by_role("button", name="Open draft 1", exact=True).click()
         expect(stale).to_be_hidden()
         recovered = self.evidence_export(page, "correction-recovered-basis")
         assert recovered["input_snapshot"] == first["input_snapshot"], "Recovery changed original preparation inputs"

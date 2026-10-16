@@ -27,7 +27,8 @@ export function observeReportSaveState(report, view, isActive = () => true) {
 
 function notifyViews(state) {
   const failures = [];
-  for (const view of state.views) {
+  for (const view of [...state.views]) {
+    if (!state.views.has(view)) continue;
     try { if (!view.isActive() || view.refresh() === false) state.views.delete(view); }
     catch (error) { failures.push(error); }
   }
@@ -50,17 +51,24 @@ function update(state) {
   else drafts.delete(state.id);
 }
 
+function notifyChange(state, previous) {
+  update(state);
+  if (state.replacementToken !== previous) notifyViews(state);
+}
+
 export function trackReportEdits(report, content) {
   const state = identities.get(report);
   if (!state) throw new Error('Register the original report before editing it.');
-  state.content = content; state.editor = null; update(state);
+  const previous = state.replacementToken;
+  state.content = content; state.editor = null; notifyChange(state, previous);
 }
 
 export function trackReportEditor(report, text, open = true) {
   const state = identities.get(report);
   if (!state) throw new Error('Register the original report before editing it.');
+  const previous = state.replacementToken;
   state.editor = open && text !== state.content ? {text, open: true} : null;
-  update(state);
+  notifyChange(state, previous);
 }
 
 /** Named local forms participate in the same navigation/quit guard, not disk schema. */
@@ -68,7 +76,8 @@ export function trackReportForm(report, name, value) {
   const state = identities.get(report);
   if (!state) throw new Error('Register the original report before editing it.');
   if (typeof name !== 'string' || !name) throw new Error('Name this local report form.');
-  state.forms.set(name, structuredClone(value)); update(state);
+  const previous = state.replacementToken;
+  state.forms.set(name, structuredClone(value)); notifyChange(state, previous);
 }
 
 export function reportFormDraft(report, name) {
@@ -78,7 +87,10 @@ export function reportFormDraft(report, name) {
 
 export function clearReportForm(report, name) {
   const state = identities.get(report);
-  if (state) { state.forms.delete(name); update(state); }
+  if (state) {
+    const previous = state.replacementToken;
+    state.forms.delete(name); notifyChange(state, previous);
+  }
 }
 
 export function reportEditorDraft(report) {
