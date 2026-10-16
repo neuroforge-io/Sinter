@@ -181,7 +181,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'CAMPAIGN PREVIEW' : 'YOUR DOCUMENT'),
     h('h2', {}, isCampaign ? 'Decision brief' : (report.document_title || report.title)), guidance)),
     missing.length ? completion : null,
-    saveState, actions.controls, campaignLog, message, actions.feedback, actions.editor, summaryEditor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel].filter(Boolean));
+    saveState, actions.controls, message, actions.feedback, actions.editor, summaryEditor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel, campaignLog].filter(Boolean));
   select('document'); updateDocument();
   if (report.workflow === 'grants' && report.sources?.length) {
     documentPanel.append(grantChecks(report, () => {

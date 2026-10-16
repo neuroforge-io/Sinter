@@ -3815,3 +3815,45 @@ jobs were skipped. Those successes do not qualify this scrolling successor.
 Fresh exact-source CI, installed workflow/recovery/native/cold-install tests and
 all four prior-preview replacements remain release gates. RC4 remains unpublished;
 the independent scoped scores above are unchanged.
+
+### 16 October: focused campaign work and interruption recovery
+
+Actions and Communications now precede the full overview and campaign details.
+Their compact context retains the existing decision label and complete blocker;
+it does not compute another readiness policy. Capacity warnings still precede work.
+Correspondence selectors use a native disclosure, with scope, status, ordering and
+result count always visible. The disclosure state survives saves and section changes.
+Draft logging follows the document and evidence, preserving its unsent status.
+The new layout module handles presentation order separately from campaign policy.
+
+Final source browser checks passed eight correspondence cases, 121 layout checks
+and eight action-bar layouts. An injected DOM failure after a real server save
+restored the previous root order, capacity, disclosure, tab and complete inputs;
+the backup matched those inputs, with one save request and no replay. Earlier
+focused checks passed 47 recovery cases, four header cases, three report/source
+journeys and 48 Python checks. Eighteen Python checks were rerun after the final
+phone refinement. Fatal Ruff and public-boundary checks passed. Original setup
+and test-harness failures remain recorded separately from successful successors.
+
+A human-operated, outbound-network-disabled fictional campaign was saved, closed,
+reopened, edited, exported, imported and saved as a separate copy through the UI.
+Read-only SQLite inspection confirmed both saved documents exactly matched the
+GUI export. The suggested role remained unconfirmed, the date remained blank and
+the correspondence remained an unsent draft. No real campaign or hosted model
+request was used. At 390 pixels wide, the context uses the available text width;
+the filter disclosure retains its native marker and a 44-pixel target.
+
+Sequential A/B/B/A comparisons used the same 47-message, 76-source, 12-route fixture
+against the frozen `7ab4d3a1f2543901ef9ff05d2ff2aa209916201f` source and this
+successor. All four final runs retained source/fixture identities, 23 timings per
+run and closed-resource receipts. One sample per operation per run, including
+automation and selector opening, establishes no general speed improvement.
+
+The independent adversarial review found no blocking regression in this bounded
+change and rated this surface **UX 7/10, local functionality 7.5/10 and aesthetics
+6.5/10** on the user's scale. The Actions introduction still occupies too much
+of the first phone viewport; other surfaces have not received equivalent review.
+These are neither whole-product nor live-AI or installed-release scores.
+Exact-source hosted CI and the installed workflow, recovery, native handoff,
+cold-install and four prior-preview upgrade gates remain outstanding for a new
+candidate. RC4 remains unpublished and unqualified; published RC3 is unchanged.

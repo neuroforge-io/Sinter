@@ -130,6 +130,10 @@ status, scope and saved wording. Closed entries show a short literal preview and
 their saved evidence count; open an entry to view or edit the complete record.
 These views preserve original message order and historical evidence in backups.
 Dates and delivery status remain your records and are not independently verified.
+In current development, **Filter and order** opens the selectors; the active scope,
+status, ordering and result count remain visible when they are closed. Actions and
+Communications place the work first and retain the complete selected-route blocker.
+**Campaign status** opens the full overview. Capacity warnings remain before work.
 
 In current development, **Route purpose** can explicitly label an application,
 discussion or research case. Older routes stay **Not specified** until you choose;

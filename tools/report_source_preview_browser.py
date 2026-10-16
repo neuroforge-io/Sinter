@@ -173,6 +173,12 @@ class PreviewChecks(PurposeChecks):
         assert before["campaign_route_purpose"] == purpose
         assert opening in before["document_markdown"]
         links = before["campaign_link"]["evidence_links"]
+        assert page.locator(".report-area").evaluate("""report => {
+            const log = report.querySelector('.campaign-draft-log');
+            return ['.report-tabs', '.document-panel', '.evidence-panel']
+                .every(selector => report.querySelector(selector)
+                    .compareDocumentPosition(log) & Node.DOCUMENT_POSITION_FOLLOWING);
+        }""")
         assert len(links) == 3
         for index, source in enumerate(baseline["sources"]):
             link = links[index]

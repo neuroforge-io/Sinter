@@ -60,6 +60,12 @@ The same setup runs `browser_smoke.py`, `studio_browser.py`, `desktop_browser.py
 Missing packages or browsers fail with installation guidance and a nonzero exit
 status, so an unexecuted integration test cannot silently pass CI.
 
+On Linux, keep Chromium's runtime temporary path short. A deeply nested `TMPDIR`
+can exceed the Unix-socket path limit before any app test runs. Keep durable logs
+in the private operation directory, use a separate short private runtime path,
+and consolidate retained evidence after the owned browsers have closed. Do not
+change browser security settings to work around a setup failure.
+
 For a repeatable local portfolio measurement, run
 `python tools/campaign_portfolio_profile.py --chromium /path/to/chromium`.
 It uses the same fictional 170,000-character fixture as the recorded baseline

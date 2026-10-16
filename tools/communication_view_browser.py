@@ -117,11 +117,129 @@ class CommunicationChecks(CampaignChecks):
             title,
         )
 
-    def start(self, page, title, document=None):
+    def start(self, page, title, document=None, *, filters_open=True):
         self.import_fixture(page, document or fixture(title))
         self.save(page)
         page.get_by_role("tab", name="Communications", exact=True).click()
+        if filters_open:
+            page.locator(".campaign-communication-filters > summary").click()
         return self.snapshot(page, title)["document"]
+
+    def compact_filters_and_work_order(self, page):
+        from playwright.sync_api import expect
+
+        title = "Fictional correspondence - visible scope and focused work"
+        before = self.start(page, title, filters_open=False)
+        filters = page.locator(".campaign-communication-filters")
+        summary = page.locator(".campaign-filter-status")
+        expect(filters).not_to_have_attribute("open", "")
+        expect(page.get_by_label("Find a communication", exact=True)).to_be_visible()
+        expect(summary).to_contain_text("All routes and campaign-wide")
+        assert page.evaluate("""() => {
+            const panel = document.querySelector('.campaign-section');
+            return ['.campaign-decision-card', '.campaign-saved-panel',
+              '.campaign-summary', '.campaign-funding-summary', '.campaign-details']
+              .every(selector => panel.compareDocumentPosition(
+                document.querySelector(selector)) & Node.DOCUMENT_POSITION_FOLLOWING);
+        }""")
+        context = page.get_by_role("region", name="Selected route context", exact=True)
+        expect(context).to_contain_text("Fictional route 0")
+        expect(context).to_contain_text(
+            page.locator(".campaign-decision-detail").inner_text()
+        )
+        expect(filters.locator("summary")).to_be_visible()
+        assert filters.locator("summary").bounding_box()["height"] >= 44
+        filters.locator("summary").press("Enter")
+        expect(filters).to_have_attribute("open", "")
+        page.get_by_label("Communication scope", exact=True).select_option("route:0")
+        page.get_by_label("Communication order", exact=True).select_option("newest")
+        page.get_by_label("Communication status filter", exact=True).select_option(
+            "received"
+        )
+        expect(summary).to_contain_text("3 of 6 communications")
+        expect(summary).to_contain_text("Route: Fictional route 0")
+        expect(summary).to_contain_text("Recorded as received")
+        expect(summary).to_contain_text("Newest dated first")
+        self.save(page)
+        expect(filters).to_have_attribute("open", "")
+        filters.locator("summary").click()
+        self.save(page)
+        expect(filters).not_to_have_attribute("open", "")
+        expect(summary).to_be_visible()
+        page.get_by_role("tab", name="Sources", exact=True).click()
+        page.get_by_role("tab", name="Communications", exact=True).click()
+        expect(filters).not_to_have_attribute("open", "")
+        expect(summary).to_contain_text("Route: Fictional route 0")
+        page.get_by_role("button", name="Clear communication filters", exact=True).click()
+        expect(summary).to_contain_text("6 of 6 communications")
+        expect(summary).to_contain_text("All routes and campaign-wide")
+        assert self.snapshot(page, title)["document"] == before
+        self.screenshot(page, "communication-focused-work-and-filter-summary")
+
+    def interrupted_view_restores_layout(self, page):
+        from playwright.sync_api import expect
+
+        title = "Fictional correspondence - interrupted acknowledgement view"
+        document = fixture(title)
+        for source in document["sources"][:36]:
+            source["notes"] = ("Fictional retained original wording. " * 160)[:5000]
+        before = self.start(page, title, document)
+        capacity = page.get_by_label("Campaign capacity", exact=True)
+        expect(capacity).to_have_attribute("data-capacity-state", "near")
+        filters = page.locator(".campaign-communication-filters")
+        expect(filters).to_have_attribute("open", "")
+        order = page.locator(".campaign-page").evaluate(
+            "root => [...root.children].map(element => element.className)"
+        )
+        # A damaged but structurally valid acknowledgement changes the rendered
+        # capacity. Then a browser DOM failure interrupts that view transition.
+        # The genuine server save still retains all original evidence.
+        saves = []
+
+        def changed_acknowledgement(route):
+            response = route.fetch()
+            payload = response.json()
+            saves.append(payload["revision"])
+            for source in payload["document"]["sources"][:4]:
+                source["notes"] = ""
+            route.fulfill(response=response, json=payload)
+
+        page.route("**/api/campaigns/save", changed_acknowledgement)
+        page.evaluate("""() => {
+            const original = Node.prototype.insertBefore;
+            Node.prototype.insertBefore = function(node, next) {
+                const result = original.call(this, node, next);
+                if (this.matches?.('.campaign-page')
+                    && node.matches?.('[aria-label="Campaign capacity"]')) {
+                    Node.prototype.insertBefore = original;
+                    window.fictionalLayoutInterrupted = true;
+                    throw new Error('Fictional DOM failure after layout change');
+                }
+                return result;
+            };
+        }""")
+        page.get_by_role("button", name="Save campaign", exact=True).click()
+        expect(page.locator(".campaign-save-feedback")).to_contain_text(
+            "Your earlier campaign inputs are retained."
+        )
+        expect(page.get_by_role("button", name="Save campaign", exact=True)).to_be_enabled()
+        assert page.evaluate("window.fictionalLayoutInterrupted === true")
+        assert len(saves) == 1
+        expect(capacity).to_have_attribute("data-capacity-state", "near")
+        expect(filters).to_have_attribute("open", "")
+        expect(page.get_by_role("tab", name="Communications", exact=True)).to_have_attribute(
+            "aria-selected", "true"
+        )
+        assert page.locator(".campaign-page").evaluate(
+            "root => [...root.children].map(element => element.className)"
+        ) == order
+        context = page.get_by_role("region", name="Selected route context", exact=True)
+        expect(context).to_contain_text(page.locator(".campaign-decision-detail").inner_text())
+        assert self.snapshot(page, title)["document"] == before
+        self.transfers(page)
+        _, backup = self.download(page, "Export campaign backup")
+        assert json.loads(backup) == before
+        self.screenshot(page, "communication-interrupted-view-restored")
 
     def lazy_status_and_preview(self, page):
         from playwright.sync_api import expect
@@ -503,6 +621,14 @@ def main(argv=None):
                         browser, f"http://127.0.0.1:{server.server_port}", artifacts
                     )
                     checks.check(
+                        "communication-focused-work-visible-filter-scope",
+                        checks.compact_filters_and_work_order,
+                    )
+                    checks.check(
+                        "communication-interrupted-view-retains-layout-evidence",
+                        checks.interrupted_view_restores_layout,
+                    )
+                    checks.check(
                         "communication-unchanged-search-order-scope",
                         checks.unchanged_views,
                     )
@@ -559,6 +685,7 @@ def main(argv=None):
             "src/sinter/web/campaigns.js",
             "src/sinter/web/campaign-communication-view.js",
             "src/sinter/web/campaign-communications.js",
+            "src/sinter/web/campaign-layout.js",
             "src/sinter/web/campaigns.css",
         )
     }

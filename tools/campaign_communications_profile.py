@@ -402,6 +402,12 @@ def main(argv=None) -> int:
                             measured("clear_search", sample, clear_search)
 
                             def scope():
+                                filters = page.locator(".campaign-communication-filters")
+                                if filters.count() and filters.get_attribute("open") is None:
+                                    # Current workspaces fold secondary controls;
+                                    # older previews keep them expanded. Include
+                                    # any required disclosure click in this sample.
+                                    filters.locator("summary").click()
                                 page.get_by_label("Communication scope", exact=True).select_option("route:2")
                                 expect_indexes([index for index in range(47) if index % 12 == 2])
 

@@ -373,6 +373,32 @@ def main(argv: Sequence[str] | None = None) -> dict:
                             page.get_by_role("tab", name=section, exact=True).click()
                             panel = page.locator(".campaign-section")
                             expect(panel).to_be_focused()
+                            if section in ("Next actions", "Communications"):
+                                check(
+                                    prefix + "-" + section + "-work-before-overview",
+                                    page.evaluate("""() => {
+                                        const panel = document.querySelector('.campaign-section');
+                                        return ['.campaign-decision-card', '.campaign-saved-panel',
+                                          '.campaign-summary', '.campaign-funding-summary',
+                                          '.campaign-details'].every(selector =>
+                                            panel.compareDocumentPosition(document.querySelector(selector))
+                                              & Node.DOCUMENT_POSITION_FOLLOWING);
+                                    }"""),
+                                )
+                                work_context = page.get_by_role(
+                                    "region", name="Selected route context", exact=True
+                                )
+                                check(
+                                    prefix + "-" + section + "-full-blocker-retained",
+                                    page.locator(".campaign-decision-detail").inner_text()
+                                    in work_context.inner_text(),
+                                )
+                                if width <= 650:
+                                    check(
+                                        prefix + "-" + section + "-context-full-width",
+                                        work_context.locator(".campaign-work-context-main").bounding_box()["width"]
+                                        >= work_context.bounding_box()["width"] - 40,
+                                    )
                             section_geometry = geometry(
                                 page, prefix + "-section-" + section
                             )
@@ -740,10 +766,15 @@ def main(argv: Sequence[str] | None = None) -> dict:
                     receipt["error"] = traceback.format_exc()
                     shot(page, "failure", True)
                 finally:
-                    context.close()
-                    receipt["resources"]["context_closed"] = True
-                    browser.close()
-                    receipt["resources"]["browser_closed"] = True
+                    for name, resource in (("context", context), ("browser", browser)):
+                        try:
+                            resource.close()
+                            receipt["resources"][name + "_closed"] = True
+                        except Exception as problem:
+                            receipt["resources"][name + "_closed"] = False
+                            receipt.setdefault("cleanup_errors", []).append(
+                                {"resource": name, "error": str(problem)}
+                            )
         finally:
             server.shutdown()
             server.app.close()

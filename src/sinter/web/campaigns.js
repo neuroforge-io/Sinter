@@ -21,6 +21,8 @@ import {gardenGuide, GARDEN_PRACTICE} from './garden-practice.js';
 import {COMMUNICATION_ORDERS, COMMUNICATION_STATUSES}
   from './campaign-communication-view.js';
 import {renderCampaignCommunications} from './campaign-communications.js';
+import {arrangeCampaignEditor, isCampaignWorkSection, renderCampaignWorkContext}
+  from './campaign-layout.js';
 import {campaignCapacity, CAMPAIGN_TEXT_LIMIT, CAMPAIGN_BYTE_LIMIT}
   from './campaign-capacity.js';
 import {campaignSourceOptions, matchingCampaignSources}
@@ -214,6 +216,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     ? seed.communicationOrder : 'record';
   let communicationStatus = COMMUNICATION_STATUSES.some(([value]) => value === seed.communicationStatus)
     ? seed.communicationStatus : 'all';
+  let communicationFiltersOpen = seed.communicationFiltersOpen === true;
   let communicationOpenState = new WeakMap();
   let pendingAssetOpenId = '';
   let pendingFocus = null;
@@ -282,10 +285,11 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
 
   function rememberCampaign() {
     if (admittingSave) return;
+    captureCommunicationFilters();
     remember('campaigns', {document: structuredClone(document), id: savedId, revision,
       dirty, selected, tab, sourceQuery, assetQuery, communicationQuery,
       opportunityQuery, opportunityStatus, opportunityPage,
-      communicationRoute, communicationOrder, communicationStatus, practice,
+      communicationRoute, communicationOrder, communicationStatus, communicationFiltersOpen, practice,
       budgetDisclosures: document.budget.map(row => budgetOpenState.get(row) ?? null)});
   }
   function captureBudgetDisclosures() {
@@ -299,6 +303,12 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       }
     }
     return updated;
+  }
+  function captureCommunicationFilters() {
+    const filters = editor.querySelector('.campaign-communication-filters');
+    if (!filters || filters.open === communicationFiltersOpen) return false;
+    communicationFiltersOpen = filters.open;
+    return true;
   }
   function setBudgetDisclosure(row, open) {
     budgetOpenState.set(row, open);
@@ -537,6 +547,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
   }
   function lock(value) { busy = value; setBusy(value); saveButton.disabled = value; prepareButton.disabled = value; newButton.disabled = value; fundingButton.disabled = value || fundingState.pending || fundingState.closed; editor.inert = value; decisionCard.inert = value; sectionNavigation.inert = value; transfers.inert = value; }
   function apply(next, id = null, rev = null, preferActionable = false, focusedRoute = '') {
+    captureCommunicationFilters();
     const resumeCurrentCampaign = Boolean(id && id === savedId);
     const previousTab = tab;
     const previousSelection = selected;
@@ -544,7 +555,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const previousSourceQuery = sourceQuery;
     const previousAssetQuery = assetQuery;
     const previousCommunicationView = {query: communicationQuery,
-      route: communicationRoute, order: communicationOrder, status: communicationStatus};
+      route: communicationRoute, order: communicationOrder, status: communicationStatus,
+      filtersOpen: communicationFiltersOpen};
     practice = null; practiceGuide.hidden = true;
     document = compatibleCampaign(next); savedId = id; revision = rev; dirty = false;
     fundingState.reset(); fundingProblem = ''; renderFunding();
@@ -570,6 +582,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     communicationRoute = resumeCurrentCampaign ? previousCommunicationView.route : null;
     communicationOrder = resumeCurrentCampaign ? previousCommunicationView.order : 'record';
     communicationStatus = resumeCurrentCampaign ? previousCommunicationView.status : 'all';
+    communicationFiltersOpen = resumeCurrentCampaign && previousCommunicationView.filtersOpen;
     status.textContent = id ? 'Saved on this computer' : 'Not saved yet'; output.replaceChildren();
     delete output.dataset.stale; output.classList.remove('campaign-output-stale');
     editor.replaceChildren();
@@ -605,9 +618,10 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     // Some renderers add local defaults. Keep the decoded reply untouched as
     // evidence if a later renderer refuses the candidate.
     const saved = structuredClone(acknowledgedCampaign(reply));
+    captureCommunicationFilters();
     const before = {document, savedId, revision, dirty, selected, tab,
       sourceQuery, opportunityQuery, opportunityStatus, opportunityPage, assetQuery,
-      communicationQuery, communicationRoute, communicationOrder, communicationStatus, communicationOpenState,
+      communicationQuery, communicationRoute, communicationOrder, communicationStatus, communicationFiltersOpen, communicationOpenState,
       budgetOpenState, expandedActionRows, pendingFocus, pendingActionFocus,
       pendingBudgetFocus, pendingAssetOpenId};
     const areas = [editor, sectionNavigation, shelf, summary, decisionCard];
@@ -615,6 +629,8 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     const oldCapacity = {text: capacity.textContent, className: capacity.className,
       state: capacity.getAttribute('data-capacity-state')};
     const oldStyle = root.getAttribute('style');
+    const oldRootChildren = [...root.childNodes];
+    const oldView = root.getAttribute('data-campaign-view');
     admittingSave = true;
     try {
       const openCommunications = document.communications.map(row => communicationOpenState.get(row));
@@ -637,7 +653,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     } catch (cause) {
       ({document, savedId, revision, dirty, selected, tab,
         sourceQuery, opportunityQuery, opportunityStatus, opportunityPage, assetQuery,
-        communicationQuery, communicationRoute, communicationOrder, communicationStatus, communicationOpenState,
+        communicationQuery, communicationRoute, communicationOrder, communicationStatus, communicationFiltersOpen, communicationOpenState,
         budgetOpenState, expandedActionRows, pendingFocus, pendingActionFocus,
         pendingBudgetFocus, pendingAssetOpenId} = before);
       let rollbackError;
@@ -648,6 +664,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
         else capacity.setAttribute('data-capacity-state', oldCapacity.state);
         if (oldStyle === null) root.removeAttribute('style');
         else root.setAttribute('style', oldStyle);
+        root.replaceChildren(...oldRootChildren);
+        if (oldView === null) root.removeAttribute('data-campaign-view');
+        else root.setAttribute('data-campaign-view', oldView);
       } catch (problem) { rollbackError = problem; }
       const failure = new Error('The save reply could not be opened. Your earlier campaign inputs are retained.'
         + (rollbackError ? ' Restoring the editor view also failed; back up the retained inputs before leaving.' : ''));
@@ -913,9 +932,15 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       [document.actions.filter(row => row.status === 'held').length, 'actions on hold']].map(([count, label]) =>
       h('div', {}, h('strong', {}, count), h('span', {}, label))));
     renderDecisionCard();
+    arrangeCampaignEditor({root, editor, capacity, decisionCard, transfers, tab});
   }
   function renderDecisionCard() {
     const result = campaignDecision(document, undefined, document.opportunities[selected]?.name || '');
+    const context = editor.querySelector('.campaign-working-context');
+    if (context) renderCampaignWorkContext(context, result,
+      () => scrollCampaignTarget(decisionCard, true), tab === 'actions'
+        ? 'All action scopes remain shown.'
+        : 'Messages may belong to other routes or to the whole campaign.');
     const state = h('span', {class: 'campaign-decision-state', 'data-state': result.state}, result.label);
     const repeatsBlocker = result.state === 'not_ready' && result.action.source === 'suggested'
       && result.detail.includes(result.action.task);
@@ -1054,7 +1079,9 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     scrollCampaignTarget(editor.querySelector('.campaign-section'), true);
   }
   function renderEditor() {
-    if (captureBudgetDisclosures()) rememberCampaign();
+    const budgetChanged = captureBudgetDisclosures();
+    const filtersChanged = captureCommunicationFilters();
+    if (budgetChanged || filtersChanged) rememberCampaign();
     const detailsOpen = editor.querySelector('.campaign-details')?.open ?? !document.title;
     const title = input('Campaign name', 'text', document, 'title', '', {required: true, maxLength: 200});
     const organisation = input('Applicant organisation', 'text', document, 'organisation', 'Use the applicant’s legal name, which may differ from the school or venue.', {maxLength: 1024});
@@ -1104,18 +1131,21 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
     else if (tab === 'communications') renderCommunications(panel);
     else if (tab === 'assets') renderAssets(panel);
     else renderSources(panel);
-    if (['budget', 'actions'].includes(tab)) {
+    if (isCampaignWorkSection(tab)) {
+      panel.prepend(h('div', {class: 'campaign-section-context campaign-working-context',
+        role: 'region', 'aria-label': 'Selected route context'}));
+    } else if (tab === 'budget') {
       const routeName = document.opportunities[selected]?.name || 'No route selected';
-      const scopeNote = tab === 'budget'
-        ? 'All current campaign costs.'
-        : 'All action scopes remain shown.';
+      const scopeNote = 'All current campaign costs.';
       const context = h('div', {class: 'campaign-section-context'},
         h('p', {}, 'Selected route: ', h('strong', {}, routeName), h('span', {}, scopeNote)),
         button('Campaign status', () => scrollCampaignTarget(decisionCard, true), 'quiet'));
       panel.prepend(context);
     }
-    editor.replaceChildren(details, panel);
+    editor.replaceChildren(...(isCampaignWorkSection(tab) ? [panel, details] : [details, panel]));
     sectionNavigation.replaceChildren(tabs);
+    renderDecisionCard();
+    arrangeCampaignEditor({root, editor, capacity, decisionCard, transfers, tab});
     revealSelectedCampaignTab();
     if (pendingFocus) {
       updateCampaignClearance();
@@ -2039,6 +2069,7 @@ export async function campaignsPage({setBusy = () => {}, remember = () => {}, se
       get route() { return communicationRoute; }, set route(value) { communicationRoute = value; },
       get order() { return communicationOrder; }, set order(value) { communicationOrder = value; },
       get status() { return communicationStatus; }, set status(value) { communicationStatus = value; },
+      get filtersOpen() { return communicationFiltersOpen; }, set filtersOpen(value) { communicationFiltersOpen = value; },
     };
     renderCampaignCommunications(panel, {document, view, openState: communicationOpenState,
       editor, input, choice, changed, renderEditor, rememberCampaign, error, remove,

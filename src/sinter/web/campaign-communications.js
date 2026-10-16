@@ -46,6 +46,14 @@ export function renderCampaignCommunications(panel, {document, view, openState,
   const routeFilter = selectField('Communication scope', routeChoices, routeValue);
   const order = selectField('Communication order', COMMUNICATION_ORDERS, view.order);
   const statusFilter = selectField('Communication status filter', COMMUNICATION_STATUSES, view.status);
+  const filters = h('details', {class: 'campaign-communication-filters', open: view.filtersOpen === true},
+    h('summary', {}, 'Filter and order'),
+    h('div', {class: 'form-grid'}, routeFilter.wrap, statusFilter.wrap, order.wrap));
+  filters.addEventListener('toggle', () => {
+    // A detached disclosure can still have a queued native toggle event.
+    if (!editor.contains(filters)) return;
+    view.filtersOpen = filters.open; rememberCampaign();
+  });
   const resultCount = h('p', {class: 'campaign-filter-status', 'aria-live': 'polite'});
   const empty = h('p', {class: 'campaign-filter-empty', hidden: true},
     'No communications match this view. Clear the search or choose another scope or status.');
@@ -75,7 +83,9 @@ export function renderCampaignCommunications(panel, {document, view, openState,
       || 'Record order';
     const statusLabel = COMMUNICATION_STATUSES.find(([value]) => value === view.status)?.[1]
       || 'All statuses';
-    resultCount.textContent = `${visible.length} of ${document.communications.length} communications · ${statusLabel} · ${orderLabel}.`
+    const scopeLabel = view.route === null ? 'All routes and campaign-wide'
+      : view.route === '' ? 'Campaign-wide' : `Route: ${view.route}`;
+    resultCount.textContent = `${visible.length} of ${document.communications.length} communications · ${scopeLabel} · ${statusLabel} · ${orderLabel}.`
       + (view.order === 'record' ? '' : ' Entries without a valid recorded date appear last.');
   }
   search.input.addEventListener('input', () => {
@@ -101,8 +111,7 @@ export function renderCampaignCommunications(panel, {document, view, openState,
   communicationList.addEventListener('click', event => {
     if (event.target.closest('.campaign-source-picker button')) updateCommunicationView();
   });
-  panel.append(search.wrap, h('div', {class: 'form-grid'}, routeFilter.wrap,
-    statusFilter.wrap, order.wrap), clear, resultCount, empty, communicationList);
+  panel.append(search.wrap, filters, clear, resultCount, empty, communicationList);
 
   for (const [index, row] of document.communications.entries()) {
     const evidenceLinks = Array.isArray(row.evidence_links) ? row.evidence_links : [];

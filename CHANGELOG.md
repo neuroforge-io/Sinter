@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Put Actions and Communications before the campaign overview, with the complete
+  selected-route blocker beside the work. Keep capacity warnings visible before
+  editing, and restore the earlier layout and inputs if opening a save reply fails.
+- Fold correspondence selectors under **Filter and order** while keeping the
+  active scope, status, ordering and result count visible. Preserve the view across
+  saves and section changes. Place the unsent draft log after the document and
+  evidence it describes.
 - Keep campaign backup controls reachable below sticky navigation. Use measured
   scrolling clearance and let the header scroll normally when the window cannot
   fit a 44-pixel target beneath it. Recovery exports preserve the complete unsaved

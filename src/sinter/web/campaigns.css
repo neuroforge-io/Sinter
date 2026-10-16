@@ -154,8 +154,22 @@
 .campaign-section-context p { flex: 1; min-width: 0; margin: 0; font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; }
 .campaign-section-context p > span { display: block; color: var(--muted); }
 .campaign-section-context .button { flex: 0 0 auto; min-height: 44px; padding: 8px 10px; font-size: .78rem; }
+.campaign-work-context-main { flex: 1; min-width: 0; }
+.campaign-work-context-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.campaign-work-context-heading p { flex: 1; }
+.campaign-context-state { padding: 3px 7px; border: 1px solid var(--line); border-radius: 5px; font-size: .7rem; font-weight: 700; }
+.campaign-context-state[data-state=not_ready] { border-color: var(--accent); }
+.campaign-context-state[data-state=no_go] { color: var(--danger); border-color: var(--danger); }
+.campaign-section-context .campaign-context-detail { margin-top: 6px; }
+.campaign-section-context .campaign-context-scope { margin-top: 5px; color: var(--muted); font-size: .73rem; }
+.campaign-communication-filters { margin: 0 0 12px; padding: 0; border: 0; }
+.campaign-communication-filters > summary { display: list-item; list-style: disclosure-closed inside; box-sizing: border-box; min-height: 44px; width: fit-content; padding: 10px 0; line-height: 24px; font-size: .82rem; font-weight: 650; }
+.campaign-communication-filters[open] > summary { list-style-type: disclosure-open; }
+.campaign-communication-filters > .form-grid { margin-top: 8px; }
 @media (max-width: 650px) {
   .campaign-section-context { align-items: flex-start; padding: 10px; }
+  .campaign-working-context { display: block; }
+  .campaign-working-context > .button { margin-top: 8px; }
 }
 .campaign-focused-copy{width:min(800px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:hidden}.campaign-focused-copy[open]{display:flex;flex-direction:column;gap:12px}.campaign-focused-copy>h2{flex-shrink:0}.campaign-focused-body{flex:1 1 auto;min-height:0;overflow:auto;padding-right:4px}.campaign-focused-body>.checkbox{display:flex;margin:12px 0}.campaign-focused-body>button{margin:8px 8px 8px 0}.campaign-focused-material details{border-top:1px solid var(--edge);padding:10px 0}.campaign-focused-material summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:650}.campaign-focused-material pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto;background:var(--raised);padding:12px;border-radius:10px}.campaign-focused-copy>.button-row{flex-shrink:0;background:var(--surface);padding:12px 0;margin:0}
 
