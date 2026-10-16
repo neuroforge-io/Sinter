@@ -492,6 +492,19 @@ class DeliverableChecks:
             first_id = edit_and_save(first_text)
             second_id = edit_and_save(second_text)
         assert first_id != second_id
+        extra = page.evaluate('''async original => {
+            const {request} = await import('/static/api.js');
+            const malformed = structuredClone(original);
+            malformed.title = 'Fictional malformed saved source field';
+            malformed.sources = {};
+            const partial = structuredClone(original);
+            partial.title = 'Fictional incomplete garden note';
+            partial.incomplete = true; partial.review_status = 'stale';
+            return {
+                malformed: (await request('/api/reports', {data: {report: malformed}})).id,
+                partial: (await request('/api/reports', {data: {report: partial}})).id,
+            };
+        }''', snapshots[0])
         assert snapshots[0]['sources'] == snapshots[1]['sources'] == original['sources']
         assert snapshots[0]['document_markdown'] == snapshots[1]['document_markdown'] == original['document_markdown']
         gets = []
@@ -614,6 +627,32 @@ class DeliverableChecks:
             return await request('/api/reports/' + id);
         }''', first_id)
         assert reopened == snapshots[0], 'Preview/open/delete changed the original saved copy.'
+        finder.fill(extra['malformed'])
+        malformed = page.locator('.saved-report-card').filter(has_text='Fictional malformed saved source field')
+        malformed.get_by_role('button', name='Open draft', exact=True).click()
+        page.get_by_role('dialog', name='Open another draft?', exact=True).get_by_role(
+            'button', name='Open selected draft', exact=True).click()
+        expect(page.get_by_text('This saved copy could not be displayed.', exact=False)).to_be_visible()
+        expect(editor).to_have_value(pending_text)
+        finder.fill(first_id)
+        first.get_by_role('button', name='Delete saved copy', exact=True).click()
+        expect(page.get_by_text('Close the open draft before deleting this saved copy. Nothing was deleted.', exact=True)).to_be_visible()
+        expect(page.get_by_role('dialog')).to_have_count(0)
+        expect(editor).to_have_value(pending_text)
+        finder.fill(extra['partial'])
+        partial = page.locator('.saved-report-card').filter(has_text='Fictional incomplete garden note')
+        partial.get_by_role('button', name='Preview saved copy', exact=True).click()
+        expect(preview).to_contain_text('Section 1')
+        partial_warning = 'INCOMPLETE MODEL DRAFT — review the partial wording before using it.'
+        stale_warning = 'Review status: stale. Check this saved record before current use; editing its wording does not confirm the original evidence.'
+        expect(preview.get_by_text(partial_warning, exact=True)).to_be_visible()
+        expect(preview.get_by_text(stale_warning, exact=True)).to_be_visible()
+        preview.get_by_role('button', name='Next section', exact=True).click()
+        expect(preview).to_contain_text('Section 2')
+        expect(preview.get_by_text(partial_warning, exact=True)).to_be_visible()
+        expect(preview.get_by_text(stale_warning, exact=True)).to_be_visible()
+        expect(editor).to_have_value(pending_text)
+        self.screenshot(page, 'saved-copy-partial-stale-later-section-phone')
         self.screenshot(page, 'saved-copy-pending-preserved-phone')
         page.set_viewport_size({'width': 1440, 'height': 1000})
 

@@ -6,12 +6,37 @@ import {clearReportDrafts} from '../src/sinter/web/report-drafts.js';
 class TestNode {
   constructor(tag = '#text', text = '') {
     this.tag = tag; this.children = []; this.attributes = {}; this._text = text;
+    this.parentNode = null; this.value = '';
   }
   get textContent() { return this._text + this.children.map(child => child.textContent).join(''); }
-  set textContent(value) { this._text = String(value); this.children = []; }
-  append(...children) { this.children.push(...children); }
-  replaceChildren(...children) { this._text = ''; this.children = []; this.append(...children); }
-  setAttribute(key, value) { this.attributes[key] = value; }
+  set textContent(value) {
+    for (const child of this.children) child.parentNode = null;
+    this._text = String(value); this.children = [];
+  }
+  get firstElementChild() { return this.children.find(child => child.tag !== '#text') ?? null; }
+  get nextElementSibling() {
+    if (!this.parentNode) return null;
+    const elements = this.parentNode.children.filter(child => child.tag !== '#text');
+    return elements[elements.indexOf(this) + 1] ?? null;
+  }
+  remove() {
+    if (!this.parentNode) return;
+    const parent = this.parentNode, index = parent.children.indexOf(this);
+    if (index !== -1) parent.children.splice(index, 1);
+    this.parentNode = null;
+  }
+  append(...children) {
+    for (const child of children) { child.remove(); child.parentNode = this; this.children.push(child); }
+  }
+  insertBefore(child, reference) {
+    if (reference === null) { this.append(child); return child; }
+    if (reference.parentNode !== this) throw new Error('Insertion reference is not a child.');
+    if (child === reference) return child;
+    child.remove(); child.parentNode = this;
+    this.children.splice(this.children.indexOf(reference), 0, child); return child;
+  }
+  replaceChildren(...children) { this.textContent = ''; this.append(...children); }
+  setAttribute(key, value) { this.attributes[key] = String(value); }
   addEventListener() {}
 }
 

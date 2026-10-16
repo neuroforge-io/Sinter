@@ -4314,3 +4314,23 @@ read followed by later editing, and delete/open identity. These are requirements
 not claims of a passed new browser journey. Fresh exact-source CI, human operation
 and installed qualification remain required. Prior narrow-workflow scores
 (UX 7, functionality 8, aesthetics 6.5) are held; no broader increase is claimed.
+
+### Exact-code adversarial follow-up
+
+Two independent critics found that the first candidate changed Library tracking
+before replacement rendering could fail. The correction constructs the candidate
+view and controls before adopting it, leaving the old editor and identity intact
+on failure. It also generation-gates Close, restores stable keyboard focus after
+deletion, and keeps incomplete/stale qualifications outside paged wording.
+
+The added fictional browser case opens a Store-admitted malformed optional source
+field while the current letter has pending text, then checks both the editor and
+current-copy deletion protection. A long incomplete/stale saved copy retains its
+warnings on a later section. These checks need their actual browser result; code
+review and focused state tests alone do not qualify the workflow or an installer.
+
+The first full Python matrix also exposed the storage-note test's minimal DOM,
+which lacked standard remove/move/sibling operations used by the new stable list.
+Ubuntu 3.13 recorded 1 failed / 6,058 passed / 47 skipped. The fixture now models
+those operations and input values; its storage wording and exact backend-request
+assertions remain intact. No product fallback or skipped assertion was added.

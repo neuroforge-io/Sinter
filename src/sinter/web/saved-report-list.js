@@ -33,7 +33,8 @@ export function savedReportWording(report, limit = 2400, start = 0) {
     text += character; count++;
   }
   return {markdown: text, truncated, characters: count, start, end: start + text.length,
-    edited: typeof report.document_edits?.markdown === 'string'};
+    edited: typeof report.document_edits?.markdown === 'string',
+    incomplete: Boolean(report.incomplete), stale: report.review_status === 'stale'};
 }
 
 /** Cancellation saves work; an independent generation check rejects late replies. */
@@ -95,11 +96,12 @@ export function savedReportList({load, onOpen, onDelete}) {
   const wording = h('div', {class: 'saved-report-wording'});
   const detail = h('p', {class: 'muted'});
   const previewStatus = h('p', {role: 'status'});
+  const qualifications = h('div');
   const openPreview = button('Open saved copy', () => selected && onOpen(selected, openPreview), 'primary');
   const previous = button('Previous section', () => { if (preview.previous()) heading.focus({preventScroll: true}); }, 'quiet');
   const next = button('Next section', () => { if (preview.next()) heading.focus({preventScroll: true}); }, 'quiet');
   const closePreviewButton = button('Close preview', () => closePreview(true), 'quiet');
-  panel.append(heading, detail, previewStatus, wording,
+  panel.append(heading, detail, previewStatus, qualifications, wording,
     h('div', {class: 'button-row'}, previous, next, openPreview, closePreviewButton));
   const rows = new Map(), busy = new Set();
   let reports = [], selected = null, origin = null, disposed = false;
@@ -108,7 +110,7 @@ export function savedReportList({load, onOpen, onDelete}) {
     load, active: () => !disposed && root.isConnected,
     changed(state) {
       if (selected?.id !== state.metadata.id) return;
-      wording.replaceChildren();
+      wording.replaceChildren(); qualifications.replaceChildren();
       openPreview.disabled = state.kind !== 'ready';
       previous.hidden = state.kind !== 'ready' || !state.previous;
       next.hidden = state.kind !== 'ready' || !state.wording.truncated;
@@ -122,6 +124,8 @@ export function savedReportList({load, onOpen, onDelete}) {
         previewStatus.textContent = (state.previous || state.wording.truncated
           ? 'Section ' + (state.page + 1) + ' · ' : 'Complete saved wording · ')
           + (state.wording.edited ? 'Saved human edits' : 'Original saved document');
+        if (state.wording.incomplete) qualifications.append(notice('INCOMPLETE MODEL DRAFT — review the partial wording before using it.'));
+        if (state.wording.stale) qualifications.append(notice('Review status: stale. Check this saved record before current use; editing its wording does not confirm the original evidence.'));
         wording.append(markdown(state.wording.markdown));
         if (state.previous || state.wording.truncated) wording.append(h('p', {class: 'notice'},
           'Showing up to 2,400 characters at a time. Use the section controls for the rest of this saved document. '
@@ -135,7 +139,7 @@ export function savedReportList({load, onOpen, onDelete}) {
     preview.close();
     if (selected) rows.get(selected.id)?.preview.setAttribute('aria-expanded', 'false');
     selected = null;
-    panel.remove(); wording.replaceChildren(); previewStatus.textContent = '';
+    panel.remove(); wording.replaceChildren(); qualifications.replaceChildren(); previewStatus.textContent = '';
     if (returnFocus && origin?.isConnected && !origin.closest('[hidden]')) origin.focus({preventScroll: true});
     origin = null;
   }

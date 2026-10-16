@@ -19,8 +19,11 @@ export async function library({onEditProject} = {}) {
   const active = () => !disposed && root.isConnected;
 
   function restoreControl(control, scroll) {
-    if (!active() || !control?.isConnected || control.closest('[hidden]')) return;
-    control.focus({preventScroll: true}); window.scrollTo(scroll.x, scroll.y);
+    if (!active()) return;
+    const target = control?.isConnected && !control.disabled && !control.closest('[hidden]')
+      ? control : savedCopies.element.querySelector('input');
+    target?.focus({preventScroll: true});
+    if (target === control) window.scrollTo(scroll.x, scroll.y);
   }
 
   async function authorization(title, confirmLabel) {
@@ -36,31 +39,47 @@ export async function library({onEditProject} = {}) {
   }
 
   function showReport(report, {saved = false, recovered = false, id = null} = {}) {
-    currentView?.dispose?.();
-    currentReport = report;
     const close = button('Close open draft', async () => {
-      const scroll = {x: window.scrollX, y: window.scrollY};
+      const attempt = ++opening, scroll = {x: window.scrollX, y: window.scrollY};
+      readController?.abort(); readController = null; openingStatus.replaceChildren();
       try {
-        opening++; readController?.abort(); readController = null; openingStatus.replaceChildren();
         const allowed = await authorization('Close this draft view?', 'Close draft view');
-        if (!allowed || !active() || !reportReplacementStillAllowed(currentReport, allowed)) {
+        if (attempt !== opening || !active()) return;
+        if (!allowed || !reportReplacementStillAllowed(currentReport, allowed)) {
           restoreControl(close, scroll); return;
         }
         currentView?.dispose?.(); currentView = null; currentReport = null;
         opened.replaceChildren(); refreshPending(); savedCopies.element.querySelector('input')?.focus({preventScroll: true});
-      } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); restoreControl(close, scroll); }
+      } catch (error) {
+        if (attempt === opening && active()) { feedback.replaceChildren(notice(error.message, 'error')); restoreControl(close, scroll); }
+      }
     }, 'quiet');
-    currentView = renderReport(report, {saved, recovered, onSaved: async () => {
-      try { await refresh(); }
-      catch (error) { if (active()) feedback.replaceChildren(notice('The draft was saved, but refreshing the list failed: ' + error.message, 'error')); }
-    }});
-    if (id) rememberReportSavedCopy(report, id);
-    opened.replaceChildren(h('div', {class: 'button-row non-print'},
-      report.input_snapshot && onEditProject ? button('Edit project inputs', () => onEditProject(report.input_snapshot)) : null,
-      close), currentView);
-    opened.scrollIntoView({block: 'start'});
-    const heading = currentView.querySelector('h2, h3');
-    if (heading) { heading.tabIndex = -1; heading.focus({preventScroll: true}); }
+    let candidate;
+    try {
+      candidate = renderReport(report, {saved, recovered, onSaved: async () => {
+        try { await refresh(); }
+        catch (error) { if (active()) feedback.replaceChildren(notice('The draft was saved, but refreshing the list failed: ' + error.message, 'error')); }
+      }});
+      if (id) rememberReportSavedCopy(report, id);
+      const toolbar = h('div', {class: 'button-row non-print'},
+        report.input_snapshot && onEditProject ? button('Edit project inputs', () => onEditProject(report.input_snapshot)) : null, close);
+      opened.replaceChildren(toolbar, candidate);
+    } catch (cause) {
+      candidate?.dispose?.();
+      const error = new Error('This saved copy could not be displayed. Your current draft is unchanged. Keep a workspace backup before repairing the saved record.');
+      error.cause = cause; throw error;
+    }
+    const previous = currentView;
+    currentReport = report; currentView = candidate;
+    let warning = '';
+    try { previous?.dispose?.(); }
+    catch { warning = 'The selected draft opened, but the previous view could not release all of its controls.'; }
+    try {
+      opened.scrollIntoView({block: 'start'});
+      const heading = currentView.querySelector('h2, h3');
+      if (heading) { heading.tabIndex = -1; heading.focus({preventScroll: true}); }
+    } catch { warning ||= 'The selected draft opened. Scroll to its document to continue.'; }
+    return warning;
   }
 
   async function openReport(metadata, control, recoveredReport = null) {
@@ -90,8 +109,8 @@ export async function library({onEditProject} = {}) {
       if (metadata && (deleting.has(metadata.id) || !knownReports.some(row => row.id === metadata.id))) {
         throw new Error('This saved copy changed or is being deleted. Check the saved list before opening it. Your open draft is unchanged.');
       }
-      showReport(report, {saved: !recoveredReport, recovered: Boolean(recoveredReport), id: metadata?.id ?? null});
-      feedback.replaceChildren(); refreshPending();
+      const warning = showReport(report, {saved: !recoveredReport, recovered: Boolean(recoveredReport), id: metadata?.id ?? null});
+      feedback.replaceChildren(...(warning ? [notice(warning, 'warning')] : [])); refreshPending();
     } catch (error) {
       if (attempt === opening && active()) {
         feedback.replaceChildren(notice(error.message, 'error')); restoreControl(control, scroll);
@@ -103,14 +122,14 @@ export async function library({onEditProject} = {}) {
     if (!active() || deleting.has(metadata.id)) return;
     const scroll = {x: window.scrollX, y: window.scrollY};
     const openCopy = () => reportSavedCopyId(currentReport) === metadata.id;
-    let deleted = false, decision;
+    let deleted = false, decision, restore = false;
     try {
       if (openCopy()) throw new Error('Close the open draft before deleting this saved copy. Nothing was deleted.');
       decision = new AbortController(); decisionController = decision;
       const approved = await confirmAction({signal: decision.signal, title: 'Delete this saved copy?', confirmLabel: 'Delete saved copy',
         description: 'Delete "' + metadata.title + '" (reference ' + savedReportReference(metadata.id, knownReports)
           + ') from My workspace? Downloaded copies are not deleted.'});
-      if (!approved || !active()) { restoreControl(control, scroll); return; }
+      if (!approved || !active()) { restore = active(); return; }
       if (openCopy()) throw new Error('This copy is now open. Close it before deleting its saved copy. Nothing was deleted.');
       deleting.add(metadata.id); savedCopies.setBusy(metadata.id, true); refreshing++;
       // A read started before deletion cannot later install that deleted copy.
@@ -124,7 +143,7 @@ export async function library({onEditProject} = {}) {
       knownReports = knownReports.filter(row => row.id !== metadata.id);
       savedCopies.update(knownReports);
       await refresh(); announce('Saved copy deleted.');
-      feedback.replaceChildren(notice('Saved copy deleted. Your open draft is unchanged.', 'success'));
+      feedback.replaceChildren(notice('Saved copy deleted. Your open draft is unchanged.', 'success')); restore = true;
     } catch (error) {
       if (active()) {
         const uncertain = deleting.has(metadata.id) && !deleted
@@ -134,11 +153,13 @@ export async function library({onEditProject} = {}) {
           ? 'The saved copy was deleted, but refreshing the list failed: ' + error.message
           : uncertain ? 'Deletion was not confirmed. Your open draft is kept. Choose Refresh saved list to check before explicitly trying again. ' + error.message
             : error.message, deleted || uncertain ? 'warning' : 'error'));
-        restoreControl(control, scroll);
+        restore = true;
       }
     } finally {
       if (decisionController === decision) decisionController = null;
       if (!uncertainDeletions.has(metadata.id)) { deleting.delete(metadata.id); savedCopies.setBusy(metadata.id, false); }
+      if (restore && (document.activeElement === control || document.activeElement === document.body
+          || !document.activeElement?.isConnected)) restoreControl(control, scroll);
     }
   }
 

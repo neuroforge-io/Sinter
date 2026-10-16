@@ -150,3 +150,18 @@ test('copy identity belongs to its originating registered report across view fai
   clearReportDrafts();
   assert.equal(reportSavedCopyId(first), null);
 });
+
+test('incomplete and recorded stale status remain on every saved section', () => {
+  const report = {document_markdown: 'Partial model wording. '.repeat(250), incomplete: true, review_status: 'stale'};
+  const original = structuredClone(report);
+  let start = 0, sections = 0, part;
+  do {
+    part = savedReportWording(report, 2400, start);
+    assert.equal(part.incomplete, true); assert.equal(part.stale, true);
+    start = part.end; sections++;
+  } while (part.truncated);
+  assert.ok(sections > 1);
+  assert.deepEqual(report, original);
+  assert.equal(savedReportWording({markdown: 'Ordinary draft'}).stale, false);
+  assert.equal(savedReportWording({markdown: 'Ordinary draft'}).incomplete, false);
+});
