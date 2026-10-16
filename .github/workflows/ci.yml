@@ -93,7 +93,10 @@ jobs:
         env:
           TMPDIR: ${{ github.workspace }}/browser-artifacts
       - run: python tools/handover_appendix_browser.py
-      - run: python tools/deliverable_browser.py
+      - name: Saved documents, recipient privacy and saved-copy recovery
+        run: |
+          node --experimental-default-type=module --test tests/saved_report_list.mjs
+          python tools/deliverable_browser.py
       - run: python tools/campaign_browser.py
       - run: python tools/campaign_hold_browser.py
       - name: Focused copies retain selected evidence and unsaved parent work

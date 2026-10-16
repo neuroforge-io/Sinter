@@ -391,3 +391,25 @@ Native HTML/CSS/JavaScript are shipped without a frontend build step or external
 `python tools/build_zipapp.py` builds `dist/sinter.pyz` with core code, web assets and Apache notices. A compatible Python interpreter is still needed; optional speech dependencies are not bundled. `python -m build` creates a wheel and source distribution.
 
 Sinter remains Apache-2.0. Do not add proprietary ERAIS/Fracture internals, model weights, credentials, recordings or personal test data. The public-boundary check is a narrow guard, not a complete secrets, history or licensing audit. Optional packages and models retain their separate licences. See [NOTICE](../NOTICE).
+
+## Saved copies: find, inspect and reopen
+
+My workspace filters saved titles or references without reading every document.
+Preview saved copy reads only the selected saved report. Applied human wording
+takes precedence; incomplete warnings remain visible. Longer wording uses
+2,400-code-point sections, including closing sections, with no further request.
+Only one selected report is retained for preview; filter changes, refresh,
+close and page disposal invalidate outstanding preview responses.
+
+Preview does not register or edit a document. Open is a separate read and checks
+the existing report replacement token before and after loading. Later editor or
+save changes preserve the current draft. Cancel opening stops only that local
+read. Close retains registry-managed pending work for explicit recovery.
+
+The session registry keeps full saved-copy identities separately from report
+content. Only a validated save acknowledgement or an explicitly opened saved ID
+updates that association. Observer/view failures after acknowledgement cannot
+relabel a known write as an uncertain request. Deleting another saved copy does
+not clear the editor; deleting its currently open copy requires closing first.
+An unconfirmed deletion remains held for an explicit list check, with no
+automatic replay. This is a single-user local workflow, not shared versioning.

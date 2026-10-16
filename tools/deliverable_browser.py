@@ -459,6 +459,164 @@ class DeliverableChecks:
         expect(page.get_by_label('Internal notes and evidence context', exact=True)).to_have_value(notes)
         expect(page.get_by_label('Opening paragraph for the recipient', exact=True)).to_have_value(opening)
 
+    def saved_copy_discovery(self, page):
+        """Two equal-title/time copies differ only after the first preview section."""
+        from playwright.sync_api import expect
+        title = 'Fictional saved garden 🐝 <letter>'
+        self.goto(page, 'brief')
+        page.get_by_label('Project name', exact=True).fill(title)
+        page.get_by_label('Internal notes and evidence context', exact=True).fill(SOURCE)
+        page.get_by_label('Questions you need answered', exact=True).fill('Who can confirm water access?')
+        page.get_by_role('button', name='Prepare my draft', exact=True).click()
+        self.document(page)
+        original = self.pack(page)
+        common = '# Shared garden letter\n\n' + 'Shared garden context. '.join([''] * 125)
+        first_text = common + '\n\nClosing A: water access is NOT approved. Café e\u0301 🐝.'
+        second_text = common + '\n\nClosing B: ask the venue for written water-access terms. 🐝.'
+        snapshots = []
+
+        def edit_and_save(text):
+            self.options(page)
+            page.get_by_role('button', name='Edit draft', exact=True).click()
+            page.get_by_label('Edit your draft', exact=True).fill(text)
+            page.get_by_role('button', name='Apply edits', exact=True).click()
+            snapshots.append(self.pack(page))
+            with page.expect_response(lambda response: response.url == self.base + '/api/reports'
+                                      and response.request.method == 'POST') as response:
+                page.get_by_role('button', name='Save to My workspace', exact=True).click()
+            identifier = response.value.json()['id']
+            expect(page.get_by_role('status', name='Document save state')).to_have_attribute('data-state', 'saved')
+            return identifier
+
+        with patch('sinter.store.time.time', return_value=1789502400.0):
+            first_id = edit_and_save(first_text)
+            second_id = edit_and_save(second_text)
+        assert first_id != second_id
+        assert snapshots[0]['sources'] == snapshots[1]['sources'] == original['sources']
+        assert snapshots[0]['document_markdown'] == snapshots[1]['document_markdown'] == original['document_markdown']
+        gets = []
+        page.on('request', lambda request: gets.append(request.url.removeprefix(self.base))
+                if request.method == 'GET' and request.url.startswith(self.base + '/api/reports/') else None)
+        self.goto(page, 'library')
+        finder = page.get_by_label('Find saved drafts', exact=True)
+        finder.fill('Fictional saved garden')
+        cards = page.locator('.saved-report-card:visible')
+        expect(cards).to_have_count(2)
+        assert gets == [], 'Listing/filtering fetched full saved documents.'
+        first = page.locator('.saved-report-card').filter(has_text='Reference ' + first_id[:8])
+        second = page.locator('.saved-report-card').filter(has_text='Reference ' + second_id[:8])
+        saved_times = [card.locator('p').first.inner_text() for card in (first, second)]
+        assert saved_times[0] == saved_times[1], saved_times
+
+        page.set_viewport_size({'width': 390, 'height': 640})
+        first.get_by_role('button', name='Preview saved copy', exact=True).focus()
+        page.keyboard.press('Enter')
+        preview = page.get_by_role('region', name='Saved copy preview', exact=True)
+        expect(preview).to_contain_text('Section 1')
+        expect(preview).not_to_contain_text('Closing A')
+        preview.get_by_role('button', name='Next section', exact=True).click()
+        expect(preview).to_contain_text('Closing A')
+        assert gets == ['/api/reports/' + first_id], 'Section navigation re-fetched a saved document.'
+        expect(preview.locator('script, iframe, object, embed')).to_have_count(0)
+        for name in ('Previous section', 'Open saved copy', 'Close preview'):
+            control = preview.get_by_role('button', name=name, exact=True)
+            control.scroll_into_view_if_needed()
+            bounds = control.bounding_box()
+            assert bounds and bounds['height'] >= 44, (name, bounds)
+            assert control.evaluate('element => { const b = element.getBoundingClientRect(); const top = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return top === element || element.contains(top); }'), name
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
+        self.screenshot(page, 'saved-copy-section-phone')
+        preview.get_by_role('button', name='Close preview', exact=True).click()
+        expect(first.get_by_role('button', name='Preview saved copy', exact=True)).to_be_focused()
+
+        second.get_by_role('button', name='Preview saved copy', exact=True).click()
+        expect(preview).to_contain_text('Section 1')
+        preview.get_by_role('button', name='Next section', exact=True).click()
+        expect(preview).to_contain_text('Closing B')
+        assert gets == ['/api/reports/' + first_id, '/api/reports/' + second_id]
+        finder.fill(first_id)
+        expect(cards).to_have_count(1)
+        expect(preview).to_have_count(0)
+        assert gets == ['/api/reports/' + first_id, '/api/reports/' + second_id]
+        page.get_by_role('button', name='Clear filter', exact=True).click()
+        finder.fill('Fictional saved garden')
+        first.get_by_role('button', name='Open draft', exact=True).click()
+        expect(self.document(page)).to_contain_text('Closing A')
+
+        self.options(page)
+        page.get_by_role('button', name='Edit draft', exact=True).click()
+        editor = page.get_by_label('Edit your draft', exact=True)
+        pending_text = 'Unapplied 🐝 wording. No funding or spending has been approved.'
+        editor.fill(pending_text)
+        second.get_by_role('button', name='Preview saved copy', exact=True).click()
+        expect(preview).to_contain_text('Section 1')
+        assert editor.input_value() == pending_text
+        selected_open = preview.get_by_role('button', name='Open saved copy', exact=True)
+        selected_open.click()
+        decision = page.get_by_role('dialog', name='Open another draft?', exact=True)
+        expect(decision).to_be_visible()
+        page.keyboard.press('Escape')
+        expect(decision).to_have_count(0)
+        expect(selected_open).to_be_focused()
+        assert editor.input_value() == pending_text
+        held = []
+        def hold_open(route):
+            held.append(route)
+        held_url = self.base + '/api/reports/' + second_id
+        page.route(held_url, hold_open)
+        selected_open.click()
+        with page.expect_request(held_url):
+            page.get_by_role('dialog', name='Open another draft?', exact=True).get_by_role(
+                'button', name='Open selected draft', exact=True).click()
+        pending_text += ' Later editing must also survive the delayed read.'
+        editor.fill(pending_text)
+        assert len(held) == 1
+        held[0].fulfill(status=200, json=snapshots[1])
+        expect(page.get_by_text('Your open draft or its save state changed while the saved copy was loading.', exact=False)).to_be_visible()
+        expect(editor).to_have_value(pending_text)
+        page.unroute(held_url, hold_open)
+        selected_open.click()
+        page.get_by_role('dialog', name='Open another draft?', exact=True).get_by_role(
+            'button', name='Open selected draft', exact=True).click()
+        expect(self.document(page)).to_contain_text('Closing B')
+        page.get_by_role('button', name='Open unsaved draft', exact=True).click()
+        editor = page.get_by_label('Edit your draft', exact=True)
+        expect(editor).to_have_value(pending_text)
+
+        delete_requests = []
+        page.on('request', lambda request: delete_requests.append(request.url)
+                if request.method == 'POST' and request.url == self.base + '/api/reports/delete' else None)
+        def uncertain_delete(route):
+            route.fulfill(status=200, json={'ok': False})
+        page.route(self.base + '/api/reports/delete', uncertain_delete)
+        second.get_by_role('button', name='Delete saved copy', exact=True).click()
+        page.get_by_role('dialog', name='Delete this saved copy?', exact=True).get_by_role(
+            'button', name='Delete saved copy', exact=True).click()
+        expect(page.get_by_text('Deletion was not confirmed.', exact=False)).to_be_visible()
+        expect(second.get_by_role('button', name='Open draft', exact=True)).to_be_disabled()
+        expect(editor).to_have_value(pending_text)
+        assert len(delete_requests) == 1
+        page.unroute(self.base + '/api/reports/delete', uncertain_delete)
+        page.get_by_role('button', name='Refresh saved list', exact=True).click()
+        expect(second.get_by_role('button', name='Delete saved copy', exact=True)).to_be_enabled()
+        assert len(delete_requests) == 1, 'Checking an uncertain deletion replayed its POST.'
+        second.get_by_role('button', name='Delete saved copy', exact=True).click()
+        page.get_by_role('dialog', name='Delete this saved copy?', exact=True).get_by_role(
+            'button', name='Delete saved copy', exact=True).click()
+        expect(second).to_have_count(0)
+        assert len(delete_requests) == 2
+        expect(editor).to_have_value(pending_text)
+        first.get_by_role('button', name='Delete saved copy', exact=True).click()
+        expect(page.get_by_text('Close the open draft before deleting this saved copy. Nothing was deleted.', exact=True)).to_be_visible()
+        expect(editor).to_have_value(pending_text)
+        reopened = page.evaluate('''async id => {
+            const {request} = await import('/static/api.js');
+            return await request('/api/reports/' + id);
+        }''', first_id)
+        assert reopened == snapshots[0], 'Preview/open/delete changed the original saved copy.'
+        self.screenshot(page, 'saved-copy-pending-preserved-phone')
+        page.set_viewport_size({'width': 1440, 'height': 1000})
+
     def template_document(self, page):
         from playwright.sync_api import expect
 
@@ -756,6 +914,7 @@ def main(argv=None):
                 checks.check('profile-defaults-explicit-blanks', checks.profile_roundtrip)
                 checks.check('edit-save-reopen-original-retained', checks.edited_draft_roundtrip)
                 checks.check('recipient-only-evidence-save-export-model-handoff', checks.private_preparation_context)
+                checks.check('saved-copy-discovery-and-pending-recovery', checks.saved_copy_discovery)
                 server.app.preferences.update({'model': client.MODEL, 'max_tokens': 2048})
                 checks.check('template-final-document', checks.template_document)
                 checks.check('readable-safe-markdown', checks.readable_markdown)

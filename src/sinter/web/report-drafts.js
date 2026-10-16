@@ -2,6 +2,7 @@
  * Nothing here writes to disk or changes the report's original evidence.
  */
 let identities = new WeakMap();
+let savedCopyIds = new WeakMap();
 const drafts = new Map();
 let sequence = 0;
 
@@ -97,9 +98,10 @@ export function reportEditorDraft(report) {
   return identities.get(report)?.editor || null;
 }
 
-export function markReportSaved(report, content, submittedReport = report) {
+export function markReportSaved(report, content, submittedReport = report, savedCopyId) {
   const state = identities.get(report);
   if (!state) return;
+  if (savedCopyId !== undefined) rememberReportSavedCopy(report, savedCopyId);
   // A user may keep editing while the save request is pending. Only the exact
   // content sent has reached disk; later edits and editor text remain unsaved.
   state.baseline = content; state.saved = true; state.saving = false;
@@ -177,4 +179,12 @@ export function reportDraftNotice(report) {
   if ([...state.forms.keys()].some(name => name !== 'handover-summary')) messages.push('Other local form inputs have not been applied; they are kept in this session only.');
   return messages.join(' ');
 }
-export function clearReportDrafts() { drafts.clear(); identities = new WeakMap(); }
+/** Acknowledged local copies belong to the original report, across view changes. */
+export function rememberReportSavedCopy(report, id) {
+  if (!identities.has(report) || typeof id !== 'string' || !/^[a-f0-9]{32}$/.test(id)) {
+    throw new Error('A registered draft and complete saved-copy identity are required.');
+  }
+  savedCopyIds.set(report, id);
+}
+export function reportSavedCopyId(report) { return savedCopyIds.get(report) ?? null; }
+export function clearReportDrafts() { drafts.clear(); identities = new WeakMap(); savedCopyIds = new WeakMap(); }

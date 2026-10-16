@@ -1,42 +1,190 @@
 import {h, button, field, check, notice, selectField, safeLink, dateTime, announce, download} from './ui.js';
 import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
-import {unsavedReportDrafts, reportDraftNotice} from './report-drafts.js';
+import {unsavedReportDrafts, reportDraftNotice, rememberReportSavedCopy, reportSavedCopyId} from './report-drafts.js';
+import {authorizeReportReplacement, reportReplacementStillAllowed} from './report-replacement.js';
+import {confirmAction} from './confirm-action.js';
+import {savedReportList, savedReportReference} from './saved-report-list.js';
 
 export async function library({onEditProject} = {}) {
   const root = h('div');
-  const list = h('div', {class: 'stack non-print'}), opened = h('div');
+  const opened = h('div');
+  const openingStatus = h('div', {class: 'non-print', 'aria-live': 'polite'});
   const feedback = h('div', {class: 'non-print', 'aria-live': 'polite'});
   const pending = h('section', {class: 'card stack non-print', 'aria-label': 'Unsaved document or form work'});
-  async function refresh() {
+  let knownReports = [];
+  let disposed = false, currentReport = null, currentView = null;
+  let opening = 0, refreshing = 0, readController = null, decisionController = null;
+  const deleting = new Set(), uncertainDeletions = new Set();
+  const active = () => !disposed && root.isConnected;
+
+  function restoreControl(control, scroll) {
+    if (!active() || !control?.isConnected || control.closest('[hidden]')) return;
+    control.focus({preventScroll: true}); window.scrollTo(scroll.x, scroll.y);
+  }
+
+  async function authorization(title, confirmLabel) {
+    decisionController?.abort();
+    const decision = new AbortController();
+    decisionController = decision;
+    try {
+      return await authorizeReportReplacement(currentReport, {isActive: active,
+        confirm: () => confirmAction({title, confirmLabel, signal: decision.signal,
+          description: 'The current document has unsaved changes or an unconfirmed save. '
+            + 'It will remain in Pending work in this session. Apply and save it before closing Sinter.'})});
+    } finally { if (decisionController === decision) decisionController = null; }
+  }
+
+  function showReport(report, {saved = false, recovered = false, id = null} = {}) {
+    currentView?.dispose?.();
+    currentReport = report;
+    const close = button('Close open draft', async () => {
+      const scroll = {x: window.scrollX, y: window.scrollY};
+      try {
+        opening++; readController?.abort(); readController = null; openingStatus.replaceChildren();
+        const allowed = await authorization('Close this draft view?', 'Close draft view');
+        if (!allowed || !active() || !reportReplacementStillAllowed(currentReport, allowed)) {
+          restoreControl(close, scroll); return;
+        }
+        currentView?.dispose?.(); currentView = null; currentReport = null;
+        opened.replaceChildren(); refreshPending(); savedCopies.element.querySelector('input')?.focus({preventScroll: true});
+      } catch (error) { feedback.replaceChildren(notice(error.message, 'error')); restoreControl(close, scroll); }
+    }, 'quiet');
+    currentView = renderReport(report, {saved, recovered, onSaved: async () => {
+      try { await refresh(); }
+      catch (error) { if (active()) feedback.replaceChildren(notice('The draft was saved, but refreshing the list failed: ' + error.message, 'error')); }
+    }});
+    if (id) rememberReportSavedCopy(report, id);
+    opened.replaceChildren(h('div', {class: 'button-row non-print'},
+      report.input_snapshot && onEditProject ? button('Edit project inputs', () => onEditProject(report.input_snapshot)) : null,
+      close), currentView);
+    opened.scrollIntoView({block: 'start'});
+    const heading = currentView.querySelector('h2, h3');
+    if (heading) { heading.tabIndex = -1; heading.focus({preventScroll: true}); }
+  }
+
+  async function openReport(metadata, control, recoveredReport = null) {
+    if (!active()) return;
+    const attempt = ++opening, scroll = {x: window.scrollX, y: window.scrollY};
+    readController?.abort(); decisionController?.abort();
+    try {
+      const allowed = await authorization('Open another draft?', 'Open selected draft');
+      if (!allowed || attempt !== opening || !active()) {
+        if (attempt === opening) restoreControl(control, scroll);
+        return;
+      }
+      if (metadata && deleting.has(metadata.id)) throw new Error('This saved copy is being deleted. Your open draft is unchanged.');
+      const read = new AbortController(); readController = read;
+      const cancel = button('Cancel opening', () => {
+        if (attempt !== opening) return;
+        opening++; read.abort(); readController = null; decisionController?.abort(); openingStatus.replaceChildren();
+        restoreControl(control, scroll); announce('Opening cancelled. Your open draft is unchanged.');
+      }, 'quiet');
+      openingStatus.replaceChildren(h('p', {}, 'Opening the selected saved copy…'), cancel);
+      const report = recoveredReport ?? await request('/api/reports/' + encodeURIComponent(metadata.id), {signal: read.signal});
+      if (attempt !== opening || !active()) return;
+      if (!reportReplacementStillAllowed(currentReport, allowed)) {
+        feedback.replaceChildren(notice('Your open draft or its save state changed while the saved copy was loading. '
+          + 'Your current work is kept. Open the selected copy again when ready.', 'warning')); return;
+      }
+      if (metadata && (deleting.has(metadata.id) || !knownReports.some(row => row.id === metadata.id))) {
+        throw new Error('This saved copy changed or is being deleted. Check the saved list before opening it. Your open draft is unchanged.');
+      }
+      showReport(report, {saved: !recoveredReport, recovered: Boolean(recoveredReport), id: metadata?.id ?? null});
+      feedback.replaceChildren(); refreshPending();
+    } catch (error) {
+      if (attempt === opening && active()) {
+        feedback.replaceChildren(notice(error.message, 'error')); restoreControl(control, scroll);
+      }
+    } finally { if (attempt === opening) { readController = null; openingStatus.replaceChildren(); } }
+  }
+
+  async function deleteReport(metadata, control) {
+    if (!active() || deleting.has(metadata.id)) return;
+    const scroll = {x: window.scrollX, y: window.scrollY};
+    const openCopy = () => reportSavedCopyId(currentReport) === metadata.id;
+    let deleted = false, decision;
+    try {
+      if (openCopy()) throw new Error('Close the open draft before deleting this saved copy. Nothing was deleted.');
+      decision = new AbortController(); decisionController = decision;
+      const approved = await confirmAction({signal: decision.signal, title: 'Delete this saved copy?', confirmLabel: 'Delete saved copy',
+        description: 'Delete "' + metadata.title + '" (reference ' + savedReportReference(metadata.id, knownReports)
+          + ') from My workspace? Downloaded copies are not deleted.'});
+      if (!approved || !active()) { restoreControl(control, scroll); return; }
+      if (openCopy()) throw new Error('This copy is now open. Close it before deleting its saved copy. Nothing was deleted.');
+      deleting.add(metadata.id); savedCopies.setBusy(metadata.id, true); refreshing++;
+      // A read started before deletion cannot later install that deleted copy.
+      opening++; readController?.abort(); readController = null; openingStatus.replaceChildren();
+      await request('/api/reports/delete', {data: {id: metadata.id}, acceptResponse: result => {
+        if (result?.ok !== true) throw new Error('The app did not confirm deletion of the saved copy.');
+        return result;
+      }});
+      deleted = true;
+      if (!active()) return;
+      knownReports = knownReports.filter(row => row.id !== metadata.id);
+      savedCopies.update(knownReports);
+      await refresh(); announce('Saved copy deleted.');
+      feedback.replaceChildren(notice('Saved copy deleted. Your open draft is unchanged.', 'success'));
+    } catch (error) {
+      if (active()) {
+        const uncertain = deleting.has(metadata.id) && !deleted
+          && !['not-sent', 'rejected'].includes(error.requestState?.outcome);
+        if (uncertain) uncertainDeletions.add(metadata.id);
+        feedback.replaceChildren(notice(deleted
+          ? 'The saved copy was deleted, but refreshing the list failed: ' + error.message
+          : uncertain ? 'Deletion was not confirmed. Your open draft is kept. Choose Refresh saved list to check before explicitly trying again. ' + error.message
+            : error.message, deleted || uncertain ? 'warning' : 'error'));
+        restoreControl(control, scroll);
+      }
+    } finally {
+      if (decisionController === decision) decisionController = null;
+      if (!uncertainDeletions.has(metadata.id)) { deleting.delete(metadata.id); savedCopies.setBusy(metadata.id, false); }
+    }
+  }
+
+  const savedCopies = savedReportList({
+    load: (id, signal) => request('/api/reports/' + encodeURIComponent(id), {signal}),
+    onOpen: openReport, onDelete: deleteReport,
+  });
+
+  function refreshPending() {
     const drafts = unsavedReportDrafts();
     pending.hidden = !drafts.length;
     pending.replaceChildren(h('h3', {}, 'Pending work in this session'),
       notice('Open each draft to apply or discard pending text and summary rows. Save applied document edits before closing Sinter.'),
-      ...drafts.map(({report}) => h('article', {}, h('strong', {}, report.document_title || report.title || 'Untitled draft'),
-        h('p', {class: 'muted'}, reportDraftNotice(report)),
-        button('Open unsaved draft', () => { opened.replaceChildren(renderReport(report, {recovered: true,
-          onSaved: () => refresh().catch(error => feedback.replaceChildren(notice('The draft was saved, but refreshing the list failed: ' + error.message, 'error')))})); opened.scrollIntoView({block: 'start'}); }))));
-    const {reports} = await request('/api/reports');
-    list.replaceChildren(...reports.map(report => h('article', {class: 'card'},
-      h('h3', {}, report.title), h('p', {class: 'muted'}, 'Saved ' + dateTime(report.created_at)),
-      h('div', {class: 'button-row'}, button('Open draft', async () => {
-        try { const document = await request(`/api/reports/${report.id}`); opened.replaceChildren(...[document.input_snapshot && onEditProject ? h('div', {class: 'button-row non-print'}, button('Edit project inputs', () => onEditProject(document.input_snapshot))) : null, renderReport(document, {saved: true, onSaved: () => refresh().catch(error => feedback.replaceChildren(notice('The draft was saved, but refreshing the list failed: ' + error.message, 'error')))} )].filter(Boolean)); opened.scrollIntoView({block: 'start'}); }
-        catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
-      }), button('Delete saved copy', async () => {
-        if (!window.confirm(`Delete the saved copy of "${report.title}"? Downloaded copies are not deleted.`)) return;
-        try { await request('/api/reports/delete', {data: {id: report.id}}); opened.replaceChildren(); await refresh(); announce('Saved copy deleted.'); }
-        catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
-      }, 'danger')))));
-    if (!reports.length) list.append(h('div', {class: 'empty'}, h('h3', {}, 'Your next good piece of work belongs here.'),
-      h('p', {}, 'Prepare a draft and choose Save to My workspace. Nothing is saved automatically.')));
+      ...drafts.map(({report}) => {
+        const open = button('Open unsaved draft', () => openReport(null, open, report));
+        return h('article', {}, h('strong', {}, report.document_title || report.title || 'Untitled draft'),
+          h('p', {class: 'muted'}, reportDraftNotice(report)), open);
+      }));
   }
+
+  async function refresh({checkUncertain = false} = {}) {
+    const attempt = ++refreshing;
+    const {reports} = await request('/api/reports');
+    if (disposed || attempt !== refreshing) return;
+    knownReports = reports;
+    if (checkUncertain) {
+      for (const id of uncertainDeletions) { deleting.delete(id); savedCopies.setBusy(id, false); }
+      uncertainDeletions.clear();
+    }
+    refreshPending(); savedCopies.update(reports);
+  }
+
   root.append(h('header', {class: 'page-intro non-print'}, h('h2', {}, 'My workspace'),
-    h('p', {}, 'Explicitly saved drafts, with their original evidence packs.')),
+    h('p', {}, 'Find saved wording and reopen its original evidence.')),
     h('div', {class: 'non-print'}, notice(globalThis.sinterBrowser
       ? 'Saved reports stay in this browser on this device, not a cloud account. They are not encrypted. Clearing browser storage, private browsing or device loss can erase saved work. Use Export saved workspace above to keep a separate backup.'
       : 'Saved reports stay in your local Sinter folder, not a cloud account. They are not encrypted. Export important work and protect access to this computer.')),
-    feedback, pending, list, opened);
+    feedback, openingStatus, pending,
+    h('div', {class: 'button-row non-print'}, button('Refresh saved list', () => refresh({checkUncertain: true})
+      .catch(error => feedback.replaceChildren(notice(error.message, 'error'))), 'quiet')),
+    savedCopies.element, opened);
+  root.dispose = () => {
+    disposed = true; opening++; refreshing++;
+    readController?.abort(); decisionController?.abort();
+    currentView?.dispose?.(); savedCopies.dispose();
+  };
   await refresh();
   return root;
 }

@@ -4289,3 +4289,28 @@ eligibility review, clarification drafting and logging, preserving prior snapsho
 Whole-product, live-provider and installed-release acceptance remain unproven.
 RC4 remains unpublished and unqualified; the exact-source release gates above
 still apply.
+
+## 16 October saved-copy retrieval — development candidate
+
+The previous exact source, ec4147225785e5cb5073bf481027f1cfb3bff519,
+passed Chromium, both Linux/macOS Python versions, Windows 3.10, speech and RKC.
+[Run 38876728037](https://github.com/neuroforge-io/Sinter/actions/runs/38876728037)
+failed Windows 3.13's unchanged five-second registered-fallback deadline
+(1 failed / 5,327 passed / 778 skipped). Parent cleanup did not prove descendant
+termination; portable qualification was skipped. That gate remains open.
+
+The next candidate adds metadata-only title/reference filtering and one explicit
+saved-copy preview. Applied wording takes precedence; bounded Unicode sections
+retain closing text without rendering every saved report. Generation checks,
+cancellation and disposal reject obsolete replies. Preview has no registry,
+edit, save or model authority. Open/Close reuse report replacement guards.
+Full saved-copy IDs belong to originating session reports, including known save
+acknowledgements followed by view failures. Unrelated deletion keeps the editor;
+uncertain deletion requires a list check and is never automatically replayed.
+
+Regressions cover equal-title/equal-time copies differing after the first
+section, unchanged originals, keyboard/phone controls, pending text, a delayed
+read followed by later editing, and delete/open identity. These are requirements,
+not claims of a passed new browser journey. Fresh exact-source CI, human operation
+and installed qualification remain required. Prior narrow-workflow scores
+(UX 7, functionality 8, aesthetics 6.5) are held; no broader increase is claimed.

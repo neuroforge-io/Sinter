@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Find saved drafts by title or reference and preview their applied wording before
+  opening. Read one selected copy at a time, with bounded sections for long text.
+  Preserve pending editors through guarded Open/Close, cancellation and stale
+  responses. Keep acknowledged copy identities in session state; deleting another
+  saved copy leaves the editor intact, and uncertain deletes require a list check.
+
 - Keep new Workbench enquiry preparation notes and reference passages in evidence,
   with explicit recipient questions instead of questions inferred from notes.
   Preserve attributed Casebook dossiers and briefing/agenda background behavior.

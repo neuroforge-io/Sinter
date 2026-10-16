@@ -174,3 +174,16 @@ pre.help-code { padding: 15px; border: 1px solid var(--line); border-radius: 10p
 .native-session > details { border: 0; padding: 4px 0; }
 .native-session p { margin: 6px 0; }
 .native-session > button { margin-top: 4px; }
+
+/* Saved-copy discovery keeps document rendering bounded and current work separate. */
+.saved-report-list { margin-top: 24px; }
+.saved-report-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+.saved-report-filter .field { flex: 1 1 260px; margin-bottom: 0; min-width: 0; }
+.saved-report-filter .button { margin-bottom: 8px; }
+.saved-report-card h3, .saved-report-reference { overflow-wrap: anywhere; }
+.saved-report-reference { color: var(--muted); font-size: .8rem; }
+.saved-report-preview { border-top: 2px solid var(--accent); padding-top: 20px; margin-top: 22px; }
+.saved-report-preview h4 { margin: 0 0 12px; font-size: 1.1rem; }
+.saved-report-preview p { overflow-wrap: anywhere; }
+.saved-report-wording { max-height: 24rem; overflow: auto; overflow-wrap: anywhere; padding: 4px; }
+.saved-report-wording .markdown { min-width: 0; }

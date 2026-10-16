@@ -43,7 +43,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       message.replaceChildren(notice(error.message, 'error')); refreshSaveState(); return;
     }
     savePending = true; markReportSaving(report);
-    let failure, viewFailures = [];
+    let failure, savedCopy, viewFailures = [];
     try {
       refreshSaveState();
     } catch (error) {
@@ -51,15 +51,18 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       message.replaceChildren(notice('Save was not sent because the view could not be updated: ' + error.message, 'error')); return;
     }
     try {
-      await request('/api/reports', {data: {report: snapshot}, acceptResponse: result => {
+      savedCopy = await request('/api/reports', {data: {report: snapshot}, acceptResponse: result => {
         if (!result || Array.isArray(result) || typeof result.id !== 'string'
             || !/^[a-f0-9]{32}$/.test(result.id)) throw new Error('The app did not return a valid saved-document acknowledgement.');
         return result;
       }});
-      viewFailures = markReportSaved(report, submittedMarkdown, snapshot) || [];
     } catch (error) {
       markReportSaveFailed(report, error); failure = error;
     } finally { savePending = false; }
+    if (savedCopy) {
+      try { viewFailures = markReportSaved(report, submittedMarkdown, snapshot, savedCopy.id) || []; }
+      catch (error) { viewFailures.push(error); }
+    }
     // Persistence has been acknowledged. A later view/callback failure cannot
     // turn that known save into an uncertain write or trigger a replay.
     try {

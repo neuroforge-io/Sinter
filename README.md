@@ -133,6 +133,12 @@ edits and original sources; apply edits and save each draft before closing the
 page. Unapplied text visibly blocks Save. This is development source, with fresh
 browser and installed qualification still required.
 
+Development **My workspace** adds title/reference filtering and an explicit saved
+wording preview, with bounded sections for longer documents. Previewing leaves
+an open editor intact; opening another copy uses the same pending-work guard.
+Saved references identify copies, not shared versions. Qualification of this new
+retrieval flow and the RC4 installer remains separate from published RC3.
+
 In the development browser workbench, choose a route and **Make focused campaign…**
 to work on a smaller case. Preview the complete included and omitted material,
 and choose explicitly whether to include shared work, linked products and other
