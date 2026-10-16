@@ -29,14 +29,23 @@ def project(**changes):
                          "url": "https://example.org/hall"}], "use_search": False, "use_model": False, **changes}
 
 
-def test_enquiry_is_a_usable_letter_with_visible_exact_sender_and_context():
-    payload = project()
+def test_enquiry_uses_explicit_recipient_opening_and_keeps_preparation_evidence():
+    payload = project(opening_paragraph="The booking has NOT been approved.")
     before = copy.deepcopy(payload)
     with patch("sinter.client.chat") as model, patch("sinter.client.search") as search:
         result = run(payload)
     document = result["document_markdown"]
     assert document.startswith("Dear River Hall coordinator,")
-    assert "The booking has NOT been approved." in document
+    assert document.count(payload["opening_paragraph"]) == 1
+    assert "Wheelchair access has not been confirmed." not in document
+    assert payload["notes"] not in document
+    assert all(value not in document for value in (
+        payload["sources"][0]["title"], payload["sources"][0]["content"],
+        payload["sources"][0]["url"],
+    ))
+    assert result["sources"][0]["content"] == payload["notes"]
+    assert result["sources"][1]["content"] == payload["sources"][0]["content"]
+    assert result["sources"][1]["url"] == payload["sources"][0]["url"]
     assert "1. Is River Hall available on 14 October?" in document
     assert "2. Does it have an accessible toilet?" in document
     assert all(value in document for value in (SENDER["signatory"], SENDER["sender_role"], SENDER["organisation"], "alex@example.org"))
@@ -84,12 +93,31 @@ def test_enquiry_can_be_prepared_from_only_a_title_recipient_and_explicit_questi
     search.assert_not_called()
 
 
-def test_only_actual_questions_in_notes_are_reused():
-    result = run(project(questions="", notes="The booking is provisional. Is access step-free?\nWhen can we collect the keys?"))
+@pytest.mark.parametrize("kind", ["briefing", "agenda"])
+def test_internal_formats_reuse_only_actual_questions_in_notes(kind):
+    result = run(project(document_type=kind, questions="",
+                         notes="The booking is provisional. Is access step-free?\nWhen can we collect the keys?"))
     assert result["document_questions"] == ["Is access step-free?", "When can we collect the keys?"]
     assert result["document_ready"]
     assert "The booking is provisional." in result["document_markdown"]
     assert "The booking is provisional." not in result["document_questions"]
+
+
+def test_enquiry_keeps_note_questions_missing_until_explicitly_entered():
+    payload = project(questions="",
+                      notes="The booking is provisional. Is access step-free?\nWhen can we collect the keys?")
+    before = copy.deepcopy(payload)
+    result = run(payload)
+    assert result["document_questions"] == []
+    assert result["document_ready"] is False
+    assert result["missing_fields"] == [
+        {"field": "questions", "label": "Questions you want answered"},
+    ]
+    assert "Is access step-free?" not in result["document_markdown"]
+    assert "When can we collect the keys?" not in result["document_markdown"]
+    assert "Could you please clarify the following?" not in result["document_markdown"]
+    assert result["sources"][0]["content"] == payload["notes"]
+    assert payload == before
 
 
 @pytest.mark.parametrize("kind", ["briefing", "agenda"])

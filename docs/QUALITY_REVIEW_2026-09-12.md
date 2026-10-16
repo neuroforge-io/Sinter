@@ -146,6 +146,43 @@ recipient in every step. Extraction intentionally has no sender. README now
 includes the recorded-purpose transfer. The expanded browser journey remains
 unexecuted until an exact-source run proves it; this review raises no score.
 
+### Human operation and complete browser follow-up on `313e6a3`
+
+[Quality run 38875133289](https://github.com/neuroforge-io/Sinter/actions/runs/38875133289)
+passed every Chromium workflow, including all nine deliverable journeys, the
+new complete sender/recipient request assertions, recovery, all six export
+guards and native-browser source checks. The replies in the model handoff
+journey remain fictional mocks; this is transport and preservation proof,
+not generated-content acceptance.
+
+A separate human operation reused the copied funding workspace: opening a
+historical letter, changing enquiry → briefing → agenda → enquiry, preparing
+a new letter, saving, reopening, exporting Word/evidence and inspecting the
+optional model fields. Exact notes/opening survived format changes; the new
+letter required no manual removal of preparation notes. The complete opening,
+questions, recipient and all four sender fields reached the editable handoff;
+the internal notes did not. Run template was not selected. After actual UI
+quit, handlers/listener drained before Application close; the owned tab closed.
+All 31 historical saved reports and protected original databases stayed
+unchanged. The two downloaded files matched the saved document and original
+inputs/evidence. The source app ran for 167.81 seconds with an observed maximum
+RSS of 34,398,208 bytes. This single bounded observation is not a performance
+comparison or installed-native qualification.
+
+The full Python matrix exposed two unreconciled legacy expectations in
+`tests/test_document_artifacts.py`: recipient-body notes and questions inferred
+from enquiry notes. Ubuntu 3.13 recorded 2 failed / 6,055 passed / 47 skipped;
+macOS 3.13 recorded 2 / 5,694 / 408. Both Windows versions recorded only these
+same two failures, each with 5,324 passes and 778 skips. Their absence of the
+earlier startup failure does not repair the separately identified ownership gate.
+
+The test reconciliation retains an approval caveat as deliberately entered
+recipient opening, asserts it appears once, and keeps all other context in
+evidence. It preserves the question-extraction checks for briefing/agenda and
+adds an enquiry check requiring explicit questions. No product boundary is
+reverted, assertion skipped or timeout widened. Fresh exact-source matrix
+results remain required; this is not a release or a new whole-product rating.
+
 ## 16 October draft replacement — operator check complete, CI and installed checks pending
 
 Actual in-app browser use of source `3056fd430efd2243a4d663c66a9e44cca26fd36e`
