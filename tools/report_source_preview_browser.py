@@ -465,7 +465,7 @@ class PreviewChecks(PurposeChecks):
             "Fictional regression: the operator confirmed quote, not coat.")
         page.get_by_role("button", name="Apply reviewed correction", exact=True).click()
         expect(page.get_by_role("dialog", name="Keep your earlier edits?", exact=True)).to_have_count(0)
-        expect(page.get_by_text("Draft ready. Review sources before using it.", exact=True)).to_be_visible()
+        expect(page.get_by_role("button", name="Open earlier draft 1", exact=True)).to_be_visible()
         corrected = self.evidence_export(page, "correction-reviewed-basis")
         assert corrected["input_snapshot"]["notes"] == transcript
         assert corrected["input_snapshot"]["corrections"][0]["replacement"] == replacement

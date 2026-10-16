@@ -46,6 +46,14 @@ notice. The automated browser run, late-result/save races through that interface
 and installed-release qualification remain pending. State/unit checks alone do
 not establish these outcomes.
 
+The first full CI attempt at `dda7a8662f4ff4881d92d041fcc461462a6da2e1`
+passed the six other source-preview journeys, including the injected late-edit
+recovery. The new meeting check failed because it asserted visibility of a
+progress message inside the correctly collapsed input panel. The correction now
+waits for the visible earlier-draft control before examining the exported
+correction and input basis. That initial failure is retained; the corrected
+seven-journey run still requires its own successful receipt.
+
 ## 16 October recipient opening — source qualification in progress
 
 The Brief form now accepts explicit recipient-facing prose rather than requiring
