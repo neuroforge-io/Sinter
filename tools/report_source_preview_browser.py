@@ -244,7 +244,10 @@ class PreviewChecks(PurposeChecks):
         page.get_by_role("button", name="Prepare my draft", exact=True).click()
         report = page.get_by_role("region", name="Your draft report")
         document = report.locator(".document-paper")
-        expect(document).to_contain_text(opening)
+        opening_paragraph = document.locator("p").filter(has_text=opening.splitlines()[0])
+        expect(opening_paragraph).to_be_visible()
+        # textContent omits <br>; verify the line breaks a person actually sees.
+        assert opening_paragraph.inner_text() == opening
         expect(document).not_to_contain_text("PRIVATE_FOLLOWUP_NOTE_SENTINEL")
         original = self.evidence_export(page, "followup-original")
         assert original["document_opening"] == original["input_snapshot"]["opening_paragraph"] == opening
@@ -469,6 +472,9 @@ def main(argv=None):
             and not checks.errors and not checks.external and not fatal and all(resources.values())
             and all(value == 0 for value in counts.values()) and before is not None and before == after)
         write_json(artifacts / "browser-receipt.json", receipt)
+    for row in receipt["checks"]:
+        if not row["passed"]:
+            print(f"FAIL DETAIL ({row['check']}): {row.get('error', 'No diagnostic recorded')[:3000]}", flush=True)
     print(artifacts / "browser-receipt.json", flush=True)
     return 0 if receipt["passed"] else 1
 
