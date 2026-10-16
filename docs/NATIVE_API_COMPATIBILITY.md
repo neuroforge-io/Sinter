@@ -10,11 +10,19 @@ The versioned public gateway fixture is
 `tests/fixtures/public_native_model_api_contract.v1.json`, copied verbatim from the
 NeuroForge site fixture generator. Its contract identifier is
 `neuroforge.public-native-model-client-fixtures.v1`; SHA-256 is
-`711feb4f774674d4e4c6ab7dbe77dada7668004d4be0014445256a03a0f5edc4`.
+`88cc078232ed0c29fff3ce70e1e3c2584d3594d7e270c8bb6f7769d48b01f423`.
 The 57 synthetic gateway cases record source-file hashes and the cutover receipt.
 They establish reproducible protocol behavior, not live deployment availability,
 language quality, a paid-service promise, or installed-client acceptance.
-This pack comes from site commit `22aad400`; public worker deployment
+This pack comes verbatim from site commit
+[`1898e9eeb5cc1b9330ce06954d3e264ea43863c9`](https://github.com/Ace1928/neuroforge_site/blob/1898e9eeb5cc1b9330ce06954d3e264ea43863c9/tests/fixtures/public_native_model_api_contract.json).
+Its generator check and the site's two focused contract suites passed against
+those exact immutable inputs on 16 October: 29 tests, no failures or skips.
+Compared with the earlier `22aad400` pack, only the declared OpenAPI source hash
+changed; all 57 cases, capabilities, limits and preflight restrictions are
+identical. This is fixture provenance reconciliation, not a new runtime or live
+availability qualification. Historical acceptance receipts retain their original
+source identities. Public worker deployment
 `d0425e8a8a844833abf7daf8b026881cadc3b885` restored text discovery on
 30 September 2026. Live Sinter generation acceptance is recorded separately.
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refresh the verbatim, qualified public native API fixture and its exact hash
+  pin. Only its OpenAPI source provenance changed; the 57 cases, model identity,
+  request limits and unavailable public preflight routes remain unchanged.
 - Guard preparation and view changes when a document has unsaved human edits or
   an unresolved save. Keep a direct route to each earlier session draft, with its
   own inputs, evidence and pending text. If editing or saving changes the current

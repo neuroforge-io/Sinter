@@ -38,7 +38,7 @@ def no_network(monkeypatch):
 
 def test_public_native_fixture_version_identity_and_capabilities_are_exact():
     assert hashlib.sha256(FIXTURE_PATH.read_bytes()).hexdigest() == (
-        "711feb4f774674d4e4c6ab7dbe77dada7668004d4be0014445256a03a0f5edc4"
+        "88cc078232ed0c29fff3ce70e1e3c2584d3594d7e270c8bb6f7769d48b01f423"
     )
     assert (
         PACK["contract"]
