@@ -337,7 +337,7 @@ class PreviewChecks(PurposeChecks):
         from playwright.sync_api import expect
         saved = self.start(page, fixture("research"))
         page.get_by_role("button", name="Draft clarification letter", exact=True).click()
-        cases = json.loads((ROOT / "tests/fixtures/literal_paragraph.v1.json").read_text())["cases"]
+        cases = json.loads((ROOT / "tests/fixtures/literal_paragraph.v1.json").read_text(encoding="utf-8"))["cases"]
         raw = "\n".join(row[0] for row in cases)
         page.get_by_label("Opening paragraph for the recipient", exact=True).fill(raw)
         page.get_by_role("button", name="Prepare my draft", exact=True).click()

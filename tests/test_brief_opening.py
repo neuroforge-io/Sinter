@@ -16,7 +16,7 @@ from sinter.docx_export import W, export_docx
 from sinter.evidence import literal_paragraph
 from sinter.store import Store
 
-FIXTURE = json.loads((Path(__file__).parent / "fixtures/literal_paragraph.v1.json").read_text())
+FIXTURE = json.loads((Path(__file__).parent / "fixtures/literal_paragraph.v1.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(autouse=True)
