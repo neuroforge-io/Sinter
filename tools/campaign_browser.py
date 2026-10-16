@@ -801,7 +801,9 @@ class CampaignChecks(DeliverableChecks):
         expect(page.locator('#view')).to_contain_text(
             'No campaign signatory or contact details are recorded.')
         expect(page.locator('.sender-panel')).to_have_attribute('open', '')
-        expect(page.get_by_label('Your notes and context', exact=True)).to_have_value('')
+        campaign_notes = page.get_by_label('Internal notes and evidence context', exact=True)
+        expect(campaign_notes).to_have_value('')
+        expect(campaign_notes).not_to_be_visible()
         questions = page.get_by_label('Questions you need answered', exact=True).input_value()
         assert questions.splitlines() == [
             'Could you confirm the current requirement for “School portal application window” and what evidence we should provide?',
