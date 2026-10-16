@@ -4,7 +4,8 @@ import {renderReport} from './reports.js';
 import {audioForm} from './audio.js';
 import {senderFields} from './profile.js';
 import {campaignLetterReviewCopy} from './campaign-letter.js';
-import {briefOpeningCopy, openingParagraphProblem, OPENING_LIMIT} from './brief-opening.js';
+import {briefOpeningCopy, briefContextCopy, enquiryModelDraftProblem,
+  openingParagraphProblem, OPENING_LIMIT} from './brief-opening.js';
 import {confirmAction} from './confirm-action.js';
 import {registerReportDraft} from './report-drafts.js';
 import {createWorkbenchDraftObservations} from './workbench-draft-observations.js';
@@ -36,11 +37,11 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   const draftObservations = createWorkbenchDraftObservations({onChange: refreshDrafts, isActive: active});
   const title = field(kind === 'research' ? 'Research topic' : 'Project name', 'text', data.title || '', 'A name you will recognise later.', {required: true, maxLength: 200});
   const campaignNotes = kind === 'brief' && campaignSenderReview;
-  const notes = field(kind === 'meeting' ? 'Transcript' : campaignNotes ? 'Internal notes and evidence context' : 'Your notes and context', 'textarea', data.notes || '',
+  const contextCopy = kind === 'brief' ? briefContextCopy(data.document_type || 'enquiry', campaignSenderReview) : null;
+  const notes = field(kind === 'meeting' ? 'Transcript' : contextCopy?.label || 'Your notes and context', 'textarea', data.notes || '',
     kind === 'meeting' ? 'Paste Speaker: words, or import TXT, SRT, VTT or JSON segments. Unlabelled turns remain unidentified.'
-      : campaignNotes ? 'When preparing locally, campaign notes and reference quotations stay in the evidence pack in every format. Use the opening paragraph and explicit questions for text the recipient should read.'
-        + (onDraftWithModel && !demo ? ' Draft with your model lets you review this context before sending it to the model.' : '')
-      : 'Keep original wording where it matters. Notes are labelled as notes, not verified facts.', {rows: 7, maxLength: kind === 'meeting' ? 1000000 : 200000});
+      : contextCopy?.help || 'Keep original wording where it matters. Notes are labelled as notes, not verified facts.',
+    {rows: 7, maxLength: kind === 'meeting' ? 1000000 : 200000});
   const questions = field('Questions you need answered', 'textarea', data.questions || '', 'One question per line works well.', {rows: 4, maxLength: 12000});
   const query = field('Exact web search query', 'text', data.query || '', 'Only this query is sent to NeuroForge search. Avoid names and private details.', {maxLength: 1024});
   const search = check('Search the web for related material', !demo && (data.use_search ?? ['grants', 'research'].includes(kind)));
@@ -81,6 +82,12 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
       + (onDraftWithModel && !demo ? ' A model may revise it if you choose Draft with your model.' : '');
     openingCount.textContent = `${Array.from(opening.input.value).length.toLocaleString()} / ${OPENING_LIMIT.toLocaleString()} characters`;
     opening.input.setCustomValidity(openingParagraphProblem(opening.input.value));
+    if (kind === 'brief') {
+      const copy = briefContextCopy(documentType.input.value, campaignSenderReview);
+      notes.wrap.querySelector('label').textContent = copy.label;
+      notes.wrap.querySelector('small').textContent = copy.help
+        + (onDraftWithModel && !demo ? ' The optional letter-drafting handoff excludes these notes and references. Source ranking has its own separate controls below.' : '');
+    }
   }
   opening.input.addEventListener('input', updateOpening);
   documentType.input.addEventListener('change', updateOpening);
@@ -342,12 +349,27 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   }
   const prepare = h('div', {class: 'prepare-bar'}, scope,
     h('button', {type: 'submit', class: 'button primary'}, kind === 'research' ? 'Prepare research brief' : 'Prepare my draft'));
-  if (kind === 'brief' && !demo && onDraftWithModel) prepare.append(button('Draft with your model', () => {
-    if (!form.reportValidity()) return;
-    const payload = state(); remember(kind, payload);
-    try { onDraftWithModel(payload); }
-    catch (problem) { feedback.replaceChildren(notice(problem.message, 'error')); }
-  }, 'quiet'), h('p', {class: 'fine'}, 'Opens a guided draft with these inputs for you to review before sending them to the model.'));
+  if (kind === 'brief' && !demo && onDraftWithModel) {
+    const modelHelp = h('p', {class: 'fine', id: opening.input.id + '-model-help'});
+    const modelDraft = button('Draft with your model', () => {
+      if (!form.reportValidity()) return;
+      const payload = state();
+      try {
+        const problem = enquiryModelDraftProblem(payload);
+        if (problem) throw new Error(problem);
+        remember(kind, payload); onDraftWithModel(payload);
+      } catch (problem) { feedback.replaceChildren(notice(problem.message, 'error')); }
+    }, 'quiet');
+    modelDraft.setAttribute('aria-describedby', modelHelp.id);
+    function updateModelDraft() {
+      const problem = enquiryModelDraftProblem({workflow: kind, document_type: documentType.input.value});
+      modelDraft.disabled = Boolean(problem);
+      modelHelp.textContent = problem || 'Opens the enquiry-letter template with the project name, complete opening, questions and recipient/sender details for review before sending. A recorded campaign purpose is included where present. Notes and reference material are excluded from this handoff.';
+    }
+    documentType.input.addEventListener('change', updateModelDraft);
+    updateModelDraft();
+    prepare.append(modelDraft, modelHelp);
+  }
   fields.append(h('h3', {class: 'form-section-title'}, 'Review and prepare'), prepare);
   form.append(fields, status, h('div', {class: 'button-row'}, cancel));
   root.append(h('header', {class: 'page-intro non-print'}, h('span', {class: 'eyebrow'}, 'COMMUNITY WORKBENCH'),

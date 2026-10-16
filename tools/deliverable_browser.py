@@ -152,7 +152,7 @@ class DeliverableChecks:
         self.goto(page, 'brief?example=1' if example else 'brief')
         if not example:
             page.get_by_label('Project name', exact=True).fill('Fictional garden access enquiry')
-            page.get_by_label('Your notes and context', exact=True).fill(SOURCE)
+            page.get_by_label('Internal notes and evidence context', exact=True).fill(SOURCE)
             page.get_by_label('Questions you need answered', exact=True).fill('Can volunteers use the venue water tap on Thursday?')
         page.get_by_role('button', name='Prepare my draft', exact=True).click()
         return self.document(page)
@@ -242,7 +242,7 @@ class DeliverableChecks:
         expect(contact).to_have_value('\n'.join(PROFILE[key] for key in ('email', 'phone', 'website')))
         page.get_by_label('Recipient or audience', exact=True).fill('Casey Example')
         page.get_by_label('Project name', exact=True).fill('A complete fictional garden enquiry')
-        page.get_by_label('Your notes and context', exact=True).fill(SOURCE)
+        page.get_by_label('Internal notes and evidence context', exact=True).fill(SOURCE)
         page.get_by_label('Questions you need answered', exact=True).fill('Who approves venue water access?')
         page.get_by_role('button', name='Prepare my draft', exact=True).click()
         signed = self.document(page).inner_text()
@@ -255,7 +255,7 @@ class DeliverableChecks:
         page.get_by_label('Organisation name', exact=True).fill('')
         contact.fill('')
         page.get_by_label('Project name', exact=True).fill('Explicitly unsigned fictional enquiry')
-        page.get_by_label('Your notes and context', exact=True).fill(SOURCE)
+        page.get_by_label('Internal notes and evidence context', exact=True).fill(SOURCE)
         page.get_by_label('Questions you need answered', exact=True).fill('Who approves venue water access?')
         page.get_by_role('button', name='Prepare my draft', exact=True).click()
         doc = self.document(page)
@@ -306,6 +306,134 @@ class DeliverableChecks:
         assert filename.endswith('.html') and 'Reviewed garden enquiry' in html
         assert '**Thursday**' not in html and 'P&amp;C' in html
         self.screenshot(page, 'edited-draft-reopened', full_page=True)
+
+    def private_preparation_context(self, page):
+        """Evidence stays local while recipient wording survives the full handoff."""
+        from playwright.sync_api import expect
+
+        title = 'Fictional recipient-only enquiry'
+        notes = 'PREPARATION_SENTINEL: private water analysis 🐝 e\u0301.\nShould we consult our lawyer?'
+        opening = 'Please clarify the public water access terms. Café e\u0301 🐝.\nNo booking or spending is approved.'
+        questions = 'Who may approve water access?\nPlease provide the current public conditions.'
+        reference = {
+            'title': 'PRIVATE_REFERENCE_TITLE',
+            'content': 'REFERENCE_BODY_SENTINEL: water costs remain unconfirmed.',
+            'url': 'https://example.invalid/private-evidence',
+        }
+        excluded = ['PREPARATION_SENTINEL', 'consult our lawyer',
+                    reference['title'], reference['content'], reference['url']]
+        self.set_profile(page, PROFILE)
+        self.goto(page, 'brief')
+        page.get_by_label('Project name', exact=True).fill(title)
+        page.get_by_label('Recipient or audience', exact=True).fill('Casey Example')
+        page.get_by_label('Internal notes and evidence context', exact=True).fill(notes)
+        page.get_by_label('Opening paragraph for the recipient', exact=True).fill(opening)
+        page.get_by_label('Questions you need answered', exact=True).fill(questions)
+        model_button = page.get_by_role('button', name='Draft with your model', exact=True)
+        expect(model_button).to_be_enabled()
+        formats = page.get_by_label('What are you preparing?', exact=True)
+        for kind, label in [
+            ('briefing', 'Background for this briefing note'),
+            ('agenda', 'Background for this agenda item'),
+            ('enquiry', 'Internal notes and evidence context'),
+        ]:
+            formats.select_option(kind)
+            expect(page.get_by_label(label, exact=True)).to_have_value(notes)
+            opening_label = ('Purpose paragraph for this agenda' if kind == 'agenda'
+                             else 'Opening paragraph for the recipient')
+            expect(page.get_by_label(opening_label, exact=True)).to_have_value(opening)
+            if kind == 'enquiry':
+                expect(model_button).to_be_enabled()
+            else:
+                expect(model_button).to_be_disabled()
+                expect(page.get_by_text(
+                    'Draft with your model supports enquiry letters only.',
+                    exact=False)).to_be_visible()
+        page.get_by_text('Add a reference', exact=True).click()
+        page.get_by_label('Reference title', exact=True).fill(reference['title'])
+        page.get_by_label('Reference text', exact=True).fill(reference['content'])
+        page.get_by_label('Reference link (optional)', exact=True).fill(reference['url'])
+        page.get_by_role('button', name='Add this reference', exact=True).click()
+        page.get_by_role('button', name='Prepare my draft', exact=True).click()
+        body = self.document(page).inner_text()
+        assert all(value not in body for value in excluded), body
+        assert all(line in body for line in opening.splitlines())
+        assert all(line in body for line in questions.splitlines())
+        copied = self.copy(page)
+        assert all(value not in copied for value in excluded), copied
+        original = self.pack(page)
+        assert original['input_snapshot']['notes'] == notes
+        assert original['input_snapshot']['opening_paragraph'] == opening
+        assert original['input_snapshot']['questions'] == questions
+        assert original['input_snapshot']['sources'][0]['content'] == reference['content']
+        assert original['sources'][0]['content'] == notes
+        assert original['sources'][1]['content'] == reference['content']
+        assert original['excerpts']
+        assert original['document_questions'] == questions.splitlines()
+        page.get_by_role('button', name='Save to My workspace', exact=True).click()
+        expect(page.get_by_text('Saved in My workspace', exact=False)).to_be_visible()
+        self.goto(page, 'library')
+        card = page.locator('article.card').filter(
+            has=page.get_by_role('heading', name=title, exact=True))
+        card.get_by_role('button', name='Open draft', exact=True).click()
+        reopened = self.pack(page)
+        for key in ('input_snapshot', 'sources', 'excerpts', 'document_markdown'):
+            assert reopened[key] == original[key], key
+        with page.expect_download() as pending:
+            page.get_by_role('button', name='Download Word (.docx)', exact=True).click()
+        with zipfile.ZipFile(pending.value.path()) as archive:
+            document = ET.fromstring(archive.read('word/document.xml'))
+        word_text = ''.join(document.itertext())
+        assert all(value not in word_text for value in excluded), word_text
+        assert all(line in word_text for line in opening.splitlines())
+        self.screenshot(page, 'recipient-only-letter-reopened', full_page=True)
+        page.get_by_role('button', name='Edit project inputs', exact=True).click()
+        expect(page.get_by_label('Internal notes and evidence context', exact=True)).to_have_value(notes)
+        expect(page.get_by_label('Opening paragraph for the recipient', exact=True)).to_have_value(opening)
+        page.get_by_role('button', name='Draft with your model', exact=True).click()
+        expect(page.get_by_label('Template', exact=True)).to_have_value('enquiry-letter')
+        values = page.locator('.template-form input:not([type="checkbox"]), .template-form textarea').evaluate_all(
+            '(inputs) => inputs.map(input => input.value)')
+        context = next(value for value in values if value.startswith(title + '\n\nOpening paragraph'))
+        assert context.endswith(opening)
+        assert questions in values and 'Casey Example' in values
+        assert all(not any(value in text for value in excluded) for text in values)
+        page.evaluate('''async () => {
+            const {request} = await import('/static/api.js');
+            await request('/api/settings', {data: {settings: {
+              provider:'openai-compatible', api_url:'https://example.invalid/v1',
+              model:'fixture-model', max_tokens:2048}, confirm_endpoint:true}});
+        }''')
+        requests, messages = [], []
+        page.on('request', lambda request: requests.append(json.loads(request.post_data or '{}'))
+                if request.method == 'POST' and request.url == self.base + '/api/template/stream' else None)
+
+        def answer(packet, **_kwargs):
+            messages.append([item.content for item in packet])
+            return client.ChatResult(FINAL_DRAFT, finish_reason='stop', model='fixture-model')
+
+        def stream(packet, **_kwargs):
+            result = answer(packet)
+            yield result.content
+            return result
+
+        with patch.object(templates, 'chat', side_effect=answer), \
+                patch.object(templates, 'chat_stream', side_effect=stream):
+            page.get_by_role('button', name='Run template', exact=True).click()
+            expect(self.document(page)).to_contain_text('Garden access enquiry')
+        assert len(requests) == 1 and len(messages) == 3
+        transmitted = requests[0]['variables']
+        assert transmitted['context'] == context
+        assert transmitted['questions'] == questions
+        assert transmitted['recipient'] == 'Casey Example'
+        assert PROFILE['full_name'] in transmitted['sender']
+        for packet in messages:
+            assert context in '\n'.join(packet)
+            assert questions in '\n'.join(packet)
+            assert all(value not in '\n'.join(packet) for value in excluded)
+        self.goto(page, 'brief')
+        expect(page.get_by_label('Internal notes and evidence context', exact=True)).to_have_value(notes)
+        expect(page.get_by_label('Opening paragraph for the recipient', exact=True)).to_have_value(opening)
 
     def template_document(self, page):
         from playwright.sync_api import expect
@@ -603,6 +731,7 @@ def main(argv=None):
                 checks.check('complete-example-copy-export', checks.complete_example)
                 checks.check('profile-defaults-explicit-blanks', checks.profile_roundtrip)
                 checks.check('edit-save-reopen-original-retained', checks.edited_draft_roundtrip)
+                checks.check('recipient-only-evidence-save-export-model-handoff', checks.private_preparation_context)
                 server.app.preferences.update({'model': client.MODEL, 'max_tokens': 2048})
                 checks.check('template-final-document', checks.template_document)
                 checks.check('readable-safe-markdown', checks.readable_markdown)

@@ -1,5 +1,6 @@
 """Recipient prose remains explicit, literal and separate from campaign evidence."""
 import copy
+from dataclasses import asdict, replace
 import io
 import json
 import zipfile
@@ -10,7 +11,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from sinter import briefs, client, workbench
+from sinter import briefs, casebooks, client, evidence, workbench
 from sinter.document_markup import Paragraph, parse
 from sinter.docx_export import W, export_docx
 from sinter.evidence import literal_paragraph
@@ -97,11 +98,63 @@ def test_private_questions_are_not_mined_from_campaign_notes_in_any_format(kind)
     assert payload == before
 
 
-def test_non_campaign_notes_keep_existing_question_and_background_behavior():
-    payload = project(campaign_sender_review=False, questions="", notes="Should we consult the coordinator?")
+@pytest.mark.parametrize("notes", [
+    "InternalNotesSentinel: water analysis.\nShould we consult our lawyer?",
+    "InternalNotesSentinel: water analysis. " * 100
+    + "\nShould we consult our lawyer?",
+    "InternalNotesSentinel: water 分析 🐝 e\u0301. " * 100
+    + "\nShould we consult our lawyer?",
+    "",
+])
+@pytest.mark.parametrize("questions", [
+    "",
+    "Please confirm the water access rules.\nWho may authorise access?",
+])
+def test_workbench_enquiry_keeps_preparation_evidence_out_of_recipient_prose(
+    monkeypatch, notes, questions,
+):
+    monkeypatch.setattr(evidence, "utc_now", lambda: "2026-10-16T00:00:00+00:00")
+    payload = project(
+        campaign_sender_review=False,
+        title="Fictional water enquiry",
+        notes=notes,
+        questions=questions,
+        opening_paragraph="Please clarify the current public terms.",
+        signatory="Example coordinator",
+        contact_details="coordinator@example.invalid",
+        sources=[{
+            "title": "Water reference",
+            "content": "ReferenceBodySentinel: water access remains unapproved.",
+            "url": "https://example.invalid/water",
+        }],
+    )
+    before = copy.deepcopy(payload)
+    expected_sources = evidence.collect(payload["sources"], notes)
+
     report = workbench.run(payload)
-    assert report["document_questions"] == [payload["notes"]]
-    assert payload["notes"] in report["document_markdown"]
+    document = report["document_markdown"]
+
+    assert "InternalNotesSentinel" not in document
+    assert "ReferenceBodySentinel" not in document
+    assert "consult our lawyer" not in document
+    assert report["document_opening"] == payload["opening_paragraph"]
+    assert report["document_questions"] == (
+        questions.splitlines() if questions else []
+    )
+    assert report["sources"] == [asdict(item) for item in expected_sources]
+    assert report["excerpts"]
+    assert {item["source_id"] for item in report["excerpts"]} == {
+        item.id for item in expected_sources
+    }
+    selected = [evidence.Excerpt(**item) for item in report["excerpts"]]
+    assert all(
+        evidence.validate_excerpt(item, expected_sources) for item in selected
+    )
+    assert evidence.render_evidence(selected, expected_sources) in report["markdown"]
+    missing = {"field": "questions", "label": "Questions you want answered"}
+    assert (missing in report["missing_fields"]) is (not bool(questions))
+    assert report["document_ready"] is bool(questions)
+    assert payload == before
 
 
 def test_blank_uses_existing_document_and_missing_field_shape():
@@ -156,3 +209,157 @@ def test_saved_report_keeps_opening_original_document_and_later_edits_distinct(t
     assert exported["input_snapshot"] == payload
     assert exported["document_markdown"] == original
     assert exported["document_edits"]["markdown"] != original
+
+
+
+def test_request_body_cannot_enable_source_passage_enquiry_context():
+    payload = project(
+        campaign_sender_review=False,
+        notes="InternalNotesSentinel: do not publish this analysis.",
+        sources=[{
+            "title": "Reference",
+            "content": "ReferenceBodySentinel: retained preparation evidence.",
+        }],
+        enquiry_context="source_passages",
+    )
+    before = copy.deepcopy(payload)
+
+    report = workbench.run(payload)
+
+    assert "InternalNotesSentinel" not in report["document_markdown"]
+    assert "ReferenceBodySentinel" not in report["document_markdown"]
+    assert report["document_questions"] == [payload["questions"]]
+    assert payload == before
+
+
+@pytest.mark.parametrize("kind", ["briefing", "agenda"])
+def test_ordinary_internal_formats_keep_notes_and_question_extraction(kind):
+    notes = "Should we consult the water coordinator?"
+    payload = project(
+        campaign_sender_review=False,
+        document_type=kind,
+        notes=notes,
+        questions="",
+        sources=[],
+    )
+    before = copy.deepcopy(payload)
+
+    report = workbench.run(payload)
+
+    assert report["document_questions"] == [notes]
+    assert notes in report["document_markdown"]
+    assert report["sources"][0]["content"] == notes
+    assert payload == before
+
+
+@pytest.mark.parametrize("policy", ["recipient_only", "source_passages"])
+@pytest.mark.parametrize("position", [0, 2])
+def test_both_enquiry_policies_reject_forged_selected_passages(policy, position):
+    sources = [evidence.source(
+        "Original reference",
+        "First exact passage.\nSecond exact passage.\nThird exact passage.",
+        kind="reference_excerpt",
+        retrieved_at="2026-10-16T00:00:00+00:00",
+    )]
+    selected = evidence.excerpts(sources)
+    selected[position] = replace(
+        selected[position], quote=selected[position].quote + " Forged wording."
+    )
+    payload = project(campaign_sender_review=False, notes="", sources=[])
+    before = copy.deepcopy(payload)
+    selected_before = copy.deepcopy(selected)
+
+    with pytest.raises(ValueError, match="document passage does not match"):
+        briefs.prepare_document(
+            payload, sources, selected, enquiry_context=policy
+        )
+
+    assert payload == before
+    assert selected == selected_before
+
+
+@pytest.mark.parametrize("policy", [
+    None, True, "", "source_passages ", ["source_passages"],
+])
+def test_invalid_producer_policy_is_rejected(policy):
+    with pytest.raises(ValueError, match="recipient-only or source-passage"):
+        briefs.prepare_document(project(), [], enquiry_context=policy)
+
+
+def test_default_renderer_omits_reference_only_enquiry_context():
+    sources = [evidence.source(
+        "Original reference",
+        "ReferenceBodySentinel: no water booking is approved.",
+        kind="reference_excerpt",
+        retrieved_at="2026-10-16T00:00:00+00:00",
+    )]
+    payload = project(campaign_sender_review=False, notes="", sources=[])
+    selected = evidence.excerpts(sources)
+
+    recipient = briefs.prepare_document(payload, sources, selected)
+    dossier = briefs.prepare_document(
+        payload, sources, selected, enquiry_context="source_passages"
+    )
+
+    assert "ReferenceBodySentinel" not in recipient["document_markdown"]
+    assert "ReferenceBodySentinel" in dossier["document_markdown"]
+    assert "The supplied material titled Original reference states:" in (
+        dossier["document_markdown"]
+    )
+
+
+def test_casebook_enquiry_explicitly_preserves_attributed_source_passages():
+    book = {
+        "schema": "sinter-casebook/v1",
+        "title": "Fictional water source dossier",
+        "document_type": "enquiry",
+        "questions": "What does the water notice say?",
+        "documents": [{
+            "title": "Water notice",
+            "content": "WaterAccessSentinel: water access has not been approved.",
+            "url": "https://example.invalid/water",
+        }],
+    }
+    before = copy.deepcopy(book)
+
+    report = casebooks.build(book)
+
+    assert "The supplied material titled Water notice states:" in (
+        report["document_markdown"]
+    )
+    assert "WaterAccessSentinel: water access has not been approved." in (
+        report["document_markdown"]
+    )
+    assert report["document_questions"] == [book["questions"]]
+    assert report["sources"][0]["content"] == book["documents"][0]["content"]
+    assert report["excerpts"]
+    assert book == before
+
+
+def test_new_preparation_does_not_rewrite_a_historical_saved_letter(tmp_path):
+    payload = project(
+        campaign_sender_review=False,
+        notes="InternalNotesSentinel: historical preparation wording.",
+    )
+    historical = workbench.run(payload)
+    sources = [evidence.Source(**item) for item in historical["sources"]]
+    selected = [evidence.Excerpt(**item) for item in historical["excerpts"]]
+    historical.update(briefs.prepare_document(
+        payload, sources, selected, enquiry_context="source_passages"
+    ))
+    historical["markdown"] = (
+        "# Historical saved report\n\n" + historical["document_markdown"]
+        + "\n\n" + evidence.render_evidence(selected, sources)
+    )
+    historical["input_snapshot"] = copy.deepcopy(payload)
+    assert "InternalNotesSentinel" in historical["document_markdown"]
+
+    store = Store(tmp_path / "fictional-history")
+    identifier = store.save_report(historical)
+    prepared_now = workbench.run(payload)
+    reopened = Store(store.directory).report(identifier)
+
+    assert "InternalNotesSentinel" not in prepared_now["document_markdown"]
+    assert reopened == historical
+    assert reopened["input_snapshot"] == payload
+    assert "InternalNotesSentinel" in reopened["document_markdown"]

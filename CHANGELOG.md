@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Keep new Workbench enquiry preparation notes and reference passages in evidence,
+  with explicit recipient questions instead of questions inferred from notes.
+  Preserve attributed Casebook dossiers and briefing/agenda background behavior.
+  Scope the optional model handoff to recipient-facing enquiry fields, explain the
+  transmitted material, and disable mismatched document formats. Historical saved
+  text, human edits, original inputs and source identities remain intact.
+
 - Keep numbered Workbench drafts in a compact, stable picker with their actual
   save states. Retain every deferred result outside the disclosure, preserve
   Cancel focus/scroll and move successful switches to the selected document.

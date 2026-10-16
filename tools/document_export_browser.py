@@ -559,17 +559,17 @@ def main(argv: list[str] | None = None) -> None:
                         blocked_exports(
                             page, report, "Edit your draft", controls, pending
                         )
-                        report.get_by_role(
+                        expect(report.get_by_role(
                             "button", name="Save to My workspace", exact=True
-                        ).click()
-                        expect(
-                            report.get_by_role("alert").filter(has_text="before saving")
-                        ).to_be_visible()
+                        )).to_be_disabled()
+                        expect(report.get_by_label("Document save state")).to_contain_text(
+                            "Apply or cancel"
+                        )
                         assert not server.app.store.reports()
                         checks.append(
                             "All six controls block pending text without download, "
                             "Word request, clipboard write, print or report change; "
-                            "Save keeps its existing refusal."
+                            "Save is disabled with visible Apply or cancel guidance."
                         )
                         page.get_by_role(
                             "link", name="My workspace", exact=True

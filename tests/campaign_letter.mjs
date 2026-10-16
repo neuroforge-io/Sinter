@@ -71,7 +71,7 @@ test('neutral opening intent is explicit and never inferred from route labels or
   }
 });
 
-test('optional model context preserves exact legacy title, notes and full source strings', () => {
+test('optional model context keeps exact title but excludes raw notes and source material', () => {
   for (const payload of [{}, {title: 'Research discussion', notes: ''}, {
     title: '  Original café e\u0301 🐝 <literal>\nTitle  ',
     notes: 'PRIVATE ORIGINAL NOTES\r\nNo permission or approval.\n' + '長'.repeat(1500),
@@ -81,30 +81,30 @@ test('optional model context preserves exact legacy title, notes and full source
     purpose: 'discussion', route_type: 'services', application_mode: 'not_required',
   }]) {
     const before = structuredClone(payload);
-    const original = [payload.title, payload.notes, ...(payload.sources || [])
-      .map(source => `${source.title}\n${source.content}\n${source.url || ''}`)]
-      .filter(Boolean).join('\n\n');
-    assert.equal(letters.campaignLetterModelContext(payload), original);
+    assert.equal(letters.campaignLetterModelContext(payload), payload.title || '');
     assert.deepEqual(payload, before);
   }
 });
 
-test('optional model context declares explicit scope without cutting supplied material', () => {
+test('optional model context preserves explicit scope and complete opening without source material', () => {
   for (const campaign_route_purpose of ['discussion', 'research']) {
-    const payload = {workflow: 'brief', campaign_sender_review: true, campaign_route_purpose,
+    const payload = {workflow: 'brief', document_type: 'enquiry', campaign_sender_review: true, campaign_route_purpose,
       title: ' Original fictional scope café e\u0301 🐝 ',
+      opening_paragraph: 'An explicitly entered recipient opening.\r\nKeep the scope tentative.',
       notes: 'PRIVATE ENTERED NOTES\r\nNo authority is established.\n' + 'n'.repeat(4000),
       sources: [{title: ' Exact source title ', content: 'Exact full content\r\n' + '中文'.repeat(2000),
         url: 'https://example.invalid/exact?source=1&scope=research'}]};
     const before = structuredClone(payload);
-    const original = [payload.title, payload.notes, ...(payload.sources || [])
-      .map(source => `${source.title}\n${source.content}\n${source.url || ''}`)]
-      .filter(Boolean).join('\n\n');
+    const recipientContext = payload.title
+      + '\n\nOpening paragraph entered by you (the model may revise it):\n' + payload.opening_paragraph;
     const result = letters.campaignLetterModelContext(payload);
     assert.match(result, new RegExp(`^Route purpose \\(user-entered\\): ${campaign_route_purpose === 'discussion' ? 'Discussion' : 'Research'}\\.`));
     assert.match(result, /unsent clarification letter/);
     assert.match(result, /Do not describe it as a formal application or imply any agreement, approval, authority or funding/);
-    assert.equal(result.slice(-original.length), original);
+    assert.ok(result.endsWith(recipientContext));
+    for (const excluded of [payload.notes, ...payload.sources.flatMap(source => [source.title, source.content, source.url])]) {
+      assert.equal(result.includes(excluded), false);
+    }
     assert.deepEqual(payload, before);
     assert.equal(letters.campaignLetterModelContext({...payload, workflow: undefined}), result);
   }

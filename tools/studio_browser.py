@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> None:
                 context.route('**/*', guard)
                 page.goto(base + '/#brief')
                 page.get_by_label('Project name', exact=True).fill('Real unsaved project')
-                page.get_by_label('Your notes and context', exact=True).fill('No spending has been approved.')
+                page.get_by_label('Internal notes and evidence context', exact=True).fill('No spending has been approved.')
                 page.get_by_role('link', name='Overview', exact=True).click()
                 page.get_by_role('button', name='Try an example', exact=True).click()
                 page.get_by_label('What are you preparing?', exact=True).select_option('agenda')
@@ -70,7 +70,7 @@ def main(argv: list[str] | None = None) -> None:
                 page.get_by_role('link', name='Overview', exact=True).click()
                 page.get_by_role('button', name='Continue: Real unsaved project', exact=True).click()
                 expect(page.get_by_label('Project name', exact=True)).to_have_value('Real unsaved project')
-                expect(page.get_by_label('Your notes and context', exact=True)).to_have_value('No spending has been approved.')
+                expect(page.get_by_label('Internal notes and evidence context', exact=True)).to_have_value('No spending has been approved.')
                 page.get_by_role('link', name='Meeting minutes', exact=True).click()
                 # A label shared by two routes can otherwise match the outgoing page.
                 expect(page.get_by_role('heading', name='Prepare a clear meeting record.', exact=True)).to_be_visible()

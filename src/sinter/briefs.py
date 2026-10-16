@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from .evidence import Excerpt, Source, excerpts, literal, literal_paragraph, text, tokens, validate_excerpt
 
 FORMATS = {"enquiry": "Enquiry letter", "briefing": "Briefing note", "agenda": "Agenda item"}
+EnquiryContext = Literal["recipient_only", "source_passages"]
 QUESTION_WORDS = set("what when where who which how could would should please confirm provide does have has are can need available information about still stated supplied evidence source material relevant say says tell know".split())
 
 
@@ -79,14 +81,17 @@ def document_details(payload: dict) -> dict[str, str]:
 
 
 def document_questions(payload: dict) -> list[str]:
-    """Use entered questions, or verbatim question sentences from the user's notes."""
+    """Require explicit enquiry questions; retain internal-format note extraction."""
     entered = text(payload.get("questions", ""), "Questions", 12000)
     if entered.strip():
         questions = [line.strip().lstrip("-* ").strip() for line in entered.splitlines()
                      if line.strip()]
-    elif payload.get("campaign_sender_review") is True:
-        # Internal campaign notes are evidence, never an implied request to the
-        # recipient. Missing explicit questions must remain visibly missing.
+    elif (
+        payload.get("campaign_sender_review") is True
+        or payload.get("document_type", "enquiry") == "enquiry"
+    ):
+        # Preparation notes are never an implied question to a recipient.
+        # Missing explicit enquiry questions must remain visibly missing.
         questions = []
     else:
         notes = text(payload.get("notes", ""), "Notes")
@@ -140,8 +145,14 @@ def _context(payload: dict, sources: list[Source], selected: list[Excerpt],
 
 
 def prepare_document(payload: dict, sources: list[Source],
-                     selected: list[Excerpt] | None = None) -> dict:
-    """Build a usable document separately from its evidence and completion guidance."""
+                     selected: list[Excerpt] | None = None, *,
+                     enquiry_context: EnquiryContext = "recipient_only") -> dict:
+    """Build a document using an explicit producer-selected enquiry policy."""
+    if (
+        not isinstance(enquiry_context, str)
+        or enquiry_context not in ("recipient_only", "source_passages")
+    ):
+        raise ValueError("Choose recipient-only or source-passage enquiry context.")
     kind = payload.get("document_type", "enquiry")
     if not isinstance(kind, str) or kind not in FORMATS:
         raise ValueError("Choose enquiry, briefing or agenda as the document type.")
@@ -151,7 +162,16 @@ def prepare_document(payload: dict, sources: list[Source],
     opening_text = document_opening(payload)
     questions = document_questions(payload)
     selected = excerpts(sources)[:4] if not selected else selected
-    context = _context(payload, sources, selected, letter=kind == "enquiry")
+    # Presentation policy must never bypass integrity checks, including passages
+    # outside the small set that a source-passage enquiry would display.
+    for passage in selected:
+        if not validate_excerpt(passage, sources):
+            raise ValueError("A document passage does not match its source. Rebuild the report.")
+    context = (
+        []
+        if kind == "enquiry" and enquiry_context == "recipient_only"
+        else _context(payload, sources, selected, letter=kind == "enquiry")
+    )
     question_list = "\n".join(f"{index}. {literal(question)}"
                               for index, question in enumerate(questions, 1))
     missing = []

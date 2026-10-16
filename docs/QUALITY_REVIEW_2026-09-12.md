@@ -93,6 +93,49 @@ the diagnosis used the completed log and exact source without downloading it.
 A fresh complete browser run is still required. These receipts do not establish
 a new human operator score, installed-release qualification or an RC4 release.
 
+## 16 October recipient-only enquiries — focused source checks passed
+
+An operator rehearsal on `45c8d415987922c119e2c68fd6a2e12527e3d654`
+saved two independently edited letters, closed the owned source server and app,
+then reopened both in a fresh source app and browser tab. Four actual Word and
+evidence downloads matched the applied human wording and original inputs. The
+protected original databases stayed unchanged; no hosted call, outgoing message
+or replayed preparation/save occurred. This established source-workspace
+preservation, not installed-app qualification. Both letters still required manual
+removal of preparation notes quoted into recipient prose. The limited workflow
+critic retained UX 6.5, functionality 7.5 and aesthetics 6.5; no higher product
+score is established.
+
+New Workbench enquiries now keep notes and reference passages in evidence, use
+only explicit recipient questions, and retain the entered opening/sender details.
+The renderer's producer-selected policy is separate from request-body fields.
+Casebook dossiers explicitly retain attributed source passages; briefing/agenda
+background and campaign protections remain intact. Every selected excerpt is
+validated before either presentation policy. Saved historical documents and
+human edits are not migrated or regenerated.
+
+The optional Workbench model handoff now constructs context from the title,
+complete validated opening and explicit route purpose, with recipient, questions
+and sender details passed separately. Internal notes, reference bodies/URLs and
+campaign metadata are excluded. Other document formats are visibly disabled for
+this enquiry-only handoff. Separate excerpt ranking and directly authored Explore
+context retain their declared transfers; provider/model admission is unchanged.
+
+Sequential local checks passed: 174 Python tests and 36 JavaScript tests, AST,
+fatal Ruff, exact ESM stdin parsing with a rejected invalid control, three browser
+help paths and diff checks. The nested Python-to-Node wrapper was deselected
+because those actual Node suites ran separately. The capped job finished in
+11.23 seconds at nice 19, idle I/O, CPU 25%, 256 MiB maximum and no swap. These
+are check receipts, not performance or memory-use benchmarks.
+
+The fictional deliverable browser journey now checks format/value retention,
+recipient-only copy, save/reopen, Word/evidence export and the actual three-step
+model messages against the visible handoff fields. Its model replies are mocked;
+the new journey has not yet run. A separate existing export assertion now checks
+the disabled Save control and visible Apply/Cancel guidance while retaining all
+six pending-export guards and the zero-write assertion. Exact pushed-source
+browser CI, a fresh human rehearsal and installed qualification remain required.
+
 ## 16 October draft replacement — operator check complete, CI and installed checks pending
 
 Actual in-app browser use of source `3056fd430efd2243a4d663c66a9e44cca26fd36e`

@@ -116,6 +116,15 @@ silently replay a request. Funding campaigns keep opportunities, quotes and next
 actions in a revisioned local record. Readable drafts can be edited and exported
 to Word while their original sources remain in the evidence pack.
 
+New development Workbench enquiries keep preparation notes and reference passages
+in the evidence pack. Write recipient-facing context in the opening paragraph and
+enter the questions explicitly. Briefing notes, agenda items and attributed
+Casebook dossiers retain their own background rules. Optional **Draft with your
+model** transfers only the enquiry title, opening, questions, recipient and sender
+details into editable template fields; notes and reference bodies are excluded.
+The separate excerpt-ranking option can still send the evidence it describes.
+Saved historical drafts are preserved; prepare explicitly to use the new behavior.
+
 Development Workbench drafts have a compact **Drafts** list with a separate
 saved/unsaved state for each version. Later results stay available when you edit
 during preparation. Opening a different draft preserves the earlier document

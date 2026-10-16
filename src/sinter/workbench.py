@@ -222,7 +222,9 @@ def run(payload: dict, progress=lambda message: None) -> dict:
         result["document_markdown"] = _research_document(title, questions, sources, selected)
     else:
         from .briefs import prepare_document, sections
-        prepared = prepare_document(payload, sources, selected)
+        prepared = prepare_document(
+            payload, sources, selected, enquiry_context="recipient_only"
+        )
         document, question_map = sections(payload, sources, prepared)
         lines.extend(document)
         result.update(prepared)

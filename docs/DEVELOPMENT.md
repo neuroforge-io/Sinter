@@ -235,11 +235,26 @@ Other workflows reject this field rather than ignore it.
 Reports retain the raw value as `document_opening`; the form's `input_snapshot`
 retains preparation inputs, while original document text and later human edits remain
 separate. Literal prose cannot create headings, links, lists or page breaks.
-Campaign sender review keeps background in evidence for all three local formats
-and requires explicit questions rather than extracting them from internal notes.
-Optional model drafting is a separate reviewed handoff: its visible context
-includes the raw opening and the supplied notes/references. The model may rewrite
-the draft opening. This does not extend the native profile to long letter recipes.
+New Workbench enquiries keep preparation notes and reference passages in evidence;
+only the explicit opening, questions and recipient/sender details enter the letter.
+Blank questions remain visibly missing rather than being inferred from notes.
+Briefing notes and agenda items retain their background passages. Campaign sender
+review keeps background in evidence for all three local formats. Casebook source
+dossiers explicitly retain their selected attributed passages; every selected
+excerpt is validated even when it is omitted from recipient prose.
+
+Optional Workbench model drafting is a separate recipient-only enquiry handoff.
+The editable template fields contain the title, complete validated opening,
+explicit questions, recipient and sender details. Internal notes, reference bodies
+and links are excluded from that handoff; the original Workbench inputs remain
+local and unchanged. The model may revise the opening. Briefing/agenda model
+handoffs are disabled until a matching workflow exists. The separate optional
+excerpt-ranking control can still send the selected evidence it describes.
+Directly authored Explore template context remains explicit model input. None
+of this extends the native profile to long letter recipes.
+
+Saved historical documents and human edits load without migration or regeneration.
+Only an explicit new preparation uses the new enquiry policy.
 
 | Variable | Purpose |
 | --- | --- |

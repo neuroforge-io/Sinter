@@ -307,7 +307,8 @@ def build(payload, document_type=None, progress=lambda message: None):
     picked = [Excerpt(**item) for item in selected.values()]
     document_sources = sources if picked or not scope_map else []
     prepared = prepare_document({**book, 'document_type': {'brief': 'briefing', 'handover': 'briefing'}.get(document_type, document_type)},
-                                document_sources, picked)
+                                document_sources, picked,
+                                enquiry_context="source_passages")
     if document_type == 'handover':
         prepared['document_markdown'] = prepared['document_markdown'].replace(
             '## Recommended next steps', '## Handover next steps')
