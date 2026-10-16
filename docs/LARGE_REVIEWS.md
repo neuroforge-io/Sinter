@@ -94,12 +94,13 @@ batches outside its budget remain blocked on a later ordinary resume. Older
 checkpoints with ambiguous `failed` records are treated conservatively as uncertain.
 A received but empty or truncated response is a definitive failed batch; another
 explicit resume may retry it. A response is treated as complete when it contains a
-verbatim source quote, a finding tied to existing source lines and specific source
-words, a DEMONSTRATED/SUSPECTED finding carrying a concrete phrase from the source,
-an unlabelled defect that retains a longer source phrase, or an explicit no-issues
-result. Missing-source refusals cannot pass by repeating a source word or a clean-result
-phrase. Line numbers and confidence labels by themselves
-do not pass. This gate recognizes usable commentary; it does not verify a finding.
+source-grounded finding or an explicit affirmative no-issues result. A finding
+needs specific source support, such as a matching quote or source line together
+with a supported claim. A quote, line number or DEMONSTRATED/SUSPECTED label alone
+does not pass. Clean-result wording must assert the result; a negated, quoted,
+conditional or example phrase does not establish completion. Missing-source
+refusals cannot pass by repeating a source word or a clean-result phrase. This
+gate recognizes usable commentary; it does not verify a finding.
 A received but unsupported reply remains a partial batch. Partials are
 never silently repeated; an explicit resume may re-review one with a bounded
 follow-up question, at most two hops, and each re-review records its attempt in the
@@ -107,6 +108,15 @@ ledger. Existing partial answers are first reassessed locally against their actu
 excerpt, including answers written by the older quote-only gate and those already
 at the follow-up limit. A newly recognized answer needs no repeat model request.
 The terminal and report both explain the remaining attempts and recovery action.
+Earlier completed batches admitted only by an unsupported clean phrase are
+reclassified locally as partial. Their exact original commentary, question,
+follow-up count and historical DONE classification remain in the ledger. No
+request is sent for a newly reclassified batch in that invocation. Inspect the
+saved result, then explicitly resume its updated checkpoint to request a bounded
+follow-up; folder reviews still require `--consent`. This does not reset an
+exhausted follow-up budget or authorize any uncertain request. Historical
+assessment data is included in the write-ahead checkpoint before any other
+eligible generation; if that write fails, no generation is dispatched.
 If an answer remains vague after two follow-ups, review its saved commentary
 manually or start a new review with a narrower question and a new output path;
 repeated `--resume` cannot reset the limit or establish completion.

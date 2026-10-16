@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Require an explicit affirmative no-issues result in collection reviews; negated,
+  quoted, conditional and example phrases no longer pass the clean-result
+  shortcut. Preserve grounded findings. Reassess affected historical completions
+  locally, retaining their original judgement and commentary; a follow-up needs
+  another explicit resume and keeps the existing attempt and uncertainty controls.
+
 - Refresh the verbatim, qualified public native API fixture and its exact hash
   pin. Only its OpenAPI source provenance changed; the 57 cases, model identity,
   request limits and unavailable public preflight routes remain unchanged.

@@ -6,6 +6,8 @@ No remote generation is automatically replayed after an uncertain failure.
 """
 from __future__ import annotations
 
+from .review_clean_claims import clean_result_prose, explicit_clean_result
+
 import hashlib
 import json
 import os
@@ -853,12 +855,20 @@ def _substantive(content, excerpt, start_line=1):
     if not content.strip():
         return False
     excerpt_lines = excerpt.splitlines() or [excerpt]
+    clean_prose = clean_result_prose(content)
+    # A clean verdict must remain affirmative across the answer, including a
+    # later paragraph that withdraws it. Grounded findings still stand alone.
+    clean_paragraphs = {
+        paragraph for paragraph in re.split(r'\n\s*\n|\n(?=\s*(?:[-*]|\d+[.)])\s)',
+                                            clean_prose)
+        if len(paragraph) >= 40
+    } if explicit_clean_result(clean_prose) else set()
     # Keep anchors local to a finding instead of borrowing vocabulary from an
     # unrelated paragraph elsewhere in a long answer.
     for paragraph in re.split(r'\n\s*\n|\n(?=\s*(?:[-*]|\d+[.)])\s)', content):
         if _UNSUPPORTED_REQUEST.search(paragraph):
             continue
-        if EXPLICIT_CLEAN.search(paragraph) and len(paragraph) >= 40:
+        if paragraph in clean_paragraphs:
             return True
         quote_matches = [match for match in re.finditer(
             r'["\'“‘`]([^"\'”’`]{12,})["\'”’`]', paragraph)
@@ -978,6 +988,8 @@ def run(payload, *, question='Review this material for mistakes, gaps and incons
     created_at = utc_now()
     results = {}
     question_plan = {}
+    prior_assessments = {}
+    reclassified = set()
     if resume is not None:
         if (not isinstance(resume, dict) or resume.get('schema') != SCHEMA
                 or resume.get('fingerprint') != fingerprint):
@@ -1003,6 +1015,20 @@ def run(payload, *, question='Review this material for mistakes, gaps and incons
                 raise ValueError('Invalid checkpoint follow-up count.')
             saved_question = _text(item.get('question', question), 'Saved review question', 5000)
             saved_error = _text(item.get('error', ''), 'Saved recovery message', 5000)
+            prior = item.get('prior_assessment')
+            if prior is not None:
+                if (not isinstance(prior, dict)
+                        or set(prior) != {'status', 'content', 'question', 'follow_ups', 'reason'}
+                        or prior['status'] != 'done'
+                        or prior['reason'] != 'clean_result_reassessed'
+                        or type(prior['follow_ups']) is not int
+                        or not 0 <= prior['follow_ups'] <= MAX_FOLLOW_UPS):
+                    raise ValueError('Invalid prior review assessment.')
+                prior_assessments[item['id']] = {
+                    **prior,
+                    'content': _text(prior['content'], 'Original classified commentary', 50000),
+                    'question': _text(prior['question'], 'Original classified question', 5000),
+                }
             seen.add(item['id'])
             uncertain = (item['status'] in {'running', 'uncertain_remote_outcome'}
                          or (item['status'] == 'failed' and recovery_version == 1))
@@ -1023,6 +1049,25 @@ def run(payload, *, question='Review this material for mistakes, gaps and incons
                 results[item['id']] = {'id': item['id'], 'status': 'done', 'content': content,
                                        'question': saved_question,
                                        'follow_ups': item.get('follow_ups', 0)}
+                # Reopen only earlier clean-phrase admissions affected by this
+                # fix. Preserve the historical judgement and known response;
+                # discovering it does not authorize another provider request.
+                if (EXPLICIT_CLEAN.search(content)
+                        and not _substantive(content, allowed[item['id']]['text'],
+                                             allowed[item['id']]['line'])):
+                    prior_assessments.setdefault(item['id'], {
+                        'status': 'done', 'content': content,
+                        'question': saved_question, 'follow_ups': follow_ups,
+                        'reason': 'clean_result_reassessed',
+                    })
+                    results[item['id']].update(
+                        status='partial',
+                        error='The earlier completion used a clean phrase without an explicit '
+                              'affirmative result. Reclassified locally; no request was sent '
+                              'for this batch. Review its commentary, then explicitly resume '
+                              'the updated checkpoint if you want a bounded follow-up.')
+                    reclassified.add(item['id'])
+                    progress(results[item['id']]['error'])
             else:
                 content = _text(item.get('content'), 'Saved review', 50000)
                 chunk = allowed[item['id']]
@@ -1055,12 +1100,16 @@ def run(payload, *, question='Review this material for mistakes, gaps and incons
                 'fingerprint': fingerprint, 'title': book['title'],
                 'question': question, 'language': language, 'created_at': created_at,
                 'updated_at': utc_now(), 'questions': question_plan, 'total_batches': len(chunks),
-                'batches': [dict(row) for row in results.values()], 'source_fingerprint': book['fingerprint']}
+                'batches': [{**row, **({'prior_assessment': dict(prior_assessments[row['id']])}
+                                     if row['id'] in prior_assessments else {})}
+                            for row in results.values()], 'source_fingerprint': book['fingerprint']}
     for position, chunk in enumerate(chunks, 1):
         if offline or attempted >= max_parts:
             break
         previous = results.get(chunk['id'])
         previous_status = previous['status'] if previous is not None else None
+        if chunk['id'] in reclassified:
+            continue  # Local reclassification never dispatches a follow-up in this invocation.
         if previous_status == 'done' or (previous_status == 'uncertain_remote_outcome' and not retry_uncertain):
             continue
         if previous_status == 'partial' and previous.get('follow_ups', 0) >= MAX_FOLLOW_UPS:
@@ -1131,6 +1180,7 @@ def run(payload, *, question='Review this material for mistakes, gaps and incons
         'follow_up_exhausted': sum(row['status'] == 'partial' and row.get('follow_ups', 0) >= MAX_FOLLOW_UPS
                                    for row in results.values()),
         'reassessed_locally': sum(bool(row.get('reassessed_locally')) for row in results.values()),
+        'reclassified_locally': len(reclassified),
         'max_follow_ups': MAX_FOLLOW_UPS,
     }
     lines = [f"# {literal(book['title'])} - review ledger", 'UNVERIFIED MODEL COMMENTARY - NOT A TEST OR CERTIFICATION',
@@ -1148,6 +1198,11 @@ def run(payload, *, question='Review this material for mistakes, gaps and incons
                   item.get('content', 'No model review completed.')]
         if item.get('error'):
             lines.append('Recovery: ' + literal(item['error']))
+        if chunk['id'] in prior_assessments:
+            prior = prior_assessments[chunk['id']]
+            lines.append('Historical classification: DONE under the earlier clean-result gate. '
+                         'The original commentary is retained below; this is not a current '
+                         'completion or a new request result.\n\n' + prior['content'])
         if item.get('prior_content'):
             lines.append('Earlier received commentary (not the outcome of the most recent request):\n\n'
                          + item['prior_content'])

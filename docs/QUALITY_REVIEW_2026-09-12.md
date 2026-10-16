@@ -54,6 +54,40 @@ waits for the visible earlier-draft control before examining the exported
 correction and input basis. That initial failure is retained; the corrected
 seven-journey run still requires its own successful receipt.
 
+That corrected run at `b4c865ce7c6072547bef09023200f58b138a3786` subsequently
+passed all 12 jobs in [source CI 38846479385](https://github.com/neuroforge-io/Sinter/actions/runs/38846479385),
+including Chromium and the seven source-preview journeys. This qualifies that
+source run; it does not qualify later source changes or an installed release.
+
+## 16 October explicit clean-result admission and historical recovery
+
+A direct local reproduction admitted “Not all checks passed” as a completed
+review because the old gate searched for the substring “all checks passed”. A
+small typed clean-assertion helper now requires affirmative result wording and
+handles negation, questions, conditions, example wording, quotations and Markdown
+code fences. Existing source-grounded finding admission remains separate.
+
+Affected historical DONE batches are reassessed locally with their exact raw
+commentary and original classification retained. Their follow-up count is not
+reset. No new request is sent for that batch when the correction is discovered;
+another explicit resume of the updated ledger is required for a bounded follow-up.
+Uncertain requests still require their separate retry permission. The complete
+historical assessment is part of the write-ahead checkpoint before any other
+eligible request. Recovery schema versions 1 and 2 remain accepted.
+
+The final focused review suites passed 288 checks with 14 platform-specific skips.
+Independent review also reproduced a withdrawn verdict hidden in a scope suffix
+and a later paragraph. Clause separators and negative contractions cannot supply
+that scope, while filenames and ordinary possessives remain supported. The
+clean-result shortcut evaluates the complete non-code response, so a later
+withdrawal cannot borrow the earlier assertion; grounded findings remain separate.
+This is conservative language admission, not general natural-language verification.
+The initial reproductions and repair-stage test failures remain in private operation
+receipts. Fatal Ruff checks could not complete under this attempt's 512 MiB
+virtual-address limit, including one single-worker retry; no lint pass is claimed.
+These are deterministic source checks; no hosted model, browser,
+installed release or general model-quality acceptance is claimed here.
+
 ## 16 October recipient opening — source qualification in progress
 
 The Brief form now accepts explicit recipient-facing prose rather than requiring
