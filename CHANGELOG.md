@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve a meeting transcript's original source record through explicit reviewed
+  corrections, with a separate preparation time for the derived draft. Validate
+  source pins against unchanged raw text, keep correction errors beside the editor,
+  and exclude only derived provenance from the editable-input comparison.
+
 - Require an explicit affirmative no-issues result in collection reviews; negated,
   quoted, conditional and example phrases no longer pass the clean-result
   shortcut. Preserve grounded findings. Reassess affected historical completions

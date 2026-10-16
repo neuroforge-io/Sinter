@@ -159,6 +159,23 @@ model request. `tests/report_replacement.mjs` checks the state policy;
 `tools/report_source_preview_browser.py` adds actual-interface recovery and an
 explicitly synthetic delayed local completion to the existing offline CI run.
 
+Meeting corrections also retain the original transcript source's capture time;
+the derived report receives its own new `created_at`. Local meeting requests may
+include `transcript_source` with exactly `id`, `sha256` and `retrieved_at` from the
+originating report. The backend recomputes identity and hash from the unchanged
+raw transcript, validates the timezone-aware timestamp, and preserves its spelling.
+This preserves caller-supplied local history; it does not authenticate when a
+source was captured. An absent pin means a fresh preparation. Explicitly null,
+malformed or mismatched pins fail without silently recapturing the evidence;
+other workflows reject this meeting-only field.
+
+The full pin remains in the captured payload and evidence export. The shared
+editable-input comparison excludes only this derived field, so it cannot create
+a false stale-input notice. Correction failures are displayed beside the pending
+replacement and reason; they do not replace the current document or replay the
+request. `tests/test_meeting_source_snapshot.py` forces different capture and
+preparation seconds, and the browser journey keeps complete source equality.
+
 Local `brief` requests accept an optional `opening_paragraph`, up to 1,200 Unicode
 code points. It replaces the default enquiry introduction, introduces a briefing
 note, or supplies an agenda's explicitly labelled purpose. The form retains the
@@ -293,7 +310,7 @@ can be downloaded with its incomplete label. No generation is automatically repl
 | `template_runs.py` | Shared collection of complete and recoverable partial template output. |
 | `evidence.py`, `briefs.py`, `grants.py`, `workbench.py` | Source-constrained compilation, question navigation and conservative checks. |
 | `research.py` | Source-backed research formatting and visible question-to-excerpt coverage. |
-| `meetings.py`, `speech.py`, `transcript_export.py` | Transcript integrity, optional recognition and interchange exports. |
+| `meetings.py`, `meeting_sources.py`, `speech.py`, `transcript_export.py` | Transcript integrity and retained provenance, optional recognition and interchange exports. |
 | `casebooks.py`, `review.py` | Revisioned source collections, bounded admission, checkpointed reviews and coverage. |
 | `outputs.py` | Shared source/destination validation and same-directory atomic text output. |
 | `review_checkpoints.py` | Review-folder output exclusion and bounded, identity-preserving checkpoint discovery. |

@@ -59,6 +59,35 @@ passed all 12 jobs in [source CI 38846479385](https://github.com/neuroforge-io/S
 including Chromium and the seven source-preview journeys. This qualifies that
 source run; it does not qualify later source changes or an installed release.
 
+## 16 October meeting-source boundary failure
+
+[Source CI 38849620196](https://github.com/neuroforge-io/Sinter/actions/runs/38849620196)
+at `1a38d1eee3244fbd3fc9156084b5d285fe297365` passed the Python, speech and RKC
+jobs but failed the meeting-correction browser journey. Inspection of the exact
+42,810,471-byte browser artifact confirmed a single source-field difference:
+`retrieved_at` advanced from `04:20:27+00:00` to `04:20:28+00:00`. Raw notes,
+source identity, content, hash and the reviewed correction were unchanged.
+The preceding same-second pass did not qualify this provenance boundary.
+
+Explicit corrections now carry a small original-source pin. The backend validates
+it against the raw transcript and preserves the complete source record while
+recording the new preparation separately. Fresh preparations still get a fresh
+capture. Invalid or mismatched pins fail; there is no timestamp fallback or
+response-metadata substitution. Captured payloads keep the pin, while comparison
+with editable inputs excludes only this derived field. Correction failures reach
+the visible editor without discarding its replacement or reason.
+
+The original strict source comparison remains. New deterministic regressions
+force separate clock seconds; the browser journey also injects one mismatched
+local pin, checks visible rejection and unchanged evidence, and explicitly retries.
+Focused source checks passed 71 Python tests and 27 Node tests, plus fatal Python
+lint, four JavaScript syntax checks and the whitespace check. Each local check
+ran sequentially at low priority with a 256 MiB resident-memory limit, no swap,
+one quarter of a CPU and a finite runtime; no virtual-address cap was imposed.
+Those browser changes require a new successful run; the failed artifact and
+reproduction are retained. No installed release or broader UI score is qualified
+by this repair.
+
 ## 16 October explicit clean-result admission and historical recovery
 
 A direct local reproduction admitted “Not all checks passed” as a completed

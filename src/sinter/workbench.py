@@ -8,6 +8,7 @@ from . import client
 from .evidence import MAX_CONTEXT, collect, literal, render_evidence, select, source, text, utc_now
 from .grants import screen
 from .meetings import minutes
+from .meeting_sources import original_transcript_source
 
 WORKFLOWS = {
     "research": {"name": "Research a topic", "description": "Explore source highlights, citations and questions to investigate."},
@@ -120,6 +121,8 @@ def run(payload: dict, progress=lambda message: None) -> dict:
     kind = payload.get("workflow", "brief")
     if not isinstance(kind, str) or kind not in WORKFLOWS:
         raise ValueError("Choose a research, funding, briefing or meeting workflow.")
+    if "transcript_source" in payload and kind != "meeting":
+        raise ValueError("transcript_source applies only to meeting corrections.")
     title = text(payload.get("title", ""), "Project title", 200, True)
     from .briefs import campaign_route_purpose, document_details, document_opening
     details = document_details(payload)
@@ -144,13 +147,16 @@ def run(payload: dict, progress=lambda message: None) -> dict:
     if kind == "meeting":
         if payload.get("use_search") or payload.get("use_model"):
             raise ValueError("Minutes are processed locally. Do not enable web search or model ranking for transcripts.")
+        original_source = (original_transcript_source(notes, payload["transcript_source"])
+                           if "transcript_source" in payload
+                           else original_transcript_source(notes))
         progress("Preserving the transcript and speaker labels")
         result.update(minutes(title, notes, payload.get("speaker_map"), payload.get("corrections")))
         result["document_markdown"] = _meeting_document(title, result, details)
         if demo:
             result["markdown"] = "ILLUSTRATIVE EXAMPLE - FICTIONAL MEETING\n\n" + result["markdown"]
             result["document_markdown"] = "Fictional example — for practice only.\n\n" + result["document_markdown"]
-        result["sources"] = [asdict(source("Original transcript", notes, kind="transcript"))]
+        result["sources"] = [asdict(original_source)]
         progress("Ready for chair and speaker review")
         return result
     progress("Collecting your notes and references")

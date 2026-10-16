@@ -463,21 +463,48 @@ class PreviewChecks(PurposeChecks):
         page.get_by_label("Reviewed replacement", exact=True).fill(replacement)
         page.get_by_label("Why is this correction justified?", exact=True).fill(
             "Fictional regression: the operator confirmed quote, not coat.")
+        # Corrupt one local request deliberately: rejection must remain visible
+        # beside the correction, without changing the report or replaying it.
+        rejected = []
+
+        def mismatched_pin(route):
+            body = route.request.post_data_json
+            body["transcript_source"]["id"] = "S" + "0" * 16
+            rejected.append(body)
+            route.continue_(post_data=json.dumps(body))
+
+        page.route("**/api/workbench", mismatched_pin)
+        try:
+            page.get_by_role("button", name="Apply reviewed correction", exact=True).click()
+            panel = page.get_by_text("Make a traceable transcript correction", exact=True).locator("..")
+            expect(panel.get_by_role("alert")).to_contain_text("no longer matches the original notes")
+            expect(page.get_by_label("Reviewed replacement", exact=True)).to_have_value(replacement)
+            expect(page.get_by_label("Why is this correction justified?", exact=True)).to_have_value(
+                "Fictional regression: the operator confirmed quote, not coat.")
+            unchanged = self.evidence_export(page, "correction-rejected-basis")
+            for key in ("sources", "input_snapshot", "segments", "corrections", "document_markdown"):
+                assert unchanged[key] == first[key], "Rejected correction changed " + key
+            assert len(rejected) == 1, "The rejected request was automatically replayed"
+        finally:
+            page.unroute("**/api/workbench", mismatched_pin)
+        # The next click is an explicit retry of a known rejected request.
         page.get_by_role("button", name="Apply reviewed correction", exact=True).click()
         expect(page.get_by_role("dialog", name="Keep your earlier edits?", exact=True)).to_have_count(0)
         expect(page.get_by_role("button", name="Open earlier draft 1", exact=True)).to_be_visible()
         corrected = self.evidence_export(page, "correction-reviewed-basis")
-        assert corrected["input_snapshot"]["notes"] == transcript
-        assert corrected["input_snapshot"]["corrections"][0]["replacement"] == replacement
-        assert corrected["sources"] == first["sources"]
+        assert corrected["input_snapshot"]["notes"] == transcript, "Correction changed raw transcript input"
+        assert corrected["input_snapshot"]["corrections"][0]["replacement"] == replacement, "Reviewed correction missing"
+        assert corrected["sources"] == first["sources"], "Correction changed original transcript source snapshot"
         stale = page.get_by_text("The draft below uses earlier inputs.", exact=False)
         expect(stale).to_be_hidden()
         page.get_by_role("button", name="Open earlier draft 1", exact=True).click()
         expect(stale).to_be_hidden()
         recovered = self.evidence_export(page, "correction-recovered-basis")
-        assert recovered["input_snapshot"] == first["input_snapshot"]
-        assert recovered["sources"] == first["sources"]
+        assert recovered["input_snapshot"] == first["input_snapshot"], "Recovery changed original preparation inputs"
+        assert recovered["sources"] == first["sources"], "Recovery changed original transcript source snapshot"
         self.content_checks.append({"scope": "Fictional meeting correction through the actual interface",
+            "synthetic_source_mismatch_visible_and_original_retained": True,
+            "rejected_request_not_replayed": True,
             "explicit_correction_adopts_its_own_basis": True,
             "no_false_stale_notice_after_correction_or_recovery": True,
             "original_transcript_and_sources_retained": True})

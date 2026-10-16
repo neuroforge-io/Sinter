@@ -514,6 +514,7 @@ function correctionForm(report, onCorrect) {
     if (!replacement.input.value.trim() || !reason.input.value.trim()) {
       errorBox.replaceChildren(notice('Enter corrected text and a reason for the change.', 'error')); return;
     }
+    errorBox.replaceChildren();
     apply.disabled = true;
     const corrections = (report.corrections || []).filter(item => item.segment_id !== segment.input.value);
     corrections.push({segment_id: segment.input.value, original: original.input.value,

@@ -343,6 +343,10 @@ On Windows use `py start.py`, or double-click `Start-Sinter.bat`. The source lau
 
 The optional local recognition workflow supports language selection, word timings, uncertain-passage flags, recording hashes, local playback and paginated review. Human speaker labels retain their original values. Corrections do not erase the original transcript, and review flags carry into minutes.
 
+Development-source workbench corrections retain the original transcript source
+record, including its capture time. Each derived draft records its own preparation
+time; preparing a new transcript creates a new source capture.
+
 Install the optional engine in a source checkout:
 
 ```sh

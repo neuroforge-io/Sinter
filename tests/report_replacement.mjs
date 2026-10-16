@@ -5,7 +5,7 @@ import {registerReportDraft, trackReportEditor, trackReportEdits, trackReportFor
   markReportSaveFailed, clearReportDrafts, unsavedReportDrafts,
   reportReplacementState, reportReplacementUnchanged} from '../src/sinter/web/report-drafts.js';
 import {authorizeReportReplacement, reportReplacementStillAllowed,
-  retainReportResult, reportCorrectionPayload} from '../src/sinter/web/report-replacement.js';
+  retainReportResult, reportCorrectionPayload, reportPreparationInputKey} from '../src/sinter/web/report-replacement.js';
 
 function setup(saved = false) {
   clearReportDrafts();
@@ -120,4 +120,61 @@ test('A to B to A corrections use A’s own captured input, not the latest attem
   assert.equal(JSON.parse(a.inputKey).notes, 'Original transcript A');
   assert.equal(JSON.parse(b.inputKey).notes, 'Later transcript B');
   assert.deepEqual(a.payload.corrections, []);
+});
+
+function meetingEntry(notes = 'Alex: No purchase was approved.', number = 1) {
+  const original = {id: 'S' + 'a'.repeat(16), sha256: 'b'.repeat(64),
+    title: 'Original transcript', kind: 'transcript', url: '', content: notes,
+    retrieved_at: '2026-10-16T04:20:27+00:00'};
+  return retainReportResult({workflow: 'meeting', sources: [original]},
+    {workflow: 'meeting', notes, corrections: []}, number);
+}
+
+test('meeting corrections carry only the selected original source metadata and never mutate it', () => {
+  const a = meetingEntry(), b = meetingEntry('Sam: Approval is still needed.', 2);
+  b.report.sources[0].retrieved_at = '2026-10-16T04:20:28+00:00';
+  const before = structuredClone(a);
+  const edits = [{segment_id: 'T0001', replacement: 'Reviewed wording'}];
+  const requestB = reportCorrectionPayload(b, edits);
+  const requestA = reportCorrectionPayload(a, edits);
+  assert.equal(requestA.notes, a.payload.notes);
+  assert.deepEqual(requestA.transcript_source, {id: a.report.sources[0].id,
+    sha256: a.report.sources[0].sha256, retrieved_at: a.report.sources[0].retrieved_at});
+  assert.notEqual(requestA.transcript_source.retrieved_at, requestB.transcript_source.retrieved_at);
+  assert.equal(Object.hasOwn(requestA.transcript_source, 'content'), false);
+  const corrected = retainReportResult(a.report, requestA, 3);
+  const form = structuredClone(requestA); delete form.transcript_source;
+  assert.equal(corrected.inputKey, reportPreparationInputKey(form));
+  assert.equal(corrected.inputKey, JSON.stringify(form));
+  assert.deepEqual(corrected.payload.transcript_source, requestA.transcript_source);
+  assert.notEqual(corrected.inputKey, reportPreparationInputKey({...form, notes: 'Changed notes'}));
+  assert.notEqual(corrected.inputKey, reportPreparationInputKey({...form, corrections: []}));
+  edits[0].replacement = 'Changed after capture';
+  requestA.transcript_source.retrieved_at = 'Changed returned object';
+  assert.equal(requestA.corrections[0].replacement, 'Reviewed wording');
+  assert.deepEqual(a, before);
+  assert.equal(corrected.payload.transcript_source.retrieved_at,
+    before.report.sources[0].retrieved_at);
+});
+
+test('missing or inconsistent meeting source records fail without silently recapturing evidence', () => {
+  const cases = [
+    entry => { delete entry.report.sources; },
+    entry => { entry.report.sources = []; },
+    entry => { entry.report.sources.push({...entry.report.sources[0]}); },
+    entry => { entry.report.sources.push({kind: 'reference_excerpt'}); },
+    entry => { entry.payload.notes = 'Changed transcript'; },
+    entry => { entry.report.sources[0].title = 'Different source'; },
+    entry => { entry.report.sources[0].kind = 'user_note'; },
+    entry => { entry.report.sources[0].url = 'https://example.org'; },
+    entry => { entry.report.sources[0].id = 'bad identity'; },
+    entry => { entry.report.sources[0].sha256 = 'not a hash'; },
+    entry => { entry.report.sources[0].retrieved_at = ''; },
+  ];
+  for (const change of cases) {
+    const entry = meetingEntry(); change(entry);
+    const before = structuredClone(entry);
+    assert.throws(() => reportCorrectionPayload(entry, []), /snapshot is missing or inconsistent/);
+    assert.deepEqual(entry, before);
+  }
 });

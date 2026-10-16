@@ -9,7 +9,7 @@ import {confirmAction} from './confirm-action.js';
 import {registerReportDraft} from './report-drafts.js';
 import {documentMarkdown} from './documents.js';
 import {authorizeReportReplacement, reportReplacementStillAllowed,
-  retainReportResult, reportCorrectionPayload} from './report-replacement.js';
+  retainReportResult, reportCorrectionPayload, reportPreparationInputKey} from './report-replacement.js';
 
 const titles = {research: 'Research a topic.', grants: 'Find funding for good ideas.', brief: 'Prepare a letter for review.', meeting: 'Prepare a clear meeting record.'};
 const descriptions = {
@@ -104,7 +104,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   const preparedState = h('p', {class: 'notice', role: 'status', hidden: true});
   function rememberInputs() {
     remember(kind, state());
-    const changed = preparedInputKey !== null && preparedInputKey !== JSON.stringify(state());
+    const changed = preparedInputKey !== null && preparedInputKey !== reportPreparationInputKey(state());
     preparedState.hidden = !changed;
     preparedState.textContent = changed
       ? 'The draft below uses earlier inputs. Your changes are kept here; prepare again when you want an updated draft. The earlier document has not been changed.' : '';
@@ -150,7 +150,8 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     const view = renderReport(report, {
       recovered: entry.shown,
       onEditInputs: () => { inputPanel.open = true; inputPanel.scrollIntoView({block: 'start'}); },
-      onCorrect: changes => perform(reportCorrectionPayload(entry, changes), {validateInputs: false}),
+      onCorrect: changes => perform(reportCorrectionPayload(entry, changes),
+        {validateInputs: false, propagateErrors: true}),
       onCampaignUpdated: saved => {
         if (!payload.campaign_link || !saved?.document) return;
         const selected = saved.document.opportunities.findIndex(row => row.name === payload.campaign_link.opportunity);
@@ -184,7 +185,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
       if (root.isConnected) target?.focus();
     }
   }
-  async function perform(input, {validateInputs = true} = {}) {
+  async function perform(input, {validateInputs = true, propagateErrors = false} = {}) {
     if (running || !root.isConnected || (validateInputs && !form.reportValidity())) return;
     const payload = structuredClone(input), focus = document.activeElement;
     let restoreFocus = true, started = false;
@@ -223,6 +224,7 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
           search.input.checked = false; updateScope(); perform({...payload, use_search: false});
         }, 'quiet'));
       if (started) status.textContent = 'Not completed. Your inputs and previous report are unchanged.';
+      if (propagateErrors) throw error; // The correction editor displays its own visible error.
     } finally {
       fields.disabled = false; cancel.hidden = true; jobId = null; running = false; setBusy(false); rememberInputs(); refreshRecovery();
       if (restoreFocus && focus?.isConnected) focus.focus();
