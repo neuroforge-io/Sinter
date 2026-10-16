@@ -5,6 +5,11 @@ import {audioForm} from './audio.js';
 import {senderFields} from './profile.js';
 import {campaignLetterReviewCopy} from './campaign-letter.js';
 import {briefOpeningCopy, openingParagraphProblem, OPENING_LIMIT} from './brief-opening.js';
+import {confirmAction} from './confirm-action.js';
+import {registerReportDraft} from './report-drafts.js';
+import {documentMarkdown} from './documents.js';
+import {authorizeReportReplacement, reportReplacementStillAllowed,
+  retainReportResult, reportCorrectionPayload} from './report-replacement.js';
 
 const titles = {research: 'Research a topic.', grants: 'Find funding for good ideas.', brief: 'Prepare a letter for review.', meeting: 'Prepare a clear meeting record.'};
 const descriptions = {
@@ -22,7 +27,8 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   const campaignSenderReview = data.campaign_sender_review === true;
   const sources = [...(data.sources || [])];
   let speakerMap = {...(data.speaker_map || {})}, corrections = [...(data.corrections || [])];
-  let running = false, lastPayload, jobId, preparedInputKey = null;
+  let running = false, jobId, preparedInputKey = null, currentResult = null, decisionController;
+  const retainedResults = new Map();
   const title = field(kind === 'research' ? 'Research topic' : 'Project name', 'text', data.title || '', 'A name you will recognise later.', {required: true, maxLength: 200});
   const campaignNotes = kind === 'brief' && campaignSenderReview;
   const notes = field(kind === 'meeting' ? 'Transcript' : campaignNotes ? 'Internal notes and evidence context' : 'Your notes and context', 'textarea', data.notes || '',
@@ -93,6 +99,8 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
   const inputPanel = h('details', {class: 'project-inputs non-print', open: true}, inputSummary, form);
   const fields = h('fieldset', {}, h('legend', {class: 'sr-only'}, 'Project inputs'));
   const feedback = h('div', {'aria-live': 'polite'}), results = h('div');
+  const recovery = h('section', {class: 'card stack non-print', hidden: true,
+    'aria-label': 'Other drafts in this session'});
   const preparedState = h('p', {class: 'notice', role: 'status', hidden: true});
   function rememberInputs() {
     remember(kind, state());
@@ -114,51 +122,110 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
       .catch(error => feedback.replaceChildren(notice(error.message, 'error')));
   });
   cancel.hidden = true;
-  async function perform(payload) {
-    if (running) return;
-    if (!form.reportValidity()) return;
-    running = true; setBusy(true); fields.disabled = true; feedback.replaceChildren();
-    status.textContent = 'Starting your evidence pack...'; cancel.hidden = false;
-    lastPayload = payload;
+  async function confirmReplacement() {
+    const controller = new AbortController(); decisionController = controller;
+    const observer = new MutationObserver(() => { if (!root.isConnected) controller.abort(); });
+    observer.observe(document.body, {childList: true, subtree: true});
     try {
+      return await confirmAction({title: 'Keep your earlier edits?',
+        description: 'Preparing or opening another draft changes the displayed document. Your earlier edits stay available in Other drafts in this session below; they are not carried into the other draft. Save them in My workspace to keep them after this session.',
+        confirmLabel: 'Keep edits and change draft', cancelLabel: 'Keep editing', signal: controller.signal});
+    } finally { observer.disconnect(); if (decisionController === controller) decisionController = null; }
+  }
+  const replacementOptions = {confirm: confirmReplacement, isActive: () => root.isConnected};
+  function refreshRecovery() {
+    const others = [...retainedResults.values()].filter(entry => entry !== currentResult);
+    recovery.hidden = !others.length;
+    recovery.replaceChildren(h('h3', {}, 'Other drafts in this session'),
+      notice('Each draft keeps its own original inputs, evidence and pending edits. Unsaved work stays in this browser session only. Open a draft and save it in My workspace to keep it after closing Sinter.'),
+      ...others.map(entry => {
+        const open = button(`${entry.shown ? 'Open earlier draft' : 'Open prepared draft'} ${entry.number}`, () => openRetained(entry), 'quiet');
+        open.dataset.recoveryNumber = String(entry.number);
+        return h('div', {class: 'stack'}, h('p', {}, entry.report.title), open);
+      }));
+    for (const control of recovery.querySelectorAll('button')) control.disabled = running;
+  }
+  function showResult(entry) {
+    const {report, payload} = entry;
+    const view = renderReport(report, {
+      recovered: entry.shown,
+      onEditInputs: () => { inputPanel.open = true; inputPanel.scrollIntoView({block: 'start'}); },
+      onCorrect: changes => perform(reportCorrectionPayload(entry, changes), {validateInputs: false}),
+      onCampaignUpdated: saved => {
+        if (!payload.campaign_link || !saved?.document) return;
+        const selected = saved.document.opportunities.findIndex(row => row.name === payload.campaign_link.opportunity);
+        remember('campaigns', {document: saved.document, id: saved.id, revision: saved.revision,
+          dirty: false, selected: Math.max(0, selected), tab: 'communications'});
+      },
+    });
+    results.replaceChildren(view);
+    currentResult = entry; entry.shown = true;
+    corrections = structuredClone(payload.corrections || []);
+    preparedInputKey = entry.inputKey;
+    inputSummary.hidden = false; inputPanel.open = false;
+    refreshRecovery(); rememberInputs();
+    (recovery.hidden ? results : recovery).scrollIntoView({block: 'start'});
+  }
+  async function openRetained(entry) {
+    if (running || !root.isConnected) return;
+    const focus = document.activeElement;
+    running = true; setBusy(true); fields.disabled = true; refreshRecovery();
+    try {
+      const authorization = await authorizeReportReplacement(currentResult?.report ?? null, replacementOptions);
+      if (authorization && root.isConnected && reportReplacementStillAllowed(currentResult?.report ?? null, authorization)) {
+        showResult(entry);
+        status.textContent = `Showing draft ${entry.number}. Its original preparation inputs, evidence and pending edits are retained.`;
+        announce('Selected local draft opened. Its original inputs and pending edits are retained.');
+      }
+    } catch (error) { if (root.isConnected) feedback.replaceChildren(notice(error.message, 'error')); }
+    finally {
+      running = false; fields.disabled = false; setBusy(false); refreshRecovery();
+      const target = focus?.isConnected ? focus : recovery.querySelector(`[data-recovery-number="${entry.number}"]`);
+      if (root.isConnected) target?.focus();
+    }
+  }
+  async function perform(input, {validateInputs = true} = {}) {
+    if (running || !root.isConnected || (validateInputs && !form.reportValidity())) return;
+    const payload = structuredClone(input), focus = document.activeElement;
+    let restoreFocus = true, started = false;
+    running = true; setBusy(true); fields.disabled = true; refreshRecovery();
+    try {
+      const authorization = await authorizeReportReplacement(currentResult?.report ?? null, replacementOptions);
+      if (!authorization || !root.isConnected) return;
+      feedback.replaceChildren();
+      status.textContent = 'Starting your evidence pack...'; cancel.hidden = false;
       const requestPayload = {...payload};
       delete requestPayload.campaign_link;
+      started = true;
       const job = await request('/api/workbench', {data: requestPayload}); jobId = job.id;
       const report = await waitForJob(jobId, value => { status.textContent = value.message || 'Preparing...'; });
-      report.input_snapshot = payload;
-      report.profile = payload.profile;
-      if (payload.campaign_link) report.campaign_link = {...payload.campaign_link};
-      results.replaceChildren(renderReport(report, {
-        onEditInputs: () => { inputPanel.open = true; inputPanel.scrollIntoView({block: 'start'}); },
-        onCorrect: async changes => {
-          corrections = changes; await perform({...lastPayload, corrections});
-        },
-        onCampaignUpdated: saved => {
-          if (!payload.campaign_link || !saved?.document) return;
-          const selected = saved.document.opportunities.findIndex(
-            row => row.name === payload.campaign_link.opportunity);
-          remember('campaigns', {
-            document: saved.document, id: saved.id, revision: saved.revision,
-            dirty: false, selected: Math.max(0, selected), tab: 'communications',
-          });
-        },
-      }));
-      preparedInputKey = JSON.stringify(payload);
+      report.input_snapshot = structuredClone(payload);
+      report.profile = structuredClone(payload.profile);
+      if (payload.campaign_link) report.campaign_link = structuredClone(payload.campaign_link);
+      registerReportDraft(report, documentMarkdown(report));
+      const entry = retainReportResult(report, payload, retainedResults.size + 1);
+      retainedResults.set(entry.number, entry);
+      if (!root.isConnected) return; // The completed result remains in Pending work; never replay it.
+      if (!reportReplacementStillAllowed(currentResult?.report ?? null, authorization)) {
+        status.textContent = 'New draft prepared. Your displayed draft changed while preparation was running. Open the prepared draft below when you are ready; your current edits have not been replaced.';
+        announce('New draft retained separately. Your current edits have not been replaced.');
+        return;
+      }
+      showResult(entry); restoreFocus = false;
       const reviewCopy = payload.campaign_sender_review
         ? campaignLetterReviewCopy(payload) : null;
       status.textContent = reviewCopy?.status || 'Draft ready. Review sources before using it.';
-      inputSummary.hidden = false; inputPanel.open = false;
       announce(reviewCopy?.announcement || 'Your draft is ready for review.');
-      results.scrollIntoView({block: 'start'});
     } catch (error) {
       feedback.replaceChildren(notice(error.message, 'error'));
-      if (payload.use_search) feedback.append(h('p', {}, 'Your inputs are safe. You can retry, or add official reference text and prepare without web search.'),
+      if (started && payload.use_search) feedback.append(h('p', {}, 'Your inputs are safe. You can retry, or add official reference text and prepare without web search.'),
         button('Continue with my notes and references', () => {
           search.input.checked = false; updateScope(); perform({...payload, use_search: false});
         }, 'quiet'));
-      status.textContent = 'Not completed. Your inputs and previous report are unchanged.';
+      if (started) status.textContent = 'Not completed. Your inputs and previous report are unchanged.';
     } finally {
-      fields.disabled = false; cancel.hidden = true; jobId = null; running = false; setBusy(false); rememberInputs();
+      fields.disabled = false; cancel.hidden = true; jobId = null; running = false; setBusy(false); rememberInputs(); refreshRecovery();
+      if (restoreFocus && focus?.isConnected) focus.focus();
     }
   }
   form.addEventListener('submit', event => { event.preventDefault(); perform(state()); });
@@ -256,8 +323,8 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     h('div', {class: 'non-print'}, demo ? notice('OFFLINE EXAMPLE / All people, programmes and details are fictional. Start a new project from Home for real data.') :
       h('p', {class: 'workspace-hint'}, campaignSenderReview
         ? 'Save this unsent draft to My workspace or record it in the linked campaign log. Sinter will not contact the recipient. '
-        : 'Save your finished draft to keep it in My workspace. ', h('a', {href: '#settings'}, 'Set up your details'))), inputPanel, preparedState, results);
-  root.dispose = () => root.querySelectorAll('[data-audio-panel]').forEach(panel => panel.dispose?.());
+        : 'Save your finished draft to keep it in My workspace. ', h('a', {href: '#settings'}, 'Set up your details'))), inputPanel, preparedState, recovery, results);
+  root.dispose = () => { decisionController?.abort(); root.querySelectorAll('[data-audio-panel]').forEach(panel => panel.dispose?.()); };
   return root;
 }
 

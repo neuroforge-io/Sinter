@@ -4,7 +4,7 @@ import {h, button} from './ui.js';
 let sequence = 0, active = false;
 
 /** The caller restores focus after releasing its own editor/transition lock. */
-export function confirmAction({title, description, confirmLabel, cancelLabel = 'Cancel'}) {
+export function confirmAction({title, description, confirmLabel, cancelLabel = 'Cancel', signal}) {
   if (active) return Promise.reject(new Error('Finish the open decision before starting another.'));
   active = true;
   return new Promise((resolve, reject) => {
@@ -37,6 +37,8 @@ export function confirmAction({title, description, confirmLabel, cancelLabel = '
       controls[(at + (event.shiftKey ? controls.length - 1 : 1)) % controls.length].focus();
     }, {signal: listeners.signal});
     window.addEventListener('pagehide', () => finish(false), {signal: listeners.signal});
+    signal?.addEventListener('abort', () => finish(false), {signal: listeners.signal});
+    if (signal?.aborted) { finish(false); return; }
     try {
       document.body.append(dialog); dialog.showModal(); cancel.focus();
     } catch {

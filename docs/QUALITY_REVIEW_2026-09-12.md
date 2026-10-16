@@ -1,5 +1,51 @@
 # Sinter user-testing closeout — 12 September 2026
 
+## 16 October draft replacement — operator check complete, CI and installed checks pending
+
+Actual in-app browser use of source `3056fd430efd2243a4d663c66a9e44cca26fd36e`
+reopened an existing funding-follow-up edit correctly and prepared a separate
+local draft with an explicit opening, questions and confirmed sender details.
+Private context stayed outside the recipient document. Preparing again after
+editing replaced the displayed human wording without a warning. The old report
+and pending text remained in the session registry and My workspace's Pending
+work; this was unguarded replacement and hidden recovery, not established
+irretrievable data loss. The recorded campaign and its earlier unsent draft
+remained unchanged, and no hosted generation was requested.
+
+The source fix guards unsaved edits and failed/uncertain saves, blocks replacement
+during an active save, and rechecks the exact report/change token at result
+arrival. A later edit or save change keeps the displayed report and retains the
+completed result separately. Specific direct recovery controls restore each
+result's own pending editor and registry-managed forms with its original input basis. Corrections retain
+the selected result's payload rather than the last preparation attempt. The
+session-only caveat stays visible; no automatic saving, merging or replay is
+introduced.
+
+The actual in-app browser follow-up protected applied and unapplied document
+edits, restored the specific earlier version, and preserved the edit when a
+recovery choice was cancelled. Both versions were explicitly saved in the copied
+workspace, closed and reopened in a new tab. Actual exported evidence packs
+preserved the original inputs, source identities and human edits after reopening.
+The canonical databases and copied campaign were unchanged. There were exactly
+two local preparations, two explicit local saves and no hosted-operation attempts.
+The owned server peaked at 33,652,736 bytes RSS and closed after 232.85 seconds.
+
+At 390 × 844, the direct recovery button measured 291 × 44.5 pixels, passed a
+pointer-hit check and introduced no horizontal overflow. Independent review of
+the actual desktop, phone and decision screenshots rated this narrow flow
+6.5/10 for user experience, 7.5/10 for functionality and 6.5/10 for appearance.
+Repeated notices crowd the phone screen, and numbered versions with identical
+titles need clearer state labels. These observations do not establish whole-app
+or installed quality, nor qualification of every auxiliary form.
+
+The offline browser harness now contains seven journeys, including cancellation,
+direct A → B → A recovery and an explicitly synthetic delayed local completion
+while the displayed draft is edited. A fictional meeting correction checks that
+adopting and recovering correction metadata does not create a false stale-input
+notice. The automated browser run, late-result/save races through that interface,
+and installed-release qualification remain pending. State/unit checks alone do
+not establish these outcomes.
+
 ## 16 October recipient opening — source qualification in progress
 
 The Brief form now accepts explicit recipient-facing prose rather than requiring

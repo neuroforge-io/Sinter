@@ -11,7 +11,7 @@ import pytest
 
 @pytest.mark.parametrize("suite", [
     "document_export_state.mjs", "casebook_handover.mjs",
-    "report_drafts.mjs", "campaign_source_options.mjs",
+    "report_drafts.mjs", "report_replacement.mjs", "campaign_source_options.mjs",
 ])
 def test_document_export_state(suite):
     node = shutil.which("node")
@@ -19,7 +19,7 @@ def test_document_export_state(suite):
         pytest.skip("Node is required to exercise browser-side document state")
     root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
-        [node, "--test", str(root / "tests" / suite)],
+        [node, "--max-old-space-size=128", "--test", str(root / "tests" / suite)],
         cwd=root,
         capture_output=True,
         text=True,

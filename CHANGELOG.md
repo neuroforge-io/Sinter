@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Guard preparation and view changes when a document has unsaved human edits or
+  an unresolved save. Keep a direct route to each earlier session draft, with its
+  own inputs, evidence and pending text. If editing or saving changes the current
+  draft while preparation runs, retain the completed result separately for an
+  explicit view switch. No edits are merged or saves/requests replayed.
 - Add a recipient-facing opening to local letters and briefing notes, or an
   explicitly labelled agenda purpose. Retain raw wording, originals and edits;
   show when changed inputs no longer match the prepared draft. During local

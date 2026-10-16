@@ -140,6 +140,25 @@ version literal in `pyproject.toml`.
 
 ## Configuration
 
+Workbench results keep their own preparation payload and original input key.
+Preparing again or opening another result asks before replacing a view with
+unsaved human document edits, registry-managed form edits or a failed/unconfirmed save; an active save
+must finish first. Untouched generated results do not require this extra decision.
+The registry provides an opaque identity/change token, checked both after the
+decision and when the new result arrives. Later edits or save changes leave the
+displayed draft in place and retain the completed result for explicit opening.
+
+**Other drafts in this session** opens each specific earlier or newly prepared
+result, restores pending text and keeps original inputs/evidence distinct.
+Corrections use that result's captured payload rather than another attempt's
+inputs. Adopting a corrected result also adopts its correction metadata, so an
+unchanged meeting does not incorrectly appear stale. This registry is session-only; explicitly save applied edits in My
+workspace for persistence. Cancelling or leaving a replacement decision starts no
+preparation. Neither recovery nor replacement automatically retries a save or
+model request. `tests/report_replacement.mjs` checks the state policy;
+`tools/report_source_preview_browser.py` adds actual-interface recovery and an
+explicitly synthetic delayed local completion to the existing offline CI run.
+
 Local `brief` requests accept an optional `opening_paragraph`, up to 1,200 Unicode
 code points. It replaces the default enquiry introduction, introduces a briefing
 note, or supplies an agenda's explicitly labelled purpose. The form retains the
@@ -280,6 +299,7 @@ can be downloaded with its incomplete label. No generation is automatically repl
 | `review_checkpoints.py` | Review-folder output exclusion and bounded, identity-preserving checkpoint discovery. |
 | `store.py`, `jobs.py`, `server.py` | Persistence, bounded work, cancellation and local HTTP. |
 | `web/home.js`, `web/app.js`, `web/workbench.js` | Overview, routing and guided tasks. |
+| `web/report-drafts.js`, `web/report-replacement.js` | Session draft/save observations, exact-state replacement decisions and per-result preparation inputs. |
 | `web/navigation.js` | One tool registry for navigation, page labels and the keyboard finder. |
 | `web/audio.js`, `web/transcription.js` | Local playback, transcription controls and passage review. |
 

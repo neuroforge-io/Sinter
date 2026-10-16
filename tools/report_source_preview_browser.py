@@ -293,6 +293,8 @@ class PreviewChecks(PurposeChecks):
         page.route(self.base + "/api/jobs/" + failed_id, failed_job)
         try:
             page.get_by_role("button", name="Prepare my draft", exact=True).click()
+            page.get_by_role("dialog", name="Keep your earlier edits?", exact=True).get_by_role(
+                "button", name="Keep edits and change draft", exact=True).click()
             expect(page.get_by_text("Not completed. Your inputs and previous report are unchanged.", exact=True)).to_be_visible()
         finally:
             page.unroute(self.base + "/api/workbench", reject_job)
@@ -335,6 +337,150 @@ class PreviewChecks(PurposeChecks):
             "oversized_unicode_retained_without_request": True, "failed_job_not_replayed": True,
             "successful_input_basis_unchanged_after_failure": True, "original_and_edits_distinct": True,
             "campaign_changes_exactly_one_unsent_log": True})
+
+    def draft_replacement_recovery(self, page):
+        """Actual view changes; one explicitly delayed synthetic local completion."""
+        from playwright.sync_api import expect
+        baseline = self.start(page, fixture())["document"]
+        page.get_by_role("button", name="Draft clarification letter", exact=True).click()
+        first_opening = "This fictional enquiry seeks clarification, not approval."
+        opening = page.get_by_label("Opening paragraph for the recipient", exact=True)
+        opening.fill(first_opening)
+        prepare = page.get_by_role("button", name="Prepare my draft", exact=True)
+        prepare.click()
+        report = page.get_by_role("region", name="Your draft report", exact=True)
+        expect(report).to_have_count(1)
+        first = self.evidence_export(page, "replacement-original-a")
+        page.get_by_role("button", name="Edit draft", exact=True).click()
+        applied = first["document_markdown"] + "\n\nHuman wording that must remain available."
+        editor = page.get_by_label("Edit your draft", exact=True)
+        editor.fill(applied)
+        page.get_by_role("button", name="Apply edits", exact=True).click()
+        first_edited = self.evidence_export(page, "replacement-applied-a")
+        page.get_by_text("Review or edit project inputs", exact=True).click()
+        next_opening = "A separate fictional follow-up with a different opening."
+        opening.fill(next_opening)
+        attempts = []
+        page.on("request", lambda request: attempts.append(request.url)
+                if request.method == "POST" and request.url == self.base + "/api/workbench" else None)
+        prepare.click()
+        decision = page.get_by_role("dialog", name="Keep your earlier edits?", exact=True)
+        expect(decision).to_be_visible()
+        page.keyboard.press("Escape")
+        expect(decision).to_have_count(0)
+        expect(prepare).to_be_focused()
+        assert attempts == []
+        assert self.evidence_export(page, "replacement-cancel-keeps-a") == first_edited
+
+        # Hold only a fictional local result. No model is called and no existing
+        # request is replayed; edit the current document while this one runs.
+        delayed_id = "e" * 32
+        released = {"value": False}
+        posts, polls = [], []
+        completed = copy.deepcopy(first)
+        completed.update(id="d" * 32, document_opening=next_opening,
+                         document_markdown=first["document_markdown"].replace(first_opening, next_opening))
+        completed.pop("document_edits", None)
+        def delayed_start(route):
+            posts.append(route.request.post_data_json)
+            route.fulfill(status=200, json={"id": delayed_id})
+        def delayed_result(route):
+            polls.append(route.request.url)
+            route.fulfill(status=200, json={"id": delayed_id,
+                "status": "done" if released["value"] else "running",
+                "message": "Fictional replacement held for the edit check.",
+                **({"result": completed} if released["value"] else {})})
+        page.route(self.base + "/api/workbench", delayed_start)
+        page.route(self.base + "/api/jobs/" + delayed_id, delayed_result)
+        try:
+            prepare.click()
+            decision.get_by_role("button", name="Keep edits and change draft", exact=True).click()
+            expect(page.get_by_text("Fictional replacement held for the edit check.", exact=True)).to_be_visible()
+            page.get_by_role("button", name="Edit draft", exact=True).click()
+            pending = applied + "\n\nUnapplied last keystrokes while preparation runs."
+            editor.fill(pending)
+            released["value"] = True
+            expect(page.get_by_text("New draft prepared. Your displayed draft changed while preparation was running.", exact=False)).to_be_visible()
+        finally:
+            page.unroute(self.base + "/api/workbench", delayed_start)
+            page.unroute(self.base + "/api/jobs/" + delayed_id, delayed_result)
+        assert len(posts) == 1 and posts[0]["opening_paragraph"] == next_opening
+        assert polls and len(attempts) == 1
+        expect(report).to_have_count(1)
+        expect(editor).to_have_value(pending)
+        other = page.get_by_role("region", name="Other drafts in this session", exact=True)
+        expect(other).to_contain_text("Unsaved work stays in this browser session only.")
+        other.get_by_role("button", name="Open prepared draft 2", exact=True).click()
+        decision.get_by_role("button", name="Keep editing", exact=True).click()
+        expect(editor).to_have_value(pending)
+        expect(other.get_by_role("button", name="Open prepared draft 2", exact=True)).to_be_focused()
+        other.get_by_role("button", name="Open prepared draft 2", exact=True).click()
+        decision.get_by_role("button", name="Keep edits and change draft", exact=True).click()
+        expect(report).to_have_count(1)
+        expect(report.locator(".document-paper")).to_contain_text(next_opening)
+        second = self.evidence_export(page, "replacement-completed-b")
+        assert second["input_snapshot"]["opening_paragraph"] == next_opening
+        assert second["sources"] == first["sources"]
+        # The untouched new result needs no second decision. Direct recovery
+        # restores the exact old editor text and the old preparation basis.
+        other.get_by_role("button", name="Open earlier draft 1", exact=True).click()
+        expect(decision).to_have_count(0)
+        expect(editor).to_have_value(pending)
+        stale = page.get_by_text("The draft below uses earlier inputs.", exact=False)
+        expect(stale).to_be_visible()
+        page.get_by_text("Review or edit project inputs", exact=True).click()
+        opening.fill(first_opening)
+        expect(stale).to_be_hidden()
+        page.get_by_role("button", name="Apply edits", exact=True).click()
+        recovered = self.evidence_export(page, "replacement-recovered-a")
+        assert recovered["document_markdown"] == first["document_markdown"]
+        assert recovered["document_edits"]["markdown"] == pending
+        assert recovered["input_snapshot"] == first["input_snapshot"] and recovered["sources"] == first["sources"]
+        assert len(attempts) == 1  # Opening retained results sends no preparation request.
+        page.set_viewport_size({"width": 390, "height": 844})
+        self.screenshot(page, "replacement-recovered-phone", full_page=True)
+        self.goto(page, "campaigns")
+        assert self.export(page, "replacement-campaign-unchanged") == baseline
+        self.content_checks.append({"scope": "Actual cancel/recovery plus injected delayed fictional completion",
+            "cancel_no_request_and_focus_restored": True, "applied_and_pending_edits_retained": True,
+            "late_result_never_replaces_later_edit": True, "specific_a_b_a_recovery": True,
+            "each_input_basis_and_sources_preserved": True, "one_preparation_no_replay": True,
+            "canonical_fixture_campaign_unchanged": True})
+
+    def meeting_correction_input_basis(self, page):
+        """A reviewed fictional correction adopts only that result's basis."""
+        from playwright.sync_api import expect
+        self.goto(page, "meeting")
+        page.get_by_label("Project name", exact=True).fill("Fictional quote discussion")
+        transcript = "Alex: We agreed to request a coat; no purchase was approved.\nSam: I will ask for the written estimate."
+        page.get_by_label("Transcript", exact=True).fill(transcript)
+        page.get_by_role("button", name="Prepare my draft", exact=True).click()
+        report = page.get_by_role("region", name="Your draft report", exact=True)
+        expect(report).to_have_count(1)
+        first = self.evidence_export(page, "correction-original-basis")
+        page.get_by_text("Make a traceable transcript correction", exact=True).click()
+        replacement = "We agreed to request a quote; no purchase was approved."
+        page.get_by_label("Reviewed replacement", exact=True).fill(replacement)
+        page.get_by_label("Why is this correction justified?", exact=True).fill(
+            "Fictional regression: the operator confirmed quote, not coat.")
+        page.get_by_role("button", name="Apply reviewed correction", exact=True).click()
+        expect(page.get_by_role("dialog", name="Keep your earlier edits?", exact=True)).to_have_count(0)
+        expect(page.get_by_text("Draft ready. Review sources before using it.", exact=True)).to_be_visible()
+        corrected = self.evidence_export(page, "correction-reviewed-basis")
+        assert corrected["input_snapshot"]["notes"] == transcript
+        assert corrected["input_snapshot"]["corrections"][0]["replacement"] == replacement
+        assert corrected["sources"] == first["sources"]
+        stale = page.get_by_text("The draft below uses earlier inputs.", exact=False)
+        expect(stale).to_be_hidden()
+        page.get_by_role("button", name="Open earlier draft 1", exact=True).click()
+        expect(stale).to_be_hidden()
+        recovered = self.evidence_export(page, "correction-recovered-basis")
+        assert recovered["input_snapshot"] == first["input_snapshot"]
+        assert recovered["sources"] == first["sources"]
+        self.content_checks.append({"scope": "Fictional meeting correction through the actual interface",
+            "explicit_correction_adopts_its_own_basis": True,
+            "no_false_stale_notice_after_correction_or_recovery": True,
+            "original_transcript_and_sources_retained": True})
 
     def literal_opening_copy_and_word(self, page):
         from playwright.sync_api import expect
@@ -436,6 +582,8 @@ def main(argv=None):
                                      lambda page: checks.actual_draft_copy_export_log(page, "research"))
                         checks.check("followup-opening-recovery", checks.followup_opening_recovery)
                         checks.check("literal-opening-copy-word", checks.literal_opening_copy_and_word)
+                        checks.check("draft-replacement-recovery", checks.draft_replacement_recovery)
+                        checks.check("meeting-correction-input-basis", checks.meeting_correction_input_basis)
                         checks.check("renderer-only-unsafe-and-missing-link", checks.unsafe_or_missing_link_retains_title)
                     finally:
                         if browser:
@@ -467,7 +615,7 @@ def main(argv=None):
             "local_responses": checks.local_responses if checks else [], "fatal_errors": fatal, "resources": resources,
             "hosted_operation_attempts": counts, "model_operations_requested": sum(counts.get(n, 0) for n in ("chat", "search")),
             "source_files_before": before, "source_files_after": after, "source_unchanged": before is not None and before == after})
-        receipt["passed"] = (bool(checks) and len(checks.results) == 5
+        receipt["passed"] = (bool(checks) and len(checks.results) == 7
             and all(row["passed"] and row["context_closed"] for row in checks.results)
             and not checks.errors and not checks.external and not fatal and all(resources.values())
             and all(value == 0 for value in counts.values()) and before is not None and before == after)

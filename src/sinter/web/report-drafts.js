@@ -36,6 +36,15 @@ function notifyViews(state) {
 
 function update(state) {
   state.payload = JSON.stringify(state.report);
+  // Callers may update retained report records directly. Observe those changes
+  // as well as editor/form/save changes, without exposing a mutable state object.
+  const values = [state.payload, state.content, state.editor?.text ?? null,
+    JSON.stringify([...state.forms]), state.saved, state.saving, state.saveFailure,
+    state.baseline, state.baselinePayload];
+  if (!state.replacementValues || values.some((value, index) => value !== state.replacementValues[index])) {
+    state.replacementValues = values;
+    state.replacementToken = Object.freeze({});
+  }
   if (!state.saved || state.content !== state.baseline || state.editor || state.forms.size
       || state.payload !== state.baselinePayload || state.saveFailure === 'unconfirmed') drafts.set(state.id, state);
   else drafts.delete(state.id);
@@ -119,6 +128,22 @@ export function reportSaveState(report) {
   return state.saved
     ? {kind: 'saved', message: 'Saved locally in My workspace.'}
     : {kind: 'prepared', message: 'Prepared locally; not saved to My workspace.'};
+}
+
+/** A local view transition must authorise the exact draft/save state it replaces. */
+export function reportReplacementState(report) {
+  const state = identities.get(report);
+  if (!state) throw new Error('Register this report before replacing its view.');
+  const save = reportSaveState(report);
+  return Object.freeze({identity: state.id, token: state.replacementToken,
+    saving: save.kind === 'saving',
+    needsDecision: ['pending', 'not-sent', 'rejected', 'unconfirmed'].includes(save.kind)});
+}
+
+export function reportReplacementUnchanged(report, previous) {
+  if (!identities.has(report)) return false;
+  const current = reportReplacementState(report);
+  return !current.saving && current.identity === previous?.identity && current.token === previous?.token;
 }
 
 export function unsavedReportDrafts() { return [...drafts.values()]; }
