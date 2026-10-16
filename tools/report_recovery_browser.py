@@ -348,10 +348,10 @@ def main(argv: list[str] | None = None) -> None:
                     expect(
                         report.get_by_label("Edit your draft", exact=True)
                     ).to_have_value("Unapplied fictional handover wording.")
-                    report.get_by_role(
+                    expect(report.get_by_role(
                         "button", name="Save to My workspace", exact=True
-                    ).click()
-                    expect(report.get_by_role("alert")).to_contain_text(
+                    )).to_be_disabled()
+                    expect(report.get_by_label("Document save state")).to_contain_text(
                         "Apply or cancel"
                     )
                     report.get_by_role(

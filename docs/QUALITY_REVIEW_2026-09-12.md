@@ -70,6 +70,29 @@ Parent exit did not establish descendant termination. Its native pending-save
 case passed this time, which does not repair the earlier fixture ownership gap.
 Those are separate qualification blockers; admission bounds remain unchanged.
 
+### Follow-up: seven draft journeys passed; editor recovery assertion reconciled
+
+At `ae00b2c216265078f75146d84400835a82f124a6`, [quality run 38864553755](https://github.com/neuroforge-io/Sinter/actions/runs/38864553755)
+finished with ten successful jobs, Chromium failed and portable qualification
+skipped. Step 31 passed all seven source-preview journeys, including delayed
+save acknowledgement and draft-replacement recovery. Windows Python 3.10 and
+3.13 each passed 5,304 tests with 778 skips. Neither Windows log reported the
+previous connection-aborted or unhandled-thread warning; this does not repair
+the previously identified descendant-ownership and interrupted-cleanup gaps.
+
+The later Chromium failure was an obsolete interaction in
+`tools/report_recovery_browser.py`: it attempted to click Save while unapplied
+editor text correctly disabled that button. Playwright timed out at the existing
+seven-second limit. The reconciliation asserts the disabled control and its
+visible “Apply or cancel” guidance. It retains the exact recovered text and
+Cancel/clean-state checks, without changing product behavior or widening the
+timeout. The 48,279,728-byte [failed-run artifact](https://github.com/neuroforge-io/Sinter/actions/runs/38864553755/artifacts/12031105726)
+has SHA-256 `dc23a68941acf1d298ac88435b928d06a6dcabfcb3215a6f122033ed64d64a00`;
+the diagnosis used the completed log and exact source without downloading it.
+
+A fresh complete browser run is still required. These receipts do not establish
+a new human operator score, installed-release qualification or an RC4 release.
+
 ## 16 October draft replacement — operator check complete, CI and installed checks pending
 
 Actual in-app browser use of source `3056fd430efd2243a4d663c66a9e44cca26fd36e`
