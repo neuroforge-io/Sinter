@@ -121,7 +121,8 @@ in the evidence pack. Write recipient-facing context in the opening paragraph an
 enter the questions explicitly. Briefing notes, agenda items and attributed
 Casebook dossiers retain their own background rules. Optional **Draft with your
 model** transfers only the enquiry title, opening, questions, recipient and sender
-details into editable template fields; notes and reference bodies are excluded.
+details and any explicitly recorded Discussion/Research purpose into editable
+template fields; notes and reference bodies are excluded.
 The separate excerpt-ranking option can still send the evidence it describes.
 Saved historical drafts are preserved; prepare explicitly to use the new behavior.
 

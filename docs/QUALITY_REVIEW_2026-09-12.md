@@ -136,6 +136,16 @@ the disabled Save control and visible Apply/Cancel guidance while retaining all
 six pending-export guards and the zero-write assertion. Exact pushed-source
 browser CI, a fresh human rehearsal and installed qualification remain required.
 
+Independent review of `db39cd911dde7e20af5614f8c58ba910d3e8ee31`
+found no blocking defect in the recipient-only product boundary. It found two
+qualification/documentation gaps: the new browser assertion covered only the
+sender name, and README's transfer list omitted explicit Discussion/Research
+purpose. The follow-up captures all displayed sender fields and compares the
+complete wire value, checks it reaches drafting/audit messages, and checks the
+recipient in every step. Extraction intentionally has no sender. README now
+includes the recorded-purpose transfer. The expanded browser journey remains
+unexecuted until an exact-source run proves it; this review raises no score.
+
 ## 16 October draft replacement — operator check complete, CI and installed checks pending
 
 Actual in-app browser use of source `3056fd430efd2243a4d663c66a9e44cca26fd36e`

@@ -398,6 +398,24 @@ class DeliverableChecks:
         assert context.endswith(opening)
         assert questions in values and 'Casey Example' in values
         assert all(not any(value in text for value in excluded) for text in values)
+        page.get_by_text('Your sign-off', exact=True).click()
+        sender = {
+            'signatory': page.get_by_label('Your name or role', exact=True).input_value(),
+            'sender_role': page.get_by_label('Your role', exact=True).input_value(),
+            'organisation': page.get_by_label('Organisation name', exact=True).input_value(),
+            'contact_details': page.get_by_label('Contact details', exact=True).input_value(),
+        }
+        assert sender == {
+            'signatory': PROFILE['full_name'], 'sender_role': PROFILE['role'],
+            'organisation': PROFILE['organisation'],
+            'contact_details': '\n'.join(PROFILE[key] for key in ('email', 'phone', 'website')),
+        }
+        expected_sender = '\n'.join([
+            'signatory: ' + sender['signatory'],
+            'sender role: ' + sender['sender_role'],
+            'organisation: ' + sender['organisation'],
+            'contact details: ' + sender['contact_details'],
+        ])
         page.evaluate('''async () => {
             const {request} = await import('/static/api.js');
             await request('/api/settings', {data: {settings: {
@@ -426,11 +444,17 @@ class DeliverableChecks:
         assert transmitted['context'] == context
         assert transmitted['questions'] == questions
         assert transmitted['recipient'] == 'Casey Example'
-        assert PROFILE['full_name'] in transmitted['sender']
-        for packet in messages:
-            assert context in '\n'.join(packet)
-            assert questions in '\n'.join(packet)
-            assert all(value not in '\n'.join(packet) for value in excluded)
+        assert transmitted['sender'] == expected_sender
+        for index, packet in enumerate(messages):
+            content = '\n'.join(packet)
+            assert context in content
+            assert questions in content
+            assert 'Casey Example' in content
+            assert all(value not in content for value in excluded)
+            if index:
+                assert expected_sender in content
+            else:
+                assert expected_sender not in content
         self.goto(page, 'brief')
         expect(page.get_by_label('Internal notes and evidence context', exact=True)).to_have_value(notes)
         expect(page.get_by_label('Opening paragraph for the recipient', exact=True)).to_have_value(opening)
