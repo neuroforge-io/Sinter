@@ -136,9 +136,9 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
     try {
       const source = currentResult?.number;
       return await confirmAction({
-        title: targetNumber === null ? 'Prepare another draft?' : `Open draft ?`,
-        description: `Draft  keeps its own document edits and original evidence in this open page. Use Drafts to return to it. Apply and save edits to My workspace before closing or reloading the page.`,
-        confirmLabel: targetNumber === null ? 'Keep edits and prepare' : `Open draft `,
+        title: targetNumber === null ? 'Prepare another draft?' : `Open draft ${targetNumber}?`,
+        description: `Draft ${source} keeps its own document edits and original evidence in this open page. Use Drafts to return to it. Apply and save edits to My workspace before closing or reloading the page.`,
+        confirmLabel: targetNumber === null ? 'Keep edits and prepare' : `Open draft ${targetNumber}`,
         cancelLabel: 'Keep editing', signal: controller.signal});
     } finally { observer.disconnect(); if (decisionController === controller) decisionController = null; }
   }
@@ -191,8 +191,8 @@ export async function workbench(kind, {example = false, seed = {}, setBusy, reme
         {...replacementOptions, confirm: () => confirmReplacement(entry.number)});
       if (authorization && active() && reportReplacementStillAllowed(currentResult?.report ?? null, authorization)) {
         showResult(entry); opened = true; focusResult();
-        status.textContent = `Showing draft . Its original inputs and document edits are retained.`;
-        announce(`Draft  opened. Its original inputs and document edits are retained.`);
+        status.textContent = `Showing draft ${entry.number}. Its original inputs and document edits are retained.`;
+        announce(`Draft ${entry.number} opened. Its original inputs and document edits are retained.`);
       }
     } catch (error) { if (active()) feedback.replaceChildren(notice(error.message, 'error')); }
     finally {

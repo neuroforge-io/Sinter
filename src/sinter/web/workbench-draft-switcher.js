@@ -19,7 +19,7 @@ function attribute(node, name, value) {
 
 /** Presentation only; Workbench owns requests, adoption, evidence and saves. */
 export function createWorkbenchDraftSwitcher({onOpen}) {
-  const prefix = `workbench-drafts-`;
+  const prefix = `workbench-drafts-${++nextSwitcherId}`;
   const rows = new Map(), preparedRows = new Map(), knownNumbers = new Set();
   let disposed = false, busy = false, currentNumber = null, lastRequested = null;
   const currentLabel = h('strong', {class: 'draft-switcher-current'});
@@ -38,15 +38,15 @@ export function createWorkbenchDraftSwitcher({onOpen}) {
   element.hidden = true; prepared.hidden = true;
 
   function makeRow(number, outside) {
-    const suffix = `${outside ? 'prepared' : 'all'}-`;
-    const state = h('span', {class: 'draft-switcher-state', id: `--state`});
-    const title = h('span', {class: 'draft-switcher-title', id: `--title`});
+    const suffix = `${outside ? 'prepared' : 'all'}-${number}`;
+    const state = h('span', {class: 'draft-switcher-state', id: `${prefix}-${suffix}-state`});
+    const title = h('span', {class: 'draft-switcher-title', id: `${prefix}-${suffix}-title`});
     const control = button('', () => {
       if (disposed || busy || number === currentNumber) return;
       lastRequested = {number, control}; onOpen(number);
     }, 'quiet draft-switcher-row');
-    control.setAttribute('aria-label', outside ? `Open prepared draft ` : `Open draft `);
-    control.append(h('span', {class: 'draft-switcher-number'}, `Draft `), state, title);
+    control.setAttribute('aria-label', outside ? `Open prepared draft ${number}` : `Open draft ${number}`);
+    control.append(h('span', {class: 'draft-switcher-number'}, `Draft ${number}`), state, title);
     return {item: h('li', {}, control), control, state, title};
   }
   function reconcile(container, cache, entries, showTitles, outside) {
@@ -58,11 +58,11 @@ export function createWorkbenchDraftSwitcher({onOpen}) {
       if (!row) { row = makeRow(entry.number, outside); cache.set(entry.number, row); }
       const isCurrent = entry.number === currentNumber;
       const title = showTitles ? (entry.title ?? '').trim() : '';
-      text(row.state, `${isCurrent ? 'Current · ' : ''}${entry.shown ? '' : ' · New'}`);
+      text(row.state, `${isCurrent ? 'Current · ' : ''}${saveLabel(entry)}${entry.shown ? '' : ' · New'}`);
       text(row.title, title); row.title.hidden = !title;
       row.control.disabled = busy || isCurrent;
       attribute(row.control, 'aria-current', isCurrent ? 'true' : null);
-      attribute(row.control, 'aria-describedby', `` : ''}`);
+      attribute(row.control, 'aria-describedby', `${row.state.id}${title ? ` ${row.title.id}` : ''}`);
       if (row.item !== cursor) container.insertBefore(row.item, cursor);
       cursor = row.item.nextElementSibling;
     }
@@ -75,14 +75,14 @@ export function createWorkbenchDraftSwitcher({onOpen}) {
     const newlyReady = waiting.filter(entry => !knownNumbers.has(entry.number));
     const titles = new Set(entries.map(entry => (entry.title ?? '').trim()).filter(Boolean));
     element.hidden = !active || entries.length === 0;
-    text(currentLabel, active ? `Draft  · ` : '');
+    text(currentLabel, active ? `Draft ${active.number} · ${saveLabel(active)}` : '');
     durability.hidden = !entries.some(entry => entry.save?.kind !== 'saved');
-    text(summary, `Drafts · `); details.hidden = entries.length < 2;
+    text(summary, `Drafts · ${entries.length}`); details.hidden = entries.length < 2;
     reconcile(list, rows, entries, titles.size > 1, false);
     reconcile(preparedList, preparedRows, waiting, titles.size > 1, true);
     prepared.hidden = waiting.length === 0;
     if (newlyReady.length) text(announcement, newlyReady.length === 1
-      ? `Draft  is ready to open.` : ` drafts are ready to open.`);
+      ? `Draft ${newlyReady[0].number} is ready to open.` : `${newlyReady.length} drafts are ready to open.`);
     else if (!waiting.length) text(announcement, '');
     for (const entry of entries) knownNumbers.add(entry.number);
   }

@@ -20,7 +20,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   const result = h('section', {class: 'report-area', 'aria-label': 'Your draft report'});
   const message = h('div', {class: 'non-print', 'aria-live': 'polite'});
   const saveState = h('p', {class: 'document-save-state non-print', role: 'status', 'aria-label': 'Document save state',
-    id: `report-save-state-`});
+    id: `report-save-state-${++reportViewSequence}`});
   let savePending = false, viewDisposed = false;
   function refreshSaveState() {
     const state = reportSaveState(report);

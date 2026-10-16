@@ -22,12 +22,21 @@ The phone textarea retains its complete value at a bounded visual height; Apply,
 Cancel and page-break actions keep their logical keyboard order. The generic
 Library recovery warning and actual stale-source/review warnings remain.
 
-The bounded source checks passed 48 Node regressions with no skips, six
-JavaScript syntax checks, Python AST parsing, fatal Ruff and the whitespace guard.
-Every child process and resource group terminated before the machine slot was
-returned. Actual operator phone use still needs a fresh receipt. The updated
-offline browser journey exercises two deliberately delayed fictional completions,
-independent version saves and one delayed real local-save acknowledgement. It checks stable controls, focus, scroll, full text and original
+An independent exact-source review rejected compact-navigation commit
+`37694bdb9164d59dd272e32aba2a9e0dd38b6177`: its transported JavaScript lost
+interpolated draft numbers, labels and unique IDs, including a syntax error. Raw
+GitHub bytes matched the local committed blob. The earlier file-only Node syntax
+receipt was invalid: an actual module import rejected the same bytes. Deliberate
+invalid CommonJS and module stdin controls both failed correctly, and an explicit
+exit-23 control returned 23. The failed commit and receipts remain historical
+records; they do not qualify this feature.
+
+The follow-up repair uses encoded transport and independently computed byte
+lengths and SHA-256 pins before replacement, followed by working/Git/raw-remote
+identity checks. Fresh module-stdin syntax, focused state and operator browser
+receipts are required before qualification. The updated offline browser journey
+exercises two deliberately delayed fictional completions, independent version
+saves and one delayed real local-save acknowledgement. It checks stable controls, focus, scroll, full text and original
 evidence. These controls are test fixtures, not hosted task or installed-app proof.
 Untracked auxiliary correction/screening/log forms remain a separate gap.
 
