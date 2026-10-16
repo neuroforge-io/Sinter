@@ -84,9 +84,24 @@ Focused source checks passed 71 Python tests and 27 Node tests, plus fatal Pytho
 lint, four JavaScript syntax checks and the whitespace check. Each local check
 ran sequentially at low priority with a 256 MiB resident-memory limit, no swap,
 one quarter of a CPU and a finite runtime; no virtual-address cap was imposed.
-Those browser changes require a new successful run; the failed artifact and
-reproduction are retained. No installed release or broader UI score is qualified
-by this repair.
+[Source CI 38853125235](https://github.com/neuroforge-io/Sinter/actions/runs/38853125235)
+at `c7706120a3afc2db83f7e7ab51d57ff9afaaecd5` subsequently passed Chromium,
+including the strict full-source comparison, visible rejected-pin recovery and
+explicit retry. Eleven quality jobs passed. The full workflow failed because
+Windows Python 3.10's optimised-rehearsal refusal subprocess exceeded its unchanged
+10-second deadline (10.15 seconds observed); the portable/source job was skipped.
+That failure is retained, rather than rerunning unchanged source or treating the
+browser pass as complete qualification.
+
+The follow-up source guard refuses `-O` and `-OO` before loading the recovery and
+browser import tree; its existing programmatic guard and 10-second direct-script
+regression remain. New import-tripwire checks require the exact refusal with no
+output artifacts. This removes unnecessary work before an unconditional refusal;
+it does not establish the exact cause of the Windows timeout or guarantee startup
+on an arbitrarily overloaded host. The final focused recovery module passed all
+53 tests; fatal Python lint, ordinary isolated --help and the whitespace check
+also passed. A new full CI receipt is required. No installed release or broader
+UI score is qualified by this repair.
 
 ## 16 October explicit clean-result admission and historical recovery
 

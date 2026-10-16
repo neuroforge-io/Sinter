@@ -78,7 +78,9 @@ TMPDIR=/your/owned/short/home-temp PYTHONDONTWRITEBYTECODE=1 \
 Run from the frozen source. The optional browser path also accepts `SINTER_CHROMIUM`
 or the existing Playwright browser configuration. The Python environment needs the
 repository browser extra already present. `--help` works without that extra. Python
-optimisation is refused because the reused browser steps use assertions. Linux is
+optimisation, including `--help` under `-O` or `-OO`, is refused before importing
+recovery/browser tooling because the reused browser steps use assertions. Normal
+`--help` remains available without Playwright. Linux is
 the only supported rehearsal platform; a short owned home temporary directory avoids
 Unix-socket pathname limits. No actual Windows or macOS recovery is claimed.
 

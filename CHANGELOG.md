@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refuse optimised recovery-rehearsal execution before importing browser tooling,
+  retaining the assertion-based safety gate and the existing subprocess deadline.
+
 - Preserve a meeting transcript's original source record through explicit reviewed
   corrections, with a separate preparation time for the derived draft. Validate
   source pins against unchanged raw text, keep correction errors beside the editor,

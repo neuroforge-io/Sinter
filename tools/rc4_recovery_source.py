@@ -7,6 +7,14 @@ and docs/RC4_LOCAL_RECOVERY.md for the bounded campaign subset and missing gates
 
 from __future__ import annotations
 
+import sys
+
+# Refuse before importing browser/recovery tooling: optimised Python removes
+# assertions used by the rehearsal and can never produce qualification evidence.
+if __name__ == "__main__" and sys.flags.optimize:
+    sys.stderr.write("Run the source rehearsal without Python optimisation.\n")
+    raise SystemExit(1)
+
 import argparse
 import base64
 import copy
@@ -16,7 +24,6 @@ import os
 import re
 import socket
 import subprocess
-import sys
 import tempfile
 import threading
 import time

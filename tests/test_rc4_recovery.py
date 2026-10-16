@@ -618,6 +618,67 @@ def test_optimisation_cannot_bypass_browser_observations(tmp_path):
     assert not (tmp_path / "proof").exists()
 
 
+@pytest.mark.parametrize("optimisation", ["-O", "-OO"])
+def test_optimisation_refuses_before_dependency_imports(
+    tmp_path: Path, optimisation: str,
+) -> None:
+    """Reject unsafe execution before optional tooling or file writes."""
+    bootstrap = r"""
+import __future__
+import builtins
+import sys
+
+script = sys.argv[1]
+sys.argv = sys.argv[1:]
+with open(script, encoding="utf-8") as stream:
+    source = stream.read()
+
+original_import = builtins.__import__
+
+
+def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+    if name not in {"sys", "__future__"}:
+        raise RuntimeError("Import reached before optimisation refusal: " + name)
+    return original_import(name, globals, locals, fromlist, level)
+
+
+builtins.__import__ = guarded_import
+exec(
+    compile(source, script, "exec"),
+    {"__name__": "__main__", "__file__": script},
+)
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            optimisation,
+            "-c",
+            bootstrap,
+            str(producer.ROOT / "tools/rc4_recovery_source.py"),
+            "--source-manifest",
+            str(tmp_path / "missing.json"),
+            "--source-manifest-sha256",
+            "a" * 64,
+            "--source-commit",
+            "b" * 40,
+            "--output",
+            str(tmp_path / "proof"),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=10,
+    )
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "Run the source rehearsal without Python optimisation.\n"
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_stale_source_notice_cannot_be_turned_into_a_current_review(rehearsal):
     mutate(
         rehearsal,
