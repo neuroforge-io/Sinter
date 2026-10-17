@@ -416,7 +416,16 @@ The public landing page lives in `site/`; the Pages workflow publishes only thos
 
 ## Licence and ownership
 
+Sinter is a **NeuroForge** open-source project, published and maintained by
+**NeuroforgeIO Pty Ltd**, with Lloyd Handyside and Sinter contributors credited
+in [NOTICE](NOTICE). Publisher attribution preserves each applicable holder's
+copyright; it is not an ownership transfer.
+
 Sinter source remains **Apache 2.0**. Preserve the [LICENSE](LICENSE), [NOTICE](NOTICE) and applicable changed-file notices. No proprietary ERAIS/Fracture implementation or model weights are bundled. The API is an interface, not a redistribution of its server.
+
+Commercial reuse, modification and redistribution are welcome under those
+terms. Neither an account, a mandatory support subscription nor a separate
+proprietary Sinter licence is required to exercise the open-source grant.
 
 Bundled runtime components and optional packages/models retain their own licences. Read [third-party notices](THIRD_PARTY_NOTICES.md); an Apache-2.0 application does not relicense its dependencies or the material you import.
 

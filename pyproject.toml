@@ -9,7 +9,8 @@ description = "A local-first community workbench: source-linked briefs, funding 
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
-authors = [{ name = "Lloyd Handyside" }]
+authors = [{ name = "Lloyd Handyside (NeuroForge)" }]
+maintainers = [{ name = "NeuroforgeIO Pty Ltd", email = "hello@neuroforge.io" }]
 keywords = ["neuroforge", "fracture", "erais", "ai", "code-review", "research", "chat"]
 classifiers = [
     "Development Status :: 4 - Beta",

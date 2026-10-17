@@ -2,6 +2,12 @@ Sinter
 Copyright 2026 Lloyd Handyside and Sinter contributors.
 Licensed under the Apache License, Version 2.0. See LICENSE.
 
+Sinter is an open-source NeuroForge project, published and maintained by
+NeuroforgeIO Pty Ltd. The named authors and contributors retain their applicable
+copyrights; this publisher attribution does not itself transfer their rights.
+Commercial use, modification and redistribution are permitted under Apache-2.0,
+subject to its licence, attribution, NOTICE and changed-file notice conditions.
+
 The Sinter 0.2 community-workbench changes refactor the public API client,
 template runner, CLI and local server and add independent workflow services.
 
