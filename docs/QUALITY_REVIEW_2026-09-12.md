@@ -4334,3 +4334,10 @@ which lacked standard remove/move/sibling operations used by the new stable list
 Ubuntu 3.13 recorded 1 failed / 6,058 passed / 47 skipped. The fixture now models
 those operations and input values; its storage wording and exact backend-request
 assertions remain intact. No product fallback or skipped assertion was added.
+
+## 18 October real saved-copy operator qualification
+
+[Read the scoped operator receipt](SAVED_COPY_OPERATOR_2026-10-18.md) for exact-source
+CI results, real local recovery/reopen/export checks, critical ratings and the
+confirmed Markdown section-boundary blocker. This does not qualify an installer,
+whole-product quality or RC4 publication.
