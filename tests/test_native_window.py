@@ -940,7 +940,9 @@ def test_real_native_first_run_setup_catalogue_save_preview_negation_and_restart
     catalogue_calls, model_calls = [], []
 
     def catalogue():
-        catalogue_calls.append(client.connection_identity())
+        settings = client._CONNECTION.get()
+        assert "model" not in settings and "max_tokens" not in settings
+        catalogue_calls.append({key: settings[key] for key in ("api_url", "provider")})
         return [{"id": "erais-native-qwen3", "object": "model"}]
 
     def answer(messages, max_tokens):
@@ -1010,6 +1012,9 @@ def test_real_native_first_run_setup_catalogue_save_preview_negation_and_restart
         window.models_button.invoke()
         wait()
         assert len(catalogue_calls) == 1
+        assert catalogue_calls[0] == {
+            "api_url": client.BASE_URL, "provider": "openai-compatible"
+        }
         assert window.controller.result == report
         assert window.connection_vars["model"].get() == "auto"
         assert tuple(window.connection_boxes["model"]["values"]) == (

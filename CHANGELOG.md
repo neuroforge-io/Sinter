@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Block unexpected streaming and account HTTP in the offline quality harness.
+  Keep fictional model fixtures above the transport guard and check native
+  first-run catalogue destination fields without weakening generation identity.
+
 - Load model catalogues independently of answer limits, including native caps
   below 32 tokens. Preserve saved selections, destination approval and session-key
   isolation; a catalogue lookup neither saves settings nor generates an answer.

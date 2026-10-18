@@ -55,6 +55,20 @@ def model_fixture(*, complete=False):
         yield calls
 
 
+@contextmanager
+def offline_services():
+    """Keep fictional model fixtures above a fail-closed HTTP boundary."""
+    with ExitStack() as guard:
+        for name in ('chat', 'search', '_post', '_get', '_open'):
+            guard.enter_context(patch.object(
+                client, name, side_effect=AssertionError('Unexpected remote ' + name)))
+        for name in ('urlopen', 'build_opener'):
+            guard.enter_context(patch(
+                'urllib.request.' + name,
+                side_effect=AssertionError('Unexpected remote urllib.' + name)))
+        yield
+
+
 class QualityChecks:
     def __init__(self, browser, base, artifacts):
         self.browser, self.base, self.artifacts = browser, base, artifacts
@@ -715,9 +729,7 @@ def main(argv=None):
     from playwright.sync_api import sync_playwright
     artifacts = ROOT / 'browser-artifacts'
     artifacts.mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix='sinter-quality-browser-') as temporary, ExitStack() as guard:
-        for name in ('chat', 'search', '_post', '_get'):
-            guard.enter_context(patch.object(client, name, side_effect=AssertionError('Unexpected remote ' + name)))
+    with tempfile.TemporaryDirectory(prefix='sinter-quality-browser-') as temporary, offline_services():
         server = make_server(port=0, directory=temporary)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()

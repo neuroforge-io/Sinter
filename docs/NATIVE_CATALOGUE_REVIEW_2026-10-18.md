@@ -80,3 +80,24 @@ Remaining defects are explicit:
   open; its 44-pixel target and 16-pixel inset checks have not been relaxed.
 
 A successful catalogue lookup is a prerequisite, not a 10/10 experience.
+
+
+## Offline guard and native fixture follow-up
+
+An adversarial review of c1e916286bae49fe0c7c00e08e956b1470d52d34 found that
+the quality harness's higher-level mocks did not guard legacy streaming's raw
+HTTP path. The shared offline context now also blocks the raw client transport
+and both standard-library urllib entry points, including account HTTP. Intended
+fictional model fixtures remain above that boundary. Regressions exercise
+captured streaming, raw transport and account aliases, direct urllib access,
+intended fixture completion and restoration after failure.
+
+The real native first-run CI journey also exposed a third outdated catalogue
+fake using generation-only connection identity. It now asserts that catalogue
+context has no model/cap, records only destination/provider and checks the exact
+record. The unchanged one-call, original-report, explicit-model-choice,
+source/export and restart assertions remain in place. No fallback model was
+added to the client.
+
+These follow-ups do not qualify the separately unrun headless native-catalogue
+case, an installed release or the remaining Settings/assistant recovery flows.
