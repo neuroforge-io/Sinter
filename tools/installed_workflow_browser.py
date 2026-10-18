@@ -1200,7 +1200,16 @@ def word_copy_workflow(page, context, report, runtime, output, read, saved_repor
     proof["synthetic_download_denials"] = page.evaluate(
         "window.installedWordDownloadDenials"
     )
-    report.locator(".document-word-save-options > summary").click()
+    word_options = report.locator(".document-word-save-options")
+    if report.locator(".report-reader-heading").count():
+        menu = report.locator(".export-menu")
+        if menu.get_attribute("open") is None:
+            menu.locator(":scope > summary").click()
+        report.get_by_role("button", name="Word save options", exact=True).click()
+        expect(word_options).to_have_attribute("open", "")
+    else:
+        # Preserve the qualified interface of older installed source candidates.
+        word_options.locator(":scope > summary").click()
     save = report.get_by_role(
         "button", name="Save Word copy on this computer", exact=True
     )

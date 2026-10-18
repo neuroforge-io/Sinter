@@ -156,9 +156,8 @@ def main(argv: list[str] | None = None) -> None:
                         "button", name="Open unsaved draft", exact=True
                     ).click()
                     report = page.get_by_role("region", name="Your draft report")
-                    expect(report.get_by_label("Document save state")).to_contain_text(
-                        "Prepared locally; not saved"
-                    )
+                    expect(report.get_by_label("Document save state")).to_have_text("Unsaved changes.")
+                    expect(page.get_by_label("Find saved drafts", exact=True)).to_be_hidden()
                     assert page.evaluate(warn)
                     checks.append(
                         "unedited prepared report survives navigation under exit protection"
@@ -182,7 +181,7 @@ def main(argv: list[str] | None = None) -> None:
                         "casebook citations open their exact original source "
                         "despite the longer identity format"
                     )
-                    report.get_by_text("More options", exact=True).click()
+                    report.locator(".export-menu > summary").click()
                     report.get_by_role("button", name="Edit draft", exact=True).click()
                     edited = (
                         "# Fictional handover\n\nNo order has been approved."
@@ -219,6 +218,48 @@ def main(argv: list[str] | None = None) -> None:
                         "applied edits are recoverable in My workspace "
                         "with unchanged original evidence"
                     )
+                    save_posts = []
+
+                    def record_save_request(request):
+                        if request.method == "POST" and request.url == base + "/api/reports":
+                            save_posts.append(request.post_data_json)
+
+                    page.on("request", record_save_request)
+
+                    def begin_save(label, *, additional=False, cancel_once=False):
+                        before = len(save_posts)
+                        control = report.get_by_role("button", name=label, exact=True)
+                        control.click()
+                        if additional:
+                            choice = page.get_by_role("dialog", name="Save an additional copy?", exact=True)
+                            expect(choice).to_be_visible()
+                            assert len(save_posts) == before
+                            if cancel_once:
+                                choice.get_by_role("button", name="Cancel", exact=True).click()
+                                expect(choice).to_be_hidden()
+                                assert len(save_posts) == before
+                                assert page.evaluate(warn)
+                                control.click()
+                                expect(choice).to_be_visible()
+                                assert len(save_posts) == before
+                            choice.get_by_role("button", name="Save new copy", exact=True).click()
+                        else:
+                            expect(page.get_by_role("dialog")).to_have_count(0)
+                        return before
+
+                    def show_saved_copies():
+                        menu = report.locator(".export-menu")
+                        if menu.get_attribute("open") is None:
+                            menu.locator(":scope > summary").click()
+                        before = len(save_posts)
+                        report.get_by_role("button", name="Check saved copies", exact=True).click()
+                        saved_filter = page.get_by_label("Find saved drafts", exact=True)
+                        expect(saved_filter).to_be_visible()
+                        expect(saved_filter).to_be_focused()
+                        expect(report).to_be_visible()
+                        assert len(save_posts) == before
+                        return saved_filter
+
                     failures = []
 
                     def fail_once(route):
@@ -249,15 +290,14 @@ def main(argv: list[str] | None = None) -> None:
                             route.fallback()
 
                     page.route("**/api/reports", reject_once)
-                    report.get_by_role(
-                        "button", name="Save to My workspace", exact=True
-                    ).click()
-                    expect(report.get_by_label("Document save state")).to_contain_text(
-                        "The app rejected this save"
+                    before_send = begin_save("Save draft")
+                    expect(report.get_by_label("Document save state")).to_have_text(
+                        "The latest save was rejected."
                     )
-                    expect(
-                        report.get_by_label("Document save state")
-                    ).not_to_contain_text("Save not confirmed")
+                    expect(report.get_by_label("Document save state")).not_to_contain_text(
+                        "Save outcome unknown"
+                    )
+                    assert len(save_posts) == before_send + 1
                     assert page.evaluate(warn)
                     assert not server.app.store.reports()
                     page.unroute("**/api/reports", reject_once)
@@ -280,48 +320,50 @@ def main(argv: list[str] | None = None) -> None:
 
                         page.route("**/api/reports", malformed_ack)
                         count = len(malformed_requests)
-                        report.get_by_role(
-                            "button", name="Save to My workspace", exact=True
-                        ).click()
-                        expect(
-                            report.get_by_label("Document save state")
-                        ).to_contain_text("Save not confirmed")
+                        before_send = begin_save(
+                            "Save draft" if count == 0 else "Save an additional copy",
+                            additional=count > 0, cancel_once=count == 1,
+                        )
+                        expect(report.get_by_label("Document save state")).to_have_text(
+                            "Save outcome unknown. Check saved copies before another save."
+                        )
                         expect(report.get_by_role("alert")).to_contain_text(
                             "valid saved-document acknowledgement"
                         )
                         assert len(malformed_requests) == count + 1
+                        assert len(save_posts) == before_send + 1
                         assert page.evaluate(warn)
                         assert not server.app.store.reports()
+                        if count == 0:
+                            saved_filter = show_saved_copies()
+                            expect(report).to_contain_text("A user-edited next step.")
+                            assert len(malformed_requests) == count + 1
+                            page.get_by_role("button", name="Return to open draft", exact=True).click()
+                            expect(saved_filter).to_be_hidden()
+                            expect(report).to_be_visible()
+                            assert len(save_posts) == before_send + 1
                         page.unroute("**/api/reports", malformed_ack)
                     checks.append(
                         "null, absent and invalid saved IDs remain unconfirmed after one POST each"
                     )
-                    report.get_by_role(
-                        "button", name="Save to My workspace", exact=True
-                    ).click()
+                    before_send = begin_save("Save an additional copy", additional=True)
                     expect(report.get_by_role("alert")).to_contain_text(
                         "Fictional local save failure"
                     )
-                    expect(report.get_by_label("Document save state")).to_contain_text(
-                        "Save not confirmed"
+                    expect(report.get_by_label("Document save state")).to_have_text(
+                        "Save outcome unknown. Check saved copies before another save."
                     )
+                    assert len(save_posts) == before_send + 1
                     assert page.evaluate(warn)
                     assert not server.app.store.reports()
-                    report.get_by_role(
-                        "button", name="Save to My workspace", exact=True
-                    ).click()
+                    before_success = len(server.app.store.reports())
+                    before_send = begin_save("Save an additional copy", additional=True)
                     expect(report).to_contain_text("Saved in My workspace")
-                    expect(report.get_by_label("Document save state")).to_have_text(
-                        "Saved locally in My workspace."
-                    )
-                    expect(
-                        report.get_by_role(
-                            "button", name="Save to My workspace", exact=True
-                        )
-                    ).to_be_disabled()
-                    expect(report).not_to_contain_text(
-                        "Edits applied. Save this draft to keep them."
-                    )
+                    expect(report.get_by_label("Document save state")).to_have_text("Saved locally.")
+                    expect(report.get_by_role("button", name="Save new copy", exact=True)).to_be_hidden()
+                    assert len(save_posts) == before_send + 1
+                    assert len(server.app.store.reports()) == before_success + 1
+                    expect(report).not_to_contain_text("Edits applied. Save this draft to keep them.")
                     assert not page.evaluate(warn)
                     assert (
                         server.app.store.report(server.app.store.reports()[0]["id"])[
@@ -334,7 +376,7 @@ def main(argv: list[str] | None = None) -> None:
                         "alone clears exit protection"
                     )
                     page.unroute("**/api/reports", fail_once)
-                    report.get_by_text("More options", exact=True).click()
+                    report.locator(".export-menu > summary").click()
                     report.get_by_role("button", name="Edit draft", exact=True).click()
                     report.get_by_label("Edit your draft", exact=True).fill(
                         "Unapplied fictional handover wording."
@@ -348,11 +390,9 @@ def main(argv: list[str] | None = None) -> None:
                     expect(
                         report.get_by_label("Edit your draft", exact=True)
                     ).to_have_value("Unapplied fictional handover wording.")
-                    expect(report.get_by_role(
-                        "button", name="Save to My workspace", exact=True
-                    )).to_be_disabled()
-                    expect(report.get_by_label("Document save state")).to_contain_text(
-                        "Apply or cancel"
+                    expect(report.get_by_role("button", name="Save new copy", exact=True)).to_be_disabled()
+                    expect(report.get_by_label("Document save state")).to_have_text(
+                        "Apply or cancel the pending inputs before saving."
                     )
                     report.get_by_role(
                         "button", name="Cancel edits", exact=True
@@ -373,7 +413,7 @@ def main(argv: list[str] | None = None) -> None:
                     )
 
                     def apply_text(text: str) -> None:
-                        report.get_by_text("More options", exact=True).click()
+                        report.locator(".export-menu > summary").click()
                         report.get_by_role(
                             "button", name="Edit draft", exact=True
                         ).click()
@@ -383,23 +423,16 @@ def main(argv: list[str] | None = None) -> None:
                         ).click()
 
                     apply_text("First version sent to save.")
-                    report.get_by_role(
-                        "button", name="Save to My workspace", exact=True
-                    ).click()
+                    before_send = begin_save("Save new copy", additional=True)
                     page.wait_for_timeout(100)
                     assert len(held) == 1
+                    assert len(save_posts) == before_send + 1
                     expect(report.get_by_label("Document save state")).to_have_text(
-                        "Saving to My workspace…"
+                        "Saving a new copy..."
                     )
-                    expect(
-                        report.get_by_role(
-                            "button", name="Save to My workspace", exact=True
-                        )
-                    ).to_be_disabled()
+                    expect(report.get_by_role("button", name="Saving new copy...", exact=True)).to_be_disabled()
                     assert (
-                        held[0].request.post_data_json["report"]["document_edits"][
-                            "markdown"
-                        ]
+                        held[0].request.post_data_json["report"]["document_edits"]["markdown"]
                         == "First version sent to save."
                     )
                     page.get_by_role("link", name="Overview", exact=True).click()
@@ -409,20 +442,21 @@ def main(argv: list[str] | None = None) -> None:
                     ).click()
                     report = page.get_by_role("region", name="Your draft report")
                     expect(report.get_by_label("Document save state")).to_have_text(
-                        "Saving to My workspace…"
+                        "Saving a new copy..."
                     )
-                    save = report.get_by_role(
-                        "button", name="Save to My workspace", exact=True
-                    )
+                    save = report.get_by_role("button", name="Saving new copy...", exact=True)
                     expect(save).to_be_disabled()
                     save.evaluate("node => {node.disabled = false; node.click();}")
                     page.wait_for_timeout(100)
                     assert len(held) == 1
+                    assert len(save_posts) == before_send + 1
+                    expect(page.get_by_role("dialog")).to_have_count(0)
                     apply_text("Newer version edited while saving.")
-                    held[0].continue_()
                     expect(report.get_by_label("Document save state")).to_have_text(
-                        "Applied document edits are not confirmed saved."
+                        "Saving an earlier version. Newer edits are unsaved."
                     )
+                    held[0].continue_()
+                    expect(report.get_by_label("Document save state")).to_have_text("Unsaved changes.")
                     document = report.get_by_role(
                         "tabpanel", name="Document", exact=True
                     )
@@ -437,11 +471,7 @@ def main(argv: list[str] | None = None) -> None:
                         == "First version sent to save."
                     )
                     assert page.evaluate(warn)
-                    expect(
-                        report.get_by_role(
-                            "button", name="Save to My workspace", exact=True
-                        )
-                    ).to_be_enabled()
+                    expect(report.get_by_role("button", name="Save new copy", exact=True)).to_be_enabled()
                     checks.append(
                         "a delayed save records its exact snapshot "
                         "and leaves newer edits protected"
@@ -463,9 +493,8 @@ def main(argv: list[str] | None = None) -> None:
                         ));
                     }""")
                     report = page.get_by_role("region", name="Your draft report")
-                    report.get_by_role(
-                        "button", name="Save to My workspace", exact=True
-                    ).click()
+                    before_refresh_save = len(server.app.store.reports())
+                    before_send = begin_save("Save to My workspace", additional=True)
                     expect(
                         report.get_by_role("note").filter(
                             has_text="Fictional refresh failure"
@@ -476,6 +505,8 @@ def main(argv: list[str] | None = None) -> None:
                     expect(report.get_by_label("Document save state")).to_have_text(
                         "Saved locally in My workspace."
                     )
+                    assert len(save_posts) == before_send + 1
+                    assert len(server.app.store.reports()) == before_refresh_save + 1
                     assert not page.evaluate(warn)
                     assert (
                         server.app.store.report(server.app.store.reports()[0]["id"])[
@@ -541,6 +572,7 @@ def main(argv: list[str] | None = None) -> None:
                     page.set_default_timeout(7000)
                     page.on("pageerror", lambda error: errors.append(str(error)))
                     page.on("dialog", lambda dialog: dialog.accept())
+                    page.on("request", record_save_request)
                     source_row = next(
                         row for row in server.app.store.reports()
                         if server.app.store.report(row["id"]).get("sources")
@@ -550,7 +582,8 @@ def main(argv: list[str] | None = None) -> None:
                     page.get_by_label("Find saved drafts", exact=True).fill(source_row["id"])
                     page.get_by_role("button", name="Open draft", exact=True).click()
                     report = page.get_by_role("region", name="Your draft report")
-                    report.get_by_text("More options", exact=True).click()
+                    expect(page.get_by_label("Find saved drafts", exact=True)).to_be_hidden()
+                    report.locator(".export-menu > summary").click()
                     with page.expect_download() as downloading:
                         report.get_by_role("button", name="Download evidence pack", exact=True).click()
                     downloaded = Path(data) / "restore-fixture.json"
@@ -560,6 +593,8 @@ def main(argv: list[str] | None = None) -> None:
                     report.get_by_role("button", name="Edit draft", exact=True).click()
                     preserved_editor = "KEEP CURRENT EDITOR — not applied or included in the backup."
                     report.get_by_label("Edit your draft", exact=True).fill(preserved_editor)
+                    show_saved_copies()
+                    expect(report.get_by_label("Edit your draft", exact=True)).to_have_value(preserved_editor)
                     page.get_by_text("Restore draft JSON", exact=True).click()
                     selected = page.get_by_label("Choose draft JSON", exact=True)
                     restore = page.get_by_role("button", name="Restore as a new saved copy", exact=True)
@@ -638,6 +673,8 @@ def main(argv: list[str] | None = None) -> None:
                     report = page.get_by_role("region", name="Your draft report")
                     report.get_by_role("button", name="Edit draft", exact=True).click()
                     report.get_by_label("Edit your draft", exact=True).fill("UNAPPLIED IMPORTED TEXT")
+                    show_saved_copies()
+                    expect(report.get_by_label("Edit your draft", exact=True)).to_have_value("UNAPPLIED IMPORTED TEXT")
                     expect(additional).to_be_disabled()
                     assert len(attempts) == 1
                     report.get_by_role("button", name="Cancel edits", exact=True).click()
@@ -660,10 +697,13 @@ def main(argv: list[str] | None = None) -> None:
                     report.get_by_role("button", name="Edit draft", exact=True).click()
                     report.get_by_label("Edit your draft", exact=True).fill("Later applied imported wording.")
                     report.get_by_role("button", name="Apply edits", exact=True).click()
-                    expect(report.get_by_role("button", name="Save to My workspace", exact=True)).to_be_enabled()
+                    expect(report.get_by_role("button", name="Save new copy", exact=True)).to_be_enabled()
                     expect(page.get_by_role("button", name="Restored to My workspace", exact=True)).to_be_disabled()
                     assert len(attempts) == 2
                     page.screenshot(path=str(out / "report-json-restoration.png"), full_page=True)
+                    show_saved_copies()
+                    expect(report).to_contain_text("Later applied imported wording.")
+                    assert len(attempts) == 2
                     original_pending = page.get_by_role("region", name="Unsaved document or form work").locator(
                         "article"
                     ).filter(has_text="Draft text is waiting to be applied")

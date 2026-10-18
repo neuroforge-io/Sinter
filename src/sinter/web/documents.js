@@ -183,7 +183,7 @@ export function downloadDocument(report) {
 }
 
 /** Shared copy, readable export and explicit editing for every kind of document. */
-export function documentActions(report, {onChange = () => {}, onEditorChange = () => {}, editorSeed, save} = {}) {
+export function documentActions(report, {onChange = () => {}, onEditorChange = () => {}, editorSeed, save, compact = false} = {}) {
   const isCampaign = report.workflow === 'campaign';
   const feedback = h('div', {class: 'document-feedback', 'aria-live': 'polite'});
   const editor = h('div', {class: 'document-editor non-print', hidden: !editorSeed?.open});
@@ -336,39 +336,47 @@ export function documentActions(report, {onChange = () => {}, onEditorChange = (
     evidencePack.textContent = privateExport.input.checked
       ? 'Download evidence pack with private details' : 'Download redacted evidence pack';
   });
-  const exports = h('details', {class: 'export-menu'}, h('summary', {class: 'button'}, 'More options'),
-    h('div', {class: 'export-options'},
-      privateExport ? h('div', {class: 'private-export-choice'}, privateExport.wrap,
-        h('small', {}, 'Off by default. The redacted file omits message text, subjects, '
-          + 'contact names and evidence links, plus signatory and contact details. '
-          + 'Edited document text is also omitted. Applicant evidence, objectives, '
-          + 'answers, budget, action owners and source notes may still contain '
-          + 'user-entered personal or sensitive details. Review the whole file '
-          + 'before sharing. Sinter downloads it to your device and does not '
-          + 'transmit it; the saved campaign is unchanged.')) : null,
-      button(isCampaign ? 'Download decision brief' : 'Download document', () => { if (canUseDocument()) downloadDocument(report); }),
-      button(isCampaign ? 'Download Markdown brief' : 'Download Markdown', () => { if (canUseDocument()) download(reportName(report.title) + '.md', documentMarkdown(report), 'text/markdown;charset=utf-8'); }),
-      evidencePack,
-      button('Print / save PDF', () => { if (canUseDocument()) window.print(); })));
+  const copy = button(isCampaign ? 'Copy decision brief' : 'Copy draft text', async () => {
+    if (!canUseDocument()) return;
+    try { await navigator.clipboard.writeText(plainDocument(documentMarkdown(report))); feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, isCampaign
+      ? 'Copied. Review the internal decision brief for accuracy and privacy before sharing.'
+      : report.incomplete ? 'Incomplete draft copied. Review the partial text before using it.'
+        : 'Copied. Ready to paste into your email or document.')); announce(isCampaign ? 'Decision brief copied.' : report.incomplete ? 'Incomplete draft text copied.' : 'Draft text copied.'); }
+    catch { feedback.replaceChildren(notice('Clipboard access is unavailable. Download the document instead.', 'error')); }
+  }, 'quiet');
+  const options = h('div', {class: 'export-options'},
+    privateExport ? h('div', {class: 'private-export-choice'}, privateExport.wrap,
+      h('small', {}, 'Off by default. The redacted file omits message text, subjects, '
+        + 'contact names and evidence links, plus signatory and contact details. '
+        + 'Edited document text is also omitted. Applicant evidence, objectives, '
+        + 'answers, budget, action owners and source notes may still contain '
+        + 'user-entered personal or sensitive details. Review the whole file '
+        + 'before sharing. Sinter downloads it to your device and does not '
+        + 'transmit it; the saved campaign is unchanged.')) : null,
+    ...(compact ? [copy] : []),
+    button(isCampaign ? 'Download decision brief' : 'Download document', () => { if (canUseDocument()) downloadDocument(report); }),
+    button(isCampaign ? 'Download Markdown brief' : 'Download Markdown', () => { if (canUseDocument()) download(reportName(report.title) + '.md', documentMarkdown(report), 'text/markdown;charset=utf-8'); }),
+    evidencePack,
+    button('Print / save PDF', () => { if (canUseDocument()) window.print(); }));
+  const menuLabel = h('summary', {class: 'button', ...(compact ? {'aria-label': 'More options'} : {})}, compact ? 'More' : 'More options');
+  const exports = h('details', {class: 'export-menu'}, menuLabel, options);
   exports.addEventListener('click', event => { if (event.target.closest('button')) exports.open = false; });
   exports.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && exports.open) { event.preventDefault(); exports.open = false; exports.querySelector('summary').focus(); }
+    if (event.key === 'Escape' && exports.open) { event.preventDefault(); exports.open = false; menuLabel.focus(); }
   });
+  if (compact) {
+    word.setAttribute('aria-label', isCampaign ? 'Download Word brief (.docx)' : 'Download Word (.docx)');
+    word.textContent = 'Download Word';
+  }
   const controls = h('div', {class: 'document-toolbar non-print'},
-    h('div', {class: 'button-row'}, save || null, edit, button(isCampaign ? 'Copy decision brief' : 'Copy draft text', async () => {
-      if (!canUseDocument()) return;
-      try { await navigator.clipboard.writeText(plainDocument(documentMarkdown(report))); feedback.replaceChildren(h('p', {class: 'copy-confirmation'}, isCampaign
-        ? 'Copied. Review the internal decision brief for accuracy and privacy before sharing.'
-        : report.incomplete ? 'Incomplete draft copied. Review the partial text before using it.'
-          : 'Copied. Ready to paste into your email or document.')); announce(isCampaign ? 'Decision brief copied.' : report.incomplete ? 'Incomplete draft text copied.' : 'Draft text copied.'); }
-      catch { feedback.replaceChildren(notice('Clipboard access is unavailable. Download the document instead.', 'error')); }
-    }, 'quiet'), word, exports), wordSaveOptions);
+    h('div', {class: 'button-row'}, save || null, edit, ...(compact ? [] : [copy]), word, exports),
+    ...(compact ? [] : [wordSaveOptions]));
   function applyMarkdown(text) {
     applyDocumentEdit(report, text);
     editor.hidden = true; onChange(); refreshLocalCopy();
     feedback.replaceChildren(notice('Edits applied. Save this draft to keep them.', 'success'));
     announce('Draft updated. Original evidence retained.'); exports.querySelector('summary').focus();
   }
-  return {controls, feedback, editor, canUseDocument, applyMarkdown,
+  return {controls, feedback, editor, canUseDocument, applyMarkdown, options, more: exports, wordSaveOptions,
     currentMarkdown: () => documentMarkdown(report)};
 }

@@ -787,7 +787,48 @@ def main(argv: list[str] | None = None) -> None:
                         reading_page.get_by_role("button", name="Open draft", exact=True).click()
                         reading_view = reading_page.get_by_role("region", name="Your draft report", exact=True)
                         reading_panel = reading_view.get_by_role("tabpanel", name="Document", exact=True)
-                        expect(reading_panel).to_be_focused()
+                        heading = reading_view.locator(".report-reader-heading h2")
+                        reader_header = reading_view.get_by_role(
+                            "group", name=reading_report.get("document_title") or reading_report["title"], exact=True
+                        )
+                        expect(reader_header).to_be_focused()
+                        expect(heading).to_have_text(
+                            reading_report.get("document_title") or reading_report["title"]
+                        )
+                        identity = reading_view.locator(".reader-copy-identity")
+                        expect(identity).to_contain_text(reading_id[:8])
+                        expect(reading_view.get_by_label("Document save state")).to_have_text(
+                            "Saved locally."
+                        )
+                        expect(reading_view.get_by_role(
+                            "button", name="Save new copy", exact=True, include_hidden=True
+                        )).to_be_hidden()
+                        for control in (
+                            reading_view.get_by_role("button", name="Back to saved copies", exact=True),
+                            reading_view.get_by_role("button", name="Edit draft", exact=True),
+                            reading_view.get_by_role("button", name="Download Word (.docx)", exact=True),
+                            reading_view.locator(".export-menu > summary"),
+                        ):
+                            bounds = control.bounding_box()
+                            assert bounds and bounds["width"] >= 44 and bounds["height"] >= 44
+                            assert bounds["y"] >= 0 and bounds["y"] + bounds["height"] <= height
+                            assert control.evaluate("""element => {
+                                const rect = element.getBoundingClientRect();
+                                const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                                return hit === element || element.contains(hit);
+                            }""")
+                        for part in (heading, identity, reading_view.get_by_label("Document save state")):
+                            bounds = part.bounding_box()
+                            assert bounds and bounds["y"] >= 0
+                            assert bounds["y"] + bounds["height"] <= height
+                        more = reading_view.locator(".export-menu > summary")
+                        expect(more).to_have_accessible_name("More options")
+                        more.click()
+                        expect(reading_view.locator(".reader-copy-reference")).to_contain_text(reading_id)
+                        more.press("Escape")
+                        expect(more).to_be_focused()
+                        expect(reading_view.locator(".export-menu")).not_to_have_attribute("open", "")
+
                         opening_row = reading_panel.locator(".handover-opening-table tbody tr").first
                         proposed = opening_row.locator("td").nth(2)
                         passage = opening_row.locator("td").nth(3).get_by_role("button").first
@@ -811,7 +852,7 @@ def main(argv: list[str] | None = None) -> None:
                             "passage": passage_bounds,
                             "reading_focus": True,
                         })
-                        reading_page.get_by_role("button", name="Close open draft", exact=True).click()
+                        reading_page.get_by_role("button", name="Back to saved copies", exact=True).click()
                         saved_filter = reading_page.get_by_label("Find saved drafts", exact=True)
                         expect(saved_filter).to_be_focused()
                         filter_bounds = saved_filter.bounding_box()
@@ -824,7 +865,7 @@ def main(argv: list[str] | None = None) -> None:
                     )
                     checks.append(
                         "real saved-copy Open lands on the first proposed action and 44px evidence target "
-                        "at 1265x712 and 390x844 without test scrolling; Close reveals the saved filter"
+                        "with title, saved identity, state and controls at 1265x712 and 390x844; Back reveals the saved filter"
                     )
                     for flag, value, label in (
                         ("model_draft", True, "MODEL-GENERATED DRAFT"),

@@ -137,6 +137,15 @@ On a narrow screen, use **Find a tool** to open My workspace or Community casebo
 Export project inputs and edited documents separately. This clearer guidance
 does not change the published installer or browser source pins.
 
+In current development source, opening a saved report keeps its title, copy
+reference, save status and document actions together. **Back to saved copies**
+returns to the list; **Check saved copies** in **More** keeps the current draft
+and unapplied inputs while checking local storage. **Save draft** saves an
+unacknowledged draft; **Save new copy** retains earlier copies. If a save outcome
+is unknown, check the list first. Another save requires an explicit confirmation
+and may create a duplicate. Pending browser inputs still need applying and saving
+before quitting; they are not a durable backup.
+
 In the rc3 browser workbench, Overview and Getting started
 also offer **Open garden handover** and **Open garden campaign**. These open the
 complete bundled fictional project without a file picker. Saved projects stay

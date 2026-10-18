@@ -145,7 +145,7 @@ class PreviewChecks(PurposeChecks):
     def evidence_export(self, page, label):
         button = page.get_by_role("button", name="Download evidence pack", exact=True)
         if not button.is_visible():
-            page.get_by_text("More options", exact=True).click()
+            page.get_by_role("region", name="Your draft report", exact=True).locator(".export-menu > summary").click()
         path = self.artifacts / (label + ".json")
         with page.expect_download() as pending:
             button.click()

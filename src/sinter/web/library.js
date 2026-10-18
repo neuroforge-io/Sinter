@@ -2,7 +2,7 @@ import {h, button, field, check, notice, selectField, safeLink, dateTime, announ
 import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
 import {savedReportRestore} from './saved-report-restore.js';
-import {unsavedReportDrafts, reportSaveState, rememberReportSavedCopy, reportSavedCopyId} from './report-drafts.js';
+import {unsavedReportDrafts, reportSaveState, reportSavedCopyId} from './report-drafts.js';
 import {authorizeReportReplacement, reportReplacementStillAllowed} from './report-replacement.js';
 import {confirmAction} from './confirm-action.js';
 import {savedReportList, savedReportReference} from './saved-report-list.js';
@@ -10,8 +10,9 @@ import {savedReportList, savedReportReference} from './saved-report-list.js';
 export async function library({onEditProject, setBusy} = {}) {
   const root = h('div');
   const opened = h('div');
+  const collection = h('section', {class: 'saved-report-collection', 'aria-label': 'Saved copies and pending work'});
   const openingStatus = h('div', {class: 'non-print', 'aria-live': 'polite'});
-  const feedback = h('div', {class: 'non-print', 'aria-live': 'polite'});
+  const feedback = h('div', {class: 'non-print library-feedback', 'aria-live': 'polite'});
   const pending = h('section', {class: 'card stack non-print', 'aria-label': 'Unsaved document or form work'});
   let knownReports = [];
   let disposed = false, currentReport = null, currentView = null;
@@ -19,10 +20,20 @@ export async function library({onEditProject, setBusy} = {}) {
   const deleting = new Set(), uncertainDeletions = new Set();
   const active = () => !disposed && root.isConnected;
 
+  const returnToDraft = button('Return to open draft', () => {
+    if (!active() || !currentView) return;
+    collection.hidden = true;
+    currentView.revealReadingStart({anchor: feedback.childNodes.length ? feedback : null});
+  }, 'quiet');
+  returnToDraft.hidden = true;
+
   function restoreControl(control, scroll) {
     if (!active()) return;
     const target = control?.isConnected && !control.disabled && !control.closest('[hidden]')
       ? control : savedCopies.element.querySelector('input');
+    if (target === savedCopies.element.querySelector('input')) {
+      collection.hidden = false; returnToDraft.hidden = !currentView;
+    }
     target?.focus({preventScroll: true});
     if (target === control) window.scrollTo({left: scroll.x, top: scroll.y, behavior: 'instant'});
     else target?.scrollIntoView({block: 'nearest', behavior: 'instant'});
@@ -41,7 +52,7 @@ export async function library({onEditProject, setBusy} = {}) {
   }
 
   function showReport(report, {saved = false, recovered = false, id = null} = {}) {
-    const close = button('Close open draft', async () => {
+    const close = button('Back to saved copies', async () => {
       const attempt = ++opening, scroll = {x: window.scrollX, y: window.scrollY};
       readController?.abort(); readController = null; openingStatus.replaceChildren();
       try {
@@ -51,7 +62,8 @@ export async function library({onEditProject, setBusy} = {}) {
           restoreControl(close, scroll); return;
         }
         currentView?.dispose?.(); currentView = null; currentReport = null;
-        opened.replaceChildren(); refreshPending();
+        opened.replaceChildren(); collection.hidden = false; returnToDraft.hidden = true;
+        root.classList.remove('workspace-reading'); refreshPending();
         const filter = savedCopies.element.querySelector('input');
         filter?.focus({preventScroll: true}); filter?.scrollIntoView({block: 'nearest', behavior: 'instant'});
       } catch (error) {
@@ -60,14 +72,16 @@ export async function library({onEditProject, setBusy} = {}) {
     }, 'quiet');
     let candidate;
     try {
-      candidate = renderReport(report, {saved, recovered, onSaved: async () => {
-        try { await refresh(); }
+      const projectEdit = report.input_snapshot && onEditProject
+        ? button('Edit project inputs', () => onEditProject(report.input_snapshot)) : null;
+      candidate = renderReport(report, {saved, recovered, reading: {
+        id, back: close, reference: currentId => savedReportReference(currentId, knownReports),
+        onCheckSaved: inspectSavedCopies, extraActions: projectEdit ? [projectEdit] : [],
+      }, onSaved: async () => {
+        try { if (await refresh()) savedCopies.showAll(); }
         catch (error) { if (active()) feedback.replaceChildren(notice('The draft was saved, but refreshing the list failed: ' + error.message, 'error')); }
       }});
-      if (id) rememberReportSavedCopy(report, id);
-      const toolbar = h('div', {class: 'button-row non-print'},
-        report.input_snapshot && onEditProject ? button('Edit project inputs', () => onEditProject(report.input_snapshot)) : null, close);
-      opened.replaceChildren(toolbar, candidate);
+      opened.replaceChildren(candidate);
     } catch (cause) {
       candidate?.dispose?.();
       const error = new Error('This saved copy could not be displayed. Your current draft is unchanged. Keep a workspace backup before repairing the saved record.');
@@ -75,6 +89,7 @@ export async function library({onEditProject, setBusy} = {}) {
     }
     const previous = currentView;
     currentReport = report; currentView = candidate;
+    collection.hidden = true; returnToDraft.hidden = false; root.classList.add('workspace-reading');
     let warning = '';
     try { previous?.dispose?.(); }
     catch { warning = 'The selected draft opened, but the previous view could not release all of its controls.'; }
@@ -121,7 +136,7 @@ export async function library({onEditProject, setBusy} = {}) {
         readController = null; openingStatus.replaceChildren();
         // Settle upstream notices and Pending work before positioning the reader.
         if (openedView && currentView === openedView && active()) {
-          try { openedView.revealReadingStart(); }
+          try { openedView.revealReadingStart({anchor: feedback.childNodes.length ? feedback : null}); }
           catch { feedback.append(notice('The selected draft opened. Scroll to its Document tab to continue.', 'warning')); }
         }
       }
@@ -202,6 +217,17 @@ export async function library({onEditProject, setBusy} = {}) {
     refreshPending(); savedCopies.update(reports); return true;
   }
 
+  async function inspectSavedCopies() {
+    const updated = await refresh({checkUncertain: true});
+    if (!updated || !active()) return false;
+    savedCopies.showAll(); collection.hidden = false; returnToDraft.hidden = !currentView;
+    feedback.replaceChildren(notice('Saved copies checked. Your open draft and pending inputs are kept below.', 'success'));
+    const filter = savedCopies.element.querySelector('input');
+    filter?.focus({preventScroll: true});
+    filter?.scrollIntoView({block: 'nearest', behavior: 'instant'});
+    return true;
+  }
+
   async function refreshRestoredCopies() {
     const updated = await refresh({checkUncertain: true});
     if (updated) savedCopies.showAll();
@@ -209,15 +235,16 @@ export async function library({onEditProject, setBusy} = {}) {
   }
   const restore = savedReportRestore({setBusy, onChanged: refreshPending,
     onSaved: refreshRestoredCopies, onCheckSaved: refreshRestoredCopies});
-  root.append(h('header', {class: 'page-intro non-print'}, h('h2', {}, 'My workspace'),
+  collection.append(h('header', {class: 'page-intro non-print'}, h('h2', {}, 'My workspace'),
     h('p', {}, 'Find saved wording and reopen its original evidence.')),
     h('div', {class: 'non-print'}, notice(globalThis.sinterBrowser
       ? 'Saved reports stay in this browser on this device, not a cloud account. They are not encrypted. Clearing browser storage, private browsing or device loss can erase saved work. Use Export saved workspace above to keep a separate backup.'
       : 'Saved reports stay in your local Sinter folder, not a cloud account. They are not encrypted. Export important work and protect access to this computer.')),
-    feedback, openingStatus, pending,
-    h('div', {class: 'button-row non-print'}, button('Refresh saved list', () => refresh({checkUncertain: true})
+    pending,
+    h('div', {class: 'button-row non-print'}, returnToDraft, button('Refresh saved list', () => refresh({checkUncertain: true})
       .catch(error => feedback.replaceChildren(notice(error.message, 'error'))), 'quiet')),
-    restore.element, savedCopies.element, opened);
+    restore.element, savedCopies.element);
+  root.append(feedback, openingStatus, collection, opened);
   root.dispose = () => {
     disposed = true; opening++; refreshing++;
     readController?.abort(); decisionController?.abort();

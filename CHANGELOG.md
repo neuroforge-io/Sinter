@@ -5,10 +5,15 @@
 - Declare the browser assets as JavaScript modules for Node-based regressions,
   avoiding the unsupported experimental flag found on the Mac runners.
 
-- Open saved reports at the document after loading panels settle. Keep reading
-  identity and save state announced, return Close to a visible saved-list filter,
-  and give handover evidence links a 44-pixel target. Preserve unfamiliar backup
-  schema metadata without coercing it into a different backup type.
+- Open saved reports with a compact title, saved-copy reference, truthful save
+  status and document actions. Back to saved copies restores the list filter;
+  checking saved copies retains the open draft and unapplied inputs. Saving edits
+  creates a new copy. An additional save after an unknown outcome requires an
+  explicit confirmation for the unchanged draft; it is never replayed automatically.
+- Keep handover evidence links and reader actions at least 44 pixels, including on
+  mobile. Distinguish an in-flight submitted version from newer local edits and
+  retain earlier uncertain-save warnings. Preserve unfamiliar backup schema
+  metadata without coercing it into a different backup type.
 
 - Restore a complete draft JSON from My workspace as a new local copy, preserving
   edited wording, original evidence and recorded review status. Preview locally,

@@ -66,7 +66,9 @@ explains what is preserved and what still needs manual review.
 Development source adds **Write handover opening** to source-only volunteer
 handovers. You enter the status and proposed next step, select exact retained
 wording, review the preview and approve replacement. Unapplied rows stay in the
-current browser session; apply them and **Save to My workspace** before quitting.
+current browser session; apply them and save the resulting draft before quitting.
+Reopened reports show their saved reference and status, with **Save draft** or
+**Save new copy** when needed. Earlier saved copies stay unchanged.
 The [garden walkthrough](examples/offline-garden/README.md) describes this optional
 local step. It is not part of the published RC3 installer; Word pagination and
 fresh installed qualification remain open.

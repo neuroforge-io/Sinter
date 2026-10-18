@@ -123,7 +123,7 @@ class QualityChecks:
     def download_text(self, page, name):
         target = page.get_by_role('button', name=name, exact=True)
         if not target.is_visible():
-            page.get_by_text('More options', exact=True).click()
+            page.get_by_role('region', name='Your draft report', exact=True).locator('.export-menu > summary').click()
         with page.expect_download() as pending:
             target.click()
         return Path(pending.value.path()).read_text(encoding='utf-8')

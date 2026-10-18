@@ -116,9 +116,22 @@ export function markReportSaved(report, content, submittedReport = report, saved
 }
 
 /** These are local observations, never inferred from a title, ID or edit baseline. */
-export function markReportSaving(report) {
+export function markReportSaving(report, submittedReport = report, submittedContent) {
   const state = identities.get(report);
-  if (state) { state.saving = true; state.saveFailure = null; update(state); notifyViews(state); }
+  if (state) {
+    state.savingPayload = JSON.stringify(submittedReport);
+    state.savingContent = submittedContent === undefined ? state.content : submittedContent;
+    state.saving = true; state.saveFailure = null; update(state); notifyViews(state);
+  }
+}
+
+/** Only the exact submitted snapshot is saving; later local inputs stay unsaved. */
+export function reportSavingHasNewerEdits(report) {
+  const state = identities.get(report);
+  if (!state?.saving) return false;
+  update(state);
+  return state.payload !== state.savingPayload || state.content !== state.savingContent
+    || Boolean(state.editor || state.forms.size);
 }
 
 export function markReportSaveFailed(report, error) {

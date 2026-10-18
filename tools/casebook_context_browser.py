@@ -299,7 +299,7 @@ def main(argv=None):
                         prefix + "/document unchanged",
                         page.locator(".document-paper").inner_text() == document_text,
                     )
-                    page.get_by_text("More options", exact=True).click()
+                    page.get_by_role("region", name="Your draft report", exact=True).locator(".export-menu > summary").click()
                     page.get_by_role("button", name="Edit draft", exact=True).click()
                     editor = page.get_by_role(
                         "textbox", name="Edit your draft", exact=True

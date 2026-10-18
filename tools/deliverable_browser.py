@@ -114,7 +114,7 @@ class DeliverableChecks:
             page.get_by_role('button', name='Download evidence pack', exact=True),
         )
         if not any(option.is_visible() for option in options):
-            page.get_by_text('More options', exact=True).click()
+            page.get_by_role('region', name='Your draft report', exact=True).locator('.export-menu > summary').click()
 
     def download(self, page, label):
         if not page.get_by_role('button', name=label, exact=True).is_visible():
@@ -516,6 +516,20 @@ class DeliverableChecks:
                 if request.method == 'GET' and request.url.startswith(self.base + '/api/reports/') else None)
         self.goto(page, 'library')
         finder = page.get_by_label('Find saved drafts', exact=True)
+
+        def show_saved_collection(expected_editor=None):
+            open_report = page.get_by_role('region', name='Your draft report', exact=True)
+            check_saved = open_report.get_by_role('button', name='Check saved copies', exact=True)
+            if not check_saved.is_visible():
+                open_report.locator('.export-menu > summary').click()
+            with page.expect_response(lambda response: response.url == self.base + '/api/reports'
+                                      and response.request.method == 'GET') as listing:
+                check_saved.click()
+            assert listing.value.status == 200
+            expect(finder).to_be_visible()
+            if expected_editor is not None:
+                expect(page.get_by_label('Edit your draft', exact=True)).to_have_value(expected_editor)
+
         finder.fill('Fictional saved garden')
         cards = page.locator('.saved-report-card:visible')
         expect(cards).to_have_count(2)
@@ -588,6 +602,7 @@ class DeliverableChecks:
         editor = page.get_by_label('Edit your draft', exact=True)
         pending_text = 'Unapplied 🐝 wording. No funding or spending has been approved.'
         editor.fill(pending_text)
+        show_saved_collection(pending_text)
         second.get_by_role('button', name='Preview saved copy', exact=True).click()
         expect(preview).to_contain_text('Section 1')
         assert editor.input_value() == pending_text
@@ -619,9 +634,11 @@ class DeliverableChecks:
         page.get_by_role('dialog', name='Open another draft?', exact=True).get_by_role(
             'button', name='Open selected draft', exact=True).click()
         expect(self.document(page)).to_contain_text('Closing B')
+        show_saved_collection()
         page.get_by_role('button', name='Open unsaved draft', exact=True).click()
         editor = page.get_by_label('Edit your draft', exact=True)
         expect(editor).to_have_value(pending_text)
+        show_saved_collection(pending_text)
 
         delete_requests = []
         page.on('request', lambda request: delete_requests.append(request.url)
@@ -971,7 +988,7 @@ class DeliverableChecks:
             edited = partial_exports('Water access still needs venue confirmation.')
             assert edited['document_edits']['markdown'] == updated
             assert edited['document_markdown'] == pack['document_markdown']
-            page.get_by_role('button', name='Save to My workspace', exact=True).click()
+            page.get_by_role('button', name='Save new copy', exact=True).click()
             expect(page.get_by_text('Saved in My workspace', exact=False)).to_be_visible()
             self.goto(page, 'library')
             page.get_by_role('button', name='Open draft', exact=True).first.click()

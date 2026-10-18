@@ -1,12 +1,15 @@
 import {h, button, notice, markdown, safeLink, download, reportName, field, selectField, check, announce} from './ui.js';
 import {request} from './api.js';
+import {confirmAction} from './confirm-action.js';
+import {reportReaderHeader, readerSavePresentation, authorizeAdditionalReportCopy} from './report-reader-header.js';
 import {documentActions, documentMarkdown, plainDocument} from './documents.js';
 import {campaignCommunicationFromDraft, campaignDraftLogBlockReason} from './campaign-letter.js';
 import {campaignActionOwnerState} from './campaign-owner.js';
 import {campaignActionPhaseLabel} from './campaign-plan.js';
 import {registerReportDraft, trackReportEdits, trackReportEditor, reportEditorDraft,
   markReportSaved, markReportSaving, markReportSaveFailed, reportSaveState, observeReportSaveState,
-  isReportDraftUnsaved, reportDraftNotice} from './report-drafts.js';
+  isReportDraftUnsaved, reportDraftNotice, reportHasUnappliedInputs, reportHasUnconfirmedSave,
+  rememberReportSavedCopy} from './report-drafts.js';
 import {reportCitationIndex, reportCitationMatcher} from './report-citations.js';
 import {casebookQuestionEvidence} from './casebook-question-evidence.js';
 import {retainedCasebookSource, retainedQuestionContext} from './casebook-retained-context.js';
@@ -15,25 +18,84 @@ import {handoverSummaryEditor, handoverSummaryAvailable, presentHandoverSummaryT
 let reportViewSequence = 0;
 
 /** The document is the default view; provenance remains one click away. */
-export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated, onSaved, recovered = false, saved = false} = {}) {
+export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated, onSaved, recovered = false, saved = false, reading = null} = {}) {
   registerReportDraft(report, documentMarkdown(report), {saved});
+  if (reading?.id) rememberReportSavedCopy(report, reading.id);
   const result = h('section', {class: 'report-area', 'aria-label': 'Your draft report'});
   const message = h('div', {class: 'non-print', 'aria-live': 'polite'});
   const saveState = h('p', {class: 'document-save-state non-print', role: 'status', 'aria-label': 'Document save state',
     id: `report-save-state-${++reportViewSequence}`});
-  let savePending = false, viewDisposed = false;
+  let savePending = false, viewDisposed = false, copyDecision = false, copyController = null, checkingCopies = false;
+  let reader = null, duplicateCopy = null, checkCopies = null;
   function refreshSaveState() {
+    const saveHadFocus = Boolean(reader && document.activeElement === save);
     const state = reportSaveState(report);
     const pendingText = Boolean(reportEditorDraft(report));
     const text = state.message + (pendingText ? ' Apply or cancel the text in the editor before saving.' : '');
     if (saveState.textContent !== text) saveState.textContent = text;
     saveState.dataset.state = state.kind;
-    save.disabled = savePending || pendingText || state.kind === 'saving' || state.kind === 'saved';
+    save.disabled = savePending || pendingText || reportHasUnappliedInputs(report)
+      || state.kind === 'saving' || state.kind === 'saved';
+    if (reader) {
+      const presentation = readerSavePresentation(report, {deciding: copyDecision});
+      save.disabled = savePending || presentation.saveDisabled;
+      save.hidden = presentation.saveHidden; save.textContent = presentation.saveLabel;
+      duplicateCopy.hidden = presentation.duplicateHidden;
+      duplicateCopy.disabled = savePending || presentation.duplicateDisabled;
+      checkCopies.disabled = savePending || copyDecision || checkingCopies || state.kind === 'saving';
+      reader.update(presentation, presentation.id ? reading.reference(presentation.id) : '');
+      if (saveHadFocus && (save.hidden || save.disabled)) reader.focus();
+    }
   }
   const campaignLog = report.campaign_link ? campaignDraftLog(report, message,
     onCampaignUpdated, () => actions.canUseDocument('saving to the campaign log'),
     () => { trackReportEdits(report, documentMarkdown(report)); refreshSaveState(); }) : null;
-  const save = button('Save to My workspace', async () => {
+  async function saveDocument({additionalCopy = false} = {}) {
+    if (viewDisposed || !result.isConnected || copyDecision || savePending
+        || reportSaveState(report).kind === 'saving') return;
+    if (reportHasUnappliedInputs(report)) {
+      message.replaceChildren(notice('Apply or cancel every pending editor and local form before saving. Your inputs are kept.', 'warning'));
+      refreshSaveState(); return;
+    }
+    if (reportSaveState(report).kind === 'saved' && !additionalCopy) return;
+    if (additionalCopy || reportHasUnconfirmedSave(report)) {
+      const decisionFocus = document.activeElement;
+      copyDecision = true; copyController = new AbortController();
+      try {
+        refreshSaveState();
+        const decision = await authorizeAdditionalReportCopy(report, {
+          isActive: () => !viewDisposed && result.isConnected,
+          confirm: () => confirmAction({
+            title: 'Save an additional copy?',
+            description: 'This creates a new saved copy; existing copies stay unchanged. '
+              + (reportHasUnconfirmedSave(report)
+                ? 'An earlier save remains unconfirmed and may already have created a copy. Cancel and choose Check saved copies first if you have not inspected the list. '
+                : '')
+              + 'Only the currently applied wording and retained evidence will be saved.',
+            confirmLabel: 'Save new copy', signal: copyController.signal,
+          }),
+        });
+        if (!decision.allowed) {
+          if (decision.reason === 'changed' || decision.reason === 'unapplied') {
+            message.replaceChildren(notice('The draft changed during confirmation. No additional copy was sent; review the current inputs before trying again.', 'warning'));
+          }
+          return;
+        }
+      } catch (error) {
+        if (!viewDisposed) message.replaceChildren(notice('No additional copy was sent: ' + error.message, 'error'));
+        return;
+      } finally {
+        copyDecision = false; copyController = null;
+        if (!viewDisposed) {
+          refreshSaveState();
+          if (result.isConnected && document.activeElement === document.body) {
+            if (decisionFocus?.isConnected && !decisionFocus.disabled && !decisionFocus.hidden
+                && decisionFocus.getClientRects().length) decisionFocus.focus({preventScroll: true});
+            else reader?.focus();
+          }
+        }
+      }
+    }
     if (!actions.canUseDocument('saving')) return;
     if (savePending || reportSaveState(report).kind === 'saving') return;
     let snapshot, submittedMarkdown;
@@ -42,7 +104,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       markReportSaveFailed(report, {requestState: {outcome: 'not-sent'}});
       message.replaceChildren(notice(error.message, 'error')); refreshSaveState(); return;
     }
-    savePending = true; markReportSaving(report);
+    savePending = true; markReportSaving(report, snapshot, submittedMarkdown);
     let failure, savedCopy, viewFailures = [];
     try {
       refreshSaveState();
@@ -82,7 +144,8 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
         ? 'The save failed and refreshing the view also failed: ' + error.message
         : 'The submitted document was saved, but refreshing the view failed: ' + error.message, 'warning'));
     }
-  }, 'primary');
+  }
+  const save = button('Save to My workspace', () => saveDocument(), 'primary');
   save.setAttribute('aria-describedby', saveState.id);
   const paper = h('div', {class: 'document-paper'});
   const isCampaign = report.workflow === 'campaign';
@@ -145,7 +208,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     const compactReading = article.className.split(' ').includes('handover-reading-document');
     result.classList.toggle('handover-reading-report', compactReading);
     guidance.hidden = compactReading;
-    if (summaryEditor) {
+    if (summaryEditor && !reading) {
       summaryEditor.classList.toggle('handover-inline-editor', compactReading);
       summaryEditor.querySelector('summary').classList.toggle('button', compactReading);
       if (compactReading) actions.controls.querySelector('.button-row').append(summaryEditor);
@@ -180,7 +243,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       : 'Source records establish provenance, not truth.')),
     (report.warnings || []).length ? h('details', {class: 'report-notes'}, h('summary', {}, 'Source limits and review notes'), h('ul', {}, report.warnings.map(item => h('li', {}, item)))) : null,
     h('div', {class: 'report-layout'}, evidenceArticle, sources)].filter(Boolean));
-  const actions = documentActions(report, {save, editorSeed: reportEditorDraft(report),
+  const actions = documentActions(report, {save, compact: Boolean(reading), editorSeed: reportEditorDraft(report),
     onEditorChange: (text, open) => { trackReportEditor(report, text, open); refreshSaveState(); },
     onChange: () => { trackReportEdits(report, documentMarkdown(report)); updateDocument(); select('document'); }});
   const summaryEditor = handoverSummaryEditor(report, {actions, onDraftChange: refreshSaveState});
@@ -188,11 +251,55 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   const guidance = h('p', {class: 'muted'}, isCampaign
     ? 'Review the decision and privacy before sharing. The full audit trail and source notes are in Audit & evidence.'
     : 'Review the wording, make it yours, then copy or download.');
+  const headingTitle = h('h2', {tabIndex: -1, id: saveState.id + '-title'},
+    isCampaign ? 'Decision brief' : (report.document_title || report.title));
+  const readerPanels = h('div', {class: 'reader-secondary-panels non-print'});
+  function secondaryOption(label, panel) {
+    const launch = button(label, () => {
+      if (viewDisposed || !result.isConnected) return;
+      actions.more.open = false; panel.hidden = false; panel.open = true;
+      panel.scrollIntoView({block: 'start', behavior: 'instant'});
+      panel.querySelector('summary')?.focus({preventScroll: true});
+    }, 'quiet');
+    panel.hidden = !panel.open;
+    panel.addEventListener('toggle', () => {
+      if (panel.open || viewDisposed) return;
+      panel.hidden = true;
+      if (panel.contains(document.activeElement)) {
+        const control = actions.more.querySelector('summary');
+        control?.focus({preventScroll: true});
+        control?.scrollIntoView({block: 'nearest', behavior: 'instant'});
+      }
+    });
+    readerPanels.append(panel);
+    return launch;
+  }
+  if (reading) {
+    result.classList.add('saved-report-reader');
+    duplicateCopy = button('Save another copy', () => saveDocument({additionalCopy: true}), 'quiet');
+    checkCopies = button('Check saved copies', async () => {
+      if (savePending || copyDecision || checkingCopies || viewDisposed) return;
+      checkingCopies = true; checkCopies.disabled = true;
+      try {
+        if (await reading.onCheckSaved() !== true) throw new Error('The saved list could not be checked. Your open draft is kept.');
+      } catch (error) {
+        if (!viewDisposed) message.replaceChildren(notice(error.message, 'error'));
+      } finally { checkingCopies = false; if (!viewDisposed) refreshSaveState(); }
+    }, 'quiet');
+    reader = reportReaderHeader({title: headingTitle, back: reading.back, saveState, controls: actions.controls});
+    actions.options.prepend(duplicateCopy, checkCopies);
+    actions.options.append(...(reading.extraActions || []), reader.fullReference, reader.detailState);
+    if (summaryEditor) actions.options.append(secondaryOption('Write handover opening', summaryEditor));
+    if (!globalThis.sinterBrowser) actions.options.append(secondaryOption('Word save options', actions.wordSaveOptions));
+  }
   result.append(...[recovered ? notice('Recovered draft from an earlier preparation. It retains the original inputs and evidence; later project changes are not included. Check the current saved project before using this draft.', 'warning') : null,
-    h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'CAMPAIGN PREVIEW' : 'YOUR DOCUMENT'),
-    h('h2', {tabIndex: -1, id: saveState.id + '-title'}, isCampaign ? 'Decision brief' : (report.document_title || report.title)), guidance)),
+    reader ? reader.element : h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'CAMPAIGN PREVIEW' : 'YOUR DOCUMENT'),
+      headingTitle, guidance)),
     missing.length ? completion : null,
-    saveState, actions.controls, message, actions.feedback, actions.editor, summaryEditor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel, campaignLog].filter(Boolean));
+    ...(reader ? [] : [saveState, actions.controls]),
+    message, actions.feedback, actions.editor, reader ? readerPanels : summaryEditor,
+    report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null,
+    tabs, documentPanel, evidencePanel, campaignLog].filter(Boolean));
   select('document'); updateDocument();
   if (report.workflow === 'grants' && report.sources?.length) {
     documentPanel.append(grantChecks(report, () => {
@@ -207,13 +314,18 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   }
   if (onCorrect && report.segments?.length) documentPanel.append(correctionForm(report, onCorrect));
   const unsubscribe = observeReportSaveState(report, refreshSaveState, () => !viewDisposed && result.isConnected);
-  result.dispose = () => { viewDisposed = true; unsubscribe(); };
+  result.dispose = () => { viewDisposed = true; copyController?.abort(); unsubscribe(); };
   // Only presentation: no new registry entry, replacement decision or save.
-  result.revealReadingStart = () => {
+  result.revealReadingStart = ({anchor = null} = {}) => {
     if (viewDisposed || !result.isConnected) return false;
     select('document');
-    documentPanel.tabIndex = -1; documentPanel.focus({preventScroll: true});
-    tabs.scrollIntoView({block: 'start', behavior: 'instant'});
+    if (reader) {
+      reader.focus();
+      (anchor?.isConnected ? anchor : result).scrollIntoView({block: 'start', behavior: 'instant'});
+    } else {
+      documentPanel.tabIndex = -1; documentPanel.focus({preventScroll: true});
+      tabs.scrollIntoView({block: 'start', behavior: 'instant'});
+    }
     return true;
   };
   return result;
