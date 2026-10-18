@@ -147,3 +147,11 @@
 }
 
 .workbench-page .document-save-state{font-size:.875rem}
+
+
+/* Saved-copy reading lands here after loading notices have settled. */
+.report-tabs{scroll-margin-top:16px}
+.handover-reading-opening .button.citation-link{
+  display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;
+  padding:4px 8px;border:1px solid var(--line);border-radius:6px;font-size:.8rem
+}

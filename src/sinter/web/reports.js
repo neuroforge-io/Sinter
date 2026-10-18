@@ -89,7 +89,8 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   const isAssistant = report.workflow === 'assistant';
   const documentLabel = isCampaign ? 'Decision brief' : 'Document';
   const evidenceLabel = isCampaign ? 'Audit & evidence' : 'Evidence';
-  const documentPanel = h('section', {class: 'document-panel report-print-target', role: 'tabpanel', 'aria-label': documentLabel}, paper);
+  const documentPanel = h('section', {class: 'document-panel report-print-target', role: 'tabpanel', 'aria-label': documentLabel,
+    'aria-describedby': saveState.id + '-title ' + saveState.id}, paper);
   const evidencePanel = h('section', {class: 'evidence-panel non-print', role: 'tabpanel', 'aria-label': evidenceLabel, hidden: true});
   const tabs = h('div', {class: 'report-tabs non-print', role: 'tablist', 'aria-label': isCampaign ? 'Campaign views' : 'Draft views'});
   const completion = h('div', {class: 'completion-panel non-print'});
@@ -189,7 +190,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     : 'Review the wording, make it yours, then copy or download.');
   result.append(...[recovered ? notice('Recovered draft from an earlier preparation. It retains the original inputs and evidence; later project changes are not included. Check the current saved project before using this draft.', 'warning') : null,
     h('header', {class: 'report-heading'}, h('div', {}, h('span', {class: 'eyebrow'}, isCampaign ? 'CAMPAIGN PREVIEW' : 'YOUR DOCUMENT'),
-    h('h2', {tabIndex: -1}, isCampaign ? 'Decision brief' : (report.document_title || report.title)), guidance)),
+    h('h2', {tabIndex: -1, id: saveState.id + '-title'}, isCampaign ? 'Decision brief' : (report.document_title || report.title)), guidance)),
     missing.length ? completion : null,
     saveState, actions.controls, message, actions.feedback, actions.editor, summaryEditor, report.model_review ? h('details', {class: 'model-review non-print'}, h('summary', {}, 'Check the model’s review notes'), h('p', {class: 'fine'}, 'A self-check by the same model; verify against your original source.'), markdown(report.model_review)) : null, tabs, documentPanel, evidencePanel, campaignLog].filter(Boolean));
   select('document'); updateDocument();
@@ -207,6 +208,14 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   if (onCorrect && report.segments?.length) documentPanel.append(correctionForm(report, onCorrect));
   const unsubscribe = observeReportSaveState(report, refreshSaveState, () => !viewDisposed && result.isConnected);
   result.dispose = () => { viewDisposed = true; unsubscribe(); };
+  // Only presentation: no new registry entry, replacement decision or save.
+  result.revealReadingStart = () => {
+    if (viewDisposed || !result.isConnected) return false;
+    select('document');
+    documentPanel.tabIndex = -1; documentPanel.focus({preventScroll: true});
+    tabs.scrollIntoView({block: 'start', behavior: 'instant'});
+    return true;
+  };
   return result;
 }
 

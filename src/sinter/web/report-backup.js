@@ -79,7 +79,8 @@ export function decodeReportBackup(bytes) {
   catch { fail('This file is not valid draft JSON. Your local work is unchanged.'); }
   checkIntegrity(text);
   if (!report || typeof report !== 'object' || Array.isArray(report)) fail('Choose an exported draft JSON object.');
-  if (/^sinter-(?:casebook|campaign|workspace)\/v\d+$/.test(report.schema || '')) {
+  if (typeof report.schema === 'string'
+      && /^sinter-(?:casebook|campaign|workspace)\/v\d+$/.test(report.schema)) {
     fail('This is a project or workspace backup. Use its matching restore controls; this control restores one draft JSON.');
   }
   if (typeof report.title !== 'string' || [...report.title].length > 200

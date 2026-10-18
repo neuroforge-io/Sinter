@@ -765,6 +765,67 @@ def main(argv: list[str] | None = None) -> None:
                         "without horizontal overflow"
                     )
                     print_report = casebooks.build(bundle["casebook"], "handover")
+                    # Retain the real UI report's cover/evidence identities.
+                    # Renaming only its title would rightly prevent cover condensation.
+                    reading_source = server.app.store.report(server.app.store.reports()[0]["id"])
+                    reading_report = {
+                        **reading_source,
+                        "document_edits": {
+                            "markdown": exact_reviewed,
+                            "author": "user",
+                            "edited_at": "2026-10-18T00:00:00Z",
+                        },
+                    }
+                    reading_id = server.app.store.save_report(reading_report)
+                    reading_metrics = []
+                    for width, height in ((1265, 712), (390, 844)):
+                        reading_page = context.new_page()
+                        reading_page.on("pageerror", lambda error: errors.append(str(error)))
+                        reading_page.set_viewport_size({"width": width, "height": height})
+                        reading_page.goto(base + "/#library")
+                        reading_page.get_by_label("Find saved drafts", exact=True).fill(reading_id)
+                        reading_page.get_by_role("button", name="Open draft", exact=True).click()
+                        reading_view = reading_page.get_by_role("region", name="Your draft report", exact=True)
+                        reading_panel = reading_view.get_by_role("tabpanel", name="Document", exact=True)
+                        expect(reading_panel).to_be_focused()
+                        opening_row = reading_panel.locator(".handover-opening-table tbody tr").first
+                        proposed = opening_row.locator("td").nth(2)
+                        passage = opening_row.locator("td").nth(3).get_by_role("button").first
+                        action_bounds = proposed.bounding_box()
+                        passage_bounds = passage.bounding_box()
+                        assert action_bounds and passage_bounds
+                        for bounds in (action_bounds, passage_bounds):
+                            assert bounds["y"] >= 16
+                            assert bounds["y"] + bounds["height"] <= height - 16
+                        assert passage_bounds["width"] >= 44 and passage_bounds["height"] >= 44
+                        assert passage.evaluate("""element => {
+                            const rect = element.getBoundingClientRect();
+                            const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                            return hit === element || element.contains(hit);
+                        }""")
+                        assert reading_page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                        reading_page.screenshot(path=str(out / f"garden-saved-reading-{width}.png"))
+                        reading_metrics.append({
+                            "viewport": [width, height],
+                            "action": action_bounds,
+                            "passage": passage_bounds,
+                            "reading_focus": True,
+                        })
+                        reading_page.get_by_role("button", name="Close open draft", exact=True).click()
+                        saved_filter = reading_page.get_by_label("Find saved drafts", exact=True)
+                        expect(saved_filter).to_be_focused()
+                        filter_bounds = saved_filter.bounding_box()
+                        assert filter_bounds and filter_bounds["y"] >= 0
+                        assert filter_bounds["y"] + filter_bounds["height"] <= height
+                        assert server.app.store.report(reading_id) == reading_report
+                        reading_page.close()
+                    (out / "garden-saved-reading-layout.json").write_text(
+                        json.dumps(reading_metrics, indent=2), encoding="utf-8"
+                    )
+                    checks.append(
+                        "real saved-copy Open lands on the first proposed action and 44px evidence target "
+                        "at 1265x712 and 390x844 without test scrolling; Close reveals the saved filter"
+                    )
                     for flag, value, label in (
                         ("model_draft", True, "MODEL-GENERATED DRAFT"),
                         ("incomplete", True, "INCOMPLETE MODEL DRAFT"),

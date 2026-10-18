@@ -437,6 +437,6 @@ copy; no request is automatically replayed. Pending text/forms must be applied o
 cancelled before restoring that candidate. Acknowledged copies use normal draft
 saving for later edits.
 
-Run `node --experimental-default-type=module --test --test-concurrency=1 tests/report_backup.mjs tests/report_drafts.mjs`
+Run `node --test --test-concurrency=1 tests/report_backup.mjs tests/report_drafts.mjs`
 and `python tools/report_recovery_browser.py` for admission and real-interface recovery
 regressions. These source checks do not qualify an installed release.

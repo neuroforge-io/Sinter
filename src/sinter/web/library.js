@@ -24,7 +24,8 @@ export async function library({onEditProject, setBusy} = {}) {
     const target = control?.isConnected && !control.disabled && !control.closest('[hidden]')
       ? control : savedCopies.element.querySelector('input');
     target?.focus({preventScroll: true});
-    if (target === control) window.scrollTo(scroll.x, scroll.y);
+    if (target === control) window.scrollTo({left: scroll.x, top: scroll.y, behavior: 'instant'});
+    else target?.scrollIntoView({block: 'nearest', behavior: 'instant'});
   }
 
   async function authorization(title, confirmLabel) {
@@ -50,7 +51,9 @@ export async function library({onEditProject, setBusy} = {}) {
           restoreControl(close, scroll); return;
         }
         currentView?.dispose?.(); currentView = null; currentReport = null;
-        opened.replaceChildren(); refreshPending(); savedCopies.element.querySelector('input')?.focus({preventScroll: true});
+        opened.replaceChildren(); refreshPending();
+        const filter = savedCopies.element.querySelector('input');
+        filter?.focus({preventScroll: true}); filter?.scrollIntoView({block: 'nearest', behavior: 'instant'});
       } catch (error) {
         if (attempt === opening && active()) { feedback.replaceChildren(notice(error.message, 'error')); restoreControl(close, scroll); }
       }
@@ -75,16 +78,12 @@ export async function library({onEditProject, setBusy} = {}) {
     let warning = '';
     try { previous?.dispose?.(); }
     catch { warning = 'The selected draft opened, but the previous view could not release all of its controls.'; }
-    try {
-      opened.scrollIntoView({block: 'start'});
-      const heading = currentView.querySelector('h2, h3');
-      if (heading) { heading.tabIndex = -1; heading.focus({preventScroll: true}); }
-    } catch { warning ||= 'The selected draft opened. Scroll to its document to continue.'; }
     return warning;
   }
 
   async function openReport(metadata, control, recoveredReport = null) {
     if (!active()) return;
+    let openedView = null;
     const attempt = ++opening, scroll = {x: window.scrollX, y: window.scrollY};
     readController?.abort(); decisionController?.abort();
     try {
@@ -112,11 +111,21 @@ export async function library({onEditProject, setBusy} = {}) {
       }
       const warning = showReport(report, {saved: !recoveredReport, recovered: Boolean(recoveredReport), id: metadata?.id ?? null});
       feedback.replaceChildren(...(warning ? [notice(warning, 'warning')] : [])); refreshPending();
+      openedView = currentView;
     } catch (error) {
       if (attempt === opening && active()) {
         feedback.replaceChildren(notice(error.message, 'error')); restoreControl(control, scroll);
       }
-    } finally { if (attempt === opening) { readController = null; openingStatus.replaceChildren(); } }
+    } finally {
+      if (attempt === opening) {
+        readController = null; openingStatus.replaceChildren();
+        // Settle upstream notices and Pending work before positioning the reader.
+        if (openedView && currentView === openedView && active()) {
+          try { openedView.revealReadingStart(); }
+          catch { feedback.append(notice('The selected draft opened. Scroll to its Document tab to continue.', 'warning')); }
+        }
+      }
+    }
   }
 
   async function deleteReport(metadata, control) {

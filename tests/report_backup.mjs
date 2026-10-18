@@ -87,3 +87,9 @@ test('prototype-looking keys remain own evidence, without changing object protot
   assert.deepEqual(restored.__proto__, {polluted: true});
   assert.equal({}.polluted, undefined);
 });
+
+test('unfamiliar non-string schema metadata is retained without coercion', () => {
+  for (const schema of [['sinter-casebook/v1'], {toString: null}, false, 7]) {
+    assert.deepEqual(decode(report({schema})).schema, schema);
+  }
+});

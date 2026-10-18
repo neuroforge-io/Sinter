@@ -12,7 +12,7 @@ def test_report_backup_admission():
         pytest.skip("Node is required to exercise report JSON admission")
     root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
-        [node, "--experimental-default-type=module", "--test",
+        [node, "--test",
          "--test-concurrency=1", "tests/report_backup.mjs", "tests/saved_report_restore.mjs"],
         cwd=root, capture_output=True, text=True, timeout=20,
     )

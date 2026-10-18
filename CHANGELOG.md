@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Declare the browser assets as JavaScript modules for Node-based regressions,
+  avoiding the unsupported experimental flag found on the Mac runners.
+
+- Open saved reports at the document after loading panels settle. Keep reading
+  identity and save state announced, return Close to a visible saved-list filter,
+  and give handover evidence links a 44-pixel target. Preserve unfamiliar backup
+  schema metadata without coercing it into a different backup type.
+
 - Restore a complete draft JSON from My workspace as a new local copy, preserving
   edited wording, original evidence and recorded review status. Preview locally,
   retain other editors and connection settings, and check saved copies before
