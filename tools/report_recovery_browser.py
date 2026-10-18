@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sys
 import tempfile
@@ -27,8 +28,8 @@ def main(argv: list[str] | None = None) -> None:
     started = time.perf_counter()
     from playwright.sync_api import expect, sync_playwright
 
-    out = ROOT / "browser-artifacts"
-    out.mkdir(exist_ok=True)
+    out = Path(os.environ.get("SINTER_BROWSER_ARTIFACTS") or ROOT / "browser-artifacts")
+    out.mkdir(parents=True, exist_ok=True)
     receipt = out / "report-recovery-summary.json"
     receipt.write_text(json.dumps({"passed": False, "state": "running"}))
     checks: list[str] = []
@@ -151,12 +152,16 @@ def main(argv: list[str] | None = None) -> None:
                         "Prepared locally; not saved"
                     )
                     assert page.evaluate(warn)
+                    expect(report.get_by_label("Document save state")).to_have_attribute("data-state", "prepared")
+                    prepared_document = report.locator(".document-paper").inner_text()
                     page.get_by_role("link", name="My workspace", exact=True).click()
                     page.get_by_role(
                         "button", name="Open unsaved draft", exact=True
                     ).click()
                     report = page.get_by_role("region", name="Your draft report")
-                    expect(report.get_by_label("Document save state")).to_have_text("Unsaved changes.")
+                    expect(report.get_by_label("Document save state")).to_have_attribute("data-state", "prepared")
+                    expect(report.get_by_label("Document save state")).to_have_text("Prepared locally; not yet saved.")
+                    assert report.locator(".document-paper").inner_text() == prepared_document
                     expect(page.get_by_label("Find saved drafts", exact=True)).to_be_hidden()
                     assert page.evaluate(warn)
                     checks.append(
@@ -187,12 +192,18 @@ def main(argv: list[str] | None = None) -> None:
                         "# Fictional handover\n\nNo order has been approved."
                         "\n\nA user-edited next step."
                     )
+                    assert report.get_by_label("Edit your draft", exact=True).input_value() != edited
                     report.get_by_label("Edit your draft", exact=True).fill(edited)
                     assert page.evaluate(warn)
                     report.get_by_role("button", name="Apply edits", exact=True).click()
                     expect(report).to_contain_text(
                         "Edits applied. Save this draft to keep them."
                     )
+                    expect(report.get_by_label("Document save state")).to_have_attribute("data-state", "pending")
+                    expect(report.get_by_label("Document save state")).to_contain_text("Applied document edits are not confirmed saved.")
+                    expect(report.locator(".document-paper")).to_contain_text("A user-edited next step.")
+                    assert report.locator(".document-paper").inner_text() != prepared_document
+                    assert page.evaluate(warn)
                     page.get_by_role("button", name="Save project", exact=True).click()
                     expect(
                         page.get_by_text("This saves the project inputs", exact=False)
@@ -700,7 +711,6 @@ def main(argv: list[str] | None = None) -> None:
                     expect(report.get_by_role("button", name="Save new copy", exact=True)).to_be_enabled()
                     expect(page.get_by_role("button", name="Restored to My workspace", exact=True)).to_be_disabled()
                     assert len(attempts) == 2
-                    page.screenshot(path=str(out / "report-json-restoration.png"), full_page=True)
                     show_saved_copies()
                     expect(report).to_contain_text("Later applied imported wording.")
                     assert len(attempts) == 2
@@ -723,6 +733,38 @@ def main(argv: list[str] | None = None) -> None:
                     ])
                     page.unroute("**/api/reports", restore_reply)
 
+                    restoration_capture = {
+                        "schema": "sinter-report-recovery-capture/v1",
+                        "path": "report-original-draft-recovered-viewport.png",
+                        "state": "Original pending editor recovered after JSON restoration checks",
+                        "scope": "Current viewport only; full content and evidence checks are separate assertions.",
+                        "full_page": False,
+                        "captured": False,
+                        "geometry": page.evaluate("""() => {
+                            const d = document.documentElement, b = document.body;
+                            return {
+                                viewport: {width: innerWidth, height: innerHeight, device_pixel_ratio: devicePixelRatio},
+                                scroll: {x: scrollX, y: scrollY},
+                                document: {width: Math.max(d.scrollWidth, b.scrollWidth), height: Math.max(d.scrollHeight, b.scrollHeight)},
+                                element_count: document.getElementsByTagName('*').length
+                            };
+                        }"""),
+                    }
+                    capture_receipt = out / "report-original-draft-recovered-viewport.json"
+                    capture_receipt.write_text(json.dumps(restoration_capture, indent=2))
+                    assert page.viewport_size == {"width": 1440, "height": 1000}
+                    image_bytes = page.screenshot(
+                        path=str(out / restoration_capture["path"]),
+                        full_page=False,
+                        timeout=10000,
+                    )
+                    restoration_capture.update(
+                        captured=True,
+                        bytes=len(image_bytes),
+                        sha256=hashlib.sha256(image_bytes).hexdigest(),
+                    )
+                    capture_receipt.write_text(json.dumps(restoration_capture, indent=2))
+
                     assert not errors, errors
                     assert not external, external
                     network.assert_not_called()
@@ -740,6 +782,7 @@ def main(argv: list[str] | None = None) -> None:
                 "checks": checks,
                 "external_requests": external,
                 "browser_errors": errors,
+                "restoration_capture": restoration_capture,
                 "elapsed_seconds": round(time.perf_counter() - started, 3),
                 "file_sha256": {
                     name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()

@@ -60,3 +60,35 @@ updates the three affected browser tools to reopen More before exact hidden
 actions. Clipboard, recipient-privacy, pending-input, download and source
 evidence assertions remain intact. This test-driver correction does not
 change the product or establish an installed-app pass; fresh CI is required.
+
+On `cf88016`, the mandatory saved-document journey passed. A later recovery
+journey exposed an untouched prepared draft incorrectly expected to be edited.
+The follow-up retains prepared state and exact visible content across navigation,
+then checks pending state only after genuinely different wording is applied.
+Quit protection and the remaining save/recovery assertions stay intact; fresh
+CI is still required.
+
+The first admitted local Chromium recovery probe reached the final JSON-restore
+capture, then failed with a screenshot protocol error. It is not a suite pass;
+checks after that capture had not run. The owned unit was collected, earlier
+browser artifacts were unchanged, and its measured peak was 695,046,144 bytes
+with no cgroup OOM event. Document height and memory are not established causes.
+The follow-up moves a bounded viewport image after every exact restoration
+check and records capture scope, DOM geometry and success separately. Capture
+failure remains a failed run; earlier failure evidence is retained.
+
+A subsequent admitted Chromium run passed all 22 offline report/source recovery
+journeys with no external calls. It verified unchanged prepared content,
+genuinely applied edits, uncertain-save and explicit-retry boundaries, JSON
+restoration, original evidence and recovery of pending editor text. The run
+completed in 43.8 seconds with about 9.1 cgroup CPU seconds and a measured peak
+of 679,731,200 bytes, including the browser and harness, with no OOM event.
+The final 1440-by-1000 image is explicitly a viewport witness; its sidecar
+records geometry and successful capture. Earlier artifacts were unchanged,
+the owned unit was collected and the runtime directory was removed.
+
+Independent image review still found a tall, mostly empty editor that pushes
+the recovered document below the viewport. The recovery pass does not remove
+that usability finding or qualify an installed release. The Windows 3.13
+registered-launcher fixture also missed its existing five-second deadline in
+exact-`cf88016` CI; its cause remains unproven and the deadline is unchanged.
