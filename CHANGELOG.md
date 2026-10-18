@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Keep bounded saved-copy previews faithful to complete Markdown blocks and the
+  original page-break context. Show oversized or continued formatting literally
+  through its real end, cache only the selected source index, retain exact Unicode
+  and line endings, and keep incomplete/stale qualifications on every section.
+  Phones use page scrolling; opening and section navigation immediately reveal
+  the focused preview heading.
+
 - Find saved drafts by title or reference and preview their applied wording before
   opening. Read one selected copy at a time, with bounded sections for long text.
   Preserve pending editors through guarded Open/Close, cancellation and stale

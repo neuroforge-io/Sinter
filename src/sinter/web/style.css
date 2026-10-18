@@ -187,3 +187,6 @@ pre.help-code { padding: 15px; border: 1px solid var(--line); border-radius: 10p
 .saved-report-preview p { overflow-wrap: anywhere; }
 .saved-report-wording { max-height: 24rem; overflow: auto; overflow-wrap: anywhere; padding: 4px; }
 .saved-report-wording .markdown { min-width: 0; }
+@media (max-width: 650px) {
+  .saved-report-wording { max-height: none; overflow: visible; }
+}

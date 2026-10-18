@@ -1,5 +1,6 @@
 /** Saved-copy discovery is metadata-only until an explicit preview request. */
 import {h, button, field, markdown, notice, dateTime} from './ui.js';
+import {createMarkdownIndex, markdownWindow} from './markdown.js';
 import {documentMarkdown} from './documents.js';
 
 let sequence = 0;
@@ -19,7 +20,7 @@ export function savedReportReference(id, reports) {
 }
 
 /** Bound rendered wording, keeping Unicode characters and incomplete warnings. */
-export function savedReportWording(report, limit = 2400, start = 0) {
+function savedReportText(report) {
   if (!report || typeof report !== 'object' || Array.isArray(report)) {
     throw new Error('This saved copy is not a readable document.');
   }
@@ -27,27 +28,47 @@ export function savedReportWording(report, limit = 2400, start = 0) {
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error('This saved copy has no readable document wording. Its evidence remains saved.');
   }
-  let text = '', count = 0, truncated = false;
-  for (const character of value.slice(start)) {
-    if (count === limit) { truncated = true; break; }
-    text += character; count++;
-  }
-  return {markdown: text, truncated, characters: count, start, end: start + text.length,
+  return value;
+}
+
+/** Bound rendered wording without changing its saved source or evidence. */
+export function savedReportWording(report, limit = 2400, start = 0, index = null) {
+  const value = savedReportText(report);
+  return savedWordingDetails(report, markdownWindow(value, start, limit, index));
+}
+
+function savedWordingDetails(report, window) {
+  return {...window,
     edited: typeof report.document_edits?.markdown === 'string',
     incomplete: Boolean(report.incomplete), stale: report.review_status === 'stale'};
 }
 
+/** Render each selected source span with its original Markdown context. */
+export function renderSavedReportWording(wording) {
+  const segments = wording.segments?.length ? wording.segments
+    : [{start: 0, end: wording.markdown.length, literal: Boolean(wording.literal)}];
+  return segments.map(segment => {
+    const text = wording.markdown.slice(segment.start, segment.end);
+    if (!segment.literal) return markdown(text, {pageBreaks: (wording.pageBreaks || [])
+      .filter(at => at >= segment.start && at < segment.end).map(at => at - segment.start)});
+    const pre = h('pre', {class: 'saved-report-literal'}, text);
+    pre.style.whiteSpace = 'pre-wrap';
+    pre.style.overflowWrap = 'anywhere';
+    return pre;
+  });
+}
+
 /** Cancellation saves work; an independent generation check rejects late replies. */
-export function savedReportPreview({load, active, changed}) {
+export function savedReportPreview({load, active, changed, indexFactory = createMarkdownIndex}) {
   let generation = 0, controller = null, disposed = false;
-  let retained = null, metadata = null, offsets = [0], page = 0;
+  let retained = null, metadata = null, offsets = [0], page = 0, sourceIndex = null;
   const close = () => {
     generation++; controller?.abort(); controller = null;
-    retained = null; metadata = null; offsets = [0]; page = 0;
+    retained = null; metadata = null; offsets = [0]; page = 0; sourceIndex = null;
   };
   function showPage() {
     if (disposed || !active() || !retained) return false;
-    const wording = savedReportWording(retained, 2400, offsets[page]);
+    const wording = savedWordingDetails(retained, markdownWindow(sourceIndex.source, offsets[page], 2400, sourceIndex));
     offsets[page + 1] = wording.end;
     changed({kind: 'ready', metadata, wording, page, previous: page > 0});
     return true;
@@ -57,7 +78,7 @@ export function savedReportPreview({load, active, changed}) {
     dispose() { disposed = true; close(); },
     next() {
       if (!retained || offsets[page + 1] === undefined
-          || !savedReportWording(retained, 2400, offsets[page]).truncated) return false;
+          || offsets[page + 1] >= sourceIndex.source.length) return false;
       page++; return showPage();
     },
     previous() { if (!retained || page === 0) return false; page--; return showPage(); },
@@ -71,7 +92,7 @@ export function savedReportPreview({load, active, changed}) {
       changed({kind: 'loading', metadata});
       try {
         const document = await load(metadata.id, request.signal);
-        if (current()) { retained = document; showPage(); }
+        if (current()) { sourceIndex = indexFactory(savedReportText(document)); retained = document; showPage(); }
       } catch (error) {
         if (current()) { retained = null; changed({kind: 'error', metadata, message: error.message}); }
       } finally {
@@ -93,13 +114,18 @@ export function savedReportList({load, onOpen, onDelete}) {
   const panel = h('section', {class: 'saved-report-preview', id: prefix + '-preview',
     'aria-label': 'Saved copy preview'});
   const heading = h('h4', {tabIndex: -1}, 'Saved copy preview');
+  const focusHeading = () => {
+    heading.focus({preventScroll: true});
+    // Long phone sections should reveal their start without a cross-page animation.
+    heading.scrollIntoView({block: 'center', behavior: 'instant'});
+  };
   const wording = h('div', {class: 'saved-report-wording'});
   const detail = h('p', {class: 'muted'});
   const previewStatus = h('p', {role: 'status'});
   const qualifications = h('div');
   const openPreview = button('Open saved copy', () => selected && onOpen(selected, openPreview), 'primary');
-  const previous = button('Previous section', () => { if (preview.previous()) heading.focus({preventScroll: true}); }, 'quiet');
-  const next = button('Next section', () => { if (preview.next()) heading.focus({preventScroll: true}); }, 'quiet');
+  const previous = button('Previous section', () => { if (preview.previous()) focusHeading(); }, 'quiet');
+  const next = button('Next section', () => { if (preview.next()) focusHeading(); }, 'quiet');
   const closePreviewButton = button('Close preview', () => closePreview(true), 'quiet');
   panel.append(heading, detail, previewStatus, qualifications, wording,
     h('div', {class: 'button-row'}, previous, next, openPreview, closePreviewButton));
@@ -124,13 +150,16 @@ export function savedReportList({load, onOpen, onDelete}) {
         previewStatus.textContent = (state.previous || state.wording.truncated
           ? 'Section ' + (state.page + 1) + ' · ' : 'Complete saved wording · ')
           + (state.wording.edited ? 'Saved human edits' : 'Original saved document');
+        if (state.wording.literal) previewStatus.textContent += state.wording.literalReason === 'unfinished-block'
+          ? '. Formatting is unfinished, so the affected text is shown as plain text.'
+          : '. Formatting extends beyond this section, so the affected text is shown as plain text.';
         if (state.wording.incomplete) qualifications.append(notice('INCOMPLETE MODEL DRAFT — review the partial wording before using it.'));
         if (state.wording.stale) qualifications.append(notice('Review status: stale. Check this saved record before current use; editing its wording does not confirm the original evidence.'));
-        wording.append(markdown(state.wording.markdown));
+        wording.append(...renderSavedReportWording(state.wording));
         if (state.previous || state.wording.truncated) wording.append(h('p', {class: 'notice'},
           'Showing up to 2,400 characters at a time. Use the section controls for the rest of this saved document. '
           + 'Open the saved copy to inspect its complete evidence.'));
-        if (document.activeElement === origin) heading.focus({preventScroll: true});
+        if (document.activeElement === origin) focusHeading();
       }
     },
   });

@@ -527,8 +527,31 @@ class DeliverableChecks:
         preview = page.get_by_role('region', name='Saved copy preview', exact=True)
         expect(preview).to_contain_text('Section 1')
         expect(preview).not_to_contain_text('Closing A')
+
+        def assert_preview_start():
+            heading = preview.get_by_role('heading', name='Saved copy preview', exact=True)
+            expect(heading).to_be_focused()
+            bounds = heading.bounding_box()
+            assert bounds and 0 <= bounds['y'] and (
+                bounds['y'] + bounds['height'] <= page.viewport_size['height']
+            ), bounds
+            assert preview.locator('.saved-report-wording').evaluate(
+                'element => getComputedStyle(element).maxHeight === "none"'
+                ' && getComputedStyle(element).overflowY === "visible"'
+            )
+
+        assert_preview_start()
         preview.get_by_role('button', name='Next section', exact=True).click()
         expect(preview).to_contain_text('Closing A')
+        assert_preview_start()
+        page.set_viewport_size({'width': 320, 'height': 568})
+        preview.get_by_role('button', name='Previous section', exact=True).click()
+        expect(preview).to_contain_text('Section 1')
+        assert_preview_start()
+        preview.get_by_role('button', name='Next section', exact=True).click()
+        expect(preview).to_contain_text('Closing A')
+        assert_preview_start()
+        page.set_viewport_size({'width': 390, 'height': 640})
         assert gets == ['/api/reports/' + first_id], 'Section navigation re-fetched a saved document.'
         expect(preview.locator('script, iframe, object, embed')).to_have_count(0)
         for name in ('Previous section', 'Open saved copy', 'Close preview'):

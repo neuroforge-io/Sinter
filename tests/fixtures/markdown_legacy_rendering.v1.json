@@ -1,0 +1,2373 @@
+{
+  "baseline": "45b55e44b5dcc8c254fe79d9e03d744b44ddca31",
+  "renderer_sha256": "8192368f143b12aa36ef31ca1e552b0a61b21200429cbe9fe85d6e639de166c5",
+  "scope": "Fictional exact semantic DOM snapshots from the pre-refactor renderer; excludes browser layout and installed-release qualification",
+  "cases": [
+    {
+      "source": "<!-- sinter-page-break -->",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "DIV",
+            "value": "",
+            "className": "document-page-break",
+            "attributes": {
+              "aria-label": "Page break",
+              "role": "separator"
+            },
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Page break",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "<!-- sinter-page-break -->\n# Heading",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "<!-- sinter-page-break -->",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "H1",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Heading",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "# Heading\n<!-- sinter-page-break -->\n\nClosing",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "H1",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Heading",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "<!-- sinter-page-break -->",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Closing",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "Before\n\n<!-- sinter-page-break -->\n\nAfter",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Before",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "DIV",
+            "value": "",
+            "className": "document-page-break",
+            "attributes": {
+              "aria-label": "Page break",
+              "role": "separator"
+            },
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Page break",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "After",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": []
+      }
+    },
+    {
+      "source": "text",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "text",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "one\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "one",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "one\r\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "one",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "one\r",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "one",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "text\n\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "text",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "first\\\nsecond",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "first",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "BR",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "second",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "first\\\\\nsecond",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "first",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "\\",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "BR",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "second",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "first\\\\\\\nsecond",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "first",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "\\",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "BR",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "second",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "```\na",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "PRE",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "CODE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "a\n",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "```\na\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "PRE",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "CODE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "a\n\n",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "```\na\n\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "PRE",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "CODE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "a\n\n\n",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "```\na\n```\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "PRE",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "CODE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "a\n",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "~~~text\n# code\n~~~\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "PRE",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "CODE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "# code\n",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "    ```text\ncode\n```",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "PRE",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "CODE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "code\n",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "para\n    ```\n# heading\n```",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "para",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "BR",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "    ```",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "H1",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "heading",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "PRE",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "CODE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "# Heading **strong**\n\nFirst *line*\nSecond line\n\n---\n\nClosing.",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "H1",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Heading ",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "STRONG",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "strong",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "tag": "#text",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "First ",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "EM",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "line",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "tag": "#text",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "BR",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "Second line",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "HR",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": []
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Closing.",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "| A | B |\n| --- | :---: |\n| one | two | extra |\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "DIV",
+            "value": "",
+            "className": "table-scroll",
+            "attributes": {
+              "aria-label": "Document table",
+              "tabIndex": "0"
+            },
+            "children": [
+              {
+                "tag": "TABLE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "THEAD",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "TR",
+                        "value": "",
+                        "className": "",
+                        "attributes": {},
+                        "children": [
+                          {
+                            "tag": "TH",
+                            "value": "",
+                            "className": "",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "#text",
+                                "value": "A",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "tag": "TH",
+                            "value": "",
+                            "className": "align-center",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "#text",
+                                "value": "B",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "tag": "TH",
+                            "value": "",
+                            "className": "",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "#text",
+                                "value": "",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "TBODY",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "TR",
+                        "value": "",
+                        "className": "",
+                        "attributes": {},
+                        "children": [
+                          {
+                            "tag": "TD",
+                            "value": "",
+                            "className": "",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "#text",
+                                "value": "one",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "tag": "TD",
+                            "value": "",
+                            "className": "align-center",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "#text",
+                                "value": "two",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "tag": "TD",
+                            "value": "",
+                            "className": "",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "#text",
+                                "value": "extra",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "| a\\|b | `c|d` |\n| --- | --- |\n| x | y |\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "DIV",
+            "value": "",
+            "className": "table-scroll",
+            "attributes": {
+              "aria-label": "Document table",
+              "tabIndex": "0"
+            },
+            "children": [
+              {
+                "tag": "TABLE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "THEAD",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "TR",
+                        "value": "",
+                        "className": "",
+                        "attributes": {},
+                        "children": [
+                          {
+                            "tag": "TH",
+                            "value": "",
+                            "className": "",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "#text",
+                                "value": "a",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              },
+                              {
+                                "tag": "#text",
+                                "value": "|",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              },
+                              {
+                                "tag": "#text",
+                                "value": "b",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "tag": "TH",
+                            "value": "",
+                            "className": "",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "CODE",
+                                "value": "",
+                                "className": "",
+                                "attributes": {},
+                                "children": [
+                                  {
+                                    "tag": "#text",
+                                    "value": "c|d",
+                                    "className": "",
+                                    "attributes": {},
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "tag": "#text",
+                                "value": "",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "TBODY",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "TR",
+                        "value": "",
+                        "className": "",
+                        "attributes": {},
+                        "children": [
+                          {
+                            "tag": "TD",
+                            "value": "",
+                            "className": "",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "#text",
+                                "value": "x",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "tag": "TD",
+                            "value": "",
+                            "className": "",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "#text",
+                                "value": "y",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "| mismatched | header |\n| --- |\n| body | stays |\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "| mismatched | header |",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "BR",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "| --- |",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "BR",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "| body | stays |",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "- first\n- second\n\n3. third\n4. fourth\n\nClosing.",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "UL",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "LI",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "P",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "first",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "tag": "LI",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "P",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "second",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "OL",
+            "value": "",
+            "className": "",
+            "attributes": {
+              "start": "3"
+            },
+            "children": [
+              {
+                "tag": "LI",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "P",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "third",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "tag": "LI",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "P",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "fourth",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Closing.",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "- first\n\n- second\n  continuation\n\nClosing",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "UL",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "LI",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "P",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "first",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "tag": "LI",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "P",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "second",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      },
+                      {
+                        "tag": "BR",
+                        "value": "",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      },
+                      {
+                        "tag": "#text",
+                        "value": "continuation",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Closing",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "- outer\n  - inner\n    code\n  paragraph\n\nClosing",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "UL",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "LI",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "P",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "outer",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "UL",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "LI",
+                        "value": "",
+                        "className": "",
+                        "attributes": {},
+                        "children": [
+                          {
+                            "tag": "P",
+                            "value": "",
+                            "className": "",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "#text",
+                                "value": "inner",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              },
+                              {
+                                "tag": "BR",
+                                "value": "",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              },
+                              {
+                                "tag": "#text",
+                                "value": "code",
+                                "className": "",
+                                "attributes": {},
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "P",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "paragraph",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Closing",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "> quote\n> ```text\n> # literal\n> ```\n\nClosing.",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "BLOCKQUOTE",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "P",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "quote",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "tag": "PRE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "CODE",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "# literal\n",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Closing.",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "- nested\n  ```text\n  # literal\n  ```\n\nClosing.",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "UL",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "LI",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "P",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "nested",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "PRE",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "CODE",
+                        "value": "",
+                        "className": "",
+                        "attributes": {},
+                        "children": [
+                          {
+                            "tag": "#text",
+                            "value": "# literal\n",
+                            "className": "",
+                            "attributes": {},
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Closing.",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "````text\n```\n~~~\n# literal\n`````\n\nClosing",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "PRE",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "CODE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "```\n~~~\n# literal\n",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Closing",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "# Café é 🐝\r\n\r\none\rbare\r\nlast\r\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "H1",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "Café é 🐝",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "one",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "BR",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "bare",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "BR",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "last",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "[safe](https://example.invalid/path) [unsafe](javascript:alert(1)) <script>literal()</script>",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "A",
+                "value": "",
+                "className": "",
+                "attributes": {
+                  "href": "https://example.invalid/path",
+                  "rel": "noopener noreferrer",
+                  "target": "_blank"
+                },
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "safe",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "tag": "#text",
+                "value": " ",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "[unsafe](javascript:alert(1))",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": " <script>literal()</script>",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "underscore_identifier **bold** __strong__ *em* _em_ `code | x`",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "underscore_identifier ",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "STRONG",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "bold",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "tag": "#text",
+                "value": " ",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "STRONG",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "strong",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "tag": "#text",
+                "value": " ",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "EM",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "em",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "tag": "#text",
+                "value": " ",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "EM",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "em",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "tag": "#text",
+                "value": " ",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "CODE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "#text",
+                    "value": "code | x",
+                    "className": "",
+                    "attributes": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "tag": "#text",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "> > > > > > > > > > > > deep quote\n",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "BLOCKQUOTE",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "BLOCKQUOTE",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "BLOCKQUOTE",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "BLOCKQUOTE",
+                        "value": "",
+                        "className": "",
+                        "attributes": {},
+                        "children": [
+                          {
+                            "tag": "BLOCKQUOTE",
+                            "value": "",
+                            "className": "",
+                            "attributes": {},
+                            "children": [
+                              {
+                                "tag": "BLOCKQUOTE",
+                                "value": "",
+                                "className": "",
+                                "attributes": {},
+                                "children": [
+                                  {
+                                    "tag": "BLOCKQUOTE",
+                                    "value": "",
+                                    "className": "",
+                                    "attributes": {},
+                                    "children": [
+                                      {
+                                        "tag": "BLOCKQUOTE",
+                                        "value": "",
+                                        "className": "",
+                                        "attributes": {},
+                                        "children": [
+                                          {
+                                            "tag": "BLOCKQUOTE",
+                                            "value": "",
+                                            "className": "",
+                                            "attributes": {},
+                                            "children": [
+                                              {
+                                                "tag": "P",
+                                                "value": "",
+                                                "className": "",
+                                                "attributes": {},
+                                                "children": [
+                                                  {
+                                                    "tag": "#text",
+                                                    "value": "> > > deep quote",
+                                                    "className": "",
+                                                    "attributes": {},
+                                                    "children": []
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "- outer\n    \n    continued\n\nlast",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "UL",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "LI",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": [
+                  {
+                    "tag": "P",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "outer",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "P",
+                    "value": "",
+                    "className": "",
+                    "attributes": {},
+                    "children": [
+                      {
+                        "tag": "#text",
+                        "value": "  continued",
+                        "className": "",
+                        "attributes": {},
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "last",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "<!-- PAGE BREAK -->\n\nbody",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "<!-- PAGE BREAK -->",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "body",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "before\n<!-- PAGE BREAK -->\nafter",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "before",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "BR",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "<!-- PAGE BREAK -->",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "BR",
+                "value": "",
+                "className": "",
+                "attributes": {},
+                "children": []
+              },
+              {
+                "tag": "#text",
+                "value": "after",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source": "before\n\n<!-- SINTER_PAGE_BREAK -->\n\nafter",
+      "expected": {
+        "tag": "DIV",
+        "value": "",
+        "className": "document",
+        "attributes": {},
+        "children": [
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "before",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "<!-- SINTER_PAGE_BREAK -->",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "tag": "P",
+            "value": "",
+            "className": "",
+            "attributes": {},
+            "children": [
+              {
+                "tag": "#text",
+                "value": "after",
+                "className": "",
+                "attributes": {},
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
