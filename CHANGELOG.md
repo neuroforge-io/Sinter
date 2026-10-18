@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bring saved wording into the phone preview with compact section controls and
+  visible incomplete/stale labels. Keep full identity and warning explanations
+  under Copy details, preserve original wording, and restore visible focus when
+  closing. Separate preview presentation from loading and editor authority.
+
 - Keep bounded saved-copy previews faithful to complete Markdown blocks and the
   original page-break context. Show oversized or continued formatting literally
   through its real end, cache only the selected source index, retain exact Unicode

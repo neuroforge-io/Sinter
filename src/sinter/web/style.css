@@ -182,11 +182,27 @@ pre.help-code { padding: 15px; border: 1px solid var(--line); border-radius: 10p
 .saved-report-filter .button { margin-bottom: 8px; }
 .saved-report-card h3, .saved-report-reference { overflow-wrap: anywhere; }
 .saved-report-reference { color: var(--muted); font-size: .8rem; }
-.saved-report-preview { border-top: 2px solid var(--accent); padding-top: 20px; margin-top: 22px; }
-.saved-report-preview h4 { margin: 0 0 12px; font-size: 1.1rem; }
+.saved-report-preview { border-top: 2px solid var(--accent); padding-top: 16px; margin-top: 20px; }
+.saved-report-preview-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.saved-report-preview-header h4 { flex: 1 1 0; min-width: 0; margin: 0; font-size: 1rem; line-height: 1.3; overflow-wrap: anywhere; scroll-margin-top: 12px; }
+.saved-report-preview-header .button { flex: 0 0 auto; padding: 8px 12px; }
 .saved-report-preview p { overflow-wrap: anywhere; }
+.saved-report-preview-status { margin: 8px 0; font-size: .8rem; line-height: 1.4; }
+.saved-report-qualifications { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.saved-report-context { border: 0; padding: 0; margin: 4px 0; }
+.saved-report-context > summary { min-height: 44px; padding: 10px 0; font-size: .8rem; overflow-wrap: anywhere; }
+.saved-report-identity { margin: 0 0 14px; font-size: .85rem; overflow-wrap: anywhere; }
+.saved-report-identity dt { color: var(--muted); font-size: .75rem; margin-top: 8px; }
+.saved-report-identity dd { margin: 0; }
+.saved-report-explanations p:last-child { margin-bottom: 10px; }
+.saved-report-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 6px 0; margin: 4px 0 10px; }
+.saved-report-sections .button { min-width: 0; }
 .saved-report-wording { max-height: 24rem; overflow: auto; overflow-wrap: anywhere; padding: 4px; }
 .saved-report-wording .markdown { min-width: 0; }
 @media (max-width: 650px) {
+  .saved-report-sections { position: sticky; top: 8px; z-index: 2; background: var(--surface); }
   .saved-report-wording { max-height: none; overflow: visible; }
+}
+@media (max-width: 650px) and (max-height: 300px) {
+  .saved-report-sections { position: static; }
 }

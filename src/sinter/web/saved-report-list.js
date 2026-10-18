@@ -1,7 +1,8 @@
 /** Saved-copy discovery is metadata-only until an explicit preview request. */
-import {h, button, field, markdown, notice, dateTime} from './ui.js';
+import {h, button, field, markdown, dateTime} from './ui.js';
 import {createMarkdownIndex, markdownWindow} from './markdown.js';
 import {documentMarkdown} from './documents.js';
+import {savedReportPreviewView} from './saved-report-preview-view.js';
 
 let sequence = 0;
 
@@ -111,24 +112,13 @@ export function savedReportList({load, onOpen, onDelete}) {
   const count = h('p', {class: 'muted', role: 'status', 'aria-atomic': 'true'});
   const cards = h('div', {class: 'stack'});
   const empty = h('p', {class: 'notice'});
-  const panel = h('section', {class: 'saved-report-preview', id: prefix + '-preview',
-    'aria-label': 'Saved copy preview'});
-  const heading = h('h4', {tabIndex: -1}, 'Saved copy preview');
-  const focusHeading = () => {
-    heading.focus({preventScroll: true});
-    // Long phone sections should reveal their start without a cross-page animation.
-    heading.scrollIntoView({block: 'center', behavior: 'instant'});
-  };
-  const wording = h('div', {class: 'saved-report-wording'});
-  const detail = h('p', {class: 'muted'});
-  const previewStatus = h('p', {role: 'status'});
-  const qualifications = h('div');
-  const openPreview = button('Open saved copy', () => selected && onOpen(selected, openPreview), 'primary');
-  const previous = button('Previous section', () => { if (preview.previous()) focusHeading(); }, 'quiet');
-  const next = button('Next section', () => { if (preview.next()) focusHeading(); }, 'quiet');
-  const closePreviewButton = button('Close preview', () => closePreview(true), 'quiet');
-  panel.append(heading, detail, previewStatus, qualifications, wording,
-    h('div', {class: 'button-row'}, previous, next, openPreview, closePreviewButton));
+  const view = savedReportPreviewView({
+    id: prefix + '-preview', render: renderSavedReportWording,
+    onOpen: control => selected && onOpen(selected, control),
+    onPrevious: () => preview.previous(), onNext: () => preview.next(),
+    onClose: () => closePreview(true),
+  });
+  const panel = view.element;
   const rows = new Map(), busy = new Set();
   let reports = [], selected = null, origin = null, disposed = false;
 
@@ -136,31 +126,8 @@ export function savedReportList({load, onOpen, onDelete}) {
     load, active: () => !disposed && root.isConnected,
     changed(state) {
       if (selected?.id !== state.metadata.id) return;
-      wording.replaceChildren(); qualifications.replaceChildren();
-      openPreview.disabled = state.kind !== 'ready';
-      previous.hidden = state.kind !== 'ready' || !state.previous;
-      next.hidden = state.kind !== 'ready' || !state.wording.truncated;
-      if (state.kind === 'loading') {
-        previewStatus.textContent = 'Loading saved wording…';
-      } else if (state.kind === 'error') {
-        previewStatus.textContent = '';
-        wording.append(notice('Preview could not be loaded: ' + state.message
-          + ' Your open draft is unchanged. Select Preview saved copy to try again.', 'error'));
-      } else {
-        previewStatus.textContent = (state.previous || state.wording.truncated
-          ? 'Section ' + (state.page + 1) + ' · ' : 'Complete saved wording · ')
-          + (state.wording.edited ? 'Saved human edits' : 'Original saved document');
-        if (state.wording.literal) previewStatus.textContent += state.wording.literalReason === 'unfinished-block'
-          ? '. Formatting is unfinished, so the affected text is shown as plain text.'
-          : '. Formatting extends beyond this section, so the affected text is shown as plain text.';
-        if (state.wording.incomplete) qualifications.append(notice('INCOMPLETE MODEL DRAFT — review the partial wording before using it.'));
-        if (state.wording.stale) qualifications.append(notice('Review status: stale. Check this saved record before current use; editing its wording does not confirm the original evidence.'));
-        wording.append(...renderSavedReportWording(state.wording));
-        if (state.previous || state.wording.truncated) wording.append(h('p', {class: 'notice'},
-          'Showing up to 2,400 characters at a time. Use the section controls for the rest of this saved document. '
-          + 'Open the saved copy to inspect its complete evidence.'));
-        if (document.activeElement === origin) focusHeading();
-      }
+      view.show(state);
+      if (state.kind === 'ready' && document.activeElement === origin) view.focus();
     },
   });
 
@@ -168,8 +135,11 @@ export function savedReportList({load, onOpen, onDelete}) {
     preview.close();
     if (selected) rows.get(selected.id)?.preview.setAttribute('aria-expanded', 'false');
     selected = null;
-    panel.remove(); wording.replaceChildren(); qualifications.replaceChildren(); previewStatus.textContent = '';
-    if (returnFocus && origin?.isConnected && !origin.closest('[hidden]')) origin.focus({preventScroll: true});
+    panel.remove(); view.clear();
+    if (returnFocus && origin?.isConnected && !origin.closest('[hidden]')) {
+      origin.focus({preventScroll: true});
+      origin.scrollIntoView({block: 'nearest', behavior: 'instant'});
+    }
     origin = null;
   }
 
@@ -177,7 +147,7 @@ export function savedReportList({load, onOpen, onDelete}) {
     if (busy.has(report.id)) return;
     closePreview();
     selected = report; origin = control;
-    detail.textContent = report.title + ' · Saved ' + dateTime(report.created_at) + ' · Reference ' + savedReportReference(report.id, reports);
+    view.identify(report, savedReportReference(report.id, reports));
     control.setAttribute('aria-expanded', 'true');
     rows.get(report.id).card.append(panel);
     preview.open(report);
@@ -243,7 +213,7 @@ export function savedReportList({load, onOpen, onDelete}) {
       if (row) for (const control of [row.preview, row.open, row.remove]) control.disabled = value;
     },
     dispose() {
-      disposed = true; preview.dispose(); panel.remove(); wording.replaceChildren();
+      disposed = true; preview.dispose(); panel.remove(); view.clear();
       rows.clear(); reports = []; selected = null; origin = null;
     },
   };

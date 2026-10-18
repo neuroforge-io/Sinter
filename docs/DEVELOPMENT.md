@@ -381,6 +381,7 @@ can be downloaded with its incomplete label. No generation is automatically repl
 | `web/home.js`, `web/app.js`, `web/workbench.js` | Overview, routing and guided tasks. |
 | `web/report-drafts.js`, `web/report-replacement.js` | Session draft/save observations, exact-state replacement decisions and per-result preparation inputs. |
 | `web/workbench-draft-switcher.js`, `web/workbench-draft-observations.js` | Stable draft controls and per-entry observed-state snapshots; no request, adoption or persistence authority. |
+| `web/saved-report-list.js`, `web/saved-report-preview-view.js` | Selected-copy loading and bounded source indexing; separate read-only presentation with no request, save or editor authority. |
 | `web/navigation.js` | One tool registry for navigation, page labels and the keyboard finder. |
 | `web/audio.js`, `web/transcription.js` | Local playback, transcription controls and passage review. |
 
@@ -398,6 +399,10 @@ My workspace filters saved titles or references without reading every document.
 Preview saved copy reads only the selected saved report. Applied human wording
 takes precedence; incomplete warnings remain visible. Longer wording uses
 2,400-code-point sections, including closing sections, with no further request.
+Phones show compact section controls and textual incomplete/stale qualifications
+before the wording. Copy details retains the complete title, date, full reference
+and warning explanations in a keyboard-operable disclosure. Close restores the
+visible originating control; opening remains an explicit guarded action.
 Only one selected report is retained for preview; filter changes, refresh,
 close and page disposal invalidate outstanding preview responses.
 

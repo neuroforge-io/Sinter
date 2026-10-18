@@ -500,6 +500,10 @@ class DeliverableChecks:
             const partial = structuredClone(original);
             partial.title = 'Fictional incomplete garden note';
             partial.incomplete = true; partial.review_status = 'stale';
+            partial.document_edits = {markdown: '# Draft enquiry\\n\\nDear fictional committee,\\n\\n'
+                + 'We are preparing the garden access handover. Please confirm the gate inspection, responsible person and cost before choosing a funding route.\\n\\n'
+                + 'The original evidence is retained; no owner, date or budget is confirmed. 🐝\\n\\n'.repeat(50)
+                + 'Closing: this is an unsubmitted fictional draft.'};
             return {
                 malformed: (await request('/api/reports', {data: {report: malformed}})).id,
                 partial: (await request('/api/reports', {data: {report: partial}})).id,
@@ -668,12 +672,41 @@ class DeliverableChecks:
         expect(preview).to_contain_text('Section 1')
         partial_warning = 'INCOMPLETE MODEL DRAFT — review the partial wording before using it.'
         stale_warning = 'Review status: stale. Check this saved record before current use; editing its wording does not confirm the original evidence.'
-        expect(preview.get_by_text(partial_warning, exact=True)).to_be_visible()
-        expect(preview.get_by_text(stale_warning, exact=True)).to_be_visible()
+        for label in ('Incomplete model draft', 'Stale review'):
+            expect(preview.get_by_text(label, exact=True)).to_be_visible()
+        expect(preview.get_by_role('button', name='Previous section', exact=True)).to_be_disabled()
+        expect(preview.get_by_role('button', name='Next section', exact=True)).to_be_enabled()
+        question = preview.locator('.saved-report-wording').get_by_text(
+            'We are preparing the garden access handover. Please confirm the gate inspection, responsible person and cost before choosing a funding route.',
+            exact=True)
+        bounds = question.bounding_box()
+        assert bounds and 0 <= bounds['y'] and (
+            bounds['y'] + bounds['height'] <= page.viewport_size['height']
+        ), bounds
+        disclosure = preview.locator('details')
+        summary = disclosure.locator('summary')
+        assert not disclosure.evaluate('element => element.open')
+        expect(preview.get_by_text(stale_warning, exact=True)).not_to_be_visible()
+        summary.focus()
+        page.keyboard.press('Enter')
+        assert disclosure.evaluate('element => element.open')
+        expect(disclosure.get_by_text(extra['partial'], exact=True)).to_be_visible()
+        expect(disclosure.get_by_text(partial_warning, exact=True)).to_be_visible()
+        expect(disclosure.get_by_text(stale_warning, exact=True)).to_be_visible()
         preview.get_by_role('button', name='Next section', exact=True).click()
-        expect(preview).to_contain_text('Section 2')
-        expect(preview.get_by_text(partial_warning, exact=True)).to_be_visible()
-        expect(preview.get_by_text(stale_warning, exact=True)).to_be_visible()
+        expect(preview).to_contain_text('Section 2 (last)')
+        expect(preview.get_by_role('button', name='Next section', exact=True)).to_be_disabled()
+        expect(preview.get_by_role('button', name='Previous section', exact=True)).to_be_enabled()
+        assert disclosure.evaluate('element => element.open')
+        for label in ('Incomplete model draft', 'Stale review'):
+            expect(preview.get_by_text(label, exact=True)).to_be_visible()
+        expect(disclosure.get_by_text(partial_warning, exact=True)).to_be_visible()
+        expect(disclosure.get_by_text(stale_warning, exact=True)).to_be_visible()
+        summary.focus()
+        page.keyboard.press('Enter')
+        expect(disclosure.get_by_text(stale_warning, exact=True)).not_to_be_visible()
+        for label in ('Incomplete model draft', 'Stale review'):
+            expect(preview.get_by_text(label, exact=True)).to_be_visible()
         expect(editor).to_have_value(pending_text)
         self.screenshot(page, 'saved-copy-partial-stale-later-section-phone')
         self.screenshot(page, 'saved-copy-pending-preserved-phone')
