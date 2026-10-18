@@ -92,3 +92,52 @@ the recovered document below the viewport. The recovery pass does not remove
 that usability finding or qualify an installed release. The Windows 3.13
 registered-launcher fixture also missed its existing five-second deadline in
 exact-`cf88016` CI; its cause remains unproven and the deadline is unchanged.
+
+## Garden reading diagnostics after exact-4e CI
+
+Exact `4e36334dbefbb3bafc9a76c0a830e6585699d5a8` CI passed the 22 recovery
+journeys and the following document export, download-lifecycle and page-break
+steps. The garden journey then failed its first-row visibility assertion.
+The old tool wrote bounds only after both viewports passed, so that failure
+does not identify the viewport, element or amount of overflow. Its original
+failure artifact remains retained.
+
+The follow-up probe flushes per-viewport geometry before the same assertions,
+including reading position before More and after Escape. Failed geometry gains
+a bounded viewport witness when capture succeeds. Secondary capture or evidence
+write errors cannot replace the original assertion. No visibility threshold,
+44-pixel target, evidence check or product layout was changed.
+
+An admitted local Chromium run of that instrumented probe passed all 24 garden
+practice journeys against unchanged exact-4e product source. It exercised the
+paired offline project, original sources, explicit opening summary, Word export,
+save/reopen and backup recovery, pending-input protection and stale-review
+screen/print classifications. There were no browser errors or external requests;
+earlier browser artifacts remained unchanged.
+
+- Tool SHA256: `1f48436c0e4ffc01c8c78b90f878d4df8ed87585d59d77aefc6cb9499e87b4f8`.
+- At 1265 by 712, the first action cell ended at y=583.75. At 390 by 844,
+  the 44-pixel Passage target ended at y=807.765625, only 20.234375 pixels
+  clear of the existing lower visibility bound at y=828. Before/after-More bounds matched
+  locally. Loaded-font status does not prove the same font metrics as CI.
+- The tool took 92.9 seconds including process/recovery observation, with 19.6
+  cgroup CPU seconds and a peak of 680,828,928 bytes. Admission capped memory
+  at 768 MiB, swap at zero and CPU at 25%; no OOM event occurred. The complete
+  guarded phase closed in 97.1 seconds, reaped its child, collected the unit
+  and removed its empty runtime directory.
+
+This local pass does not resolve or classify the CI failure. Fresh CI must
+retain its actual bounds before a layout fix is chosen. It is automated source
+evidence, not a new installed-release or in-app operator qualification.
+
+Exact-4e Windows 3.13 passed its unchanged launcher deadline; Windows 3.10
+failed two fallback fixtures within that same five-second budget. The four
+Linux/macOS Python lanes, RKC and three speech lanes passed. Verified packaging was
+skipped. Historical Windows failures remain retained; their cause is not
+established and no deadline was relaxed.
+
+Independent review of the 390-by-844 image and these 24 offline journeys rates
+this bounded path UX 7.5/10, functionality 8/10 and aesthetics 7.5/10.
+The dense status paragraph still mixes status, owner, acceptance and target.
+A future canonical action-section format should separate those facts while
+preserving legacy tables literally; these scores do not cover the whole product.

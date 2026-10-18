@@ -66,11 +66,17 @@ in the private operation directory, use a separate short private runtime path,
 and consolidate retained evidence after the owned browsers have closed. Do not
 change browser security settings to work around a setup failure.
 
-For `tools/report_recovery_browser.py`, set `SINTER_BROWSER_ARTIFACTS` to a
-private absolute directory to keep its screenshots and receipt together with
-operation logs while preserving earlier browser evidence. Its final restoration
-image covers one viewport; the sidecar records image scope, DOM geometry and
-capture success. Complete content and evidence checks run separately.
+For `tools/report_recovery_browser.py` and `tools/garden_practice_browser.py`,
+set `SINTER_BROWSER_ARTIFACTS` to a fresh private absolute directory to keep
+screenshots and receipts with operation logs while preserving earlier evidence.
+The recovery tool's final restoration image covers one viewport; its sidecar
+records image scope, DOM geometry and capture success. Complete content and
+evidence checks run separately. The garden tool flushes saved-reading geometry
+before its existing visibility checks, records bounds before and after More,
+and retains a viewport image on assertion failure where possible. A secondary
+diagnostic error never replaces the original failed assertion. Its Word receipt
+keeps the default repository-relative path, or records an absolute path when
+the operator explicitly chooses an external artifact directory.
 
 On a shared machine, keep local authoring, checks, builds and browser rehearsals
 sequential. Use explicit CPU/memory limits, low scheduling priority, finite

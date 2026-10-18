@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sys
 import tempfile
@@ -24,13 +25,30 @@ from sinter.server import make_server  # noqa: E402
 from tools._support import browser_arguments, launch_chromium  # noqa: E402
 
 
+def retain_layout_metrics(path: Path, metrics: list[dict]) -> None:
+    """Flush observed geometry before a later assertion can stop the journey."""
+    temporary = path.with_suffix(".partial")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        json.dump(metrics, stream, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    if os.name == "posix":
+        descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
 def main(argv: list[str] | None = None) -> None:
     started = time.perf_counter()
     args = browser_arguments(__doc__, argv)
     from playwright.sync_api import expect, sync_playwright
 
-    out = ROOT / "browser-artifacts"
-    out.mkdir(exist_ok=True)
+    out = Path(os.environ.get("SINTER_BROWSER_ARTIFACTS") or ROOT / "browser-artifacts")
+    out.mkdir(parents=True, exist_ok=True)
     receipt = out / "garden-practice-summary.json"
     receipt.write_text(json.dumps({"passed": False, "state": "running"}))
     implementation_paths = (
@@ -490,7 +508,11 @@ def main(argv: list[str] | None = None) -> None:
                     else:
                         retained_path.write_bytes(word_bytes)
                     retained_word = {
-                        "path": str(retained_path.relative_to(ROOT)),
+                        "path": (
+                            str(retained_path.relative_to(ROOT))
+                            if retained_path.is_relative_to(ROOT)
+                            else str(retained_path.resolve())
+                        ),
                         "sha256": word_sha,
                     }
                     with zipfile.ZipFile(downloaded_word) as archive:
@@ -821,6 +843,18 @@ def main(argv: list[str] | None = None) -> None:
                             bounds = part.bounding_box()
                             assert bounds and bounds["y"] >= 0
                             assert bounds["y"] + bounds["height"] <= height
+                        before_more = {
+                            "scroll_y": reading_page.evaluate("scrollY"),
+                            "reader_header": reader_header.bounding_box(),
+                            "tabs": reading_view.locator(".report-tabs").bounding_box(),
+                            "opening": reading_panel.locator(".handover-reading-opening").bounding_box(),
+                            "cells": reading_panel.locator(".handover-opening-table tbody tr").first.locator("td").evaluate_all(
+                                """cells => cells.map(cell => ({
+                                    text_length: cell.textContent.length,
+                                    rect: cell.getBoundingClientRect().toJSON()
+                                }))"""
+                            ),
+                        }
                         more = reading_view.locator(".export-menu > summary")
                         expect(more).to_have_accessible_name("More options")
                         more.click()
@@ -834,11 +868,73 @@ def main(argv: list[str] | None = None) -> None:
                         passage = opening_row.locator("td").nth(3).get_by_role("button").first
                         action_bounds = proposed.bounding_box()
                         passage_bounds = passage.bounding_box()
-                        assert action_bounds and passage_bounds
-                        for bounds in (action_bounds, passage_bounds):
-                            assert bounds["y"] >= 16
-                            assert bounds["y"] + bounds["height"] <= height - 16
-                        assert passage_bounds["width"] >= 44 and passage_bounds["height"] >= 44
+                        metric = {
+                            "viewport": [width, height],
+                            "action": action_bounds,
+                            "passage": passage_bounds,
+                            "before_more": before_more,
+                            "reader_header": reader_header.bounding_box(),
+                            "opening": reading_panel.locator(".handover-reading-opening").bounding_box(),
+                            "row": opening_row.bounding_box(),
+                            "cells": opening_row.locator("td").evaluate_all(
+                                """cells => cells.map(cell => ({
+                                    text_length: cell.textContent.length,
+                                    rect: cell.getBoundingClientRect().toJSON()
+                                }))"""
+                            ),
+                            "page": reading_page.evaluate(
+                                """() => ({
+                                    scrollX, scrollY, width: innerWidth, height: innerHeight,
+                                    scroll_width: document.documentElement.scrollWidth,
+                                    scroll_height: document.documentElement.scrollHeight,
+                                    fonts: document.fonts.status
+                                })"""
+                            ),
+                            "reading_focus": True,
+                            "geometry_passed": False,
+                        }
+                        reading_metrics.append(metric)
+                        layout_receipt = out / "garden-saved-reading-layout.json"
+                        retain_layout_metrics(layout_receipt, reading_metrics)
+                        try:
+                            assert action_bounds and passage_bounds, metric
+                            for label, bounds in (
+                                ("proposed action", action_bounds),
+                                ("source passage", passage_bounds),
+                            ):
+                                assert bounds["y"] >= 16, (label, metric)
+                                assert bounds["y"] + bounds["height"] <= height - 16, (
+                                    label, metric
+                                )
+                            assert passage_bounds["width"] >= 44 and passage_bounds["height"] >= 44, metric
+                        except AssertionError:
+                            try:
+                                image = out / f"garden-saved-reading-failed-{width}.png"
+                                try:
+                                    reading_page.screenshot(path=str(image), timeout=10000)
+                                    metric["failure_image"] = {
+                                        "scope": "viewport",
+                                        "bytes": image.stat().st_size,
+                                        "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
+                                    }
+                                except Exception as error:
+                                    metric["failure_image"] = {
+                                        "scope": "viewport",
+                                        "error": f"{type(error).__name__}: {str(error)[:1000]}",
+                                    }
+                                retain_layout_metrics(layout_receipt, reading_metrics)
+                            except Exception as error:
+                                try:
+                                    print(
+                                        "Could not retain failure diagnostics: "
+                                        f"{type(error).__name__}: {str(error)[:1000]}",
+                                        file=sys.stderr,
+                                    )
+                                except Exception:
+                                    pass  # Preserve the original failed geometry assertion.
+                            raise
+                        metric["geometry_passed"] = True
+                        retain_layout_metrics(layout_receipt, reading_metrics)
                         assert passage.evaluate("""element => {
                             const rect = element.getBoundingClientRect();
                             const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
@@ -846,12 +942,6 @@ def main(argv: list[str] | None = None) -> None:
                         }""")
                         assert reading_page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                         reading_page.screenshot(path=str(out / f"garden-saved-reading-{width}.png"))
-                        reading_metrics.append({
-                            "viewport": [width, height],
-                            "action": action_bounds,
-                            "passage": passage_bounds,
-                            "reading_focus": True,
-                        })
                         reading_page.get_by_role("button", name="Back to saved copies", exact=True).click()
                         saved_filter = reading_page.get_by_label("Find saved drafts", exact=True)
                         expect(saved_filter).to_be_focused()
@@ -860,9 +950,7 @@ def main(argv: list[str] | None = None) -> None:
                         assert filter_bounds["y"] + filter_bounds["height"] <= height
                         assert server.app.store.report(reading_id) == reading_report
                         reading_page.close()
-                    (out / "garden-saved-reading-layout.json").write_text(
-                        json.dumps(reading_metrics, indent=2), encoding="utf-8"
-                    )
+                    retain_layout_metrics(out / "garden-saved-reading-layout.json", reading_metrics)
                     checks.append(
                         "real saved-copy Open lands on the first proposed action and 44px evidence target "
                         "with title, saved identity, state and controls at 1265x712 and 390x844; Back reveals the saved filter"
