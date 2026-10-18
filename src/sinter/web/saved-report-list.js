@@ -206,6 +206,10 @@ export function savedReportList({load, onOpen, onDelete}) {
       }
       applyFilter();
     },
+    showAll() {
+      if (disposed) return;
+      filter.input.value = ''; applyFilter();
+    },
     setBusy(id, value) {
       if (value) busy.add(id); else busy.delete(id);
       if (value && selected?.id === id) closePreview();

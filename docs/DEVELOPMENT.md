@@ -418,3 +418,25 @@ relabel a known write as an uncertain request. Deleting another saved copy does
 not clear the editor; deleting its currently open copy requires closing first.
 An unconfirmed deletion remains held for an explicit list check, with no
 automatic replay. This is a single-user local workflow, not shared versioning.
+
+## Single-report JSON recovery
+
+My workspace → Restore draft JSON admits an exported report without replacing an
+open editor, project, connection setting or existing saved copy. Selection previews
+locally; Restore as a new saved copy is the explicit write. This differs from a
+project backup (inputs) and a complete saved-workspace backup. Preserve the original
+file: restoration keeps all report fields, source identities, edited wording and
+historical review/partial flags, but does not verify them as current facts.
+
+Admission checks original UTF-8 bytes, a 2,000,000-byte limit, the report envelope,
+duplicate keys, incomplete Unicode, excessive nesting and numbers that JavaScript
+would round. The server separately validates its serialized request and storage
+capacity. A lost or malformed acknowledgement remains unconfirmed even if the
+write committed. Check saved copies before explicitly authorising an additional
+copy; no request is automatically replayed. Pending text/forms must be applied or
+cancelled before restoring that candidate. Acknowledged copies use normal draft
+saving for later edits.
+
+Run `node --experimental-default-type=module --test --test-concurrency=1 tests/report_backup.mjs tests/report_drafts.mjs`
+and `python tools/report_recovery_browser.py` for admission and real-interface recovery
+regressions. These source checks do not qualify an installed release.

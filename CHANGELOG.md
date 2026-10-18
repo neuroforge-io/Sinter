@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Restore a complete draft JSON from My workspace as a new local copy, preserving
+  edited wording, original evidence and recorded review status. Preview locally,
+  retain other editors and connection settings, and check saved copies before
+  explicitly retrying an unconfirmed save. Reject ambiguous or lossy backups.
+
 - Describe pending and unconfirmed report saves without claiming the document
   was never saved. Keep the current save outcome visible in My workspace’s
   Pending work, preserve earlier acknowledged copies, and require explicit retry.

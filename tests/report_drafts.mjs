@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {registerReportDraft, trackReportEdits, trackReportEditor, reportEditorDraft,
   markReportSaved, markReportSaving, markReportSaveFailed, reportSaveState, observeReportSaveState,
-  trackReportForm, clearReportForm, unsavedReportDrafts, hasUnsavedReportDrafts, clearReportDrafts, reportDraftNotice} from '../src/sinter/web/report-drafts.js';
+  reportHasUnconfirmedSave, reportHasUnappliedInputs, trackReportForm, clearReportForm, unsavedReportDrafts, hasUnsavedReportDrafts, clearReportDrafts, reportDraftNotice} from '../src/sinter/web/report-drafts.js';
 import {hasPendingSource} from '../src/sinter/web/casebook-drafts.js';
 
 test('applied and pending edits are separately retained until their exact content is saved', () => {
@@ -328,4 +328,38 @@ test('pending notices do not deny a possibly completed save or erase an earlier 
     assert.equal(registerReportDraft(report, 'Human clarification').saved, saved);
   }
   clearReportDrafts();
+});
+
+test('all unapplied inputs block restoration while applied edits remain eligible', () => {
+  clearReportDrafts();
+  const report = {title: 'Historical handover'};
+  assert.equal(reportHasUnappliedInputs(report), false);
+  registerReportDraft(report, 'Original');
+  trackReportEditor(report, 'Pending');
+  assert.equal(reportHasUnappliedInputs(report), true);
+  trackReportEditor(report, '', false);
+  trackReportForm(report, 'future-extension-form', {owner: 'unknown'});
+  assert.equal(reportHasUnappliedInputs(report), true);
+  clearReportForm(report, 'future-extension-form');
+  trackReportEdits(report, 'Applied wording');
+  assert.equal(reportHasUnappliedInputs(report), false);
+  assert.equal(unsavedReportDrafts()[0].report, report);
+});
+
+test('a rejected or unsent retry never resolves an earlier uncertain write', () => {
+  clearReportDrafts();
+  const report = {title: 'Uncertain restoration'};
+  registerReportDraft(report, 'Original');
+  assert.equal(reportHasUnconfirmedSave(report), false);
+  markReportSaving(report); markReportSaveFailed(report, new Error('Lost acknowledgement'));
+  assert.equal(reportHasUnconfirmedSave(report), true);
+  for (const outcome of ['not-sent', 'rejected']) {
+    markReportSaving(report);
+    markReportSaveFailed(report, {requestState: {outcome}});
+    assert.equal(reportSaveState(report).kind, outcome);
+    assert.equal(reportHasUnconfirmedSave(report), true);
+  }
+  markReportSaved(report, 'Original', report, 'a'.repeat(32));
+  assert.equal(reportSaveState(report).kind, 'saved');
+  assert.equal(reportHasUnconfirmedSave(report), true);
 });

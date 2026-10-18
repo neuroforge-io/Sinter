@@ -532,6 +532,157 @@ def main(argv: list[str] | None = None) -> None:
                     checks.append(
                         "first post-ack view failure keeps confirmed save state and sends exactly one POST"
                     )
+
+                    # A real downloaded report restores independently of the editor.
+                    # A committed write with a deliberately lost acknowledgement
+                    # must not be replayed as if nothing reached local storage.
+                    page.close()
+                    page = context.new_page()
+                    page.set_default_timeout(7000)
+                    page.on("pageerror", lambda error: errors.append(str(error)))
+                    page.on("dialog", lambda dialog: dialog.accept())
+                    source_row = next(
+                        row for row in server.app.store.reports()
+                        if server.app.store.report(row["id"]).get("sources")
+                    )
+                    original = server.app.store.report(source_row["id"])
+                    page.goto(base + "/#library")
+                    page.get_by_label("Find saved drafts", exact=True).fill(source_row["id"])
+                    page.get_by_role("button", name="Open draft", exact=True).click()
+                    report = page.get_by_role("region", name="Your draft report")
+                    report.get_by_text("More options", exact=True).click()
+                    with page.expect_download() as downloading:
+                        report.get_by_role("button", name="Download evidence pack", exact=True).click()
+                    downloaded = Path(data) / "restore-fixture.json"
+                    downloading.value.save_as(downloaded)
+                    exported = json.loads(downloaded.read_text(encoding="utf-8"))
+                    assert exported == original
+                    report.get_by_role("button", name="Edit draft", exact=True).click()
+                    preserved_editor = "KEEP CURRENT EDITOR — not applied or included in the backup."
+                    report.get_by_label("Edit your draft", exact=True).fill(preserved_editor)
+                    page.get_by_text("Restore draft JSON", exact=True).click()
+                    selected = page.get_by_label("Choose draft JSON", exact=True)
+                    restore = page.get_by_role("button", name="Restore as a new saved copy", exact=True)
+                    count_before = len(server.app.store.reports())
+                    selected.set_input_files(str(downloaded))
+                    expect(page.get_by_label("Restored wording preview", exact=True)).to_be_visible()
+                    expect(restore).to_be_enabled()
+                    expect(report.get_by_label("Edit your draft", exact=True)).to_have_value(preserved_editor)
+                    assert len(server.app.store.reports()) == count_before
+                    selected.set_input_files({
+                        "name": "oversized-unicode.json", "mimeType": "application/json",
+                        "buffer": json.dumps(
+                            {"title": "Oversized Unicode", "markdown": "🐝" * 500_001},
+                            ensure_ascii=False,
+                        ).encode("utf-8"),
+                    })
+                    expect(restore).to_be_disabled()
+                    expect(page.get_by_role("alert")).to_contain_text("2,000,000 bytes")
+                    assert len(server.app.store.reports()) == count_before
+                    selected.set_input_files(str(downloaded))
+                    expect(restore).to_be_enabled()
+                    attempts = []
+                    restored_ids = []
+                    fail_refresh = [False]
+
+                    def restore_reply(route):
+                        if route.request.method == "POST":
+                            attempts.append(route.request.post_data_json)
+                            response = route.fetch()
+                            assert response.status == 201
+                            restored_ids.append(response.json()["id"])
+                            if len(attempts) == 1:
+                                route.abort("failed")
+                            else:
+                                fail_refresh[0] = True
+                                route.fulfill(response=response)
+                        elif fail_refresh[0]:
+                            fail_refresh[0] = False
+                            route.fulfill(
+                                status=503, content_type="application/json",
+                                body=json.dumps({"error": "Fictional post-restore refresh failure"}),
+                            )
+                        else:
+                            route.continue_()
+
+                    page.route("**/api/reports", restore_reply)
+                    restore.click()
+                    state = page.get_by_label("Draft restore state", exact=True)
+                    expect(state).to_contain_text("Save not confirmed")
+                    additional = page.get_by_role("button", name="Restore an additional copy", exact=True)
+                    expect(additional).to_be_disabled()
+                    assert len(attempts) == 1
+                    assert len(server.app.store.reports()) == count_before + 1
+                    assert server.app.store.report(restored_ids[0]) == exported
+                    assert server.app.store.report(source_row["id"]) == original
+                    expect(report.get_by_label("Edit your draft", exact=True)).to_have_value(preserved_editor)
+                    assert page.evaluate(warn)
+                    check_saved = page.get_by_role("button", name="Check saved list before retrying", exact=True)
+                    check_saved.click()
+                    expect(additional).to_be_enabled()
+                    expect(page.get_by_label('Find saved drafts', exact=True)).to_have_value('')
+                    expect(page.get_by_text('Reference ' + restored_ids[0][:8], exact=True)).to_be_visible()
+                    assert len(attempts) == 1
+                    additional.click()
+                    page.get_by_role("dialog").get_by_role("button", name="Cancel", exact=True).click()
+                    assert len(attempts) == 1
+
+                    pending_copy = page.get_by_role("region", name="Unsaved document or form work").locator(
+                        "article"
+                    ).filter(has_text="Save not confirmed")
+                    pending_copy.get_by_role("button", name="Open unsaved draft", exact=True).click()
+                    page.get_by_role("dialog").get_by_role("button", name="Cancel", exact=True).click()
+                    expect(report.get_by_label("Edit your draft", exact=True)).to_have_value(preserved_editor)
+                    pending_copy.get_by_role("button", name="Open unsaved draft", exact=True).click()
+                    page.get_by_role("dialog").get_by_role("button", name="Open selected draft", exact=True).click()
+                    report = page.get_by_role("region", name="Your draft report")
+                    report.get_by_role("button", name="Edit draft", exact=True).click()
+                    report.get_by_label("Edit your draft", exact=True).fill("UNAPPLIED IMPORTED TEXT")
+                    expect(additional).to_be_disabled()
+                    assert len(attempts) == 1
+                    report.get_by_role("button", name="Cancel edits", exact=True).click()
+                    check_saved.click()
+                    expect(additional).to_be_enabled()
+                    additional.click()
+                    page.get_by_role("dialog").get_by_role(
+                        "button", name="Restore additional copy", exact=True
+                    ).click()
+                    expect(state).to_contain_text("Restored copy acknowledged")
+                    expect(page.get_by_role("note").filter(
+                        has_text="Fictional post-restore refresh failure"
+                    )).to_contain_text("Do not restore again to refresh")
+                    assert len(attempts) == 2
+                    assert len(set(restored_ids)) == 2
+                    assert len(server.app.store.reports()) == count_before + 2
+                    for saved_id in restored_ids:
+                        assert server.app.store.report(saved_id) == exported
+                    expect(page.get_by_role("button", name="Restored to My workspace", exact=True)).to_be_disabled()
+                    report.get_by_role("button", name="Edit draft", exact=True).click()
+                    report.get_by_label("Edit your draft", exact=True).fill("Later applied imported wording.")
+                    report.get_by_role("button", name="Apply edits", exact=True).click()
+                    expect(report.get_by_role("button", name="Save to My workspace", exact=True)).to_be_enabled()
+                    expect(page.get_by_role("button", name="Restored to My workspace", exact=True)).to_be_disabled()
+                    assert len(attempts) == 2
+                    page.screenshot(path=str(out / "report-json-restoration.png"), full_page=True)
+                    original_pending = page.get_by_role("region", name="Unsaved document or form work").locator(
+                        "article"
+                    ).filter(has_text="Draft text is waiting to be applied")
+                    original_pending.get_by_role("button", name="Open unsaved draft", exact=True).click()
+                    page.get_by_role("dialog").get_by_role("button", name="Open selected draft", exact=True).click()
+                    expect(page.get_by_label("Edit your draft", exact=True)).to_have_value(preserved_editor)
+                    assert len(attempts) == 2
+                    assert server.app.store.report(source_row["id"]) == original
+                    checks.extend([
+                        "actual downloaded report stages locally without replacing pending editor text",
+                        "oversized Unicode selection clears candidate without writing",
+                        "real committed restore with lost acknowledgement remains uncertain without replay",
+                        "list check and cancelled copy decision never repeat the write",
+                        "unapplied imported text blocks retry; original editor stays recoverable",
+                        "explicit additional copy preserves all evidence with a distinct identity",
+                        "post-ack refresh failure and later edits cannot re-enable Restore",
+                    ])
+                    page.unroute("**/api/reports", restore_reply)
+
                     assert not errors, errors
                     assert not external, external
                     network.assert_not_called()
@@ -557,6 +708,10 @@ def main(argv: list[str] | None = None) -> None:
                         "src/sinter/web/casebooks.js",
                         "src/sinter/web/reports.js",
                         "src/sinter/web/report-citations.js",
+                        "src/sinter/web/report-backup.js",
+                        "src/sinter/web/saved-report-restore.js",
+                        "src/sinter/web/library.js",
+                        "src/sinter/web/saved-report-list.js",
                     ]
                 },
             },

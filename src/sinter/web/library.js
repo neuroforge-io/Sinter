@@ -1,12 +1,13 @@
 import {h, button, field, check, notice, selectField, safeLink, dateTime, announce, download} from './ui.js';
 import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
+import {savedReportRestore} from './saved-report-restore.js';
 import {unsavedReportDrafts, reportSaveState, rememberReportSavedCopy, reportSavedCopyId} from './report-drafts.js';
 import {authorizeReportReplacement, reportReplacementStillAllowed} from './report-replacement.js';
 import {confirmAction} from './confirm-action.js';
 import {savedReportList, savedReportReference} from './saved-report-list.js';
 
-export async function library({onEditProject} = {}) {
+export async function library({onEditProject, setBusy} = {}) {
   const root = h('div');
   const opened = h('div');
   const openingStatus = h('div', {class: 'non-print', 'aria-live': 'polite'});
@@ -183,15 +184,22 @@ export async function library({onEditProject} = {}) {
   async function refresh({checkUncertain = false} = {}) {
     const attempt = ++refreshing;
     const {reports} = await request('/api/reports');
-    if (disposed || attempt !== refreshing) return;
+    if (disposed || attempt !== refreshing) return false;
     knownReports = reports;
     if (checkUncertain) {
       for (const id of uncertainDeletions) { deleting.delete(id); savedCopies.setBusy(id, false); }
       uncertainDeletions.clear();
     }
-    refreshPending(); savedCopies.update(reports);
+    refreshPending(); savedCopies.update(reports); return true;
   }
 
+  async function refreshRestoredCopies() {
+    const updated = await refresh({checkUncertain: true});
+    if (updated) savedCopies.showAll();
+    return updated;
+  }
+  const restore = savedReportRestore({setBusy, onChanged: refreshPending,
+    onSaved: refreshRestoredCopies, onCheckSaved: refreshRestoredCopies});
   root.append(h('header', {class: 'page-intro non-print'}, h('h2', {}, 'My workspace'),
     h('p', {}, 'Find saved wording and reopen its original evidence.')),
     h('div', {class: 'non-print'}, notice(globalThis.sinterBrowser
@@ -200,11 +208,11 @@ export async function library({onEditProject} = {}) {
     feedback, openingStatus, pending,
     h('div', {class: 'button-row non-print'}, button('Refresh saved list', () => refresh({checkUncertain: true})
       .catch(error => feedback.replaceChildren(notice(error.message, 'error'))), 'quiet')),
-    savedCopies.element, opened);
+    restore.element, savedCopies.element, opened);
   root.dispose = () => {
     disposed = true; opening++; refreshing++;
     readController?.abort(); decisionController?.abort();
-    currentView?.dispose?.(); savedCopies.dispose();
+    currentView?.dispose?.(); savedCopies.dispose(); restore.dispose();
   };
   await refresh();
   return root;

@@ -78,7 +78,7 @@ async function route() {
     else if (id === 'casebooks') content = await casebooksPage(options);
     else if (id === 'campaigns') content = await campaignsPage(options);
     else if (id === 'activity') content = await activityPage();
-    else if (id === 'library') content = await library({onEditProject: payload => { remember(payload.workflow, payload, {dirty: true}); go(payload.workflow); }});
+    else if (id === 'library') content = await library({setBusy, onEditProject: payload => { remember(payload.workflow, payload, {dirty: true}); go(payload.workflow); }});
     else if (id === 'watches') content = await watches(options);
     else if (id === 'explore' || id === 'search') content = await playground({...options, pageId: id,
       seed: id === 'search' ? {...options.seed, mode: 'search'} : options.seed,

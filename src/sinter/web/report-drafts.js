@@ -9,7 +9,7 @@ let sequence = 0;
 export function registerReportDraft(report, content, {saved = false} = {}) {
   if (!identities.has(report)) identities.set(report, {
     id: `report-draft-${++sequence}`, report, baseline: content, content, editor: null, forms: new Map(),
-    saved: saved === true, saving: false, saveFailure: null,
+    saved: saved === true, saving: false, saveFailure: null, unconfirmedSave: false,
     baselinePayload: JSON.stringify(report), payload: JSON.stringify(report),
     views: new Set(),
   });
@@ -94,6 +94,12 @@ export function clearReportForm(report, name) {
   }
 }
 
+/** Include every named local form, including forms added by future features. */
+export function reportHasUnappliedInputs(report) {
+  const state = identities.get(report);
+  return Boolean(state && (state.editor || state.forms.size));
+}
+
 export function reportEditorDraft(report) {
   return identities.get(report)?.editor || null;
 }
@@ -121,7 +127,13 @@ export function markReportSaveFailed(report, error) {
   const outcome = error?.requestState?.outcome;
   state.saving = false;
   state.saveFailure = ['not-sent', 'rejected'].includes(outcome) ? outcome : 'unconfirmed';
+  if (state.saveFailure === 'unconfirmed') state.unconfirmedSave = true;
   update(state); notifyViews(state);
+}
+
+/** Earlier uncertain writes remain uncertain after a different attempt is rejected. */
+export function reportHasUnconfirmedSave(report) {
+  return identities.get(report)?.unconfirmedSave === true;
 }
 
 export function reportSaveState(report) {

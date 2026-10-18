@@ -139,6 +139,14 @@ an open editor intact; opening another copy uses the same pending-work guard.
 Saved references identify copies, not shared versions. Qualification of this new
 retrieval flow and the RC4 installer remains separate from published RC3.
 
+Development **My workspace → Restore draft JSON** previews a report export locally
+and saves a new copy with its edited wording, original evidence and recorded review
+status. Other editors, projects and connection settings stay intact. This differs
+from a project backup, which contains project inputs. An unconfirmed save requires
+checking all saved copies before explicitly authorising an additional copy; pending
+text and forms must first be applied or cancelled. This source feature is not in
+the published RC3 downloads.
+
 In the development browser workbench, choose a route and **Make focused campaign…**
 to work on a smaller case. Preview the complete included and omitted material,
 and choose explicitly whether to include shared work, linked products and other
