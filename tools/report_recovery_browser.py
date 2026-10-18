@@ -421,7 +421,7 @@ def main(argv: list[str] | None = None) -> None:
                     apply_text("Newer version edited while saving.")
                     held[0].continue_()
                     expect(report.get_by_label("Document save state")).to_have_text(
-                        "Applied document edits have not been saved."
+                        "Applied document edits are not confirmed saved."
                     )
                     document = report.get_by_role(
                         "tabpanel", name="Document", exact=True

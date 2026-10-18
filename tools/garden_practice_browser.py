@@ -304,7 +304,7 @@ def main(argv: list[str] | None = None) -> None:
                     ):
                         expect(opening).to_contain_text(phrase)
                     expect(report.get_by_label("Document save state")).to_contain_text(
-                        "Applied document edits have not been saved"
+                        "Applied document edits are not confirmed saved"
                     )
                     page.evaluate("document.activeElement.blur()")
                     report.evaluate("node => node.scrollIntoView({block: 'start'})")

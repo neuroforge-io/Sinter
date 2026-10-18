@@ -171,9 +171,9 @@ export function reportDraftNotice(report) {
   if (!state) return '';
   update(state);
   const messages = [];
-  if (!state.saved) messages.push('Prepared document has not been saved; it is kept in this session only.');
-  if (state.content !== state.baseline) messages.push('Applied document edits have not been saved.');
-  else if (state.payload !== state.baselinePayload) messages.push('Changes to this document’s retained records have not been saved.');
+  if (!state.saved) messages.push('Prepared document stays in this session until its save is confirmed.');
+  if (state.content !== state.baseline) messages.push('Applied document edits are not confirmed saved.');
+  else if (state.payload !== state.baselinePayload) messages.push('Changes to this document’s retained records are not confirmed saved.');
   if (state.editor) messages.push('Draft text is waiting to be applied.');
   if (state.forms.has('handover-summary')) messages.push('Summary rows have not been applied; they are kept in this session only.');
   if ([...state.forms.keys()].some(name => name !== 'handover-summary')) messages.push('Other local form inputs have not been applied; they are kept in this session only.');

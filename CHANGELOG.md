@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Describe pending and unconfirmed report saves without claiming the document
+  was never saved. Keep the current save outcome visible in My workspace’s
+  Pending work, preserve earlier acknowledged copies, and require explicit retry.
+
 - Bring saved wording into the phone preview with compact section controls and
   visible incomplete/stale labels. Keep full identity and warning explanations
   under Copy details, preserve original wording, and restore visible focus when

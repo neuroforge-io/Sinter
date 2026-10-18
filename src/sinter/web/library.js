@@ -1,7 +1,7 @@
 import {h, button, field, check, notice, selectField, safeLink, dateTime, announce, download} from './ui.js';
 import {request, waitForJob} from './api.js';
 import {renderReport} from './reports.js';
-import {unsavedReportDrafts, reportDraftNotice, rememberReportSavedCopy, reportSavedCopyId} from './report-drafts.js';
+import {unsavedReportDrafts, reportSaveState, rememberReportSavedCopy, reportSavedCopyId} from './report-drafts.js';
 import {authorizeReportReplacement, reportReplacementStillAllowed} from './report-replacement.js';
 import {confirmAction} from './confirm-action.js';
 import {savedReportList, savedReportReference} from './saved-report-list.js';
@@ -176,7 +176,7 @@ export async function library({onEditProject} = {}) {
       ...drafts.map(({report}) => {
         const open = button('Open unsaved draft', () => openReport(null, open, report));
         return h('article', {}, h('strong', {}, report.document_title || report.title || 'Untitled draft'),
-          h('p', {class: 'muted'}, reportDraftNotice(report)), open);
+          h('p', {class: 'muted'}, reportSaveState(report).message), open);
       }));
   }
 

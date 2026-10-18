@@ -422,7 +422,7 @@ if (process.argv.includes('--sample-json')) {
     trackReportEditor(report, 'Pending typed text');
     assert.match(reportDraftNotice(report), /Draft text is waiting to be applied/);
     trackReportEdits(report, 'Applied changed document');
-    assert.match(reportDraftNotice(report), /Applied document edits have not been saved/);
+    assert.match(reportDraftNotice(report), /Applied document edits are not confirmed saved/);
     assert.doesNotMatch(reportDraftNotice(report), /Draft text is waiting/);
     markReportSaved(report, 'Applied changed document');
     assert.doesNotMatch(reportDraftNotice(report), /Applied document edits/);

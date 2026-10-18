@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {registerReportDraft, trackReportEdits, trackReportEditor, reportEditorDraft,
   markReportSaved, markReportSaving, markReportSaveFailed, reportSaveState, observeReportSaveState,
-  trackReportForm, clearReportForm, unsavedReportDrafts, hasUnsavedReportDrafts, clearReportDrafts} from '../src/sinter/web/report-drafts.js';
+  trackReportForm, clearReportForm, unsavedReportDrafts, hasUnsavedReportDrafts, clearReportDrafts, reportDraftNotice} from '../src/sinter/web/report-drafts.js';
 import {hasPendingSource} from '../src/sinter/web/casebook-drafts.js';
 
 test('applied and pending edits are separately retained until their exact content is saved', () => {
@@ -158,7 +158,7 @@ test('acknowledging an earlier snapshot leaves later applied text and pending fo
   trackReportForm(report, 'handover-summary', {rows: [{status: 'Unknown'}]});
   markReportSaved(report, 'Submitted wording');
   assert.equal(reportSaveState(report).kind, 'pending');
-  assert.match(reportSaveState(report).message, /Applied document edits have not been saved/);
+  assert.match(reportSaveState(report).message, /Applied document edits are not confirmed saved/);
   assert.match(reportSaveState(report).message, /Summary rows have not been applied/);
   clearReportForm(report, 'handover-summary');
   assert.equal(reportSaveState(report).kind, 'pending');
@@ -189,7 +189,7 @@ test('retained screening changes need saving even when the displayed document is
   report.markdown += '\nNew screening record';
   trackReportEdits(report, report.document_markdown);
   assert.equal(reportSaveState(report).kind, 'pending');
-  assert.match(reportSaveState(report).message, /retained records have not been saved/);
+  assert.match(reportSaveState(report).message, /retained records are not confirmed saved/);
   assert.equal(hasUnsavedReportDrafts(), true);
   const sent = structuredClone(report); markReportSaving(report);
   report.screening.checks.push({status: 'not_met', reason: 'Later user-entered assessment'});
@@ -298,4 +298,34 @@ test('mutations notify retained records without changing save uncertainty or pen
   assert.equal(events.at(-1), 'pending');
   assert.equal(reportEditorDraft(report).text, 'Later pending text');
   assert.equal(report.screening.checks[0].status, 'unknown');
+});
+
+
+test('pending notices do not deny a possibly completed save or erase an earlier saved revision', () => {
+  for (const saved of [false, true]) {
+    clearReportDrafts();
+    const report = {title: 'Fictional recovery', markdown: 'Original wording',
+      sources: [{id: 'original-source', content: 'No owner has accepted.'}], incomplete: true};
+    const original = structuredClone(report);
+    registerReportDraft(report, 'Original wording', {saved});
+    trackReportEdits(report, 'Human clarification');
+    markReportSaving(report);
+    assert.equal(reportSaveState(report).kind, 'saving');
+    assert.doesNotMatch(reportDraftNotice(report), /(?:has|have) not been saved/);
+    markReportSaveFailed(report, {requestState: {outcome: 'unconfirmed'}});
+    assert.equal(reportSaveState(report).kind, 'unconfirmed');
+    assert.match(reportSaveState(report).message, /check My workspace before explicitly trying again/);
+    assert.match(reportDraftNotice(report), /Applied document edits are not confirmed saved/);
+    assert.doesNotMatch(reportSaveState(report).message, /(?:has|have) not been saved/);
+    // A later rejected attempt cannot establish that an earlier uncertain save did not complete.
+    markReportSaving(report);
+    markReportSaveFailed(report, {requestState: {outcome: 'rejected'}});
+    assert.equal(reportSaveState(report).kind, 'rejected');
+    assert.match(reportSaveState(report).message, /rejected this save/);
+    assert.doesNotMatch(reportDraftNotice(report), /(?:has|have) not been saved/);
+    assert.deepEqual(report, original);
+    assert.equal(unsavedReportDrafts().length, 1);
+    assert.equal(registerReportDraft(report, 'Human clarification').saved, saved);
+  }
+  clearReportDrafts();
 });
