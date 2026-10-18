@@ -96,14 +96,16 @@ def test_catalogue_is_explicit_unsaved_and_contains_no_documents(
     received = []
 
     def catalogue():
-        received.append(client.connection_identity())
+        settings = client._CONNECTION.get()
+        assert "model" not in settings and "max_tokens" not in settings
+        received.append({name: settings[name] for name in ("api_url", "provider")})
         return [{"id": "fictional-model"}]
 
     monkeypatch.setattr(client, "list_models", catalogue)
     job = controller.start_models(connection(model="probe-placeholder"))
     assert controller.runtime.wait(job) == {"models": [{"id": "fictional-model"}]}
     assert len(received) == 1
-    assert received[0]["model"] == "probe-placeholder"
+    assert received[0] == {"api_url": client.BASE_URL, "provider": "openai-compatible"}
     assert "Fictional private-to-test note" not in json.dumps(received)
     assert controller.connection_settings() == before
     assert controller.variables["excerpt"] == "Fictional private-to-test note"

@@ -308,6 +308,39 @@ class QualityChecks:
         expect(page.locator('html')).to_have_attribute('data-theme', 'light')
         self.screenshot(page, 'settings-large-light')
 
+
+    def native_catalogue(self, page, preferences):
+        """A real Settings lookup cannot depend on the saved answer cap."""
+        from playwright.sync_api import expect
+        self.goto(page, 'settings')
+        model = page.get_by_label('Model identifier', exact=True)
+        maximum = page.get_by_label('Maximum answer length', exact=True)
+        model.fill('erais-native-qwen3')
+        maximum.fill('16')
+        page.get_by_role('button', name='Save connection', exact=True).click()
+        expect(page.get_by_text('Connection saved. You can check it now or start an assistant task.', exact=True)).to_be_visible()
+        original = preferences.path.read_bytes()
+        observed = []
+
+        def catalogue(path):
+            settings = client._CONNECTION.get()
+            assert 'model' not in settings and 'max_tokens' not in settings
+            observed.append((path, settings['api_url'], settings['provider']))
+            return {'data': [{'id': 'erais-native-qwen3'}]}
+
+        with patch.object(client, '_get', side_effect=catalogue):
+            page.get_by_role('button', name='Load available models', exact=True).click()
+            available = page.get_by_label('Available model', exact=True)
+            expect(available).to_be_visible()
+            expect(available).to_have_value('')
+        assert observed == [('/models', client.BASE_URL, 'openai-compatible')]
+        expect(model).to_have_value('erais-native-qwen3')
+        expect(maximum).to_have_value('16')
+        assert preferences.path.read_bytes() == original
+        assert preferences.snapshot()['model'] == 'erais-native-qwen3'
+        assert preferences.snapshot()['max_tokens'] == 16
+        self.screenshot(page, 'native-catalogue-16', full_page=False)
+
     def open_template(self, page):
         self.goto(page, 'explore')
         page.get_by_label('Tool', exact=True).select_option('templates')
@@ -696,6 +729,7 @@ def main(argv=None):
                 checks.check('research-evidence-roundtrip', checks.research)
                 checks.check('meeting-statistics', checks.meeting_stats)
                 checks.check('settings-validity', checks.settings)
+                checks.check('native-catalogue-16', lambda page: checks.native_catalogue(page, server.app.preferences))
                 # Later synthetic long-template journeys explicitly use the legacy
                 # profile; native discovery/admission has its own gateway suite.
                 server.app.preferences.update({'model': client.MODEL, 'max_tokens': 2048})

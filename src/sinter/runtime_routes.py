@@ -209,7 +209,7 @@ class RouteDispatch:
                 )
             )
         elif path == "/api/models":
-            candidate = self.app.preferences.preview_connection(
+            candidate = self.app.preferences.preview_destination(
                 body.get("settings"),
                 confirm_endpoint=body.get("confirm_endpoint") is True,
                 api_key=body.get("api_key"),

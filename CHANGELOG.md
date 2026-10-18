@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Load model catalogues independently of answer limits, including native caps
+  below 32 tokens. Preserve saved selections, destination approval and session-key
+  isolation; a catalogue lookup neither saves settings nor generates an answer.
+
 - Declare the browser assets as JavaScript modules for Node-based regressions,
   avoiding the unsupported experimental flag found on the Mac runners.
 

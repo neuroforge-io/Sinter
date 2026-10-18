@@ -278,7 +278,9 @@ def test_candidate_catalogue_can_leave_an_unavailable_selected_account(
     observed = []
 
     def models():
-        observed.append(client.connection_identity())
+        settings = client._CONNECTION.get()
+        assert "model" not in settings and "max_tokens" not in settings
+        observed.append({name: settings[name] for name in ("api_url", "provider")})
         return [{"id": "fictional-candidate-model"}]
 
     with (

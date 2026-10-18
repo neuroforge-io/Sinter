@@ -247,7 +247,7 @@ export async function settingsPage() {
     loadModels.disabled = true;
     catalogueState.replaceChildren(notice('Loading the model catalogue. This does not generate an answer or save this connection.'));
     try {
-      const result = await request('/api/models', {data: {settings: {...draftConnection(), model: 'probe-placeholder'},
+      const result = await request('/api/models', {data: {settings: {provider, api_url: url.input.value},
         confirm_endpoint: destination.input.checked, ...(keyEdited ? {api_key: key.input.value} : {})}});
       const ids = availableModelIds(result);
       if (!ids.length) throw new Error('No compatible model identifiers were returned. You can still enter the exact identifier supplied by your provider.');

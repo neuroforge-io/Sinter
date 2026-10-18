@@ -186,3 +186,20 @@ test('adding another account is an explicit new registration action', async t =>
   assert.deepEqual(f.calls.find(call => call.path === '/api/account/connect').data, {});
   assert.equal(action(page, 'Add another ChatGPT account').disabled, true);
 });
+
+test('native 16-token catalogue keeps the saved model and output cap', async t => {
+  const f = fixture(t, {model: 'erais-native-qwen3', max_tokens: 16});
+  const page = await settingsPage();
+  await action(page, 'Load available models').dispatch('click');
+  const lookup = f.calls.find(call => call.path === '/api/models');
+  assert.deepEqual(lookup.data.settings, {
+    provider: 'openai-compatible', api_url: 'https://neuroforge.io/v1'
+  });
+  assert.equal(field(page, 'Model identifier').value, 'erais-native-qwen3');
+  assert.equal(Number(field(page, 'Maximum answer length').value), 16);
+  assert.equal(field(page, 'Available model').value, '');
+  assert.equal(f.settings.model, 'erais-native-qwen3');
+  assert.equal(f.settings.max_tokens, 16);
+  assert.equal(f.calls.filter(call => call.path === '/api/settings' && call.data).length, 0);
+  assert.equal(f.calls.some(call => call.path === '/api/chat'), false);
+});

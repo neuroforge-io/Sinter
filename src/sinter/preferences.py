@@ -33,12 +33,47 @@ PROVIDERS = frozenset({'openai-compatible', 'anthropic', 'chatgpt'})
 MAX_PREFERENCES_BYTES = 65536
 
 
+def _validate_destination(api_url, provider) -> dict:
+    """Validate only the address and API style needed for catalogue discovery."""
+    if (not isinstance(api_url, str) or len(api_url) > 1024
+            or any(ord(char) < 32 for char in api_url)):
+        raise ValueError('Please use ordinary text for api url.')
+    if not isinstance(provider, str) or provider not in PROVIDERS:
+        raise ValueError('Choose one of the offered model connection types.')
+    url = api_url.strip().rstrip('/')
+    if not safe_url(url):
+        raise ValueError('Enter a valid HTTPS API address without credentials.')
+    parsed = urlsplit(url)
+    if parsed.query or parsed.fragment or (parsed.scheme != 'https' and parsed.hostname not in {'127.0.0.1', 'localhost', '::1'}):
+        raise ValueError('Remote APIs require HTTPS. Queries and fragments are not allowed.')
+    if provider == 'chatgpt' and not same_api_destination(
+            url, 'https://api.openai.com/v1'):
+        raise ValueError('ChatGPT account access uses the official OpenAI API address.')
+    if uses_neuroforge_api(url) and provider != 'openai-compatible':
+        raise ValueError('Use the NeuroForge connection type for the NeuroForge API.')
+    return {'api_url': url, 'provider': provider}
+
+
+def _validate_api_key(api_key) -> None:
+    if api_key is not None and (
+            not isinstance(api_key, str) or len(api_key) > 4096
+            or any(ord(char) < 33 or ord(char) > 126 for char in api_key)):
+        raise ValueError('The API key contains invalid characters.')
+
+
+def _validate_preview_fields(values, api_key) -> None:
+    if not isinstance(values, dict) or set(values) - {
+            'api_url', 'provider', 'model', 'max_tokens'}:
+        raise ValueError('Provide only the model connection fields.')
+    _validate_api_key(api_key)
+
+
 def validate(values: dict) -> dict:
     if not isinstance(values, dict) or set(values) - set(DEFAULTS):
         raise ValueError('Unrecognised settings. Reload the settings page.')
     result = {**DEFAULTS, **values}
     result.update(validate_profile(result))
-    for key in ('api_url', 'model', 'rkc_executable'):
+    for key in ('model', 'rkc_executable'):
         value = result[key]
         if not isinstance(value, str) or len(value) > 1024 or any(ord(c) < 32 for c in value):
             raise ValueError(f'Please use ordinary text for {key.replace("_", " ")}.')
@@ -49,26 +84,15 @@ def validate(values: dict) -> dict:
             raise ValueError('Choose one of the offered appearance settings.')
     if type(result['reduce_motion']) is not bool or type(result['schema_version']) is not int or result['schema_version'] != 1:
         raise ValueError('Unsupported settings version or motion preference.')
-    if not isinstance(result['provider'], str) or result['provider'] not in PROVIDERS:
-        raise ValueError('Choose one of the offered model connection types.')
+    result.update(_validate_destination(result['api_url'], result['provider']))
     if type(result['rkc_port']) is not int or not 1024 <= result['rkc_port'] <= 65535:
         raise ValueError('Choose an RKC port from 1024 to 65535.')
-    url = result['api_url'].rstrip('/')
-    if not safe_url(url):
-        raise ValueError('Enter a valid HTTPS API address without credentials.')
-    parsed = urlsplit(url)
-    if parsed.query or parsed.fragment or (parsed.scheme != 'https' and parsed.hostname not in {'127.0.0.1', 'localhost', '::1'}):
-        raise ValueError('Remote APIs require HTTPS. Queries and fragments are not allowed.')
+    url = result['api_url']
     if not result['model'] or not re.fullmatch(r'[A-Za-z0-9_./:@+-]{1,200}', result['model']):
         raise ValueError('Enter the model identifier supplied by your provider.')
     result['api_url'] = url
     native = native_profile_applies(result['model'], url, result['provider'])
     validate_max_tokens(result['max_tokens'], model=NATIVE_MODEL if native else None)
-    if result['provider'] == 'chatgpt' and not same_api_destination(
-            url, 'https://api.openai.com/v1'):
-        raise ValueError('ChatGPT account access uses the official OpenAI API address.')
-    if uses_neuroforge_api(url) and result['provider'] != 'openai-compatible':
-        raise ValueError('Use the NeuroForge connection type for the NeuroForge API.')
     if uses_neuroforge_api(url) and result['max_tokens'] > PUBLIC_MAX_OUTPUT_TOKENS:
         raise ValueError('The public NeuroForge API supports at most 2,048 output tokens per step. Choose 2,048 or less.')
     return result
@@ -114,37 +138,47 @@ class Preferences:
         return {'settings': self.snapshot(), 'has_session_key': bool(self._key), 'warning': self.warning,
                 'environment_override': bool(os.environ.get('NEUROFORGE_BASE_URL') or os.environ.get('NEUROFORGE_MODEL'))}
 
+    def _preview_credentials(self, candidate: dict, *,
+                             confirm_endpoint, api_key) -> dict:
+        """Bind credentials while the caller holds the preferences lock."""
+        same = (same_api_destination(candidate['api_url'], self._values['api_url'])
+                and candidate['provider'] == self._values['provider'])
+        if not same and confirm_endpoint is not True:
+            raise ValueError('Confirm the API destination before checking it.')
+        return {
+            **candidate,
+            'api_key': api_key if api_key is not None else self._key if same else '',
+            'inherit_key': uses_neuroforge_api(candidate['api_url']),
+        }
+
     def preview_connection(self, values: dict, *, confirm_endpoint=False,
                            api_key=None) -> dict:
-        """Validate an unsaved catalog check without retaining its credential."""
-        if not isinstance(values, dict) or set(values) - {
-                'api_url', 'provider', 'model', 'max_tokens'}:
-            raise ValueError('Provide only the model connection fields.')
-        if api_key is not None and (
-                not isinstance(api_key, str) or len(api_key) > 4096
-                or any(ord(c) < 33 or ord(c) > 126 for c in api_key)):
-            raise ValueError('The API key contains invalid characters.')
+        """Validate full unsaved connection settings without retaining a key."""
+        _validate_preview_fields(values, api_key)
         with self.lock:
-            candidate = validate({**self._values, **values})
-            same = (same_api_destination(candidate['api_url'],
-                                         self._values['api_url'])
-                    and candidate['provider'] == self._values['provider'])
-            if not same and confirm_endpoint is not True:
-                raise ValueError('Confirm the API destination before checking it.')
-            return {
-                **{name: candidate[name] for name in
-                   ('api_url', 'provider', 'model', 'max_tokens')},
-                'api_key': api_key if api_key is not None else
-                self._key if same else '',
-                'inherit_key': uses_neuroforge_api(candidate['api_url']),
-            }
+            validated = validate({**self._values, **values})
+            candidate = {name: validated[name] for name in
+                         ('api_url', 'provider', 'model', 'max_tokens')}
+            return self._preview_credentials(
+                candidate, confirm_endpoint=confirm_endpoint, api_key=api_key)
+
+    def preview_destination(self, values: dict, *, confirm_endpoint=False,
+                            api_key=None) -> dict:
+        """Admit a catalogue destination independently of generation settings."""
+        _validate_preview_fields(values, api_key)
+        with self.lock:
+            # Older callers may include model/cap; catalogue lookup neither uses
+            # nor changes them. Full saves and generation remain model-aware.
+            candidate = _validate_destination(
+                values.get('api_url', self._values['api_url']),
+                values.get('provider', self._values['provider']))
+            return self._preview_credentials(
+                candidate, confirm_endpoint=confirm_endpoint, api_key=api_key)
 
     def update(self, values: dict, *, confirm_endpoint=False, api_key=None) -> dict:
         if not isinstance(values, dict) or set(values) - set(DEFAULTS):
             raise ValueError('Unrecognised settings. Reload the settings page.')
-        if api_key is not None and (not isinstance(api_key, str) or len(api_key) > 4096 or
-                                    any(ord(c) < 33 or ord(c) > 126 for c in api_key)):
-            raise ValueError('The API key contains invalid characters.')
+        _validate_api_key(api_key)
         with self.lock:
             # Partial saves (for example, a theme toggle) preserve the saved profile.
             # An explicit empty string clears just that profile field.
