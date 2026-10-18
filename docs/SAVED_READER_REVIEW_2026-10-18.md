@@ -53,3 +53,10 @@ submitted version from later edits. Earlier uncertain saves remain visible.
 Use the fictional garden bundle in `examples/offline-garden`. Original evidence,
 unknown versus unassigned owners, unconfirmed dates and historical source wording
 remain intact; this pass does not infer structured responsibility from old prose.
+
+Fresh CI on `0dc4221` passed all three WASM browser jobs but exposed
+two obsolete control locations in the deliverable journey. The follow-up
+updates the three affected browser tools to reopen More before exact hidden
+actions. Clipboard, recipient-privacy, pending-input, download and source
+evidence assertions remain intact. This test-driver correction does not
+change the product or establish an installed-app pass; fresh CI is required.

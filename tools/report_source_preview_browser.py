@@ -316,7 +316,10 @@ class PreviewChecks(PurposeChecks):
         reopened = self.evidence_export(page, "followup-reopened")
         assert reopened == prepared
         page.context.grant_permissions(["clipboard-read", "clipboard-write"], origin=self.base)
-        page.get_by_role("button", name="Copy draft text", exact=True).click()
+        copy_draft = page.get_by_role("button", name="Copy draft text", exact=True)
+        if not copy_draft.is_visible():
+            page.get_by_role("region", name="Your draft report", exact=True).locator(".export-menu > summary").click()
+        copy_draft.click()
         expect(page.get_by_text("Copied. Ready to paste into your email or document.", exact=True)).to_be_visible()
         copied = page.evaluate("navigator.clipboard.readText()")
         assert opening in copied and "Human correction:" in copied and "PRIVATE_FOLLOWUP_NOTE_SENTINEL" not in copied

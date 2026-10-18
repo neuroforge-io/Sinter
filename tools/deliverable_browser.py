@@ -134,7 +134,10 @@ class DeliverableChecks:
         return json.loads(content)
 
     def copy(self, page, *, incomplete=False):
-        page.get_by_role('button', name='Copy draft text', exact=True).click()
+        target = page.get_by_role('button', name='Copy draft text', exact=True)
+        if not target.is_visible():
+            self.options(page)
+        target.click()
         confirmation = ('Incomplete draft copied. Review the partial text before using it.'
                         if incomplete else 'Copied. Ready to paste into your email or document.')
         page.get_by_text(confirmation, exact=True).wait_for()
@@ -387,6 +390,7 @@ class DeliverableChecks:
         assert all(value not in word_text for value in excluded), word_text
         assert all(line in word_text for line in opening.splitlines())
         self.screenshot(page, 'recipient-only-letter-reopened', full_page=True)
+        self.options(page)
         page.get_by_role('button', name='Edit project inputs', exact=True).click()
         expect(page.get_by_label('Internal notes and evidence context', exact=True)).to_have_value(notes)
         expect(page.get_by_label('Opening paragraph for the recipient', exact=True)).to_have_value(opening)

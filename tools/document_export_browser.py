@@ -157,9 +157,10 @@ def main(argv: list[str] | None = None) -> None:
         before = (len(downloads), len(word_requests))
         print_before = page.evaluate("window.fictionalPrintCalls")
         for name in controls:
-            if name not in controls[:2]:
+            target = report.get_by_role("button", name=name, exact=True)
+            if not target.is_visible():
                 open_options(report)
-            report.get_by_role("button", name=name, exact=True).click()
+            target.click()
             expect(
                 report.locator(".document-feedback").get_by_role("alert")
             ).to_contain_text("Apply or cancel")
@@ -623,6 +624,7 @@ def main(argv: list[str] | None = None) -> None:
                         ).read_text()
                         assert "Exact 🐝 é wording." in html
                         assert unchanged not in html
+                        open_options(report)
                         report.get_by_role(
                             "button", name=controls[0], exact=True
                         ).click()
