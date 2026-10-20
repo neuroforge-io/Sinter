@@ -13,6 +13,7 @@ import unicodedata
 import zipfile
 from copy import deepcopy
 from dataclasses import dataclass, replace
+from datetime import date
 from xml.etree import ElementTree as ET
 
 from .document_markup import Block, PageBreak, Paragraph, Span, Table, parse
@@ -61,6 +62,11 @@ _HANDOVER_SUMMARY_HEADERS = (
     "Evidence",
 )
 _HANDOVER_SUMMARY_WIDTHS = (1560, 4200, 2280, 1320)
+_HANDOVER_MISSING_EVIDENCE = "Missing supporting record; answer remains unknown"
+_HANDOVER_ACTION_FIELDS = (
+    "Next step — proposed", "Evidence", "Recorded status — user-entered",
+    "Wording period", "Responsibility", "Timing",
+)
 _HANDOVER_SUBTITLE = "Source-only handover checklist — review before using."
 _HANDOVER_CHECKLIST_INTRO = (
     "Review each question against its related wording, then record the confirmed "
@@ -407,12 +413,32 @@ def _handover_summary_presentation(
     ):
         return refused
     section = normalized[coverage[1].end() : checklist[1].start()].strip("\n")
+    table = blocks[table_at]
+    items = tuple(("".join(span.text for span in row[0]), row[3])
+                  for row in table.rows[1:])
+    return _handover_summary_quotes(
+        section, blocks[coverage[0] + 1 : checklist[0]], items,
+        coverage[0] + 1, checklist[0],
+    )
+
+
+def _handover_summary_quotes(
+    section: str,
+    selected: tuple[Block, ...],
+    items: tuple[tuple[str, tuple[Span, ...]], ...],
+    first: int,
+    after: int,
+    *,
+    require_all: bool = False,
+) -> tuple[bool, frozenset[int], frozenset[int]]:
+    """Shared literal caption/quotation binding; this does not verify facts."""
+    refused = False, frozenset(), frozenset()
+    supported = {index + 1 for index, (_, spans) in enumerate(items)
+                 if spans != (Span(_HANDOVER_MISSING_EVIDENCE),)}
     if not section:
-        return True, frozenset(), frozenset()
+        return refused if require_all and supported else (True, frozenset(), frozenset())
     heading = "### Wording selected for this summary"
     raw = [part for part in section.split("\n\n") if part]
-    selected = blocks[coverage[0] + 1 : checklist[0]]
-    table = blocks[table_at]
     if (
         raw[0] != heading
         or len(raw) < 3
@@ -421,11 +447,11 @@ def _handover_summary_presentation(
         or parse(section) != selected
         or selected[0]
         != Paragraph((Span("Wording selected for this summary"),), heading=3)
-        or len(table.rows) > 13
+        or len(items) > 12
     ):
         return refused
     quotes, keep, previous = set(), set(), 0
-    first = coverage[0] + 1
+    seen = set()
     for offset in range(1, len(raw), 2):
         caption = re.fullmatch(
             r"\*\*Summary item ([1-9][0-9]*): (.+)\*\* — (Passage [1-9][0-9]*)",
@@ -434,16 +460,22 @@ def _handover_summary_presentation(
         if caption is None or len(caption[1]) > 2:
             return refused
         number = int(caption[1])
-        if not previous < number < len(table.rows):
+        if not previous < number <= len(items):
             return refused
         previous = number
-        item = "".join(span.text for span in table.rows[number][0])
-        if selected[offset] != Paragraph(
-            (
-                Span(f"Summary item {number}: {item}", bold=True),
-                Span(" — " + caption[3]),
+        item, evidence = items[number - 1]
+        seen.add(number)
+        expected = Paragraph(
+            (Span(f"Summary item {number}: {item}", bold=True), Span(" — " + caption[3]))
+        )
+        if require_all:
+            literal_caption = (
+                f"**Summary item {number}: {_opening_literal(item)}** — " + caption[3]
             )
-        ) or table.rows[number][3] != (Span(caption[3]),):
+            if raw[offset] != literal_caption:
+                return refused
+            expected = parse(literal_caption)[0]
+        if selected[offset] != expected or evidence != (Span(caption[3]),):
             return refused
         lines = raw[offset + 1].split("\n")
         fence = re.fullmatch(r"> (`{3,})text", lines[0])
@@ -455,6 +487,8 @@ def _handover_summary_presentation(
         ):
             return refused
         wording = "\n".join(line[2:] for line in lines[1:-1])
+        if require_all and not wording:
+            return refused
         longest = max((len(run) for run in re.findall(r"`+", wording)), default=0)
         if len(fence[1]) != max(3, longest + 1) or selected[offset + 1] != Paragraph(
             (Span(wording, code=True),), quote=True, code=True
@@ -463,12 +497,155 @@ def _handover_summary_presentation(
         quotes.add(first + offset + 1)
         if _short_summary_quote_group(selected[offset : offset + 2]):
             keep.add(first + offset)
+    if require_all and seen != supported:
+        return refused
     if len(quotes) <= _MAX_SUMMARY_QUOTE_GROUP_COUNT and _short_summary_quote_group(
         selected
     ):
         # End on the last quotation, never on the original checklist or evidence.
-        keep.update(range(first, checklist[0] - 1))
+        keep.update(range(first, after - 1))
     return True, frozenset(quotes), frozenset(keep)
+
+
+
+
+@dataclass(frozen=True)
+class _HandoverActionPresentation:
+    qualified: bool = False
+    quotes: frozenset[int] = frozenset()
+    keep: frozenset[int] = frozenset()
+    evidence: tuple[tuple[int, str], ...] = ()
+    fields: tuple[tuple[int, Paragraph], ...] = ()
+
+
+def _opening_literal(value: str) -> str:
+    escaped = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return re.sub(r"[\\\x60*_{}\[\]#!|]", lambda match: "\\" + match[0], escaped)
+
+
+def _opening_value(encoded: str, limit: int = 1000) -> str | None:
+    value = re.sub(r"\\([\\\x60*_{}\[\]#!|])", r"\1", encoded)
+    value = value.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+    if (not value.replace('\ufeff', '').strip() or re.search(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]", value)
+            or any(0xD800 <= ord(char) <= 0xDFFF for char in value)
+            or len(value.encode("utf-16-le")) // 2 > limit
+            or _opening_literal(value) != encoded):
+        return None
+    return value
+
+
+def _opening_heading(
+    markdown: str, blocks: tuple[Block, ...], label: str
+) -> tuple[int, re.Match[str]] | None:
+    """Find the actual top-level block, never a heading inside quoted/code text."""
+    expected = Paragraph((Span(label),), heading=2)
+    indexes = [index for index, block in enumerate(blocks) if block == expected]
+    if len(indexes) != 1:
+        return None
+    index = indexes[0]
+    for attempt, match in enumerate(
+        re.finditer(r"(?m)^## " + re.escape(label) + "$", markdown)
+    ):
+        if attempt >= 64:
+            return None
+        if parse(markdown[:match.end()]) == blocks[:index + 1]:
+            return index, match
+    return None
+
+
+def _handover_action_sections(
+    markdown: str, blocks: tuple[Block, ...]
+) -> _HandoverActionPresentation:
+    """Independently admit the complete new editable syntax before styling it."""
+    refused = _HandoverActionPresentation()
+    normalized = markdown.replace("\r\n", "\n").replace("\r", "\n")
+    if (len(blocks) < 2 or not normalized.startswith("# ")
+            or not isinstance(blocks[0], Paragraph)
+            or blocks[0].heading != 1 or blocks[0].quote or blocks[0].code
+            or blocks[0].list_id or blocks[1] != Paragraph((Span(_HANDOVER_SUBTITLE),))):
+        return refused
+    opening = _opening_heading(normalized, blocks, _HANDOVER_SUMMARY_HEADING)
+    checklist = _opening_heading(normalized, blocks, "Handover next steps")
+    if (opening is None or checklist is None or checklist[0] <= opening[0]
+            or checklist[0] + 1 >= len(blocks)
+            or blocks[checklist[0] + 1] != Paragraph((Span(_HANDOVER_CHECKLIST_INTRO),))):
+        return refused
+    raw = normalized[opening[1].start():checklist[1].start()].rstrip("\n")
+    parts = raw.split("\n\n")
+    selected = blocks[opening[0]:checklist[0]]
+    if (len(parts) < 10 or parts[:2] != ["## At a glance", _HANDOVER_SUMMARY_INTRO]
+            or len(parts) != len(selected) or parse(raw) != selected):
+        return refused
+    at = 2
+    if parts[at] == _HANDOVER_SUMMARY_STALE:
+        at += 1
+    items, fields, evidence, keep = [], [], [], set()
+    while at < len(parts) and parts[at].startswith("### Summary item "):
+        number = len(items) + 1
+        prefix = f"### Summary item {number}: "
+        if number > 12 or not parts[at].startswith(prefix):
+            return refused
+        item = _opening_value(parts[at][len(prefix):])
+        if item is None:
+            return refused
+        first = opening[0] + at
+        at += 1
+        values = []
+        for index, label in enumerate(_HANDOVER_ACTION_FIELDS):
+            prefix = f"**{label}:** "
+            if at >= len(parts) or not parts[at].startswith(prefix):
+                return refused
+            value = _opening_value(parts[at][len(prefix):], 1160 if index == 4 else 1000)
+            if value is None:
+                return refused
+            values.append(value)
+            fields.append((opening[0] + at,
+                           Paragraph((Span(label + ":", bold=True), Span(" " + value)))))
+            at += 1
+        if (not re.fullmatch(r"Passage [1-9][0-9]*", values[1])
+                and values[1] != _HANDOVER_MISSING_EVIDENCE):
+            return refused
+        if values[3] not in ("As recorded", "Historical wording"):
+            return refused
+        if values[4] not in ("Owner type unknown; acceptance unconfirmed",
+                             "Unassigned; no owner has been recorded"):
+            owner = re.fullmatch(
+                r"Named person: (.+); (?:acceptance unconfirmed|acceptance marked "
+                r"by the user \(not independently verified\))", values[4]
+            ) or re.fullmatch(r"Suggested role: (.+); acceptance unconfirmed", values[4])
+            if (owner is None or not owner[1].replace('\ufeff', '').strip()
+                    or len(owner[1].encode("utf-16-le")) // 2 > 1000):
+                return refused
+        if values[5] != "Proposed target not supplied":
+            target = re.fullmatch(
+                r"Proposed target (\d{4}-\d{2}-\d{2}) "
+                r"\(unconfirmed; not a funder deadline\)", values[5]
+            )
+            if target is None:
+                return refused
+            try:
+                if date.fromisoformat(target[1]).isoformat() != target[1]:
+                    return refused
+            except ValueError:
+                return refused
+        items.append((item, (Span(values[1]),)))
+        if values[1] != _HANDOVER_MISSING_EVIDENCE:
+            evidence.append((first + 2, values[1]))
+        group = (blocks[first], fields[-6][1], fields[-5][1])
+        if _short_summary_quote_group(group):
+            keep.update((first, first + 1))
+    if not items or at >= len(parts) or parts[at] != _HANDOVER_SUMMARY_COVERAGE:
+        return refused
+    at += 1
+    qualified, quotes, quote_keep = _handover_summary_quotes(
+        "\n\n".join(parts[at:]), blocks[opening[0] + at:checklist[0]],
+        tuple(items), opening[0] + at, checklist[0], require_all=True,
+    )
+    if not qualified:
+        return refused
+    return _HandoverActionPresentation(
+        True, quotes, frozenset(keep) | quote_keep, tuple(evidence), tuple(fields)
+    )
 
 
 def _reference_key_spacing(markdown: str, blocks: tuple[Block, ...]) -> frozenset[int]:
@@ -576,7 +753,8 @@ def _reference_key_spacing(markdown: str, blocks: tuple[Block, ...]) -> frozense
 
 
 def _passage_navigation(
-    markdown: str, blocks: tuple[Block, ...], references: frozenset[int]
+    markdown: str, blocks: tuple[Block, ...], references: frozenset[int],
+    summary_evidence: tuple[tuple[int, str], ...] = (),
 ) -> tuple[dict[int, str], dict[int, tuple[tuple[int, int, str], ...]]]:
     """Link admitted literal labels, never infer or verify source identities.
 
@@ -688,6 +866,11 @@ def _passage_navigation(
             links[index] = tuple(
                 (match.start(), match.end(), destinations[match[0]]) for match in labels
             )
+    for index, label in summary_evidence:
+        expected = Paragraph((Span("Evidence:", bold=True), Span(" " + label)))
+        if label in destinations and blocks[index] == expected:
+            start = len("Evidence: ")
+            links[index] = ((start, start + len(label), destinations[label]),)
     return bookmarks, links
 
 
@@ -1078,12 +1261,22 @@ def export_docx(payload: object) -> WordDocument:
     qualified, summary_quotes, summary_keep = _handover_summary_presentation(
         markdown, blocks, summary_widths
     )
+    action_summary = _handover_action_sections(markdown, blocks)
+    if action_summary.qualified:
+        qualified = True
+        summary_quotes = action_summary.quotes
+        summary_keep = action_summary.keep
     source_keep, source_tables = _source_table_groups(markdown, blocks)
     keep_next = _source_note_keep_next(blocks) | summary_keep | source_keep
     compact_references = _reference_key_spacing(markdown, blocks)
     bookmarks, internal_links = _passage_navigation(
-        markdown, blocks, compact_references
+        markdown, blocks, compact_references, action_summary.evidence
     )
+    if action_summary.qualified:
+        # Admission used the original parsed blocks. Restore field spacing only
+        # for serialization, with every admitted block index kept unchanged.
+        replacements = dict(action_summary.fields)
+        blocks = tuple(replacements.get(index, block) for index, block in enumerate(blocks))
     for index, block in enumerate(blocks):
         if isinstance(block, PageBreak):
             package.page_break()

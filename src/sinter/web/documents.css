@@ -179,3 +179,22 @@
   .report-reader-heading .document-toolbar .button{font-size:.77rem;padding:8px}
   .report-reader-heading .export-menu>summary{justify-content:center;min-height:44px}
 }
+
+/* New handover items follow the same order in the DOM, on screen and in print. */
+.handover-action-items{min-width:0}
+.document .handover-action-item{min-width:0;margin:16px 0 22px;padding:14px 0 0;border-top:1px solid var(--line)}
+.document .handover-action-item>h3{font-size:1rem;line-height:1.45;margin:0 0 10px;white-space:pre-wrap;overflow-wrap:anywhere}
+.document .handover-action-item>p{font-size:inherit;line-height:1.55;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.document .handover-action-item>.handover-action-evidence{margin:6px 0 14px}
+.handover-action-item .button.citation-link{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:4px 8px;border:1px solid var(--line);border-radius:6px}
+@media screen{
+  .handover-reading-opening.handover-action-opening{display:block}
+  .handover-action-opening>.handover-context-toggle,.handover-action-opening>.handover-context-content{order:initial}
+  .handover-action-opening>.handover-context-toggle{min-height:44px;margin:0 0 8px}
+}
+@media print{
+  .document .handover-action-item{border-color:#bbb}
+  .document .handover-action-item>h3,.document .handover-action-item>.handover-action-proposal{break-after:avoid}
+  .document .handover-action-item>.handover-action-evidence{break-after:auto}
+  .handover-action-opening>.handover-context-content{padding:0 0 12pt}
+}

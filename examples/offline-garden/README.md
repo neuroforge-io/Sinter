@@ -105,9 +105,11 @@ Choose **Preview opening summary** and read the selected wording. **Apply
 reviewed opening summary** asks before replacing an already edited draft;
 Cancel keeps it. Then choose **Save to My workspace**. The saved document keeps
 the original checklist, sources, citations and review state. Unapplied rows are
-session-only work, not a separately saved form. On a phone, the opening is shown
-as labelled cards; wider screens and Word exports retain a table.
-The five-item Word opening can span two pages and remains a formatting limit.
+session-only work, not a separately saved form. New openings use ordinary item
+headings and labelled paragraphs in the app, Markdown and Word. Proposed next
+steps and evidence come before longer status, responsibility and unconfirmed
+timing. Earlier saved table openings retain their original format. Long items
+can span pages; fresh installed Word pagination qualification remains open.
 
 ## Operate the action and funding review
 

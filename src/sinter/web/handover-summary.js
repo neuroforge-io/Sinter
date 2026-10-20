@@ -1,10 +1,15 @@
 /** Recipient-first, user-reviewed wording; never an inferred answer or commitment. */
 import {h, button, field, selectField, check, notice, markdown} from './ui.js';
 import {confirmAction} from './confirm-action.js';
+import {createMarkdownIndex} from './markdown.js';
 import {trackReportForm, reportFormDraft, clearReportForm} from './report-drafts.js';
 import {retainedQuestionContext} from './casebook-retained-context.js';
 import {casebookQuestionEvidence} from './casebook-question-evidence.js';
 import {reportCitationIndex, reportCitationMatcher} from './report-citations.js';
+
+import {OPENING_INTRO, OPENING_STALE, OPENING_COVERAGE, MISSING_EVIDENCE,
+  OPENING_FIELDS, openingLiteral as literal, openingQuote as quoted,
+  formatOpeningItem, parseHandoverOpening} from './handover-opening-format.js';
 
 const MAX_ROWS = 12;
 const FORM = 'handover-summary';
@@ -19,9 +24,6 @@ const OWNER_LABELS = {
 };
 const PERIODS = new Set(['as_recorded', 'historical']);
 const snapshot = report => JSON.stringify(report);
-const literal = value => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;').replace(/[\\`*_{}\[\]#!|]/g, '\\$&');
-
 export function handoverSummaryAvailable(report) {
   const original = report?.document_markdown;
   return report?.document_type === 'handover' && casebookQuestionEvidence(report) !== null
@@ -82,12 +84,6 @@ export async function handoverSummaryQuote(report, evidence) {
     start: evidence.start, end: evidence.end, quote: evidence.quote});
 }
 
-function quoted(value) {
-  const longest = Math.max(0, ...(value.match(/`+/g) || []).map(run => run.length));
-  const fence = '`'.repeat(Math.max(3, longest + 1));
-  return `> ${fence}text\n> ${value.replace(/\r\n|[\r\n\v\f\x85\u2028\u2029]/g, '\n').replaceAll('\n', '\n> ')}\n> ${fence}`;
-}
-
 /** Return a detached edit; all original report evidence and review state stay intact. */
 export async function compileHandoverSummary(report, rows) {
   if (!handoverSummaryAvailable(report)) throw new Error('Use a complete source-only handover with its original checklist and retained references.');
@@ -102,18 +98,17 @@ export async function compileHandoverSummary(report, rows) {
     const responsibility = owner(row, references), date = target(row.targetDate);
     const evidence = row.evidence === null ? null : await handoverSummaryQuote(original, row.evidence);
     if (evidence) quotations.push({item, position: entries.length + 1, ...evidence});
-    const state = `${row.period === 'historical' ? 'Historical wording' : 'As recorded'}: ${status} · ${responsibility} · ${date}`;
-    entries.push(`| ${literal(item)} | ${literal(state)} | ${literal(action)} | ${evidence ? evidence.label : 'Missing supporting record; answer remains unknown'} |`);
+    entries.push(formatOpeningItem({number: entries.length + 1, item, action, status,
+      evidence: evidence ? evidence.label : MISSING_EVIDENCE,
+      period: row.period === 'historical' ? 'Historical wording' : 'As recorded',
+      responsibility, timing: date}));
   }
-  const lines = ['## At a glance',
-    'Statuses and next steps below are user-entered for review. Next steps are proposals, not accepted commitments. A retained quotation establishes supplied wording, not independent verification.',
-    ...(original.review_status === 'stale' ? ['**Review status: stale.** Review this saved record again before current use. Original evidence and historical wording remain unchanged; no current source was substituted.'] : []),
-    ['| Item | Recorded status — user-entered | Next step — proposed | Evidence |',
-      '| --- | --- | --- | --- |', ...entries].join('\n'),
-    '**Evidence coverage:** this opening uses selected wording from this saved report. The unchanged checklist and selected evidence follow. This is not full supplied history; request the matching original project backup for unselected text. Later project or campaign changes are not included.'];
+  const lines = ['## At a glance', OPENING_INTRO,
+    ...(original.review_status === 'stale' ? [OPENING_STALE] : []),
+    ...entries, OPENING_COVERAGE];
   if (quotations.length) {
-    lines.push('', '### Wording selected for this summary');
-    quotations.forEach(row => lines.push('', `**Summary item ${row.position}: ${literal(row.item)}** — ${row.label}`, quoted(row.quote)));
+    lines.push('### Wording selected for this summary');
+    quotations.forEach(row => lines.push(`**Summary item ${row.position}: ${literal(row.item)}** — ${row.label}`, quoted(row.quote)));
   }
   const base = original.document_markdown, at = base.indexOf(MARKER);
   const composed = base.slice(0, at) + lines.join('\n\n') + '\n\n' + base.slice(at);
@@ -131,6 +126,117 @@ export async function applyHandoverSummary(report, compiled, {currentMarkdown, c
   }
   apply(compiled.markdown);
   return true;
+}
+
+function condenseHandoverCover(article, heading, section, {report, currentMarkdown} = {}, natural = false) {
+  const children = [...article.children];
+  const prefix = report?.document_markdown?.split(MARKER)[0];
+  const preamble = children.slice(0, children.indexOf(heading));
+  const cover = [report?.document_title || report?.title,
+    'Source-only handover checklist — review before using.'];
+  const details = report?.document_details;
+  let knownCover = details && typeof details === 'object' && !Array.isArray(details);
+  for (const [key, label] of [['recipient', 'Prepared for: '], ['signatory', 'Prepared by: '],
+    ['sender_role', 'Role: '], ['organisation', ''], ['contact_details', 'Contact details: ']]) {
+    const value = details?.[key];
+    if (typeof value !== 'string' || /[\r\n\v\f\x85\u2028\u2029]/u.test(value)) knownCover = false;
+    else if (value) cover.push(label + value);
+  }
+  // Only the exact retained generated cover is condensed. A user's added or
+  // changed preamble, extra warning, quote, heading or source table stays visible.
+  if (handoverSummaryAvailable(report) && !report.demo
+      && knownCover && preamble.length === cover.length
+      && preamble.every((node, index) => node.textContent === cover[index])
+      && typeof prefix === 'string' && typeof currentMarkdown === 'string'
+      && currentMarkdown.startsWith(prefix + '## At a glance\n')
+      && preamble[0].tagName === 'H1'
+      && preamble[1].tagName === 'P'
+      && preamble.slice(1).every(node => node.tagName === 'P')) {
+    const id = `handover-context-${++contextSequence}`;
+    const context = h('div', {id, class: 'handover-context-content', hidden: true,
+      role: 'region', 'aria-label': 'Audience and document context'});
+    const toggle = button('Audience and document context', () => {
+      context.hidden = !context.hidden;
+      toggle.setAttribute('aria-expanded', String(!context.hidden));
+    }, 'quiet handover-context-toggle non-print');
+    toggle.setAttribute('aria-controls', id); toggle.setAttribute('aria-expanded', 'false');
+    const opening = h('section', {class: natural ? 'handover-reading-opening handover-action-opening'
+      : 'handover-reading-opening', 'aria-label': 'Reviewed handover opening'});
+    article.insertBefore(opening, preamble[0]);
+    for (const node of preamble) { node.remove(); context.append(node); }
+    const sourceLabel = h('p', {class: 'handover-source-label non-print'},
+      'Source-only handover · review before using');
+    if (natural) opening.append(toggle, context, sourceLabel);
+    else opening.append(context, sourceLabel);
+    for (const node of [heading, ...section]) {
+      node.remove(); opening.append(node);
+    }
+    if (!natural) opening.append(toggle);
+    article.classList.add('handover-reading-document');
+  }
+}
+
+function sameOpeningNode(left, right) {
+  if (left.tagName !== right.tagName || left.textContent !== right.textContent) return false;
+  const a = [...(left.childNodes || left.children)], b = [...(right.childNodes || right.children)];
+  return a.length === b.length && a.every((node, index) => sameOpeningNode(node, b[index]));
+}
+
+/** Whole-shape admission precedes every mutation, including whitespace restoration. */
+function presentHandoverActionSections(article, options, parsed) {
+  const children = [...article.children];
+  const headings = children.filter(node => node.tagName === 'H2' && node.textContent === 'At a glance');
+  if (headings.length !== 1) return false;
+  const start = children.indexOf(headings[0]), expected = [...markdown(parsed.raw).children];
+  const actual = children.slice(start, start + expected.length);
+  const after = children[start + expected.length];
+  if (actual.length !== expected.length || !actual.every((node, index) => sameOpeningNode(node, expected[index]))
+      || (parsed.hasTail ? after?.tagName !== 'H2' || after.textContent !== 'Handover next steps' : after !== undefined)) return false;
+  // The generic Markdown renderer drops paragraph-ending double spaces. Admit
+  // against its exact output first, then restore the complete canonical value.
+  let at = 2 + Number(parsed.stale);
+  const rows = parsed.items.map(row => {
+    const nodes = actual.slice(at, at + 7); at += 7;
+    return {row, nodes};
+  });
+  const items = h('div', {class: 'handover-action-items'});
+  article.insertBefore(items, rows[0].nodes[0]);
+  for (const {row, nodes} of rows) {
+    nodes[0].textContent = 'Summary item ' + row.number + ': ' + row.item;
+    row.values.forEach((value, index) => {
+      nodes[index + 1].replaceChildren(h('strong', {}, OPENING_FIELDS[index] + ':'), document.createTextNode(' ' + value));
+      nodes[index + 1].classList.add(['handover-action-proposal', 'handover-action-evidence',
+        'handover-action-status', 'handover-action-period', 'handover-action-owner', 'handover-action-timing'][index]);
+    });
+    const card = h('div', {class: 'handover-action-item'});
+    for (const node of nodes) { node.remove(); card.append(node); }
+    items.append(card);
+  }
+  const following = [...article.children].slice([...article.children].indexOf(headings[0]) + 1);
+  const boundary = following.findIndex(node => /^H[1-6]$/.test(node.tagName));
+  condenseHandoverCover(article, headings[0], boundary < 0 ? following : following.slice(0, boundary), options, true);
+  return true;
+}
+
+/** New editable sections and retained legacy tables have distinct admission paths. */
+export function presentHandoverSummary(article, options = {}) {
+  const parsed = parseHandoverOpening(options.currentMarkdown);
+  if (parsed) return presentHandoverActionSections(article, options, parsed);
+  return presentHandoverSummaryTable(article, options);
+}
+
+export function handoverSummaryTableHint(markdown) {
+  if (typeof markdown !== 'string' || markdown.length > 500000) return false;
+  const source = markdown.replace(/\r\n?/g, '\n');
+  const blocks = createMarkdownIndex(source).blocks;
+  const starts = blocks.map((block, index) => ({block, index})).filter(({block}) =>
+    block.kind === 'heading' && source.slice(block.start, block.end).replace(/\n$/, '') === '## At a glance');
+  if (starts.length !== 1) return false;
+  const after = blocks.slice(starts[0].index + 1);
+  const boundary = after.findIndex(block => block.kind === 'heading');
+  return (boundary < 0 ? after : after.slice(0, boundary)).some(block =>
+    block.kind === 'table' && source.slice(block.start, block.end).split('\n')[0]
+      === '| Item | Recorded status — user-entered | Next step — proposed | Evidence |');
 }
 
 /** Presentation only: a bounded, exact opening table; quoted source tables stay literal. */
@@ -163,46 +269,7 @@ export function presentHandoverSummaryTable(article, {report, currentMarkdown} =
       cell.append(h('span', {class: 'handover-cell-label', 'aria-hidden': 'true'}, labels[index]));
     });
   }
-  const prefix = report?.document_markdown?.split(MARKER)[0];
-  const preamble = children.slice(0, children.indexOf(headings[0]));
-  const cover = [report?.document_title || report?.title,
-    'Source-only handover checklist — review before using.'];
-  const details = report?.document_details;
-  let knownCover = details && typeof details === 'object' && !Array.isArray(details);
-  for (const [key, label] of [['recipient', 'Prepared for: '], ['signatory', 'Prepared by: '],
-    ['sender_role', 'Role: '], ['organisation', ''], ['contact_details', 'Contact details: ']]) {
-    const value = details?.[key];
-    if (typeof value !== 'string' || /[\r\n\v\f\x85\u2028\u2029]/u.test(value)) knownCover = false;
-    else if (value) cover.push(label + value);
-  }
-  // Only the exact retained generated cover is condensed. A user's added or
-  // changed preamble, extra warning, quote, heading or source table stays visible.
-  if (handoverSummaryAvailable(report) && !report.demo
-      && knownCover && preamble.length === cover.length
-      && preamble.every((node, index) => node.textContent === cover[index])
-      && typeof prefix === 'string' && typeof currentMarkdown === 'string'
-      && currentMarkdown.startsWith(prefix + '## At a glance\n')
-      && preamble[0].tagName === 'H1'
-      && preamble[1].tagName === 'P'
-      && preamble.slice(1).every(node => node.tagName === 'P')) {
-    const id = `handover-context-${++contextSequence}`;
-    const context = h('div', {id, class: 'handover-context-content', hidden: true,
-      role: 'region', 'aria-label': 'Audience and document context'});
-    const toggle = button('Audience and document context', () => {
-      context.hidden = !context.hidden;
-      toggle.setAttribute('aria-expanded', String(!context.hidden));
-    }, 'quiet handover-context-toggle non-print');
-    toggle.setAttribute('aria-controls', id); toggle.setAttribute('aria-expanded', 'false');
-    const opening = h('section', {class: 'handover-reading-opening', 'aria-label': 'Reviewed handover opening'});
-    article.insertBefore(opening, preamble[0]);
-    for (const node of preamble) { node.remove(); context.append(node); }
-    opening.append(context, h('p', {class: 'handover-source-label non-print'},
-      'Source-only handover · review before using'));
-    for (const node of [headings[0], ...section.slice(0, section.indexOf(wrapper) + 1)]) {
-      node.remove(); opening.append(node);
-    }
-    opening.append(toggle); article.classList.add('handover-reading-document');
-  }
+  condenseHandoverCover(article, headings[0], section.slice(0, section.indexOf(wrapper) + 1), {report, currentMarkdown});
   return true;
 }
 
@@ -341,9 +408,9 @@ export function handoverSummaryEditor(report, {actions, onDraftChange = () => {}
       if (before !== snapshot(rows.map(row => row.read()))) throw new Error('The summary changed during preparation. Review your current wording again.');
       reviewed = compiled; reviewedRows = before;
       const document = markdown(compiled.openingMarkdown); document.classList.add('handover-summary-document');
-      const responsive = presentHandoverSummaryTable(document);
+      const responsive = presentHandoverSummary(document, {currentMarkdown: compiled.openingMarkdown});
       feedback.replaceChildren(h('h3', {}, 'Opening summary preview'),
-        ...(responsive ? [] : [h('p', {class: 'handover-summary-scroll-hint fine'}, 'On a small screen, scroll the summary table sideways to review every column.')]), document);
+        ...(responsive || !handoverSummaryTableHint(compiled.openingMarkdown) ? [] : [h('p', {class: 'handover-summary-scroll-hint fine'}, 'On a small screen, scroll the summary table sideways to review every column.')]), document);
       apply.hidden = false;
     } catch (error) { invalidate(); feedback.replaceChildren(notice(error.message, 'error')); }
     finally { busy = false; preview.disabled = false; add.disabled = rows.length >= MAX_ROWS; }

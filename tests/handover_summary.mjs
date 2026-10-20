@@ -2,17 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash, webcrypto} from 'node:crypto';
-import {compileHandoverSummary, handoverSummaryQuote, applyHandoverSummary, handoverSummaryAvailable, handoverSummaryEditor, presentHandoverSummaryTable} from '../src/sinter/web/handover-summary.js';
+import {compileHandoverSummary, handoverSummaryQuote, applyHandoverSummary, handoverSummaryAvailable, handoverSummaryEditor, presentHandoverSummaryTable, presentHandoverSummary, handoverSummaryTableHint} from '../src/sinter/web/handover-summary.js';
+import {parseHandoverOpening, openingLiteral, openingQuote, OPENING_STALE, OPENING_COVERAGE} from '../src/sinter/web/handover-opening-format.js';
 import {applyDocumentEdit, documentMarkdown} from '../src/sinter/web/documents.js';
 import {registerReportDraft, trackReportEdits, trackReportEditor, markReportSaved, isReportDraftUnsaved, clearReportDrafts, trackReportForm, reportFormDraft, clearReportForm, hasUnsavedReportDrafts, unsavedReportDrafts, reportDraftNotice} from '../src/sinter/web/report-drafts.js';
 if (!globalThis.crypto) Object.defineProperty(globalThis, 'crypto', {configurable: true, value: webcrypto});
 const oracle = JSON.parse(readFileSync(new URL('fixtures/handover_pre_recipient_v1.json', import.meta.url)));
 const fixture = (name = 'installed_garden') => structuredClone(oracle.fixtures[name].report);
+const legacyOpening = JSON.parse(readFileSync(new URL('fixtures/handover_opening_table_v1.json', import.meta.url)));
 const sha = value => createHash('sha256').update(value).digest('hex');
 function row(fields = {}) {
   return {item: 'Equipment quote', status: 'Not received', proposedAction: 'Obtain an itemised quote and confirm a named owner',
     period: 'as_recorded', ownerType: 'unknown', ownerName: '', ownerAcceptance: 'unconfirmed', targetDate: '', evidence: null, ...fields};
 }
+
+async function legacyCompiled(report, rows) {
+  assert.deepEqual(rows, [row()]);
+  assert.equal(sha(legacyOpening.opening_markdown), legacyOpening.opening_sha256);
+  const opening = report.review_status === 'stale'
+    ? legacyOpening.opening_markdown.replace('\n\n| Item |', '\n\n' + OPENING_STALE + '\n\n| Item |')
+    : legacyOpening.opening_markdown;
+  const at = report.document_markdown.indexOf('## Handover next steps\n');
+  return {markdown: report.document_markdown.slice(0, at) + opening + '\n\n' + report.document_markdown.slice(at),
+    openingMarkdown: opening};
+}
+
 function selection(report, quote, passage = 0) {
   const excerpt = report.excerpts[passage];
   const index = excerpt.quote.indexOf(quote); assert.ok(index >= 0, quote);
@@ -38,7 +52,9 @@ if (process.argv.includes('--sample-json')) {
   const report = fixture();
   if (process.argv.includes('--stale')) report.review_status = 'stale';
   const before = structuredClone(report);
-  const compiled = await compileHandoverSummary(report, exampleRows(report));
+  const entries = exampleRows(report);
+  if (process.argv.includes('--repeated-passage')) entries[1].evidence = {...entries[0].evidence};
+  const compiled = await compileHandoverSummary(report, entries);
   applyDocumentEdit(report, compiled.markdown, '2026-10-03T00:00:00.000Z');
   console.log(JSON.stringify({original: before, applied: report, quotations: compiled.quotations}));
 } else {
@@ -46,13 +62,17 @@ if (process.argv.includes('--sample-json')) {
     const report = fixture(), before = structuredClone(report);
     const result = await compileHandoverSummary(report, exampleRows(report));
     assert.ok(result.markdown.indexOf('## At a glance') < result.markdown.indexOf('## Handover next steps'));
-    assert.match(result.markdown, /\| Equipment quote \| As recorded: Not received/);
-    assert.match(result.markdown, /\| Funding checks \|.*Unassigned; no owner has been recorded/);
+    assert.match(result.markdown, /### Summary item 1: Equipment quote/);
+    assert.match(result.markdown, /\*\*Recorded status — user-entered:\*\* Not received/);
+    assert.match(result.markdown, /### Summary item 2: Funding checks/);
+    assert.match(result.markdown, /\*\*Responsibility:\*\* Unassigned; no owner has been recorded/);
     assert.match(result.markdown, /Suggested role: Volunteer coordinator; acceptance unconfirmed/);
     assert.match(result.markdown, /Owner type unknown; acceptance unconfirmed/);
     assert.match(result.markdown, /Proposed target 2026-10-09 \(unconfirmed; not a funder deadline\)/);
-    assert.match(result.markdown, /Historical wording: Recorded closed in the earlier notes/);
-    assert.match(result.markdown, /\| Insurance excess \|[^\n]*\| Missing supporting record; answer remains unknown \|/);
+    assert.match(result.markdown, /\*\*Recorded status — user-entered:\*\* Recorded closed in the earlier notes/);
+    assert.match(result.markdown, /\*\*Wording period:\*\* Historical wording/);
+    assert.match(result.markdown, /### Summary item 6: Insurance excess/);
+    assert.equal(parseHandoverOpening(result.markdown).items[5].values[1], 'Missing supporting record; answer remains unknown');
     assert.equal(result.quotations.length, 5);
     assert.deepEqual(result.quotations.map(quote => quote.position), [1, 2, 3, 4, 5]);
     assert.ok(result.markdown.endsWith(before.document_markdown.slice(before.document_markdown.indexOf('## Handover next steps\n'))));
@@ -61,12 +81,14 @@ if (process.argv.includes('--sample-json')) {
     assert.deepEqual(report, before);
   });
 
-  test('a table stays one contiguous block and literal user text cannot inject links, HTML or columns', async () => {
-    const report = fixture();
-    const result = await compileHandoverSummary(report, [row({item: '<script>|[fake](https://example.invalid)', status: 'Unknown & not zero'})]);
-    assert.match(result.markdown, /\| Item[^\n]*\n\| ---[^\n]*\n\| &lt;script&gt;\\\|\\\[fake\\\]/);
-    assert.match(result.markdown, /Unknown &amp; not zero/);
-    assert.doesNotMatch(result.openingMarkdown, /\|[^\n]*\n\n\|/);
+  test('ordinary editable sections preserve literal hostile wording without injecting links, HTML or tables', async () => {
+    const report = fixture(), item = '<script>|[fake](https://example.invalid)';
+    const result = await compileHandoverSummary(report, [row({item, status: 'Unknown & not zero'})]);
+    const parsed = parseHandoverOpening(result.openingMarkdown);
+    assert.ok(parsed); assert.equal(parsed.items[0].item, item);
+    assert.equal(parsed.items[0].values[2], 'Unknown & not zero');
+    assert.ok(result.markdown.includes('### Summary item 1: ' + openingLiteral(item)));
+    assert.doesNotMatch(result.openingMarkdown, /^\|/m);
   });
 
   test('generated status separators preserve entered punctuation and leave source evidence and row inputs unchanged', async () => {
@@ -75,7 +97,7 @@ if (process.argv.includes('--sample-json')) {
       evidence: selection(report, 'The equipment quote has not been received.')})];
     const originalRows = structuredClone(entered);
     const result = await compileHandoverSummary(report, entered);
-    assert.match(result.openingMarkdown, /Not received\.  Keep café 🐝 &amp; &lt;wording&gt;\\\| exactly\. · Owner type unknown; acceptance unconfirmed · Proposed target not supplied/);
+    assert.equal(parseHandoverOpening(result.openingMarkdown).items[0].values[2], entered[0].status);
     assert.doesNotMatch(result.openingMarkdown, /exactly\.;/);
     assert.deepEqual(entered, originalRows);
     assert.deepEqual(report, before);
@@ -434,7 +456,7 @@ if (process.argv.includes('--sample-json')) {
     const report = fixture(); report.review_status = 'stale'; const before = structuredClone(report);
     const compiled = await compileHandoverSummary(report, [row()]);
     assert.match(compiled.openingMarkdown, /Review status: stale/);
-    assert.ok(compiled.openingMarkdown.indexOf('Review status: stale') < compiled.openingMarkdown.indexOf('| Item |'));
+    assert.ok(compiled.openingMarkdown.indexOf('Review status: stale') < compiled.openingMarkdown.indexOf('### Summary item 1:'));
     assert.deepEqual(report, before);
     const current = fixture(); current.review_status = 'draft';
     assert.doesNotMatch((await compileHandoverSummary(current, [row()])).openingMarkdown, /Review status: stale/);
@@ -466,7 +488,7 @@ if (process.argv.includes('--sample-json')) {
     const dom = inertDOM();
     try {
       const {markdown} = await import('../src/sinter/web/markdown.js');
-      const compiled = await compileHandoverSummary(fixture(), [row()]);
+      const compiled = await legacyCompiled(fixture(), [row()]);
       const article = markdown(compiled.markdown), tables = dom.all(article, 'table');
       assert.equal(tables.length, 2);
       const opening = dom.all(tables[0], 'td'), values = opening.map(cell => cell.textContent);
@@ -491,7 +513,7 @@ if (process.argv.includes('--sample-json')) {
     const dom = inertDOM();
     try {
       const {markdown} = await import('../src/sinter/web/markdown.js');
-      const compiled = await compileHandoverSummary(fixture(), [row()]);
+      const compiled = await legacyCompiled(fixture(), [row()]);
       for (const changed of [
         compiled.markdown.replace('| Evidence |', '| Verified facts |'),
         compiled.markdown.replace('## At a glance', '### At a glance'),
@@ -510,7 +532,7 @@ if (process.argv.includes('--sample-json')) {
     try {
       const {markdown} = await import('../src/sinter/web/markdown.js');
       const report = fixture(), before = structuredClone(report);
-      const compiled = await compileHandoverSummary(report, [row()]);
+      const compiled = await legacyCompiled(report, [row()]);
       const article = markdown(compiled.markdown);
       const preamble = article.children.slice(0, article.children.findIndex(node => node.tagName === 'H2'));
       const wording = preamble.map(node => node.textContent);
@@ -539,7 +561,7 @@ if (process.argv.includes('--sample-json')) {
         const report = fixture();
         if (kind === 'baseline-warning') report.document_markdown = report.document_markdown.replace(
           '## Handover next steps', 'Keep this added human warning visible.\n\n## Handover next steps');
-        const compiled = await compileHandoverSummary(report, [row()]);
+        const compiled = await legacyCompiled(report, [row()]);
         let current = compiled.markdown;
         if (kind === 'warning') current = current.replace('## At a glance', 'Keep this added human warning visible.\n\n## At a glance');
         if (kind === 'changed-cover') current = current.replace('Source-only handover checklist — review before using.', 'My human-edited introduction.');
@@ -561,7 +583,7 @@ if (process.argv.includes('--sample-json')) {
     try {
       const {markdown} = await import('../src/sinter/web/markdown.js');
       const report = fixture(); report.review_status = 'stale';
-      const compiled = await compileHandoverSummary(report, [row()]), article = markdown(compiled.markdown);
+      const compiled = await legacyCompiled(report, [row()]), article = markdown(compiled.markdown);
       presentHandoverSummaryTable(article, {report, currentMarkdown: compiled.markdown});
       const opening = dom.all(article, 'section').find(node => node.className === 'handover-reading-opening');
       const warning = opening.children.find(node => node.tagName === 'P' && node.textContent.startsWith('Review status: stale.'));
@@ -576,7 +598,7 @@ if (process.argv.includes('--sample-json')) {
     try {
       const {markdown} = await import('../src/sinter/web/markdown.js');
       for (const flag of ['model_draft', 'incomplete', 'demo']) {
-        const report = fixture(), compiled = await compileHandoverSummary(report, [row()]);
+        const report = fixture(), compiled = await legacyCompiled(report, [row()]);
         report[flag] = true;
         const article = markdown(compiled.markdown), before = article.children[0];
         assert.equal(presentHandoverSummaryTable(article, {report, currentMarkdown: compiled.markdown}), true);
@@ -587,6 +609,181 @@ if (process.argv.includes('--sample-json')) {
         assert.equal(report[flag], true);
       }
     } finally {dom.restore();}
+  });
+
+
+  test('new sections present exact preview and saved wording in the same action/evidence/status order', async () => {
+    const dom = inertDOM();
+    try {
+      const {markdown} = await import('../src/sinter/web/markdown.js');
+      const report = fixture(), entered = exampleRows(report), before = structuredClone(report);
+      const compiled = await compileHandoverSummary(report, entered);
+      for (const [value, saved] of [[compiled.openingMarkdown, false], [compiled.markdown, true]]) {
+        const article = markdown(value);
+        assert.equal(presentHandoverSummary(article, {report: saved ? report : undefined, currentMarkdown: value}), true);
+        const items = dom.all(article, 'div').filter(node => node.className === 'handover-action-item');
+        assert.equal(items.length, entered.length);
+        for (const [index, item] of items.entries()) {
+          assert.deepEqual(item.children.map(node => node.tagName), ['H3', 'P', 'P', 'P', 'P', 'P', 'P']);
+          assert.equal(item.children[0].textContent, 'Summary item ' + (index + 1) + ': ' + entered[index].item);
+          assert.equal(item.children[1].textContent, 'Next step — proposed: ' + entered[index].proposedAction);
+          assert.match(item.children[2].textContent, /^Evidence: (Passage \d+|Missing supporting record; answer remains unknown)$/);
+          assert.equal(item.children[3].textContent, 'Recorded status — user-entered: ' + entered[index].status);
+          assert.equal(item.children.some(node => node.role), false);
+        }
+        assert.equal(dom.all(article, 'table').length, saved ? 1 : 0);
+        const toggle = dom.button(article, 'Audience and document context');
+        assert.equal(Boolean(toggle), saved);
+        if (saved) {
+          const opening = dom.all(article, 'section').find(node => node.className.includes('handover-action-opening'));
+          const context = dom.all(opening, 'div').find(node => node.className === 'handover-context-content');
+          assert.ok(opening.children.indexOf(toggle) < opening.children.indexOf(context));
+          assert.ok(opening.children.indexOf(context) < opening.children.findIndex(node => node.tagName === 'H2'));
+        }
+      }
+      assert.deepEqual(report, before);
+      assert.ok(compiled.markdown.endsWith(before.document_markdown.slice(before.document_markdown.indexOf('## Handover next steps\n'))));
+    } finally {dom.restore();}
+  });
+
+  test('full permitted Unicode wording and edge spacing survive new preview fields without truncation or invented separators', async () => {
+    const dom = inertDOM();
+    try {
+      const {markdown} = await import('../src/sinter/web/markdown.js');
+      const entered = row({item: '  Repeated  café 🐝 ; :  ',
+        status: '  ' + 'x'.repeat(994) + '  ', proposedAction: '  Ask  ; : <&>|\x60* &amp; &lt; \\\\  ',
+        ownerType: 'person', ownerName: 'Example: family; role  retained  '});
+      const compiled = await compileHandoverSummary(fixture(), [entered]), parsed = parseHandoverOpening(compiled.openingMarkdown);
+      assert.equal(parsed.items[0].item, entered.item);
+      assert.equal(parsed.items[0].values[2], entered.status);
+      const article = markdown(compiled.openingMarkdown);
+      assert.equal(presentHandoverSummary(article, {currentMarkdown: compiled.openingMarkdown}), true);
+      const item = dom.all(article, 'div').find(node => node.className === 'handover-action-item');
+      assert.equal(item.children[0].textContent, 'Summary item 1: ' + entered.item);
+      assert.equal(item.children[1].textContent, 'Next step — proposed: ' + entered.proposedAction);
+      assert.equal(item.children[3].textContent, 'Recorded status — user-entered: ' + entered.status);
+      assert.ok(item.children[5].textContent.includes(entered.ownerName));
+      assert.ok(item.children.every(node => !node.hidden));
+      const twelve = await compileHandoverSummary(fixture(), Array.from({length: 12}, (_, i) => row({item: 'Item ' + i})));
+      assert.equal(parseHandoverOpening(twelve.openingMarkdown).items.length, 12);
+    } finally {dom.restore();}
+  });
+
+  test('ambiguous new syntax and later-row or quotation edits leave the complete tree untouched', async () => {
+    const dom = inertDOM();
+    try {
+      const {markdown} = await import('../src/sinter/web/markdown.js');
+      const compiled = await compileHandoverSummary(fixture(), exampleRows(fixture()));
+      const tree = node => [node.tagName, node.className, node.textContent, node.hidden, node.children.map(tree)];
+      const changed = [
+        value => value.replace('### Summary item 2:', '### Summary item 1:'),
+        value => value.replace('### Summary item 2:', '### Summary item 3:'),
+        value => value.replace('**Evidence:** Passage 1', '**Evidence:** Passage 1\n\nExtra human paragraph.'),
+        value => value.replace('**Recorded status — user-entered:** Not received', '**Recorded status — user-entered:** **Not received**'),
+        value => value.replace('**Evidence:** Passage 1', '**Evidence:** [Passage 1](https://example.invalid)'),
+        value => value.replace('**Summary item 1: Equipment quote** — Passage 1', '**Summary item 1: Equipment quote** — Passage 2'),
+        value => value.replace('**Summary item 1: Equipment quote** — Passage 1', '**Summary item 2: Equipment quote** — Passage 1'),
+        value => value.replace(OPENING_COVERAGE, 'An altered coverage statement.'),
+        value => value.replace('**Wording period:** Historical wording', '**Wording period:** Verified today'),
+        value => value.replace('**Responsibility:** Owner type unknown; acceptance unconfirmed', '**Responsibility:** Jane confirmed'),
+        value => value + '\n\n## At a glance\n\nAnother section.',
+      ];
+      for (const change of changed) {
+        const value = change(compiled.markdown), article = markdown(value), before = tree(article);
+        assert.equal(parseHandoverOpening(value), null);
+        assert.equal(presentHandoverSummary(article, {currentMarkdown: value}), false);
+        assert.deepEqual(tree(article), before);
+      }
+      const article = markdown(compiled.markdown);
+      const paragraphs = dom.all(article, 'p'), last = paragraphs.find(node => node.textContent === 'Timing: Proposed target not supplied');
+      last.append(document.createElement('strong')); const before = tree(article);
+      assert.equal(presentHandoverSummary(article, {currentMarkdown: compiled.markdown}), false);
+      assert.deepEqual(tree(article), before);
+    } finally {dom.restore();}
+  });
+
+  test('new opening styling never conceals an altered cover or an added preamble warning', async () => {
+    const dom = inertDOM();
+    try {
+      const {markdown} = await import('../src/sinter/web/markdown.js');
+      const report = fixture(), compiled = await compileHandoverSummary(report, [row()]);
+      for (const value of [compiled.markdown.replace('## At a glance', 'Keep this human warning visible.\n\n## At a glance'),
+        compiled.markdown.replace('Source-only handover checklist — review before using.', 'Human introduction kept.')]) {
+        const article = markdown(value);
+        assert.equal(presentHandoverSummary(article, {report, currentMarkdown: value}), true);
+        assert.equal(article.children[0].tagName, 'H1');
+        assert.ok(!article.className.includes('handover-reading-document'));
+        assert.equal(dom.button(article, 'Audience and document context'), undefined);
+      }
+    } finally {dom.restore();}
+  });
+
+  test('heading-like source text inside fences or quotes cannot become an opening or tail boundary', async () => {
+    const dom = inertDOM();
+    try {
+      const {markdown} = await import('../src/sinter/web/markdown.js');
+      const report = fixture(), compiled = await compileHandoverSummary(report, [row()]);
+      const source = compiled.markdown + '\n\n~~~text\n## At a glance\n## Handover next steps\n~~~\n\n> ## At a glance\n> ## Handover next steps';
+      assert.ok(parseHandoverOpening(source));
+      const article = markdown(source);
+      assert.equal(presentHandoverSummary(article, {report, currentMarkdown: source}), true);
+      assert.equal(dom.all(article, 'pre').at(-1).textContent, '## At a glance\n## Handover next steps\n');
+      assert.ok(dom.all(article, 'blockquote').at(-1).textContent.includes('Handover next steps'));
+    } finally {dom.restore();}
+  });
+
+  test('astral boundaries use UTF-16 units and repeated Passage selections retain per-item quotes', async () => {
+    const report = fixture(), entries = exampleRows(report);
+    entries[1].evidence = {...entries[0].evidence};
+    const repeated = await compileHandoverSummary(report, entries);
+    const parsed = parseHandoverOpening(repeated.markdown);
+    assert.deepEqual(parsed.quotations.slice(0, 2).map(value => [value.number, value.label, value.quote]),
+      [[1, 'Passage 1', entries[0].evidence.quote], [2, 'Passage 1', entries[0].evidence.quote]]);
+    const current = await compileHandoverSummary(report, [row()]);
+    const status = '**Recorded status — user-entered:** Not received';
+    for (const [value, accepted] of [['🐝'.repeat(500), true], ['🐝'.repeat(501), false], ['x'.repeat(1001), false],
+      [String.fromCharCode(0xd800), false], ['x' + String.fromCharCode(0x85), false]]) {
+      const changed = current.openingMarkdown.replace(status, '**Recorded status — user-entered:** ' + openingLiteral(value));
+      assert.equal(Boolean(parseHandoverOpening(changed)), accepted);
+    }
+    const owner = row({ownerType: 'person', ownerName: '🐝'.repeat(500), ownerAcceptance: 'user_marked_accepted'});
+    assert.ok(parseHandoverOpening((await compileHandoverSummary(report, [owner])).openingMarkdown));
+  });
+
+  test('blank-looking BOM fields and owners refuse consistently without changing literal originals', async () => {
+    const report = fixture(), compiled = await compileHandoverSummary(report, [row()]);
+    const blank = '\ufeff \ufeff';
+    for (const [from, to] of [
+      ['**Recorded status — user-entered:** Not received', '**Recorded status — user-entered:** ' + blank],
+      ['**Responsibility:** Owner type unknown; acceptance unconfirmed', '**Responsibility:** Named person: ' + blank + '; acceptance unconfirmed'],
+      ['**Responsibility:** Owner type unknown; acceptance unconfirmed', '**Responsibility:** Suggested role: ' + blank + '; acceptance unconfirmed'],
+    ]) assert.equal(parseHandoverOpening(compiled.openingMarkdown.replace(from, to)), null);
+  });
+
+  test('only an actual top-level legacy opening table receives sideways-table guidance', async () => {
+    const compiled = await compileHandoverSummary(fixture(), [row()]);
+    const legacy = (await legacyCompiled(fixture(), [row()])).openingMarkdown;
+    assert.equal(handoverSummaryTableHint(legacy), true);
+    assert.equal(handoverSummaryTableHint(compiled.markdown), false);
+    const table = legacy.slice(legacy.indexOf('| Item |'), legacy.indexOf('\n\n**Evidence coverage:'));
+    for (const suffix of ['\n\n~~~text\n' + table + '\n~~~', '\n\n## Other section\n\n' + table,
+      '\n\n> ' + table.replaceAll('\n', '\n> ')]) {
+      const changed = compiled.markdown.replace('**Recorded status — user-entered:** Not received',
+        '**Recorded status — user-entered:** **Human edit**') + suffix;
+      assert.equal(parseHandoverOpening(changed), null);
+      assert.equal(handoverSummaryTableHint(changed), false);
+    }
+    assert.equal(handoverSummaryTableHint('~~~text\n' + legacy + '\n~~~'), false);
+  });
+
+  test('many separate backtick runs in one bounded quotation cannot throw during reading admission', async () => {
+    const report = fixture(), evidence = selection(report, 'The equipment quote has not been received.');
+    const compiled = await compileHandoverSummary(report, [row({evidence})]);
+    const quote = String.fromCharCode(96) + 'x', many = quote.repeat(150000);
+    const changed = compiled.openingMarkdown.replace(openingQuote(evidence.quote), openingQuote(many));
+    assert.ok(changed.length < 500000);
+    const parsed = parseHandoverOpening(changed);
+    assert.ok(parsed); assert.equal(parsed.quotations[0].quote, many);
   });
 
 }

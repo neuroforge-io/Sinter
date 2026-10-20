@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose new handover openings as ordinary editable item sections, with proposed
+  next steps and evidence before longer status, responsibility and timing. Keep
+  original sources and earlier saved table openings; preserve literal wording and
+  existing citation destinations in Word. Guard ambiguous shapes and long quoted
+  punctuation without rewriting saved records. Offline garden recovery, phone
+  targets, print and Word download are source-tested; installers remain separate.
+
 - Guard local Settings saves with an observed runtime revision. Keep newer form
   and key drafts through delayed or unconfirmed acknowledgements; inspect saved
   settings explicitly before a further write. Forget clears only the held key.

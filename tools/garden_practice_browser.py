@@ -53,6 +53,7 @@ def main(argv: list[str] | None = None) -> None:
     receipt.write_text(json.dumps({"passed": False, "state": "running"}))
     implementation_paths = (
         "src/sinter/practice.py",
+        "src/sinter/docx_export.py",
         "src/sinter/casebooks.py",
         "src/sinter/handover.py",
         "src/sinter/web/report-citations.js",
@@ -61,6 +62,7 @@ def main(argv: list[str] | None = None) -> None:
         "src/sinter/web/documents.js",
         "src/sinter/web/documents.css",
         "src/sinter/web/handover-summary.js",
+        "src/sinter/web/handover-opening-format.js",
         "src/sinter/web/casebooks.js",
         "src/sinter/web/desktop.css",
         "src/sinter/web/library.js",
@@ -307,7 +309,7 @@ def main(argv: list[str] | None = None) -> None:
                     summary.get_by_role(
                         "button", name="Apply reviewed opening summary", exact=True
                     ).click()
-                    opening = document.locator(".handover-opening-table")
+                    opening = document.locator(".handover-action-items")
                     expect(summary).not_to_have_attribute("open", "")
                     expect(opening).to_have_count(1)
                     for phrase in (
@@ -327,7 +329,7 @@ def main(argv: list[str] | None = None) -> None:
                     page.evaluate("document.activeElement.blur()")
                     report.evaluate("node => node.scrollIntoView({block: 'start'})")
                     first_action = (
-                        opening.locator("tbody tr").first.locator("td").nth(2)
+                        opening.locator(".handover-action-item").first.locator(".handover-action-proposal")
                     )
                     desktop_action = first_action.bounding_box()
                     assert desktop_action and desktop_action["y"] >= 0
@@ -342,13 +344,13 @@ def main(argv: list[str] | None = None) -> None:
                     assert opening.evaluate(
                         "node => node.scrollWidth <= node.clientWidth"
                     )
-                    expect(opening.get_by_role("row")).to_have_count(4)
-                    expect(opening.get_by_role("columnheader")).to_have_count(4)
-                    expect(opening.get_by_role("cell")).to_have_count(12)
+                    expect(opening.get_by_role("heading", level=3)).to_have_count(3)
+                    expect(opening.get_by_role("table")).to_have_count(0)
+                    expect(opening.locator(".handover-action-item > p")).to_have_count(18)
                     accessible = opening.aria_snapshot()
                     for phrase in (
-                        "table",
-                        "Item",
+                        "heading",
+                        "Summary item",
                         "Recorded status — user-entered",
                         "Next step — proposed",
                         "Evidence",
@@ -396,7 +398,7 @@ def main(argv: list[str] | None = None) -> None:
                         path=str(out / "garden-handover-opening-cards-390.png")
                     )
                     expect(
-                        document.locator("table:not(.handover-opening-table)")
+                        document.locator("table")
                     ).to_contain_text("Proposed target date (unconfirmed)")
                     page.set_viewport_size({"width": 1440, "height": 1000})
                     context_control = document.get_by_role(
@@ -432,16 +434,12 @@ def main(argv: list[str] | None = None) -> None:
                     assert (
                         context_body.bounding_box()["y"] < opening.bounding_box()["y"]
                     )
-                    assert (
-                        opening.evaluate("node => getComputedStyle(node).display")
-                        == "table"
-                    )
-                    assert opening.get_by_role("columnheader").first.evaluate(
-                        "node => getComputedStyle(node).backgroundColor"
-                    ) == "rgb(255, 255, 255)"
-                    assert opening.get_by_role("columnheader").first.evaluate(
-                        "node => getComputedStyle(node).color"
-                    ) == "rgb(0, 0, 0)"
+                    assert opening.evaluate(
+                        "node => getComputedStyle(node).display"
+                    ) == "block"
+                    assert opening.locator(".handover-action-item").first.evaluate(
+                        "node => getComputedStyle(node).display"
+                    ) == "block"
                     for phrase in (
                         "Source-only handover checklist — review before using.",
                         "proposals, not accepted commitments",
@@ -490,7 +488,7 @@ def main(argv: list[str] | None = None) -> None:
                         "explicit three-row opening has actionable proposals, "
                         "exact quotations, "
                         "distinct unknown/unassigned owners and an unconfirmed date; "
-                        "390px cards retain every column without changing "
+                        "390px sections retain every field without changing "
                         "the original table"
                     )
                     with page.expect_download() as word_download:
@@ -848,7 +846,7 @@ def main(argv: list[str] | None = None) -> None:
                             "reader_header": reader_header.bounding_box(),
                             "tabs": reading_view.locator(".report-tabs").bounding_box(),
                             "opening": reading_panel.locator(".handover-reading-opening").bounding_box(),
-                            "cells": reading_panel.locator(".handover-opening-table tbody tr").first.locator("td").evaluate_all(
+                            "fields": reading_panel.locator(".handover-action-item").first.locator(":scope > p").evaluate_all(
                                 """cells => cells.map(cell => ({
                                     text_length: cell.textContent.length,
                                     rect: cell.getBoundingClientRect().toJSON()
@@ -863,9 +861,9 @@ def main(argv: list[str] | None = None) -> None:
                         expect(more).to_be_focused()
                         expect(reading_view.locator(".export-menu")).not_to_have_attribute("open", "")
 
-                        opening_row = reading_panel.locator(".handover-opening-table tbody tr").first
-                        proposed = opening_row.locator("td").nth(2)
-                        passage = opening_row.locator("td").nth(3).get_by_role("button").first
+                        opening_row = reading_panel.locator(".handover-action-item").first
+                        proposed = opening_row.locator(".handover-action-proposal")
+                        passage = opening_row.locator(".handover-action-evidence").get_by_role("button").first
                         action_bounds = proposed.bounding_box()
                         passage_bounds = passage.bounding_box()
                         metric = {
@@ -876,7 +874,7 @@ def main(argv: list[str] | None = None) -> None:
                             "reader_header": reader_header.bounding_box(),
                             "opening": reading_panel.locator(".handover-reading-opening").bounding_box(),
                             "row": opening_row.bounding_box(),
-                            "cells": opening_row.locator("td").evaluate_all(
+                            "fields": opening_row.locator(":scope > p").evaluate_all(
                                 """cells => cells.map(cell => ({
                                     text_length: cell.textContent.length,
                                     rect: cell.getBoundingClientRect().toJSON()

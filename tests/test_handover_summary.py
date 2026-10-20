@@ -111,7 +111,8 @@ def test_word_contains_useful_opening_before_questions_and_original_navigation(s
         "Owner type unknown; acceptance unconfirmed",
         "Suggested role: Volunteer coordinator",
         "2026-10-09 (unconfirmed; not a funder deadline)",
-        "Historical wording: Recorded closed",
+        "Wording period: Historical wording",
+        "Recorded status — user-entered: Recorded closed",
         "Missing supporting record; answer remains unknown",
         "not full supplied history",
         "in_progress",
@@ -119,8 +120,34 @@ def test_word_contains_useful_opening_before_questions_and_original_navigation(s
     ):
         assert wording in text
     tables = list(body.iter(f"{{{W}}}tbl"))
-    assert len(tables) == 2  # reviewed summary plus the original quoted action table
-    assert len(list(tables[0].iter(f"{{{W}}}tr"))) == 7
+    assert len(tables) == 1  # unchanged quoted source table; opening uses paragraphs
+    paragraphs = list(body.find(f"{{{W}}}body").findall(f"{{{W}}}p"))
+    def wording(paragraph):
+        return "".join(n.text or "" for n in paragraph.iter(f"{{{W}}}t"))
+    starts = [index for index, paragraph in enumerate(paragraphs)
+              if paragraph.find(f"{{{W}}}pPr/{{{W}}}pStyle") is not None
+              and paragraph.find(f"{{{W}}}pPr/{{{W}}}pStyle").get(f"{{{W}}}val") == "Heading3"
+              and wording(paragraph).startswith("Summary item ")]
+    assert len(starts) == 6
+    labels = ("Next step — proposed:", "Evidence:", "Recorded status — user-entered:",
+              "Wording period:", "Responsibility:", "Timing:")
+    for number, start in enumerate(starts, 1):
+        assert wording(paragraphs[start]).startswith(f"Summary item {number}: ")
+        assert all(wording(paragraphs[start + index + 1]).startswith(label)
+                   for index, label in enumerate(labels))
+        links = list(paragraphs[start + 2].iter(f"{{{W}}}hyperlink"))
+        if number <= len(sample["quotations"]):
+            label = sample["quotations"][number - 1]["label"]
+            assert len(links) == 1
+            assert wording(links[0]) == label
+            assert links[0].get(f"{{{W}}}anchor") == "SinterPassage" + label.split()[1]
+        else:
+            assert not links
+    historical = starts[4]
+    assert wording(paragraphs[historical + 3]) == (
+        "Recorded status — user-entered: Recorded closed in the earlier notes"
+    )
+    assert wording(paragraphs[historical + 4]) == "Wording period: Historical wording"
     for reference in report["document_references"]:
         assert reference["label"] + " — Original source:" in text
         assert f"Unicode characters: {reference['start']}–{reference['end']};" in text

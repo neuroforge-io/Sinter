@@ -13,7 +13,7 @@ import {registerReportDraft, trackReportEdits, trackReportEditor, reportEditorDr
 import {reportCitationIndex, reportCitationMatcher} from './report-citations.js';
 import {casebookQuestionEvidence} from './casebook-question-evidence.js';
 import {retainedCasebookSource, retainedQuestionContext} from './casebook-retained-context.js';
-import {handoverSummaryEditor, handoverSummaryAvailable, presentHandoverSummaryTable} from './handover-summary.js';
+import {handoverSummaryEditor, handoverSummaryAvailable, presentHandoverSummary, handoverSummaryTableHint} from './handover-summary.js';
 
 let reportViewSequence = 0;
 
@@ -203,7 +203,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     const article = markdown(documentMarkdown(report));
     if (isCampaign) article.classList.add('campaign-decision-document');
     const hasSummary = handoverSummaryAvailable(report) && documentMarkdown(report).includes('## At a glance\n');
-    const responsiveSummary = hasSummary && presentHandoverSummaryTable(article,
+    const responsiveSummary = hasSummary && presentHandoverSummary(article,
       {report, currentMarkdown: documentMarkdown(report)});
     const compactReading = article.className.split(' ').includes('handover-reading-document');
     result.classList.toggle('handover-reading-report', compactReading);
@@ -221,7 +221,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       : report.incomplete ? 'INCOMPLETE MODEL DRAFT' : report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'),
       ...(report.review_status === 'stale' ? [h('p', {class: 'document-review-warning', role: 'note'},
         'Review status: stale. Check this saved record before current use; editing its wording does not confirm the original evidence.')] : []),
-      ...(hasSummary && !responsiveSummary ? [h('p', {class: 'handover-summary-scroll-hint fine'}, 'On a small screen, scroll the summary table sideways to review every column.')] : []), article);
+      ...(hasSummary && !responsiveSummary && handoverSummaryTableHint(documentMarkdown(report)) ? [h('p', {class: 'handover-summary-scroll-hint fine'}, 'On a small screen, scroll the summary table sideways to review every column.')] : []), article);
     completion.replaceChildren(h('div', {}, h('strong', {}, report.document_edits ? 'Check these details' : 'Finish the details'),
       h('p', {}, (report.document_edits ? 'Originally missing: ' : '') + (report.missing_fields || []).map(item => item.label).join(' · '))),
       onEditInputs ? button('Add missing details', onEditInputs) : h('span', {class: 'fine'}, 'Use Edit draft to complete these.'));

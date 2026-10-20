@@ -1,0 +1,8 @@
+{
+  "schema": "sinter-handover-opening-table-fixture/v1",
+  "source_commit": "33366aac10a1e879d0921c4c0b1606968e861f08",
+  "source_path": "src/sinter/web/handover-summary.js",
+  "source_sha256": "11cced217e806114dd8d9d7eee47311bb4f59987d70abe883f42d8259a2f0846",
+  "opening_sha256": "7c103544c65550421cad47497fc8620cafd4b5033112d551b25c7c6284776c91",
+  "opening_markdown": "## At a glance\n\nStatuses and next steps below are user-entered for review. Next steps are proposals, not accepted commitments. A retained quotation establishes supplied wording, not independent verification.\n\n| Item | Recorded status — user-entered | Next step — proposed | Evidence |\n| --- | --- | --- | --- |\n| Equipment quote | As recorded: Not received · Owner type unknown; acceptance unconfirmed · Proposed target not supplied | Obtain an itemised quote and confirm a named owner | Missing supporting record; answer remains unknown |\n\n**Evidence coverage:** this opening uses selected wording from this saved report. The unchanged checklist and selected evidence follow. This is not full supplied history; request the matching original project backup for unselected text. Later project or campaign changes are not included."
+}

@@ -4341,3 +4341,13 @@ assertions remain intact. No product fallback or skipped assertion was added.
 CI results, real local recovery/reopen/export checks, critical ratings and the
 confirmed Markdown section-boundary blocker. This does not qualify an installer,
 whole-product quality or RC4 publication.
+
+## 20 October handover reading and export qualification
+
+[Read the scoped handover receipt](HANDOVER_READING_2026-10-20.md) for the exact
+source blobs, independent critic fixes, 166 Python / 43 JavaScript checks,
+loopback and zipapp asset checks, and 24 actual offline garden browser checks.
+The original phone target and pointer-hit thresholds are unchanged. Historical
+saved openings and installed-release evidence remain separate. The scoped critic
+scores are UX 7, tested functionality 8 and aesthetics 6.5; no whole-product 10/10
+or installed-platform pass is claimed.
