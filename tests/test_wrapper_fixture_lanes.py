@@ -328,9 +328,12 @@ def _windows_selection_fixture(
         assert isinstance(wrapper_bytes, bytes) and len(wrapper_bytes) <= 65536
         launcher.write_bytes(wrapper_bytes)
     marker, stages = tmp_path / "runtime.json", tmp_path / "stages.bin"
+    child_path = tmp_path / "child-path.txt"
     batch_stages = tmp_path / "batch-stages.bin"
     (source / "start.py").write_text(
         fixtures._wrapper_entry_source(marker, stages)
+        + (f"__import__(\'pathlib\').Path({str(child_path)!r}).write_text("
+           "__import__(\'os\').environ.get(\'PATH\',\'\'),encoding=\'utf-8\')\n")
         + f"raise SystemExit({exit_code})\n",
         encoding="utf-8",
     )
@@ -366,6 +369,15 @@ def _windows_selection_fixture(
         path_text = os.pathsep.join(map(str, path))
     elif path_format == "quoted":
         path_text = os.pathsep.join('"' + str(p) + '"' for p in path)
+    elif path_format == "mixed":
+        path_text = os.pathsep.join('"' + str(p) + '"' if i % 2 == 0 else str(p)
+                                    for i, p in enumerate(path))
+    elif path_format == "empty-segments":
+        path_text = os.pathsep + os.pathsep.join(map(str, path)) + os.pathsep
+    elif path_format == "quoted-empty":
+        path_text = '""' + os.pathsep + os.pathsep.join(map(str, path)) + os.pathsep + '""'
+    elif path_format == "explicit-dot":
+        path_text = "." + os.pathsep + os.pathsep.join(map(str, path))
     elif path_format == "casefold":
         path_text = os.pathsep.join(str(p).casefold() for p in path)
     else:
@@ -399,7 +411,10 @@ def _windows_selection_fixture(
         batch_stages
     )
     observation["selection_fixture"] = {
-        "lane": lane, "path": list(map(str, path)), "py": py,
+        "lane": lane, "path": list(map(str, path)), "path_format": path_format,
+        "child_path_unchanged": (child_path.is_file()
+                                 and child_path.read_text(encoding="utf-8") == path_text),
+        "py": py,
         "matrix_python": sys.executable, "matrix_version": list(sys.version_info),
         "inherited_errorlevel": os.environ.get("ERRORLEVEL"),
         "expected_exit": (
@@ -422,6 +437,7 @@ def _windows_selection_fixture(
         assert b"Sinter needs Python 3.10 or newer" in stdout, raw
         return observation
     actual = observation["marker"]["value"]
+    assert observation["selection_fixture"]["child_path_unchanged"], raw
     assert actual["version_info"][:2] >= [3, 10], raw
     assert actual["argv"][1:] == arguments, raw
     assert Path(actual["cwd"]) == source, raw

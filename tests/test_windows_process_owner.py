@@ -464,3 +464,43 @@ def test_owned_observer_preserves_interruption_after_real_creation(tmp_path, mon
     value = caught.value.wrapper_observation
     assert value["owned_tree"]["clean"] and value["owned_tree"]["process_created"]
     assert value["owned_tree"]["parent_reaped"] and value["owned_tree"]["active_after"] == 0
+    assert value["stdout"]["sample_base64"] == ""
+    assert value["stderr"]["sample_base64"] == ""
+    assert "error" in value["marker"]
+
+
+@WINDOWS
+def test_owned_observer_retains_partial_samples_and_original_wait_interruption(tmp_path, monkeypatch):
+    import wrapper_diagnostics
+
+    marker = tmp_path / "partial-marker.json"
+    native = owner.WindowsOwnedProcess.wait
+    original = KeyboardInterrupt("controlled observer wait interrupt")
+    def interrupted_wait(process, timeout=None):
+        _wait_for(marker)
+        monkeypatch.setattr(owner.WindowsOwnedProcess, "wait", native)
+        raise original
+    monkeypatch.setattr(owner.WindowsOwnedProcess, "wait", interrupted_wait)
+    with pytest.raises(KeyboardInterrupt) as caught:
+        wrapper_diagnostics.observe_wrapper(
+            [sys.executable, "-I", "-S", "-B", "-c",
+             "import sys,time;from pathlib import Path;"
+             "print('fictional partial stdout',flush=True);"
+             "print('fictional partial stderr',file=sys.stderr,flush=True);"
+             f"Path({str(marker)!r}).write_text('{{\"partial\":true}}');"
+             "time.sleep(30)"],
+            tmp_path, marker, timeout=5, windows_tree=True,
+        )
+    assert caught.value is original
+    value = caught.value.wrapper_observation
+    assert value["owned_tree"]["clean"] and value["owned_tree"]["active_after"] == 0
+    assert value["owned_tree"]["parent_reaped"] and value["marker"]["value"] == {"partial": True}
+    assert value["stdout"]["sample_bytes"] > 0 and value["stderr"]["sample_bytes"] > 0
+    assert value["stdout"]["metadata_stable_snapshot"] and value["stderr"]["metadata_stable_snapshot"]
+    assert marker.read_text() == '{"partial":true}'
+    monkeypatch.setattr(owner.WindowsOwnedProcess, "wait", native)
+    destination = os.environ.get("SINTER_STARTUP_DIAGNOSTICS_DIR")
+    if destination:
+        (Path(destination) / "observer-interrupted-partial.json").write_text(
+            json.dumps(value, indent=2), encoding="utf-8",
+        )

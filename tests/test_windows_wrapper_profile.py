@@ -181,7 +181,10 @@ def test_windows_launcher_matched_abba_and_candidate_recovery(tmp_path, monkeypa
             "lane": lane,
             "all_four_original_assertions_passed": all_pass,
             "timing_comparison_admissible": all_pass,
-            "timing_basis": "Full owned observation includes construction and cleanup; no costs subtracted.",
+            "process_count_comparison_admissible": all_pass,
+            "timing_basis": ("Owned lifecycle includes construction, wait and cleanup; "
+                             "excludes fixture preparation and later diagnostic snapshots. "
+                             "No costs subtracted."),
             "runtime": list(observed),
             "process_counts": {
                 v: [r["observation"]["owned_tree"]["process_counts_after"]["total_processes"]
@@ -203,7 +206,8 @@ def test_windows_launcher_matched_abba_and_candidate_recovery(tmp_path, monkeypa
     _save("launcher-candidate-failures.json", candidate_failures)
     assert not candidate_failures, "Candidate must satisfy every original readiness assertion."
     for summary in summaries:
-        if summary["lane"] != "system-discovery":
+        if (summary["process_count_comparison_admissible"]
+                and summary["lane"] != "system-discovery"):
             assert max(summary["process_counts"]["B"]) < min(summary["process_counts"]["A"])
 
     # Existing refusal/admission/status controls use the same qualified ownership.
@@ -215,6 +219,7 @@ def test_windows_launcher_matched_abba_and_candidate_recovery(tmp_path, monkeypa
         ("local-exit", {"lane": "local-failure", "exit_code": 7}),
         ("path-exit", {"lane": "path-failure", "exit_code": 7}),
         ("quoted-path", {"lane": "path-failure", "path_format": "quoted"}),
+        ("mixed-path", {"lane": "path-failure", "path_format": "mixed"}),
         ("casefold-path", {"lane": "path-failure", "path_format": "casefold"}),
         ("ignore-current-directory", {"lane": "path-failure", "cwd_python_decoy": True}),
     ]
@@ -226,7 +231,7 @@ def test_windows_launcher_matched_abba_and_candidate_recovery(tmp_path, monkeypa
         with monkeypatch.context() as patch:
             patch.setenv("ERRORLEVEL", "0")
             for name in ("SINTER_CANDIDATE", "SINTER_FIRST_PATH", "SINTER_PYTHON",
-                         "SINTER_PY_LAUNCHER", "SINTER_RUNTIME_PRESENT"):
+                         "SINTER_PY_LAUNCHER", "SINTER_RUNTIME_PRESENT", "SINTER_SEARCH_PATH"):
                 patch.setenv(name, "must-not-be-admitted")
             observed_control = _retain_control("launcher-control-" + label, request, lambda: (
                 selection._windows_selection_fixture(
@@ -236,8 +241,29 @@ def test_windows_launcher_matched_abba_and_candidate_recovery(tmp_path, monkeypa
             probes = observed_control["batch_stages"].get("lines", []).count("runtime_probe_begin")
             if label == "broken-before-fallback":
                 assert probes == 2, "Do not probe the refused first PATH runtime twice."
-            elif label in ("alias-before-path", "quoted-path", "casefold-path", "ignore-current-directory"):
+            elif label in ("alias-before-path", "quoted-path", "mixed-path",
+                            "casefold-path", "ignore-current-directory"):
                 assert probes == 1
+    # Empty and explicit-dot entries retain original lookup/selection semantics.
+    for representation in ("empty-segments", "quoted-empty", "explicit-dot"):
+        paired = []
+        for variant, wrapper in (("A", baseline), ("B", candidate)):
+            cell = tmp_path / ("segments-" + representation + "-" + variant)
+            cell.mkdir()
+            request = _request()
+            with monkeypatch.context() as patch:
+                value = _retain_control("launcher-segments-" + representation + "-" + variant,
+                    request, lambda: selection._windows_selection_fixture(
+                        cell, patch, request, lane="path-failure", path_format=representation,
+                        cwd_python_decoy=True, wrapper_bytes=wrapper, windows_tree=True,
+                    ))
+            paired.append(value)
+        assert {os.path.normcase(v["marker"]["value"]["executable"]) for v in paired} == {
+            os.path.normcase(sys.executable)
+        }
+        assert [v["batch_stages"]["lines"].count("runtime_probe_begin") for v in paired][0] == (
+            paired[1]["batch_stages"]["lines"].count("runtime_probe_begin")
+        )
     # A real venv proves a PATH runtime containing literal variable markers and metacharacters.
     runtime = tmp_path / "runtime Ω & (draft)! %SINTER_LITERAL_PATH%"
     venv.EnvBuilder(with_pip=False, symlinks=False).create(runtime)

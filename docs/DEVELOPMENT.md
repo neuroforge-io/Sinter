@@ -538,16 +538,21 @@ checked-out hashes. Entry hashes normalize only the declared fresh-cell prefix;
 the original imports and readiness marker stay inside their original budget.
 
 Reports retain failed baseline cells rather than excluding them from averages.
-Timing comparison is admitted only when all four original assertions pass and
-observed runtimes and normalized entries match. Full observed durations include
-owner construction and cleanup; no overhead is subtracted. Native job accounting
+Timing and process-count comparisons are admitted only when all four original
+assertions pass and observed runtimes and normalized entries match. Owned
+lifecycle durations include construction, wait and cleanup, and exclude fixture
+preparation and subsequent bounded diagnostic snapshots; no overhead is subtracted.
+Interrupted observations retain bounded partial stdout, stderr and marker samples
+without replacing the original interruption. Native job accounting
 records actual cumulative process counts and CPU counters separately from host
 phase observations. Counts and timings qualify this source-wrapper workload,
 not an installed application, arbitrary host or useful hosted generation.
 
 Candidate controls retain refusal, later fallback, missing/broken local runtimes,
-normal nonzero status, quoted/case-varied PATH, current-directory exclusion and
+normal nonzero status, quoted/mixed/case-varied PATH, current-directory exclusion and
 literal metacharacters. Existing listing and signed probe-exit controls retain
 their original assertions. The product fast path preserves the original WHERE
 enumeration whenever its builtin lookup admits nothing; no runtime is accepted
-without the existing isolated proof.
+without the existing isolated proof. Lookup removes quote characters in a private
+search variable without changing the application\'s original PATH. Paired controls
+retain baseline semantics for empty, quoted-empty and explicit-dot entries.

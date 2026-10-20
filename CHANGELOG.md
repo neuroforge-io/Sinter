@@ -3,7 +3,8 @@
 ## Unreleased
 
 - Resolve the first admitted Windows PATH Python inside CMD, avoiding external
-  lookup processes on that path. Preserve later enumeration after refusal,
+  lookup processes on that path and normalising quoted lookup entries without
+  changing the application PATH. Preserve later enumeration after refusal,
   explicit local runtimes, positive version admission and application status.
   Qualify discovery with owned-process recovery and a frozen A/B/B/A source
   comparison under the existing five-second readiness criterion.
