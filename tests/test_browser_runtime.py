@@ -60,6 +60,24 @@ def exercise(directory):
     call('/api/settings', {'settings':{'api_url':'https://example.invalid/v1'}}, expect=400)
     call('/api/settings', {'settings':{'theme':'light'}})
     assert call('/api/settings')['settings']['theme'] == 'light'
+    # This runs on CPython and Pyodide; no public network is used.
+    from sinter import client
+    original_health = client.health_check
+    observed_revision = call('/api/settings')['revision']
+
+    def anonymous_health():
+        connection = client._CONNECTION.get()
+        assert connection['anonymous'] is True
+        assert connection['api_key'] == '' and connection['inherit_key'] is False
+        return True, 'Fictional browser availability'
+
+    try:
+        client.health_check = anonymous_health
+        health = call('/api/health')
+        assert health['settings_revision'] == observed_revision
+        assert health['ok'] is True
+    finally:
+        client.health_check = original_health
     for route in ['/api/atlas/compile','/api/atlas/retrieve','/api/transcribe','/api/account/connect','/api/documents/docx/save','/api/desktop/quit']:
         call(route, {}, expect=400)
     assert not call('/api/speech')['available']

@@ -452,3 +452,36 @@ saving for later edits.
 Run `node --test --test-concurrency=1 tests/report_backup.mjs tests/report_drafts.mjs`
 and `python tools/report_recovery_browser.py` for admission and real-interface recovery
 regressions. These source checks do not qualify an installed release.
+
+
+## Local app settings recovery
+
+Save connection applies only the displayed destination, API style, model and
+answer limit, plus an explicitly edited session key. Save my preferences applies
+the complete preference form. Forget the session API key clears only the held
+key; an unsaved replacement in the field is retained.
+
+The local Settings page uses an opaque runtime `expected_revision` for writes.
+`GET /api/settings` returns that revision alongside the saved settings and held-key
+flag. A stale revision returns 409 before mutation; explicit null/malformed
+preconditions return 400. Omitted preconditions remain compatible with legacy
+callers and provide no concurrency guarantee. Revisions and keys are not stored
+in the preferences file.
+
+After a conflict or unconfirmed acknowledgement, choose **Check what was saved**.
+It observes current state without overwriting the form or replaying a write.
+An earlier unconfirmed outcome remains unknown; a read is not proof that the
+earlier request terminated. A subsequent explicit revision-aware write is
+protected against another writer using that same earlier revision.
+
+Run the focused checks sequentially:
+
+```sh
+python -m pytest -q tests/test_preferences_revision.py tests/test_provider_connections.py tests/test_browser_runtime.py
+node --test --test-concurrency=1 tests/provider_connection_page.mjs tests/provider_connection.mjs
+```
+
+Run the shared browser-domain exercise on the shipped Pyodide interpreter as
+well to qualify anonymous health/revision binding there. Account mutation recovery and the separate
+browser-only preference editor are not newly qualified. See
+[the scoped review](SETTINGS_RECOVERY_REVIEW_2026-10-20.md).

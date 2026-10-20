@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import tempfile
 import threading
 from pathlib import Path
@@ -31,6 +32,11 @@ DEFAULTS = {
 }
 PROVIDERS = frozenset({'openai-compatible', 'anthropic', 'chatgpt'})
 MAX_PREFERENCES_BYTES = 65536
+_NO_REVISION = object()
+
+
+class PreferencesConflict(ValueError):
+    """A delayed settings request no longer matches the observed runtime state."""
 
 
 def _validate_destination(api_url, provider) -> dict:
@@ -103,6 +109,7 @@ class Preferences:
         self.path = directory / 'preferences.json'
         self.lock = threading.RLock()
         self._key = ''
+        self._revision = secrets.token_hex(16)
         self._values = dict(DEFAULTS)
         self.warning = ''
         try:
@@ -135,8 +142,13 @@ class Preferences:
             return values
 
     def public(self) -> dict:
-        return {'settings': self.snapshot(), 'has_session_key': bool(self._key), 'warning': self.warning,
-                'environment_override': bool(os.environ.get('NEUROFORGE_BASE_URL') or os.environ.get('NEUROFORGE_MODEL'))}
+        with self.lock:
+            return {
+                'settings': dict(self._values), 'has_session_key': bool(self._key),
+                'revision': self._revision, 'warning': self.warning,
+                'environment_override': bool(os.environ.get('NEUROFORGE_BASE_URL')
+                                             or os.environ.get('NEUROFORGE_MODEL')),
+            }
 
     def _preview_credentials(self, candidate: dict, *,
                              confirm_endpoint, api_key) -> dict:
@@ -175,11 +187,21 @@ class Preferences:
             return self._preview_credentials(
                 candidate, confirm_endpoint=confirm_endpoint, api_key=api_key)
 
-    def update(self, values: dict, *, confirm_endpoint=False, api_key=None) -> dict:
+    def update(self, values: dict, *, confirm_endpoint=False, api_key=None,
+               expected_revision=_NO_REVISION) -> dict:
         if not isinstance(values, dict) or set(values) - set(DEFAULTS):
             raise ValueError('Unrecognised settings. Reload the settings page.')
         _validate_api_key(api_key)
+        if expected_revision is not _NO_REVISION and (
+                not isinstance(expected_revision, str)
+                or not re.fullmatch(r'[0-9a-f]{32}', expected_revision)):
+            raise ValueError('Provide the settings revision returned by this app.')
         with self.lock:
+            if (expected_revision is not _NO_REVISION
+                    and expected_revision != self._revision):
+                raise PreferencesConflict(
+                    'Saved settings changed. Check what is saved before '
+                    'explicitly saving again. Your form has not been applied.')
             # Partial saves (for example, a theme toggle) preserve the saved profile.
             # An explicit empty string clears just that profile field.
             validated = validate({**self._values, **values})
@@ -187,6 +209,7 @@ class Preferences:
                        or validated['provider'] != self._values['provider'])
             if changed and confirm_endpoint is not True:
                 raise ValueError('Confirm the new API destination before saving it.')
+            next_revision = secrets.token_hex(16)
             fd, name = tempfile.mkstemp(prefix='.preferences-', dir=self.path.parent)
             try:
                 with os.fdopen(fd, 'w', encoding='utf-8') as stream:
@@ -203,4 +226,6 @@ class Preferences:
             if api_key is not None:
                 self._key = api_key
             self.warning = ''
-        return self.public()
+            self._revision = next_revision
+            # Keep this acknowledgement bound to this write, including its key flag.
+            return self.public()

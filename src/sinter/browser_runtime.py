@@ -236,7 +236,10 @@ def request(raw):
             return json.dumps({"status":200,"result":result},ensure_ascii=False,allow_nan=False)
         capture = Capture(app, casebook_schema=casebooks.SCOPED_SCHEMA)
         parsed = urlsplit(path)
-        with client.connection_settings(app.connection()):
+        with app.preferences.lock:
+            connection = app.connection()
+            capture._settings_revision = app.preferences.public()["revision"]
+        with client.connection_settings(connection):
             if method == "GET":
                 capture._dispatch_get(parsed, parsed.path)
             else:

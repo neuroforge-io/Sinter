@@ -2,6 +2,7 @@ import {browserSettingsPage} from './browser-settings.js';
 /** Settings are local. API keys stay in process memory, never browser storage. */
 import {h, field, selectField, check, button, notice, announce, safeLink} from './ui.js';
 import {request} from './api.js';
+import {settingsReply, settingsOperations} from './settings-recovery.js';
 import {CONNECTION_PRESETS, connectionPreset, inferConnectionPreset, connectionTokenLimits,
   connectionDestinationChanged, connectionStatus, availableModelIds} from './provider-connection.js';
 
@@ -18,7 +19,7 @@ export function applyAppearance(settings) {
 
 export async function settingsPage() {
   if (globalThis.sinterBrowser) return browserSettingsPage(applyAppearance);
-  let current = await request('/api/settings');
+  let current = await request('/api/settings', {acceptResponse: settingsReply});
   const s = current.settings;
   const organisation = field('Your group or organisation', 'text', s.organisation, 'A local preference; no account is created.', {maxLength: 200});
   const profile = {
@@ -63,23 +64,39 @@ export async function settingsPage() {
   const catalogueState = h('div', {'aria-live': 'polite'});
   const connectionFeedback = h('div', {'aria-live': 'polite'});
   const accountState = h('div', {'aria-live': 'polite'});
+  const accountFeedback = h('div', {'aria-live': 'polite'});
   const accountActions = h('div', {class: 'button-row'});
   const savedAccount = selectField('Saved ChatGPT account', [], '', 'Reconnect an existing registration, or select a signed-in account to use.');
   const accountSelectionState = h('p', {class: 'fine'});
-  const accountPanel = h('div', {}, accountState, savedAccount.wrap, accountSelectionState, accountActions,
+  const accountPanel = h('div', {}, accountState, accountFeedback, savedAccount.wrap, accountSelectionState, accountActions,
     h('p', {class: 'fine'}, 'Set a weekly Sinter allowance in ChatGPT’s Settings → Usage → App limits. Keep credit fallback off to stay within that plan allowance. ',
       safeLink('https://chatgpt.com/settings/usage?tab=overview', 'Manage your ChatGPT app allowance')));
-  let keyEdited = false, checked = false, checking = false;
+  const operations = settingsOperations();
+  let keyEdited = false, keyRevision = 0, draftRevision = 0, checked = false;
+  const recoveryHistory = h('div', {'aria-live': 'polite'});
+  const heldKeyState = h('p', {class: 'fine'});
   let account = null, authLink = null, accountChoice = '';
+  let accountWriting = false, accountEpoch = 0, accountRead = null, accountChoiceRevision = 0;
   const signInPending = () => ['awaiting', 'waiting', 'processing'].includes(account?.pending?.status);
   const draftConnection = () => ({provider, api_url: url.input.value, model: model.input.value, max_tokens: Number(length.input.value)});
   const state = h('div', {'aria-live': 'polite'});
 
   function updateConnectionState() {
-    const status = connectionStatus({saved: s, draft: draftConnection(), keyEdited, checking, verified: checked});
+    const status = connectionStatus({saved: s, draft: draftConnection(), keyEdited,
+      checking: operations.reading('health'), verified: checked});
     const active = connectionPreset(inferConnectionPreset(s));
-    connectionState.replaceChildren(h('p', {}, h('strong', {}, `Saved connection: ${active.label}`)), notice(status.text, status.kind));
-    checkConnection.disabled = !status.canCheck;
+    connectionState.replaceChildren(h('p', {}, h('strong', {}, 'Saved connection: ' + active.label)),
+      h('p', {class: 'fine'}, 'Saved model: ' + s.model + ' · Answer length setting: ' + s.max_tokens),
+      notice(operations.blocked ? 'Check what was saved before making another change.' : status.text,
+        operations.blocked ? 'error' : status.kind));
+    checkConnection.disabled = !status.canCheck || operations.busy || operations.blocked || accountWriting;
+    loadModels.disabled = operations.busy || operations.blocked || accountWriting || operations.reading('catalogue');
+    save.disabled = saveConnection.disabled = clear.disabled = operations.busy || operations.blocked || accountWriting;
+    refreshSaved.disabled = operations.busy || accountWriting;
+    renderAccount();
+    heldKeyState.textContent = current.has_session_key
+      ? 'An API key is held for the saved connection in this running app.'
+      : 'No session API key is held for the saved connection.';
   }
   function updateLengthLimit() {
     const limits = connectionTokenLimits(draftConnection());
@@ -105,13 +122,13 @@ export async function settingsPage() {
     updateLengthLimit();
   }
   function markConnectionChanged() {
-    checked = false;
+    draftRevision++; operations.edit(); checked = false;
     catalogueState.replaceChildren(); connectionFeedback.replaceChildren();
     updateLengthLimit(); updateConnectionState();
   }
   function clearDraftKeyOnDestinationChange() {
     if (connectionDestinationChanged(s, draftConnection())) {
-      key.input.value = ''; keyEdited = true;
+      key.input.value = ''; keyEdited = true; keyRevision++;
     }
     destination.input.checked = false;
     markConnectionChanged();
@@ -132,7 +149,7 @@ export async function settingsPage() {
     clearDraftKeyOnDestinationChange(); updateRouteDetails();
   });
   [model, length].forEach(entry => entry.input.addEventListener('input', markConnectionChanged));
-  key.input.addEventListener('input', () => { keyEdited = true; markConnectionChanged(); });
+  key.input.addEventListener('input', () => { keyEdited = true; keyRevision++; markConnectionChanged(); });
 
   function renderAccount() {
     const profiles = Array.isArray(account?.profiles) ? account.profiles : [];
@@ -165,109 +182,202 @@ export async function settingsPage() {
     connectAccount.textContent = selected ? 'Reconnect selected account' : 'Sign in with ChatGPT';
     connectAccount.disabled = account?.available === false || waiting;
     addAccount.disabled = account?.available === false || waiting || profiles.length >= 20;
+    const busy = accountWriting || operations.busy || operations.blocked;
+    connectAccount.disabled ||= busy; addAccount.disabled ||= busy;
+    activateAccount.disabled = cancelSignIn.disabled = disconnectAccount.disabled = busy;
+    refreshSignIn.disabled = busy || accountRead !== null;
     accountActions.replaceChildren(connectAccount, refreshSignIn);
     if (profiles.length) accountActions.append(addAccount);
     if (selected?.connected && selected.id !== account.active_profile_id) accountActions.append(activateAccount);
     if (waiting) accountActions.append(cancelSignIn);
     if (account?.connected) accountActions.append(disconnectAccount);
   }
-  savedAccount.input.addEventListener('change', () => { accountChoice = savedAccount.input.value; renderAccount(); });
+  savedAccount.input.addEventListener('change', () => { accountChoice = savedAccount.input.value; accountChoiceRevision++; renderAccount(); });
   async function refreshAccount() {
-    refreshSignIn.disabled = true;
+    if (accountWriting || operations.busy || operations.blocked) return;
+    const token = {epoch: accountEpoch}; accountRead = token; renderAccount();
     try {
-      account = await request('/api/account');
+      const reply = await request('/api/account');
+      if (accountRead !== token || token.epoch !== accountEpoch || accountWriting) return;
+      account = reply;
       if (!signInPending()) authLink = null;
-      if (account.pending?.status === 'complete') accountChoice = account.active_profile_id || '';
-      renderAccount();
-    } catch (error) { accountState.replaceChildren(notice(error.message, 'error')); }
-    finally { refreshSignIn.disabled = false; }
+      markConnectionChanged(); renderAccount();
+    } catch (error) {
+      if (accountRead === token && token.epoch === accountEpoch && !accountWriting)
+        accountFeedback.replaceChildren(notice(error.message, 'error'));
+    } finally {
+      if (accountRead === token) { accountRead = null; renderAccount(); }
+    }
+  }
+  function beginAccountWrite() {
+    if (accountWriting || operations.busy || operations.blocked) return false;
+    accountWriting = true; accountEpoch++; accountRead = null;
+    markConnectionChanged(); renderAccount(); return true;
+  }
+  function finishAccountWrite() {
+    accountWriting = false; accountEpoch++; accountRead = null;
+    markConnectionChanged(); renderAccount();
   }
   async function beginSignIn(profileId = '') {
-    connectAccount.disabled = true; addAccount.disabled = true;
+    if (!beginAccountWrite()) return;
+    const choiceRevision = accountChoiceRevision;
     try {
       const result = await request('/api/account/connect', {data: profileId ? {profile_id: profileId} : {}});
-      account = result; authLink = result.auth_url || null; accountChoice = profileId;
+      account = result; authLink = result.auth_url || null;
+      if (profileId && accountChoiceRevision === choiceRevision) accountChoice = profileId;
       renderAccount();
-    } catch (error) { accountState.replaceChildren(notice(error.message, 'error')); }
-    finally { connectAccount.disabled = account?.available === false || signInPending(); addAccount.disabled = account?.available === false || signInPending() || (account?.profiles?.length || 0) >= 20; }
+    } catch (error) { accountFeedback.replaceChildren(notice(error.message, 'error')); }
+    finally { finishAccountWrite(); }
   }
   const connectAccount = button('Sign in with ChatGPT', () => beginSignIn(accountChoice), 'primary');
   const addAccount = button('Add another ChatGPT account', () => beginSignIn(), 'quiet');
   const refreshSignIn = button('Refresh sign-in status', refreshAccount, 'quiet');
   const activateAccount = button('Use selected account', async () => {
-    activateAccount.disabled = true;
+    if (!beginAccountWrite()) return;
     try {
       account = await request('/api/account/activate', {data: {profile_id: accountChoice}});
       authLink = null; checked = false; catalogueState.replaceChildren(); renderAccount(); updateConnectionState();
-    } catch (error) { accountState.replaceChildren(notice(error.message, 'error')); }
-    finally { activateAccount.disabled = false; }
+    } catch (error) { accountFeedback.replaceChildren(notice(error.message, 'error')); }
+    finally { finishAccountWrite(); }
   }, 'quiet');
   const cancelSignIn = button('Cancel sign-in', async () => {
+    if (!beginAccountWrite()) return;
     try { account = await request('/api/account/cancel', {data: {}}); authLink = null; renderAccount(); }
-    catch (error) { accountState.replaceChildren(notice(error.message, 'error')); }
+    catch (error) { accountFeedback.replaceChildren(notice(error.message, 'error')); }
+    finally { finishAccountWrite(); }
   }, 'quiet');
   const disconnectAccount = button('Disconnect active ChatGPT account', async () => {
+    if (!beginAccountWrite()) return;
     try { account = await request('/api/account/disconnect', {data: {}}); authLink = null; checked = false; catalogueState.replaceChildren(); renderAccount(); updateConnectionState(); }
-    catch (error) { accountState.replaceChildren(notice(error.message, 'error')); }
+    catch (error) { accountFeedback.replaceChildren(notice(error.message, 'error')); }
+    finally { finishAccountWrite(); }
   }, 'quiet');
 
   const port = field('Local RKC port', 'number', s.rkc_port, 'For an already-running local RKC context service.', {min: 1024, max: 65535});
   const executable = field('Installed RKC executable', 'text', s.rkc_executable, 'Optional absolute path. Used only when you explicitly compile a selected collection.');
-  const saveAction = async () => {
-    if (![url, model, port, organisation, length, ...Object.values(profile)].every(f => f.input.disabled || f.input.reportValidity())) return;
-    save.disabled = true; saveConnection.disabled = true;
+  function adoptSettings(reply) {
+    current = reply; Object.assign(s, reply.settings); applyAppearance(s);
+  }
+  function writeFailure(error, label) {
+    const unconfirmed = error.requestState?.outcome === 'unconfirmed';
+    const needsRefresh = unconfirmed || error.status === 409;
+    if (unconfirmed) recoveryHistory.append(notice(label +
+      ' has an unconfirmed outcome. It may have reached the app. No request was repeated. ' +
+      'Check what was saved; your form and any newer key stay here.', 'error'));
+    connectionFeedback.replaceChildren(notice(error.message, 'error'));
+    state.replaceChildren(notice(error.message, 'error'));
+    return needsRefresh;
+  }
+  const saveAction = async (connectionOnly = false) => {
+    if (operations.busy || operations.blocked || accountWriting) return;
+    const fields = connectionOnly ? [url, model, length] : [url, model, port, organisation, length, ...Object.values(profile)];
+    if (!fields.every(f => f.input.disabled || f.input.reportValidity())) return;
+    const next = connectionOnly ? draftConnection() : {
+      ...s, ...Object.fromEntries(Object.entries(profile).map(([name, entry]) => [name, entry.input.value])),
+      organisation: organisation.input.value, theme: theme.input.value, text_size: size.input.value,
+      density: density.input.value, reduce_motion: motion.input.checked, ...draftConnection(),
+      rkc_port: Number(port.input.value), rkc_executable: executable.input.value};
+    const sentKeyRevision = keyRevision, sentDraftRevision = draftRevision;
+    const token = operations.write(); if (!token) return;
+    accountEpoch++; accountRead = null;
+    checked = false; catalogueState.replaceChildren(); updateConnectionState();
+    let needsRefresh = false;
     try {
-      const next = {...s, ...Object.fromEntries(Object.entries(profile).map(([name, entry]) => [name, entry.input.value])),
-        organisation: organisation.input.value, theme: theme.input.value, text_size: size.input.value,
-        density: density.input.value, reduce_motion: motion.input.checked, ...draftConnection(),
-        rkc_port: Number(port.input.value), rkc_executable: executable.input.value};
-      current = await request('/api/settings', {data: {settings: next, confirm_endpoint: destination.input.checked,
-        ...(keyEdited ? {api_key: key.input.value} : {})}});
-      Object.assign(s, current.settings); applyAppearance(s); key.input.value = ''; keyEdited = false; checked = false;
-      destination.input.checked = false; updateConnectionState();
-      state.replaceChildren(notice('Preferences saved on this computer. '+(current.has_session_key ? 'An API key is held for this session only.' : 'No session API key is stored.'), 'success'));
-      connectionFeedback.replaceChildren(notice('Connection saved. You can check it now or start an assistant task.', 'success'));
-      announce('Preferences saved.');
-    } catch (error) { connectionFeedback.replaceChildren(notice(error.message, 'error')); state.replaceChildren(notice(error.message, 'error')); }
-    finally { save.disabled = false; saveConnection.disabled = false; }
+      const reply = await request('/api/settings', {data: {
+        settings: next, expected_revision: current.revision,
+        confirm_endpoint: destination.input.checked, ...(keyEdited ? {api_key: key.input.value} : {})
+      }, acceptResponse: settingsReply});
+      adoptSettings(reply);
+      if (keyRevision === sentKeyRevision) { key.input.value = ''; keyEdited = false; }
+      if (draftRevision === sentDraftRevision) destination.input.checked = false;
+      state.replaceChildren(notice(connectionOnly
+        ? 'Connection saved on this computer. Other preference fields were not saved.'
+        : 'Preferences saved on this computer.', 'success'));
+      connectionFeedback.replaceChildren(notice('Saved on this computer. Availability has not been checked.', 'success'));
+      announce(connectionOnly ? 'Connection saved.' : 'Preferences saved.');
+    } catch (error) { needsRefresh = writeFailure(error, connectionOnly ? 'Save connection' : 'Save preferences'); }
+    finally { operations.finishWrite(token, needsRefresh); updateConnectionState(); }
   };
-  const save = button('Save my preferences', saveAction, 'primary');
-  const saveConnection = button('Save connection', saveAction, 'primary');
+  const save = button('Save my preferences', () => saveAction(), 'primary');
+  const saveConnection = button('Save connection', () => saveAction(true), 'primary');
+  const refreshSaved = button('Check what was saved', async () => {
+    if (accountWriting) return;
+    const token = operations.recover(); if (!token) return;
+    checked = false; catalogueState.replaceChildren(); updateConnectionState();
+    let observed = false;
+    try {
+      const reply = await request('/api/settings', {acceptResponse: settingsReply});
+      if (!operations.acceptsRecovery(token)) return;
+      adoptSettings(reply); observed = true;
+      connectionFeedback.replaceChildren(notice('Saved settings observed. Your form edits are unchanged. ' +
+        'Earlier unconfirmed requests remain unconfirmed; none was repeated. ' +
+        'A subsequent explicit save is protected against an older delayed request.'));
+    } catch (error) {
+      if (operations.acceptsRecovery(token)) connectionFeedback.replaceChildren(notice(error.message, 'error'));
+    } finally { operations.finishRecovery(token, observed); updateConnectionState(); }
+  }, 'quiet');
   const checkConnection = button('Check saved connection', async () => {
-    checking = true; updateConnectionState();
-    try { const health = await request('/api/health'); checked = !!health.ok; connectionFeedback.replaceChildren(notice(health.message, checked ? 'success' : 'error')); }
-    catch (error) { checked = false; connectionFeedback.replaceChildren(notice(error.message, 'error')); }
-    finally { checking = false; updateConnectionState(); }
+    if (operations.busy || operations.blocked || accountWriting ||
+        !connectionStatus({saved: s, draft: draftConnection(), keyEdited}).canCheck) return;
+    const token = operations.read('health'); if (!token) return;
+    const revision = current.revision;
+    updateConnectionState();
+    try {
+      const health = await request('/api/health');
+      if (!operations.accepts(token)) return;
+      if (health.settings_revision !== revision) {
+        connectionFeedback.replaceChildren(notice('Saved settings changed before this check. Check what was saved, then check that connection.', 'error'));
+        return;
+      }
+      checked = health.ok === true;
+      connectionFeedback.replaceChildren(notice(health.message, checked ? 'success' : 'error'));
+    } catch (error) {
+      if (operations.accepts(token)) { checked = false; connectionFeedback.replaceChildren(notice(error.message, 'error')); }
+    } finally { operations.finishRead('health', token); updateConnectionState(); }
   }, 'quiet');
   const loadModels = button('Load available models', async () => {
-    if (!url.input.reportValidity()) return;
+    if (operations.busy || operations.blocked || accountWriting || !url.input.reportValidity()) return;
     if (connectionDestinationChanged(s, draftConnection()) && !destination.input.checked) {
       catalogueState.replaceChildren(notice('Approve the API destination above before requesting its model list.', 'error')); return;
     }
-    loadModels.disabled = true;
+    const token = operations.read('catalogue'); if (!token) return;
+    updateConnectionState();
     catalogueState.replaceChildren(notice('Loading the model catalogue. This does not generate an answer or save this connection.'));
     try {
       const result = await request('/api/models', {data: {settings: {provider, api_url: url.input.value},
         confirm_endpoint: destination.input.checked, ...(keyEdited ? {api_key: key.input.value} : {})}});
+      if (!operations.accepts(token)) return;
       const ids = availableModelIds(result);
       if (!ids.length) throw new Error('No compatible model identifiers were returned. You can still enter the exact identifier supplied by your provider.');
       const choices = selectField('Available model', [['', 'Choose a model…'], ...ids.map(id => [id, id])], '');
-      // selectField defaults empty values to the first option; selecting is always explicit.
       choices.input.value = '';
       choices.input.addEventListener('change', () => {
-        if (!choices.input.value) return;
-        model.input.value = choices.input.value; checked = false; updateLengthLimit(); updateConnectionState();
+        if (!choices.input.value || !operations.accepts(token)) return;
+        model.input.value = choices.input.value; markConnectionChanged();
+        connectionFeedback.replaceChildren(notice('Model selected in this form. Save connection to use it.'));
       });
-      catalogueState.replaceChildren(choices.wrap, h('small', {}, 'The catalogue confirms model names; availability and answer quality are tested when you run a task.'));
-    } catch (error) { catalogueState.replaceChildren(notice(error.message, 'error')); }
-    finally { loadModels.disabled = false; }
+      const resultText = ids.length + (ids.length === 1 ? ' model name loaded. ' : ' model names loaded. ') +
+        (ids.includes(model.input.value) ? 'Your current selection is unchanged.' :
+          'Your selected model is not listed. Nothing has been changed.');
+      catalogueState.replaceChildren(notice(resultText), choices.wrap,
+        h('small', {}, 'To change the model, choose explicitly, then Save connection. Loading names does not check answer quality.'));
+    } catch (error) { if (operations.accepts(token)) catalogueState.replaceChildren(notice(error.message, 'error')); }
+    finally { operations.finishRead('catalogue', token); updateConnectionState(); }
   }, 'quiet');
   const clear = button('Forget the session API key', async () => {
+    if (accountWriting) return;
+    const token = operations.write(); if (!token) return;
+    checked = false; catalogueState.replaceChildren(); updateConnectionState();
+    let needsRefresh = false;
     try {
-      current = await request('/api/settings', {data: {settings: s, api_key: ''}});
-      key.input.value = ''; keyEdited = false; checked = false; updateConnectionState();
-      state.replaceChildren(notice('Session key forgotten. Environment or key-file credentials may still apply to the default NeuroForge connection.'));
-    } catch (error) { state.replaceChildren(notice(error.message, 'error')); }
+      const reply = await request('/api/settings', {data: {
+        settings: {}, api_key: '', expected_revision: current.revision
+      }, acceptResponse: settingsReply});
+      adoptSettings(reply);
+      state.replaceChildren(notice('Held session key forgotten. Any replacement key typed in this form is unchanged. ' +
+        'Environment or key-file credentials may still apply to the default NeuroForge connection.'));
+    } catch (error) { needsRefresh = writeFailure(error, 'Forget session key'); }
+    finally { operations.finishWrite(token, needsRefresh); updateConnectionState(); }
   }, 'quiet');
   updateRouteDetails(); updateConnectionState(); renderAccount();
   if (provider === 'chatgpt') await refreshAccount();
@@ -286,8 +396,10 @@ export async function settingsPage() {
       h('p', {class: 'muted'}, 'Use NeuroForge’s ERAIS preview, your ChatGPT plan, a provider API, or a compatible model on this computer. Only the content you choose for a model task is sent to that connection.'),
       route.wrap, description, setupLink, accountPanel,
       addressDetails,
-      answerFields, lengthExplanation, key.wrap, destination.wrap,
-      h('div', {class: 'button-row'}, loadModels, saveConnection, checkConnection), catalogueState, connectionState, connectionFeedback,
+      connectionState, answerFields, lengthExplanation,
+      h('div', {class: 'button-row'}, loadModels), catalogueState,
+      key.wrap, heldKeyState, destination.wrap,
+      h('div', {class: 'button-row'}, saveConnection, checkConnection, refreshSaved), connectionFeedback, recoveryHistory,
       h('details', {}, h('summary', {}, 'Session credentials'),
         notice('API keys are held by the running Sinter app and never saved to your profile or browser storage. Changing the API address or style clears the previous session key. ChatGPT account access is managed separately.'), clear)),
     h('section', {class: 'card'}, h('h3', {}, 'Reading and appearance'),

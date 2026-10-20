@@ -24,6 +24,7 @@ from .docx_export import export_docx
 from .evidence import collect, text
 from .grants import screen
 from .meetings import parse_transcript
+from .preferences import PreferencesConflict
 from .store import calendar
 from .templates import available_templates, resolve_template, template_events
 
@@ -95,6 +96,11 @@ class RouteDispatch:
                 or (path == "/api/workbench" and body.get("use_model") is True)
             )
         )
+        if path == "/api/health" and body is None:
+            with self.app.preferences.lock:
+                candidate = self.app.preferences.connection()
+                self._settings_revision = self.app.preferences.public()["revision"]
+            return client.connection_settings(self.app.connection(candidate))
         return client.connection_settings(
             self.app.connection() if model else self.app.preferences.connection()
         )
@@ -140,7 +146,11 @@ class RouteDispatch:
             self._json({"models": client.list_models()})
         elif path == "/api/health":
             ok, message = client.health_check()
-            self._json({"ok": ok, "message": message}, 200 if ok else 503)
+            self._json(
+                {"ok": ok, "message": message,
+                 "settings_revision": self._settings_revision},
+                200 if ok else 503,
+            )
         elif path == "/api/templates":
             self._json(
                 {
@@ -201,13 +211,18 @@ class RouteDispatch:
 
     def _dispatch_post(self, path, body):
         if path == "/api/settings":
-            self._json(
-                self.app.preferences.update(
+            try:
+                result = self.app.preferences.update(
                     body.get("settings"),
                     confirm_endpoint=body.get("confirm_endpoint") is True,
                     api_key=body.get("api_key"),
+                    **({"expected_revision": body["expected_revision"]}
+                       if "expected_revision" in body else {}),
                 )
-            )
+            except PreferencesConflict as exc:
+                self._json({"error": str(exc)}, 409)
+            else:
+                self._json(result)
         elif path == "/api/models":
             candidate = self.app.preferences.preview_destination(
                 body.get("settings"),

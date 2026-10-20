@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Guard local Settings saves with an observed runtime revision. Keep newer form
+  and key drafts through delayed or unconfirmed acknowledgements; inspect saved
+  settings explicitly before a further write. Forget clears only the held key.
+- Save connection applies only connection fields, preserving unrelated profile,
+  appearance and RKC drafts. Fence stale health, catalogue and account-read results
+  without selecting a different model or replaying a request.
+
 - Block unexpected streaming and account HTTP in the offline quality harness.
   Keep fictional model fixtures above the transport guard and check native
   first-run catalogue destination fields without weakening generation identity.

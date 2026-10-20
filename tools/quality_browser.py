@@ -312,7 +312,7 @@ class QualityChecks:
         maximum.fill('512')
         page.get_by_label('Reading size', exact=True).select_option('large')
         page.get_by_label('Colour theme', exact=True).select_option('light')
-        save_connection.click()
+        page.get_by_role('button', name='Save my preferences', exact=True).click()
         expect(page.locator('html')).to_have_attribute('data-text-size', 'large')
         expect(page.locator('html')).to_have_attribute('data-theme', 'light')
         expect(page.get_by_text('Preferences saved on this computer.', exact=False)).to_be_visible()
@@ -332,7 +332,7 @@ class QualityChecks:
         model.fill('erais-native-qwen3')
         maximum.fill('16')
         page.get_by_role('button', name='Save connection', exact=True).click()
-        expect(page.get_by_text('Connection saved. You can check it now or start an assistant task.', exact=True)).to_be_visible()
+        expect(page.get_by_text('Saved on this computer. Availability has not been checked.', exact=True)).to_be_visible()
         original = preferences.path.read_bytes()
         observed = []
 
