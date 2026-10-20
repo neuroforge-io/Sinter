@@ -1,5 +1,6 @@
 """User-facing review recovery regressions; responses are deterministic fixtures."""
 import json
+import hashlib
 import os
 import runpy
 import shutil
@@ -796,6 +797,7 @@ def _exercise_wrapper_fixture(
     tmp_path: Path, wrapper: str, arguments: list[str],
     request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, *,
     lane: str = 'system-discovery',
+    wrapper_bytes: bytes | None = None, windows_tree: bool = False,
 ) -> None:
     """Exercise one unchanged native wrapper with honest runtime diagnostics.
 
@@ -811,7 +813,11 @@ def _exercise_wrapper_fixture(
     directory = tmp_path / 'source folder with spaces'
     directory.mkdir()
     launcher = directory / wrapper
-    shutil.copyfile(Path(__file__).parents[1] / wrapper, launcher)
+    if wrapper_bytes is None:
+        shutil.copyfile(Path(__file__).parents[1] / wrapper, launcher)
+    else:
+        assert isinstance(wrapper_bytes, bytes) and len(wrapper_bytes) <= 65536
+        launcher.write_bytes(wrapper_bytes)
     marker, stages = tmp_path / 'wrapper-marker.json', tmp_path / 'wrapper-stages.bin'
     batch_stages = tmp_path / 'wrapper-batch-stages.bin'
     selection = {
@@ -885,11 +891,19 @@ def _exercise_wrapper_fixture(
         command = f'{shell} /d /s /c "{invocation}"'
     else:
         command = ['sh', str(launcher), *arguments]
+    ownership = {}
+    if windows_tree:
+        assert windows, "Owned Windows qualification needs the real Windows wrapper."
+        ownership = {"windows_tree": True, "windows_executable": os.environ["COMSPEC"]}
     observation, stdout = observe_wrapper(
         command, tmp_path, marker, timeout=5,
         phase_paths=({'batch': batch_stages, 'python': stages}
                      if windows else {'python': stages}),
+        **ownership,
     )
+    if wrapper_bytes is not None:
+        observation["wrapper_bytes"] = len(wrapper_bytes)
+        observation["wrapper_sha256"] = hashlib.sha256(wrapper_bytes).hexdigest()
     observation['startup_stages'] = _wrapper_stage_observation(stages)
     if windows:
         observation['batch_stages'] = _wrapper_batch_stage_observation(batch_stages)

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Resolve the first admitted Windows PATH Python inside CMD, avoiding external
+  lookup processes on that path. Preserve later enumeration after refusal,
+  explicit local runtimes, positive version admission and application status.
+  Qualify discovery with owned-process recovery and a frozen A/B/B/A source
+  comparison under the existing five-second readiness criterion.
+
 - Compose new handover openings as ordinary editable item sections, with proposed
   next steps and evidence before longer status, responsibility and timing. Keep
   original sources and earlier saved table openings; preserve literal wording and

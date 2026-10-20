@@ -157,14 +157,27 @@ _UNRESOLVED_OWNERS = {}
 class WindowsOwnedProcess:
     """Own one explicit executable and its descendants, including on owner death."""
 
-    def __init__(self, command, *, cwd, stdout, stderr, _api=None):
+    def __init__(self, command, *, cwd, stdout, stderr, executable=None, _api=None):
         if _UNRESOLVED_OWNERS:
             raise OSError("A prior Windows owner has unproven cleanup; further launches are quarantined.")
         self._api = _api if _api is not None else _WinAPI()
-        if not isinstance(command, (list, tuple)) or not command:
-            raise ValueError("Pass an argument sequence with an absolute executable.")
-        self.args = [os.fspath(value) for value in command]
-        if not Path(self.args[0]).is_absolute():
+        if isinstance(command, str):
+            if not command or "\x00" in command or executable is None:
+                raise ValueError("A raw command requires an explicit absolute executable.")
+            self.args = command
+            line = command  # Preserve CMD quoting verbatim, without argv re-escaping.
+            application = os.fspath(executable)
+        elif isinstance(command, (list, tuple)) and command:
+            self.args = [os.fspath(value) for value in command]
+            if any("\x00" in value for value in self.args):
+                raise ValueError("A process argument contains a null character.")
+            if executable is not None:
+                raise ValueError("Only raw commands take an explicit executable.")
+            application = self.args[0]
+            line = subprocess.list2cmdline(self.args)
+        else:
+            raise ValueError("Pass a nonempty argument sequence or explicit raw command.")
+        if not Path(application).is_absolute():
             raise ValueError("The qualification executable must be absolute.")
         # Register output storage before any native call can populate it.
         self._info = _ProcessInfo()
@@ -216,9 +229,9 @@ class WindowsOwnedProcess:
             startup.StartupInfo.hStdInput, startup.StartupInfo.hStdOutput, \
                 startup.StartupInfo.hStdError = inherited_values
             startup.attributes = ctypes.cast(attribute_buffer, ctypes.c_void_p)
-            line = ctypes.create_unicode_buffer(subprocess.list2cmdline(self.args))
+            line = ctypes.create_unicode_buffer(line)
             _check(self._api.create(
-                self.args[0], line, None, None, True,
+                application, line, None, None, True,
                 0x00080004,  # EXTENDED_STARTUPINFO_PRESENT | CREATE_SUSPENDED.
                 None, os.fspath(cwd), ctypes.byref(startup), ctypes.byref(self._info),
             ))
@@ -307,6 +320,13 @@ class WindowsOwnedProcess:
         _check(self._api.query_job(
             self._job, 1, ctypes.byref(accounting), ctypes.sizeof(accounting), None,
         ))
+        self._last_accounting = {
+            "total_processes": accounting.total_processes,
+            "active_processes": accounting.active_processes,
+            "terminated_processes": accounting.terminated_processes,
+            "user_time_100ns": accounting.user_time,
+            "kernel_time_100ns": accounting.kernel_time,
+        }
         return accounting.active_processes
 
     def poll(self):
@@ -364,6 +384,7 @@ class WindowsOwnedProcess:
         try:
             if self._job:
                 receipt["active_before"] = self.active_processes()
+                receipt["process_counts_before"] = dict(self._last_accounting)
                 if receipt["active_before"]:
                     self.kill()
                 if self._created:
@@ -371,6 +392,7 @@ class WindowsOwnedProcess:
                     receipt["parent_reaped"] = self.returncode is not None
                 while True:
                     receipt["active_after"] = self.active_processes()
+                    receipt["process_counts_after"] = dict(self._last_accounting)
                     if receipt["active_after"] == 0:
                         break
                     remaining = deadline - time.monotonic()

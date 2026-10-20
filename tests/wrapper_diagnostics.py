@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -190,6 +191,8 @@ def observe_wrapper(
     timeout=5,
     *,
     phase_paths: dict[str, Path] | None = None,
+    windows_tree: bool = False,
+    windows_executable: str | None = None,
 ) -> tuple[dict, bytes | None]:
     """Wait for the owned parent, retaining observations even on timeout."""
     stdout_path = directory / "wrapper.stdout.bin"
@@ -231,14 +234,29 @@ def observe_wrapper(
     # Do not use Popen as a context manager: its exit may wait without a bound.
     with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
         try:
-            started = time.monotonic() if phase_paths is not None else None
-            process = subprocess.Popen(
-                command,
-                cwd=directory,
-                stdin=subprocess.DEVNULL,
-                stdout=stdout,
-                stderr=stderr,
-            )
+            started = time.monotonic() if phase_paths is not None or windows_tree else None
+            if windows_tree:
+                from windows_process_owner import WindowsOwnedProcess
+
+                observation["ownership_mode"] = "windows-job"
+                observation["owned_cleanup_budget_seconds"] = 2
+                if phase_paths is not None:
+                    observation["phase_timing"]["origin"] = (
+                        "Parent monotonic time before owned process construction; "
+                        "the unchanged wait budget starts after construction."
+                    )
+                process = WindowsOwnedProcess(
+                    command, executable=windows_executable, cwd=directory,
+                    stdout=stdout, stderr=stderr,
+                )
+            else:
+                process = subprocess.Popen(
+                    command,
+                    cwd=directory,
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout,
+                    stderr=stderr,
+                )
             observation["pid"] = process.pid
             phase = "wait"
             try:
@@ -255,13 +273,36 @@ def observe_wrapper(
             except subprocess.TimeoutExpired:
                 observation["timed_out"] = True
             observation["returncode_before_cleanup"] = process.poll()
+        except (KeyboardInterrupt, SystemExit) as exc:
+            if windows_tree:
+                if hasattr(exc, "owned_tree"):
+                    observation["owned_tree"] = exc.owned_tree
+                exc.wrapper_observation = observation
+            raise
         except OSError as exc:
+            if windows_tree and hasattr(exc, "owned_tree"):
+                observation["owned_tree"] = exc.owned_tree
+                if not exc.owned_tree["clean"]:
+                    observation["cleanup_errors"].append("Owned setup cleanup is unproven.")
             observation["operation_error"] = {
                 "phase": phase,
                 "error": f"{type(exc).__name__}: {exc}",
             }
         finally:
-            if process is not None:
+            if process is not None and windows_tree:
+                proof = process.finish(timeout=2)
+                observation["owned_tree"] = proof
+                observation["kill_attempted"] = bool(proof["active_before"])
+                observation["returncode"] = process.returncode
+                observation["parent_exited"] = proof["parent_reaped"]
+                observation["full_owned_elapsed_seconds"] = time.monotonic() - started
+                if not proof["clean"]:
+                    observation["cleanup_errors"].append("Owned Windows tree cleanup is unproven.")
+                interruption = process._cleanup_interruption
+                if interruption is not None and sys.exc_info()[0] is None:
+                    interruption.wrapper_observation = observation
+                    raise interruption
+            elif process is not None:
                 if process.poll() is None:
                     observation["kill_attempted"] = True
                     try:

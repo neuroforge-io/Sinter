@@ -2,6 +2,7 @@
 
 import builtins
 import json
+import hashlib
 import os
 import shutil
 import subprocess
@@ -304,6 +305,9 @@ def test_windows_fixture_requests_both_launcher_policies_before_one_launch(
 def _windows_selection_fixture(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest,
     *, lane: str, exit_code: int = 0, trace_enabled: bool = True,
+    wrapper_bytes: bytes | None = None, windows_tree: bool = False,
+    path_format: str = "plain", runtime_path: Path | None = None,
+    cwd_python_decoy: bool = False,
 ) -> dict:
     """Run the real batch wrapper with an owned zero-work entry, never Sinter.
 
@@ -313,8 +317,16 @@ def _windows_selection_fixture(
     """
     source = tmp_path / "source Ω & (draft)! 100% folder"
     source.mkdir()
+    if cwd_python_decoy:
+        (source / "python.exe").write_bytes(b"not an executable")
+        (source / "Lib").mkdir()
+        (source / "Lib" / "os.py").write_text("# current-directory refusal fixture\n")
     launcher = source / "Start-Sinter.bat"
-    shutil.copyfile(Path(fixtures.__file__).parents[1] / launcher.name, launcher)
+    if wrapper_bytes is None:
+        shutil.copyfile(Path(fixtures.__file__).parents[1] / launcher.name, launcher)
+    else:
+        assert isinstance(wrapper_bytes, bytes) and len(wrapper_bytes) <= 65536
+        launcher.write_bytes(wrapper_bytes)
     marker, stages = tmp_path / "runtime.json", tmp_path / "stages.bin"
     batch_stages = tmp_path / "batch-stages.bin"
     (source / "start.py").write_text(
@@ -324,7 +336,7 @@ def _windows_selection_fixture(
     )
     system32 = Path(os.environ["SystemRoot"]) / "System32"
     py = shutil.which("py.exe")
-    runtime = Path(sys.executable).parent
+    runtime = runtime_path if runtime_path is not None else Path(sys.executable).parent
     path = [system32]
     if lane in {"registered-fallback", "broken-before-fallback"}:
         assert py, "The Windows CI image must provide its registered launcher."
@@ -350,7 +362,15 @@ def _windows_selection_fixture(
         private = source / ".venv" / "Scripts"
         private.mkdir(parents=True)
         (private / "python.exe").write_bytes(b"not an executable")
-    monkeypatch.setenv("PATH", os.pathsep.join(map(str, path)))
+    if path_format == "plain":
+        path_text = os.pathsep.join(map(str, path))
+    elif path_format == "quoted":
+        path_text = os.pathsep.join('"' + str(p) + '"' for p in path)
+    elif path_format == "casefold":
+        path_text = os.pathsep.join(str(p).casefold() for p in path)
+    else:
+        raise ValueError("Unknown PATH fixture representation.")
+    monkeypatch.setenv("PATH", path_text)
     if trace_enabled:
         monkeypatch.setenv("SINTER_FIXTURE_BATCH_STAGES", str(batch_stages))
     else:
@@ -362,10 +382,18 @@ def _windows_selection_fixture(
     shell = subprocess.list2cmdline([os.environ["COMSPEC"]])
     invocation = subprocess.list2cmdline([str(launcher), *arguments])
     command = f'{shell} /d /s /c "{invocation}"'
+    ownership = (
+        {"windows_tree": True, "windows_executable": os.environ["COMSPEC"]}
+        if windows_tree else {}
+    )
     observation, stdout = fixtures.observe_wrapper(
         command, tmp_path, marker, timeout=5,
         phase_paths={"batch": batch_stages, "python": stages},
+        **ownership,
     )
+    if wrapper_bytes is not None:
+        observation["wrapper_bytes"] = len(wrapper_bytes)
+        observation["wrapper_sha256"] = hashlib.sha256(wrapper_bytes).hexdigest()
     observation["startup_stages"] = fixtures._wrapper_stage_observation(stages)
     observation["batch_stages"] = fixtures._wrapper_batch_stage_observation(
         batch_stages
@@ -400,7 +428,7 @@ def _windows_selection_fixture(
     assert observation["startup_stages"]["lines"].count("python_entered") == 1, raw
     assert observation["startup_stages"]["lines"].count("marker_written") == 1, raw
     if lane in {"path-failure", "alias-before-path"}:
-        assert Path(actual["executable"]).resolve() == Path(sys.executable).resolve()
+        assert Path(actual["executable"]).resolve() == (runtime / "python.exe").resolve()
     if lane == "local-failure":
         assert Path(actual["executable"]).resolve() == (
             source / ".venv" / "Scripts" / "python.exe"
