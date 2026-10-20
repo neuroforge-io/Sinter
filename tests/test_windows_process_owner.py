@@ -351,3 +351,160 @@ def test_uncertain_cleanup_quarantines_launches_without_replaying_handles(tmp_pa
         (Path(destination) / ("inner-uncertain-" + fault + ".json")).write_text(
             json.dumps(value, indent=2), encoding="utf-8",
         )
+
+
+@WINDOWS
+def test_raw_cmd_keeps_original_quoting_normal_application_flags_and_status(tmp_path, monkeypatch):
+    script = tmp_path / "raw Ω & (draft)! 100%.bat"
+    entry = tmp_path / "entry Ω ! 100%.py"
+    entry.write_text(
+        "import json,sys\n"
+        "print(json.dumps({'args':sys.argv[1:], 'isolated':sys.flags.isolated, "
+        "'no_site':sys.flags.no_site}),flush=True)\nraise SystemExit(7)\n",
+        encoding="utf-8",
+    )
+    script.write_text(
+        '@echo off\nsetlocal EnableExtensions DisableDelayedExpansion\n'
+        '"%SINTER_RAW_PYTHON%" "%SINTER_RAW_ENTRY%" %*\nexit /b %errorlevel%\n',
+        encoding="utf-8", newline="\r\n",
+    )
+    monkeypatch.setenv("SINTER_RAW_PYTHON", sys.executable)
+    monkeypatch.setenv("SINTER_RAW_ENTRY", str(entry))
+    arguments = ["review", "notes Ω & (draft)! 100% ready.txt", "--offline"]
+    shell = subprocess.list2cmdline([os.environ["COMSPEC"]])
+    invocation = subprocess.list2cmdline([str(script), *arguments])
+    command = f'{shell} /d /s /c "{invocation}"'
+    with (tmp_path / "raw-out").open("wb") as out, (tmp_path / "raw-err").open("wb") as err:
+        process = owner.WindowsOwnedProcess(
+            command, executable=os.environ["COMSPEC"], cwd=tmp_path, stdout=out, stderr=err,
+        )
+    try:
+        assert process.wait(timeout=5) == 7
+    finally:
+        proof = _receipt(process, tmp_path, "raw-cmd")
+    assert json.loads((tmp_path / "raw-out").read_text()) == {
+        "args": arguments, "isolated": 0, "no_site": 0,
+    }
+    assert process.args == command
+    assert proof["process_counts_after"]["total_processes"] >= 2
+
+
+@WINDOWS
+def test_interrupted_resume_retains_partial_work_and_unknown_resume_outcome(tmp_path, monkeypatch):
+    marker = tmp_path / "partial.txt"
+    api = owner._WinAPI()
+    native = api.resume
+    original = KeyboardInterrupt("controlled interrupt after native resume")
+
+    def interrupted_resume(thread):
+        assert native(thread) == 1
+        _wait_for(marker)
+        raise original
+
+    monkeypatch.setattr(api, "resume", interrupted_resume)
+    with pytest.raises(KeyboardInterrupt) as caught:
+        _launch(tmp_path, (
+            f"open({str(marker)!r},'w').write('fictional partial retained')\n"
+            "import time;time.sleep(30)\n"
+        ), _api=api)
+    assert caught.value is original
+    proof = caught.value.owned_tree
+    assert proof["clean"] and proof["parent_reaped"] and proof["active_after"] == 0
+    assert proof["resume_outcome"] == "unconfirmed" and proof["resumed"] is False
+    assert marker.read_text() == "fictional partial retained"
+    destination = os.environ.get("SINTER_STARTUP_DIAGNOSTICS_DIR")
+    if destination:
+        (Path(destination) / "after-native-resume.json").write_text(
+            json.dumps(proof, indent=2), encoding="utf-8",
+        )
+
+
+@WINDOWS
+def test_owned_observer_keeps_five_second_wait_and_separate_cleanup_proof(tmp_path):
+    import wrapper_diagnostics
+
+    shell = subprocess.list2cmdline([os.environ["COMSPEC"]])
+    value, raw = wrapper_diagnostics.observe_wrapper(
+        f'{shell} /d /s /c "exit /b 7"', tmp_path, tmp_path / "no-marker",
+        timeout=5, phase_paths={"batch": tmp_path / "no-batch"},
+        windows_tree=True, windows_executable=os.environ["COMSPEC"],
+    )
+    assert value["returncode_before_cleanup"] == value["returncode"] == 7
+    assert value["timed_out"] is False and value["cleanup_errors"] == []
+    assert value["owned_tree"]["clean"] and value["owned_tree"]["active_after"] == 0
+    assert value["phase_timing"]["wait_budget_seconds"] == 5
+    assert value["owned_cleanup_budget_seconds"] == 2
+    assert value["full_owned_elapsed_seconds"] >= 0
+    assert value["descendants_observed"] is False
+    assert value["stdout"]["final_stream_proven"] is False
+    assert raw == b""
+
+
+@WINDOWS
+def test_owned_observer_preserves_interruption_after_real_creation(tmp_path, monkeypatch):
+    import wrapper_diagnostics
+
+    api = owner._WinAPI()
+    native = api.create
+    original = KeyboardInterrupt("controlled observer creation interrupt")
+
+    def interrupted_create(*args):
+        owner._check(native(*args))
+        raise original
+
+    monkeypatch.setattr(api, "create", interrupted_create)
+    monkeypatch.setattr(owner, "_WinAPI", lambda: api)
+    shell = subprocess.list2cmdline([os.environ["COMSPEC"]])
+    with pytest.raises(KeyboardInterrupt) as caught:
+        wrapper_diagnostics.observe_wrapper(
+            f'{shell} /d /s /c "exit /b 0"', tmp_path, tmp_path / "no-marker",
+            timeout=5, windows_tree=True, windows_executable=os.environ["COMSPEC"],
+        )
+    assert caught.value is original
+    value = caught.value.wrapper_observation
+    assert value["owned_tree"]["clean"] and value["owned_tree"]["process_created"]
+    assert value["owned_tree"]["parent_reaped"] and value["owned_tree"]["active_after"] == 0
+    assert value["stdout"]["sample_base64"] == ""
+    assert value["stderr"]["sample_base64"] == ""
+    assert "error" in value["marker"]
+
+
+@WINDOWS
+def test_owned_observer_retains_partial_samples_and_original_wait_interruption(tmp_path, monkeypatch):
+    import wrapper_diagnostics
+
+    marker = tmp_path / "partial-marker.json"
+    ready = tmp_path / "partial-ready"
+    native = owner.WindowsOwnedProcess.wait
+    original = KeyboardInterrupt("controlled observer wait interrupt")
+    def interrupted_wait(process, timeout=None):
+        try:
+            _wait_for(ready)
+        finally:
+            monkeypatch.setattr(owner.WindowsOwnedProcess, "wait", native)
+        raise original
+    monkeypatch.setattr(owner.WindowsOwnedProcess, "wait", interrupted_wait)
+    with pytest.raises(KeyboardInterrupt) as caught:
+        wrapper_diagnostics.observe_wrapper(
+            [sys.executable, "-I", "-S", "-B", "-c",
+             "import sys,time;from pathlib import Path;"
+             "print('fictional partial stdout',flush=True);"
+             "print('fictional partial stderr',file=sys.stderr,flush=True);"
+             f"Path({str(marker)!r}).write_text('{{\"partial\":true}}');"
+             f"Path({str(ready)!r}).write_text('ready');"
+             "time.sleep(30)"],
+            tmp_path, marker, timeout=5, windows_tree=True,
+        )
+    assert caught.value is original
+    value = caught.value.wrapper_observation
+    assert value["owned_tree"]["clean"] and value["owned_tree"]["active_after"] == 0
+    assert value["owned_tree"]["parent_reaped"] and value["marker"]["value"] == {"partial": True}
+    assert value["stdout"]["sample_bytes"] > 0 and value["stderr"]["sample_bytes"] > 0
+    assert value["stdout"]["metadata_stable_snapshot"] and value["stderr"]["metadata_stable_snapshot"]
+    assert marker.read_text() == '{"partial":true}'
+    monkeypatch.setattr(owner.WindowsOwnedProcess, "wait", native)
+    destination = os.environ.get("SINTER_STARTUP_DIAGNOSTICS_DIR")
+    if destination:
+        (Path(destination) / "observer-interrupted-partial.json").write_text(
+            json.dumps(value, indent=2), encoding="utf-8",
+        )

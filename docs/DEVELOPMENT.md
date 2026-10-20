@@ -517,3 +517,44 @@ original five-second fixture readiness criterion and account for any separate
 cleanup deadline. A passing owner control is not a launcher speedup, supported
 installer qualification or evidence that the existing Windows readiness failures
 are fixed.
+
+
+### Matched Windows source-wrapper comparison
+
+The same dedicated workflow first qualifies the owner, including raw CMD
+forwarding and interrupted resume. It then runs the frozen b269 launcher and
+candidate in A/B/B/A order on one runner per Python lane, with fresh directories
+and the existing zero-work entry and assertions. Both wrappers retain isolated
+positive Python admission and ordinary application invocation. The five-second
+wait starts after process construction; ownership has a separately recorded
+two-second cleanup budget. Every cell must prove an empty owned job and reaped
+parent before another launch.
+
+The baseline remains exactly 4,471 Git bytes with SHA-256
+`319f2079a920f22ce1878f64a6a2b0b38e18f7c42019a137070b63fc41c50cf7`.
+The comparison reads baseline and candidate from immutable Git objects rather
+than Windows checkout newline conversion. Source receipts retain both Git and
+checked-out hashes. Entry hashes normalize only the declared fresh-cell prefix;
+the original imports and readiness marker stay inside their original budget.
+
+Reports retain failed baseline cells rather than excluding them from averages.
+Timing and process-count comparisons are admitted only when all four original
+assertions pass and observed runtimes and normalized entries match. Owned
+lifecycle durations include construction, wait and cleanup, and exclude fixture
+preparation and subsequent bounded diagnostic snapshots; no overhead is subtracted.
+Interrupted observations retain bounded partial stdout, stderr and marker samples
+without replacing the original interruption. Native job accounting
+records actual cumulative process counts and CPU counters separately from host
+phase observations. Counts and timings qualify this source-wrapper workload,
+not an installed application, arbitrary host or useful hosted generation.
+
+Candidate controls retain refusal, later fallback, missing/broken local runtimes,
+normal nonzero status, quoted/mixed/case-varied PATH, current-directory exclusion and
+literal metacharacters. Existing listing and signed probe-exit controls retain
+their original assertions. The product fast path preserves the original WHERE
+enumeration whenever its builtin lookup admits nothing; no runtime is accepted
+without the existing isolated proof. Lookup removes quote characters in a private
+search variable without changing the application\'s original PATH. Paired controls
+retain baseline semantics for empty, quoted-empty and explicit-dot entries.
+Builtin results in the app directory defer to the original WHERE enumeration,
+which decides whether an explicit directory entry actually selects that location.

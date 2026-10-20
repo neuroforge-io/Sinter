@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -183,6 +184,18 @@ def _snapshot(path: Path, limit=MAX_SNAPSHOT_BYTES) -> tuple[dict, bytes | None]
     return observation, data if complete else None
 
 
+def _wrapper_snapshots(observation, stdout_path, stderr_path, marker):
+    observation["stdout"], stdout_data = _snapshot(stdout_path)
+    observation["stderr"], _ = _snapshot(stderr_path)
+    observation["marker"], marker_data = _snapshot(marker, limit=MAX_SAMPLE_BYTES)
+    if marker_data is not None:
+        try:
+            observation["marker"]["value"] = json.loads(marker_data)
+        except (UnicodeError, ValueError) as exc:
+            observation["marker"]["parse_error"] = f"{type(exc).__name__}: {exc}"
+    return stdout_data
+
+
 def observe_wrapper(
     command,
     directory: Path,
@@ -190,6 +203,8 @@ def observe_wrapper(
     timeout=5,
     *,
     phase_paths: dict[str, Path] | None = None,
+    windows_tree: bool = False,
+    windows_executable: str | None = None,
 ) -> tuple[dict, bytes | None]:
     """Wait for the owned parent, retaining observations even on timeout."""
     stdout_path = directory / "wrapper.stdout.bin"
@@ -229,61 +244,104 @@ def observe_wrapper(
     process = None
     phase = "launch"
     # Do not use Popen as a context manager: its exit may wait without a bound.
-    with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
-        try:
-            started = time.monotonic() if phase_paths is not None else None
-            process = subprocess.Popen(
-                command,
-                cwd=directory,
-                stdin=subprocess.DEVNULL,
-                stdout=stdout,
-                stderr=stderr,
-            )
-            observation["pid"] = process.pid
-            phase = "wait"
+    try:
+        with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
             try:
-                if phase_paths is None:
-                    process.wait(timeout=timeout)
-                else:
-                    _wait_with_phases(
-                        process,
-                        timeout,
-                        phase_paths,
-                        observation["phase_timing"],
-                        started,
+                started = time.monotonic() if phase_paths is not None or windows_tree else None
+                if windows_tree:
+                    from windows_process_owner import WindowsOwnedProcess
+
+                    observation["ownership_mode"] = "windows-job"
+                    observation["owned_cleanup_budget_seconds"] = 2
+                    if phase_paths is not None:
+                        observation["phase_timing"]["origin"] = (
+                            "Parent monotonic time before owned process construction; "
+                            "the unchanged wait budget starts after construction."
+                        )
+                    process = WindowsOwnedProcess(
+                        command, executable=windows_executable, cwd=directory,
+                        stdout=stdout, stderr=stderr,
                     )
-            except subprocess.TimeoutExpired:
-                observation["timed_out"] = True
-            observation["returncode_before_cleanup"] = process.poll()
-        except OSError as exc:
-            observation["operation_error"] = {
-                "phase": phase,
-                "error": f"{type(exc).__name__}: {exc}",
-            }
-        finally:
-            if process is not None:
-                if process.poll() is None:
-                    observation["kill_attempted"] = True
-                    try:
-                        process.kill()
-                    except OSError as exc:
-                        observation["cleanup_errors"].append(
-                            f"kill: {type(exc).__name__}: {exc}"
+                else:
+                    process = subprocess.Popen(
+                        command,
+                        cwd=directory,
+                        stdin=subprocess.DEVNULL,
+                        stdout=stdout,
+                        stderr=stderr,
+                    )
+                observation["pid"] = process.pid
+                phase = "wait"
+                try:
+                    if phase_paths is None:
+                        process.wait(timeout=timeout)
+                    else:
+                        _wait_with_phases(
+                            process,
+                            timeout,
+                            phase_paths,
+                            observation["phase_timing"],
+                            started,
                         )
-                    try:
-                        process.wait(timeout=REAP_TIMEOUT)
-                    except (OSError, subprocess.TimeoutExpired) as exc:
-                        observation["cleanup_errors"].append(
-                            f"wait: {type(exc).__name__}: {exc}"
-                        )
-                observation["returncode"] = process.poll()
-                observation["parent_exited"] = process.returncode is not None
-    observation["stdout"], stdout_data = _snapshot(stdout_path)
-    observation["stderr"], _ = _snapshot(stderr_path)
-    observation["marker"], marker_data = _snapshot(marker, limit=MAX_SAMPLE_BYTES)
-    if marker_data is not None:
-        try:
-            observation["marker"]["value"] = json.loads(marker_data)
-        except (UnicodeError, ValueError) as exc:
-            observation["marker"]["parse_error"] = f"{type(exc).__name__}: {exc}"
+                except subprocess.TimeoutExpired:
+                    observation["timed_out"] = True
+                observation["returncode_before_cleanup"] = process.poll()
+            except (KeyboardInterrupt, SystemExit) as exc:
+                if windows_tree:
+                    if hasattr(exc, "owned_tree"):
+                        observation["owned_tree"] = exc.owned_tree
+                    exc.wrapper_observation = observation
+                raise
+            except OSError as exc:
+                if windows_tree and hasattr(exc, "owned_tree"):
+                    observation["owned_tree"] = exc.owned_tree
+                    if not exc.owned_tree["clean"]:
+                        observation["cleanup_errors"].append("Owned setup cleanup is unproven.")
+                observation["operation_error"] = {
+                    "phase": phase,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            finally:
+                if process is not None and windows_tree:
+                    proof = process.finish(timeout=2)
+                    observation["owned_tree"] = proof
+                    observation["kill_attempted"] = bool(proof["active_before"])
+                    observation["returncode"] = process.returncode
+                    observation["parent_exited"] = proof["parent_reaped"]
+                    observation["full_owned_elapsed_seconds"] = time.monotonic() - started
+                    if not proof["clean"]:
+                        observation["cleanup_errors"].append("Owned Windows tree cleanup is unproven.")
+                    interruption = process._cleanup_interruption
+                    if interruption is not None and sys.exc_info()[0] is None:
+                        interruption.wrapper_observation = observation
+                        raise interruption
+                elif process is not None:
+                    if process.poll() is None:
+                        observation["kill_attempted"] = True
+                        try:
+                            process.kill()
+                        except OSError as exc:
+                            observation["cleanup_errors"].append(
+                                f"kill: {type(exc).__name__}: {exc}"
+                            )
+                        try:
+                            process.wait(timeout=REAP_TIMEOUT)
+                        except (OSError, subprocess.TimeoutExpired) as exc:
+                            observation["cleanup_errors"].append(
+                                f"wait: {type(exc).__name__}: {exc}"
+                            )
+                    observation["returncode"] = process.poll()
+                    observation["parent_exited"] = process.returncode is not None
+    except (KeyboardInterrupt, SystemExit) as exc:
+        if windows_tree:
+            # Cleanup ran first. Keep bounded partial evidence without replacing the fault.
+            exc.wrapper_observation = observation
+            try:
+                _wrapper_snapshots(observation, stdout_path, stderr_path, marker)
+            except BaseException as sample_error:
+                observation["interrupted_snapshot_error"] = (
+                    f"{type(sample_error).__name__}: {sample_error}"
+                )
+        raise
+    stdout_data = _wrapper_snapshots(observation, stdout_path, stderr_path, marker)
     return observation, stdout_data

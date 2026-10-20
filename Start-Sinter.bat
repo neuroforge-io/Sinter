@@ -10,17 +10,37 @@ if exist ".venv\Scripts\python.exe" (
 )
 set "SINTER_PYTHON="
 set "SINTER_PY_LAUNCHER="
+set "SINTER_FIRST_PATH="
+set "SINTER_CANDIDATE="
+rem Quotes are not directory-name characters; keep child PATH unchanged.
+set "SINTER_SEARCH_PATH=%PATH:"=%"
 if defined SINTER_FIXTURE_BATCH_STAGES call :trace python_lookup_begin
-for /f "delims=" %%P in ('"%SystemRoot%\System32\where.exe" $PATH:python.exe 2^>nul') do (
-  set "SINTER_CANDIDATE=%%P"
-  call :probe_candidate
+rem Resolve the first PATH match inside cmd; keep positive runtime admission.
+for %%P in (python.exe) do set "SINTER_CANDIDATE=%%~$SINTER_SEARCH_PATH:P"
+rem Builtin lookup may treat an empty PATH entry as the current directory.
+rem Defer that case to WHERE, preserving its original empty/dot semantics.
+for %%P in ("%SINTER_CANDIDATE%") do if /i "%%~dpP"=="%~dp0" set "SINTER_CANDIDATE="
+set "SINTER_FIRST_PATH=%SINTER_CANDIDATE%"
+if defined SINTER_CANDIDATE call :probe_candidate
+if defined SINTER_PYTHON goto :python_lookup_done
+rem If the fast lookup admits nothing, preserve the existing enumeration order.
+for /f "delims=" %%P in ('"%SystemRoot%\System32\where.exe" $SINTER_SEARCH_PATH:python.exe 2^>nul') do (
+  if /i not "%%~fP"=="%SINTER_FIRST_PATH%" (
+    set "SINTER_CANDIDATE=%%P"
+    call :probe_candidate
+  )
 )
+:python_lookup_done
 if defined SINTER_FIXTURE_BATCH_STAGES call :trace python_lookup_end
 if defined SINTER_PYTHON goto :launch
 rem Listing installed runtimes never requests a download. Do not launch py -3.
 if defined SINTER_FIXTURE_BATCH_STAGES call :trace launcher_lookup_begin
-for /f "delims=" %%P in ('"%SystemRoot%\System32\where.exe" $PATH:py.exe 2^>nul') do (
-  if not defined SINTER_PY_LAUNCHER set "SINTER_PY_LAUNCHER=%%P"
+for %%P in (py.exe) do set "SINTER_PY_LAUNCHER=%%~$SINTER_SEARCH_PATH:P"
+for %%P in ("%SINTER_PY_LAUNCHER%") do if /i "%%~dpP"=="%~dp0" set "SINTER_PY_LAUNCHER="
+if not defined SINTER_PY_LAUNCHER (
+  for /f "delims=" %%P in ('"%SystemRoot%\System32\where.exe" $SINTER_SEARCH_PATH:py.exe 2^>nul') do (
+    if not defined SINTER_PY_LAUNCHER set "SINTER_PY_LAUNCHER=%%P"
+  )
 )
 if defined SINTER_FIXTURE_BATCH_STAGES call :trace launcher_lookup_end
 if not defined SINTER_PY_LAUNCHER goto :missing
