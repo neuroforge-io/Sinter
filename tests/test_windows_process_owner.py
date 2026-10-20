@@ -12,7 +12,10 @@ import pytest
 
 import windows_process_owner as owner
 
-WINDOWS = pytest.mark.skipif(sys.platform != "win32", reason="Actual Windows APIs required.")
+WINDOWS = pytest.mark.skipif(
+    sys.platform != "win32" or os.environ.get("SINTER_WINDOWS_OWNER_CONTROLS") != "1",
+    reason="Actual Windows ownership controls require the dedicated fail-fast workflow.",
+)
 
 
 def _receipt(process, directory, label):
@@ -155,13 +158,35 @@ def test_keyboard_interrupt_keeps_the_original_fault_and_cleans_tree(tmp_path):
 
 
 @WINDOWS
-@pytest.mark.parametrize("fault", ["job-attribute", "membership", "resume"])
+@pytest.mark.parametrize("fault", [
+    "job-attribute", "membership", "resume", "duplicate-after-native", "create-after-native",
+])
 def test_setup_refusal_never_executes_the_child_and_keeps_first_fault(
     tmp_path, monkeypatch, fault
 ):
     marker = tmp_path / "must-not-run"
-    original = OSError("controlled " + fault)
-    if fault == "job-attribute":
+    original = (KeyboardInterrupt if fault.endswith("-after-native") else OSError)(
+        "controlled " + fault
+    )
+    returned_handles = []
+    if fault in ("duplicate-after-native", "create-after-native"):
+        api = owner._WinAPI()
+        method = "duplicate" if fault.startswith("duplicate") else "create"
+        native = getattr(api, method)
+
+        def interrupt_after_native(*args):
+            owner._check(native(*args))
+            if method == "create":
+                value = ctypes.cast(args[-1], ctypes.POINTER(owner._ProcessInfo)).contents
+                returned_handles.extend([value.process, value.thread])
+            else:
+                value = ctypes.cast(args[3], ctypes.POINTER(owner.wintypes.HANDLE)).contents
+                returned_handles.append(value.value)
+            raise original
+
+        monkeypatch.setattr(api, method, interrupt_after_native)
+        options = {"_api": api}
+    elif fault == "job-attribute":
         api = owner._WinAPI()
         update = api.update
 
@@ -180,14 +205,28 @@ def test_setup_refusal_never_executes_the_child_and_keeps_first_fault(
 
         monkeypatch.setattr(owner.WindowsOwnedProcess, method, refuse)
         options = {}
-    with pytest.raises(OSError) as caught:
+    with pytest.raises(type(original)) as caught:
         _launch(tmp_path, f"open({str(marker)!r},'w').write('unexpected')", **options)
     assert caught.value is original
     proof = caught.value.owned_tree
     assert proof["clean"] and proof["active_after"] == 0, proof
     assert proof["parent_reaped"] and proof["startup_handles_closed"]
     assert proof["resumed"] is False
+    assert proof["process_created"] is (fault not in ("job-attribute", "duplicate-after-native"))
     assert not marker.exists()
+    info = ctypes.WinDLL("kernel32", use_last_error=True).GetHandleInformation
+    info.argtypes = [owner.wintypes.HANDLE, ctypes.POINTER(owner.wintypes.DWORD)]
+    info.restype = owner.wintypes.BOOL
+    for handle in returned_handles:
+        flags = owner.wintypes.DWORD()
+        ctypes.set_last_error(0)
+        assert not info(handle, ctypes.byref(flags))
+        assert ctypes.get_last_error() == 6  # ERROR_INVALID_HANDLE, before any new launch.
+    destination = os.environ.get("SINTER_STARTUP_DIAGNOSTICS_DIR")
+    if destination:
+        (Path(destination) / ("setup-" + fault + ".json")).write_text(
+            json.dumps(proof, indent=2), encoding="utf-8",
+        )
 
 
 @WINDOWS
@@ -246,3 +285,69 @@ def test_owner_death_kills_inner_job_without_killing_the_outer_job(tmp_path):
         assert outer.active_processes() == 0
     finally:
         _receipt(outer, tmp_path, "owner-death")
+
+
+@WINDOWS
+@pytest.mark.parametrize("fault", ["query", "terminate", "close-after-native", "cleanup-interrupt"])
+def test_uncertain_cleanup_quarantines_launches_without_replaying_handles(tmp_path, fault):
+    """Faulted inner owners exit inside a separately retained, verified outer job."""
+    result = tmp_path / "uncertain-cleanup.json"
+    code = (
+        "import json,sys,time\n"
+        f"sys.path.insert(0,{str(Path(__file__).parent)!r})\n"
+        "import windows_process_owner as owner\n"
+        "from pathlib import Path\n"
+        f"root=Path({str(tmp_path)!r});fault={fault!r}\n"
+        "with (root/'fault-out').open('wb') as out,(root/'fault-err').open('wb') as err:\n"
+        " p=owner.WindowsOwnedProcess([sys.executable,'-I','-S','-B','-c',"
+        "'import time;time.sleep(30)'],cwd=root,stdout=out,stderr=err)\n"
+        " original=ValueError('original fictional failure')\n"
+        " native_close=p._api.close\n"
+        " close_calls=[]\n"
+        " def failed_query(*args):raise OSError('controlled query failure')\n"
+        " def failed_terminate(*args):raise OSError('controlled termination failure')\n"
+        " def interrupted_terminate(*args):raise KeyboardInterrupt('controlled cleanup interrupt')\n"
+        " def uncertain_close(handle):\n"
+        "  close_calls.append(handle)\n"
+        "  owner._check(native_close(handle))\n"
+        "  if handle==p._job:raise KeyboardInterrupt('controlled interrupt after native close')\n"
+        "  return True\n"
+        " if fault=='query':p._api.query_job=failed_query\n"
+        " elif fault=='terminate':p._api.terminate_job=failed_terminate\n"
+        " elif fault=='cleanup-interrupt':p._api.terminate_job=interrupted_terminate\n"
+        " else:p._api.close=uncertain_close\n"
+        " try:\n"
+        "  with p:raise original\n"
+        " except ValueError as caught:\n"
+        "  assert caught is original\n"
+        "  proof=caught.owned_tree\n"
+        " else:raise AssertionError('first failure was lost')\n"
+        " assert not proof['clean'] and proof['errors']\n"
+        " count=len(close_calls)\n"
+        " assert p.finish() is proof and len(close_calls)==count\n"
+        " try:\n"
+        "  owner.WindowsOwnedProcess([sys.executable,'-c','raise AssertionError()'],"
+        "cwd=root,stdout=None,stderr=None)\n"
+        " except OSError as refusal:assert 'quarantined' in str(refusal)\n"
+        " else:raise AssertionError('a new owner ran after unproven cleanup')\n"
+        f" Path({str(result)!r}).write_text(json.dumps("
+        "{'fault':fault,'proof':proof,'quarantined':True,'close_replayed':False}),encoding='utf-8')\n"
+        # No attempt to recover/reclose potentially reused numeric handles.
+    )
+    outer = _launch(tmp_path, code)
+    try:
+        assert outer.wait(timeout=5) == 0, (tmp_path / "stderr.bin").read_bytes()
+        value = json.loads(result.read_text(encoding="utf-8"))
+        assert value["quarantined"] and value["close_replayed"] is False
+        assert value["proof"]["clean"] is False
+        deadline = time.monotonic() + 2
+        while outer.active_processes() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert outer.active_processes() == 0
+    finally:
+        _receipt(outer, tmp_path, "outer-cleanup-fault-" + fault)
+    destination = os.environ.get("SINTER_STARTUP_DIAGNOSTICS_DIR")
+    if destination:
+        (Path(destination) / ("inner-uncertain-" + fault + ".json")).write_text(
+            json.dumps(value, indent=2), encoding="utf-8",
+        )

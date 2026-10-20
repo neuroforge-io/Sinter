@@ -501,7 +501,14 @@ and 3.13 controls. The controls retain source/interpreter identities and test
 ordinary exit, a surviving child and grandchild with inherited output, timeout,
 operator interruption, setup refusal, unrelated handle exclusion and owner
 death. Cleanup receipts separately require an empty owned job, reaped parent
-and released handles; parent exit alone is insufficient.
+and released handles; parent exit alone is insufficient. Actual failure controls
+also interrupt after native handle/process creation and during cleanup. An
+unproven cleanup quarantines further launches in that owner process and retains
+the original receipt; an uncertain CloseHandle is never replayed. Deliberately
+faulted owners run inside a separately retained outer job whose empty state is
+verified after their exit. The focused workflow stops at the first failed test;
+ordinary suites skip these Windows controls unless
+`SINTER_WINDOWS_OWNER_CONTROLS=1` is explicitly set.
 
 This helper is qualification infrastructure. It does not change the product
 launcher or retrofit ownership claims onto earlier diagnostics. These controls

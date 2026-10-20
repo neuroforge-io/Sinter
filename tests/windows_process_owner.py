@@ -151,25 +151,29 @@ def _check(success):
         raise ctypes.WinError(ctypes.get_last_error())
 
 
+_UNRESOLVED_OWNERS = {}
+
+
 class WindowsOwnedProcess:
     """Own one explicit executable and its descendants, including on owner death."""
 
     def __init__(self, command, *, cwd, stdout, stderr, _api=None):
+        if _UNRESOLVED_OWNERS:
+            raise OSError("A prior Windows owner has unproven cleanup; further launches are quarantined.")
         self._api = _api if _api is not None else _WinAPI()
         if not isinstance(command, (list, tuple)) or not command:
             raise ValueError("Pass an argument sequence with an absolute executable.")
         self.args = [os.fspath(value) for value in command]
         if not Path(self.args[0]).is_absolute():
             raise ValueError("The qualification executable must be absolute.")
-        self.pid = None
+        # Register output storage before any native call can populate it.
+        self._info = _ProcessInfo()
         self.returncode = None
         self.identity = {}
         self._job = None
-        self._process = None
-        self._created = False
         self._resumed = False
+        self._resume_outcome = 'not_attempted'
         self._receipt = None
-        thread = None
         duplicates = []
         attribute_buffer = None
         attribute_initialized = False
@@ -193,12 +197,13 @@ class WindowsOwnedProcess:
             with open(os.devnull, "rb") as stdin:
                 for stream in (stdin, stdout, stderr):
                     duplicate = wintypes.HANDLE()
+                    duplicates.append(duplicate)
                     _check(self._api.duplicate(
                         self._api.current(), msvcrt.get_osfhandle(stream.fileno()),
                         self._api.current(), ctypes.byref(duplicate), 0, True, 2,
                     ))
-                    duplicates.append(duplicate.value)
-            inherited = (wintypes.HANDLE * 3)(*duplicates)
+            inherited_values = [handle.value for handle in duplicates]
+            inherited = (wintypes.HANDLE * 3)(*inherited_values)
             jobs = (wintypes.HANDLE * 1)(self._job)
             _check(self._api.update(attribute_buffer, 0, 0x20002,
                                     inherited, ctypes.sizeof(inherited), None, None))
@@ -209,17 +214,14 @@ class WindowsOwnedProcess:
             startup.StartupInfo.cb = ctypes.sizeof(startup)
             startup.StartupInfo.dwFlags = 0x100  # STARTF_USESTDHANDLES.
             startup.StartupInfo.hStdInput, startup.StartupInfo.hStdOutput, \
-                startup.StartupInfo.hStdError = duplicates
+                startup.StartupInfo.hStdError = inherited_values
             startup.attributes = ctypes.cast(attribute_buffer, ctypes.c_void_p)
-            process = _ProcessInfo()
             line = ctypes.create_unicode_buffer(subprocess.list2cmdline(self.args))
             _check(self._api.create(
                 self.args[0], line, None, None, True,
                 0x00080004,  # EXTENDED_STARTUPINFO_PRESENT | CREATE_SUSPENDED.
-                None, os.fspath(cwd), ctypes.byref(startup), ctypes.byref(process),
+                None, os.fspath(cwd), ctypes.byref(startup), ctypes.byref(self._info),
             ))
-            self._process, thread, self.pid = process.process, process.thread, process.pid
-            self._created = True
             self._verify_membership()
             creation, exit_time, kernel, user = (wintypes.FILETIME() for _ in range(4))
             _check(self._api.process_times(
@@ -236,13 +238,17 @@ class WindowsOwnedProcess:
                 "atomic_job_assignment": True,
                 "membership_verified_before_resume": True,
             }
-            self._resume(thread)
+            self._resume_outcome = "unconfirmed"
+            self._resume(self._info.thread)
             self._resumed = True
+            self._resume_outcome = "confirmed"
         except BaseException as error:
             setup_error = error
         finally:
             # Attempt every release; a secondary failure never masks the first fault.
-            for handle in ([thread] if thread else []) + duplicates:
+            handles = ([self._info.thread] if self._info.thread else [])
+            handles.extend(handle.value for handle in duplicates if handle.value)
+            for handle in handles:
                 try:
                     _check(self._api.close(handle))
                 except BaseException as error:
@@ -263,6 +269,23 @@ class WindowsOwnedProcess:
             receipt["clean"] = receipt["clean"] and not setup_close_errors
             setup_error.owned_tree = receipt
             raise setup_error
+
+    @property
+    def pid(self):
+        return self._info.pid or None
+
+    @property
+    def _process(self):
+        return self._info.process
+
+    @_process.setter
+    def _process(self, handle):
+        self._info.process = handle
+
+    @property
+    def _created(self):
+        # PID remains recorded after the retained process handle is released.
+        return bool(self._info.pid or self._info.process)
 
     def _verify_membership(self):
         member = wintypes.BOOL()
@@ -325,9 +348,10 @@ class WindowsOwnedProcess:
         deadline = time.monotonic() + timeout
         receipt = {
             "schema": "sinter-windows-owned-tree/v1",
-            "identity": self.identity,
+            "identity": {"pid": self.pid, **self.identity},
             "process_created": self._created,
             "resumed": self._resumed,
+            "resume_outcome": self._resume_outcome,
             "active_before": None,
             "active_after": None,
             "parent_reaped": not self._created,
@@ -379,6 +403,9 @@ class WindowsOwnedProcess:
         )
         self._receipt = receipt
         self._cleanup_interruption = cleanup_interruption
+        if not receipt["clean"]:
+            # Keep identities and possibly live handles; never replay an uncertain close.
+            _UNRESOLVED_OWNERS[id(self)] = self
         return receipt
 
     def __enter__(self):
