@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Open casebook passage citations at the exact retained quotation, with a visible
+  Return to the invoking reading position. Keep full-original inspection separate,
+  preserve the previous successful Return during failed or interrupted navigation,
+  and refuse changed identities or stale views. Source text, human edits, historical
+  review status, saved copies and exports remain unchanged.
+
 - Resolve the first admitted Windows PATH Python inside CMD, avoiding external
   lookup processes on that path and normalising quoted lookup entries without
   changing the application PATH. Preserve later enumeration after refusal,

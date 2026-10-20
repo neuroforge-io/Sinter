@@ -391,6 +391,7 @@ can be downloaded with its incomplete label. No generation is automatically repl
 | `review_checkpoints.py` | Review-folder output exclusion and bounded, identity-preserving checkpoint discovery. |
 | `store.py`, `jobs.py`, `server.py` | Persistence, bounded work, cancellation and local HTTP. |
 | `web/home.js`, `web/app.js`, `web/workbench.js` | Overview, routing and guided tasks. |
+| `web/report-passage-navigation.js` | Exact retained-quote navigation, local integrity checks and ephemeral Return positions; no persistence or model authority. |
 | `web/report-drafts.js`, `web/report-replacement.js` | Session draft/save observations, exact-state replacement decisions and per-result preparation inputs. |
 | `web/workbench-draft-switcher.js`, `web/workbench-draft-observations.js` | Stable draft controls and per-entry observed-state snapshots; no request, adoption or persistence authority. |
 | `web/saved-report-list.js`, `web/saved-report-preview-view.js` | Selected-copy loading and bounded source indexing; separate read-only presentation with no request, save or editor authority. |
@@ -558,3 +559,28 @@ search variable without changing the application\'s original PATH. Paired contro
 retain baseline semantics for empty, quoted-empty and explicit-dot entries.
 Builtin results in the app directory defer to the original WHERE enumeration,
 which decides whether an explicit directory entry actually selects that location.
+
+## Retained passage navigation
+
+In casebook documents, **Show Passage N** opens the matching retained quotation
+under its recorded question, with its excerpt ID, source ID and zero-based Unicode
+range. **Open original source for Passage N** remains a separate local inspection.
+**Return to document** restores the invoking citation and reading position.
+Ordinary source-ID citations keep their existing full-original route.
+
+The navigator validates the retained source hash, exact range, question scope and
+current control before landing. A missing or changed target refuses without
+substituting newer source text. Pending, failed or superseded inspections preserve
+the last successful Return. Changing view, replacing the document or disposal
+invalidates outstanding navigation; it never replays an inspection. A missing or
+changed return control goes to the document heading with an explanation.
+
+These controls are transient presentation. They do not edit reports, saved-copy
+status, historical review flags, Markdown, Word or backups, and make no model or
+network request. The original source and human wording stay unchanged.
+
+Run `python -m pytest -q tests/test_report_reader_js.py tests/test_casebook_question_evidence.py tests/test_runtime.py`
+and `python tools/garden_practice_browser.py` sequentially. The browser journey checks
+the exact quote, complete original, focus, pointer reachability and visible Return
+at desktop and phone sizes. Source tests remain separate from installed-release
+qualification.

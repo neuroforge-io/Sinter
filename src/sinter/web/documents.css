@@ -198,3 +198,10 @@
   .document .handover-action-item>.handover-action-evidence{break-after:auto}
   .handover-action-opening>.handover-context-content{padding:0 0 12pt}
 }
+
+/* Local passage controls never enter persisted wording or print. */
+.passage-return-controls{display:grid;gap:8px;margin:12px 0;scroll-margin-block:18px}
+.passage-return-controls>.fine{margin:0}
+.passage-return-controls>.button{justify-self:start;min-height:44px;min-width:44px}
+.citation-navigation-feedback{display:block;font-size:.875rem;line-height:1.5;font-family:ui-sans-serif,system-ui,sans-serif}
+.question-evidence-quote summary,.question-evidence-quote>.button{min-height:44px}
