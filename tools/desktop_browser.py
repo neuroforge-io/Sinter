@@ -44,8 +44,9 @@ def main(argv: list[str] | None = None) -> None:
                 check_connection = page.get_by_role('button', name='Check saved connection', exact=True)
                 check_connection.click()
                 expect(page.get_by_text('dense Gemma 4 E4B; text preview', exact=False)).to_be_visible()
+                saved_before = server.app.preferences.snapshot()
                 settings_posts = []
-                page.on('request', lambda request: settings_posts.append(request.url)
+                page.on('request', lambda request: settings_posts.append(json.loads(request.post_data))
                         if request.method == 'POST' and request.url.endswith('/api/settings') else None)
                 page.get_by_label('Model identifier', exact=True).fill(client.DENSE_MODEL)
                 expect(check_connection).to_be_disabled()
@@ -56,9 +57,25 @@ def main(argv: list[str] | None = None) -> None:
                 page.get_by_label('Colour theme', exact=True).select_option('light')
                 assert not settings_posts, 'Draft connection changes were saved implicitly.'
                 page.get_by_role('button', name='Save connection', exact=True).click()
-                expect(page.get_by_text('Connection saved. You can check it now or start an assistant task.', exact=True)).to_be_visible()
+                expect(page.get_by_text('Saved on this computer. Availability has not been checked.', exact=True)).to_be_visible()
+                expect(page.get_by_text('Connection saved on this computer. Other preference fields were not saved.', exact=True)).to_be_visible()
                 expect(check_connection).to_be_enabled()
                 assert len(settings_posts) == 1
+                assert set(settings_posts[0]['settings']) == {'provider', 'api_url', 'model', 'max_tokens'}
+                assert 'api_key' not in settings_posts[0]
+                saved_connection = server.app.preferences.snapshot()
+                assert saved_connection['model'] == client.DENSE_MODEL
+                for field in ('organisation', 'text_size', 'theme'):
+                    assert saved_connection[field] == saved_before[field], field
+                expect(page.get_by_label('Your group or organisation', exact=True)).to_have_value('Garden P&C')
+                expect(page.get_by_label('Reading size', exact=True)).to_have_value('large')
+                expect(page.get_by_label('Colour theme', exact=True)).to_have_value('light')
+                page.get_by_role('button', name='Save my preferences', exact=True).click()
+                expect(page.get_by_text('Preferences saved on this computer.', exact=True)).to_be_visible()
+                assert len(settings_posts) == 2
+                assert settings_posts[1]['settings']['organisation'] == 'Garden P&C'
+                assert settings_posts[1]['settings']['text_size'] == 'large'
+                assert settings_posts[1]['settings']['theme'] == 'light'
                 expect(page.locator('html')).to_have_attribute('data-text-size', 'large')
                 expect(page.locator('html')).to_have_attribute('data-theme', 'light')
                 page.reload()
