@@ -485,3 +485,28 @@ Run the shared browser-domain exercise on the shipped Pyodide interpreter as
 well to qualify anonymous health/revision binding there. Account mutation recovery and the separate
 browser-only preference editor are not newly qualified. See
 [the scoped review](SETTINGS_RECOVERY_REVIEW_2026-10-20.md).
+
+
+## Windows launcher qualification ownership
+
+The test-only `tests/windows_process_owner.py` requires Windows 10 / Server 2016
+or newer. It uses a private kill-on-close Job Object assigned atomically at
+process creation through `STARTUPINFOEX` JOB_LIST, an explicit inherited stream
+HANDLE_LIST and a suspended initial thread. It verifies membership before
+resuming and refuses unsupported setup; there is no unowned fallback. See
+[Microsoft's process attribute contract](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute).
+
+Run the **Windows wrapper ownership** manual workflow for sequential Python 3.10
+and 3.13 controls. The controls retain source/interpreter identities and test
+ordinary exit, a surviving child and grandchild with inherited output, timeout,
+operator interruption, setup refusal, unrelated handle exclusion and owner
+death. Cleanup receipts separately require an empty owned job, reaped parent
+and released handles; parent exit alone is insufficient.
+
+This helper is qualification infrastructure. It does not change the product
+launcher or retrofit ownership claims onto earlier diagnostics. These controls
+must pass on actual Windows before using it for a launcher comparison. Keep the
+original five-second fixture readiness criterion and account for any separate
+cleanup deadline. A passing owner control is not a launcher speedup, supported
+installer qualification or evidence that the existing Windows readiness failures
+are fixed.
