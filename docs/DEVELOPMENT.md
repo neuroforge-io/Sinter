@@ -556,3 +556,5 @@ enumeration whenever its builtin lookup admits nothing; no runtime is accepted
 without the existing isolated proof. Lookup removes quote characters in a private
 search variable without changing the application\'s original PATH. Paired controls
 retain baseline semantics for empty, quoted-empty and explicit-dot entries.
+Builtin results in the app directory defer to the original WHERE enumeration,
+which decides whether an explicit directory entry actually selects that location.

@@ -474,11 +474,14 @@ def test_owned_observer_retains_partial_samples_and_original_wait_interruption(t
     import wrapper_diagnostics
 
     marker = tmp_path / "partial-marker.json"
+    ready = tmp_path / "partial-ready"
     native = owner.WindowsOwnedProcess.wait
     original = KeyboardInterrupt("controlled observer wait interrupt")
     def interrupted_wait(process, timeout=None):
-        _wait_for(marker)
-        monkeypatch.setattr(owner.WindowsOwnedProcess, "wait", native)
+        try:
+            _wait_for(ready)
+        finally:
+            monkeypatch.setattr(owner.WindowsOwnedProcess, "wait", native)
         raise original
     monkeypatch.setattr(owner.WindowsOwnedProcess, "wait", interrupted_wait)
     with pytest.raises(KeyboardInterrupt) as caught:
@@ -488,6 +491,7 @@ def test_owned_observer_retains_partial_samples_and_original_wait_interruption(t
              "print('fictional partial stdout',flush=True);"
              "print('fictional partial stderr',file=sys.stderr,flush=True);"
              f"Path({str(marker)!r}).write_text('{{\"partial\":true}}');"
+             f"Path({str(ready)!r}).write_text('ready');"
              "time.sleep(30)"],
             tmp_path, marker, timeout=5, windows_tree=True,
         )
