@@ -79,7 +79,7 @@ function delayedCrypto() {
   }}});
   return calls;
 }
-function setup(t, {corruptTail = false, detached = false} = {}) {
+function setup(t, {corruptTail = false, detached = false, shared = false} = {}) {
   observations = []; document.body.replaceChildren(); drafts.clearReportDrafts(); useCrypto(webcrypto);
   let external = 0;
   const previousFetch = globalThis.fetch, previousBridge = globalThis.sinterBrowser;
@@ -100,6 +100,7 @@ function setup(t, {corruptTail = false, detached = false} = {}) {
     document_references: ranges.map(([start, end], i) => ({
       label: 'Passage ' + (i + 1), excerpt_id: 'E' + (i + 1), source_id: 'S1', start, end})),
     question_index: [{question: 'Who accepted ownership?', excerpt_ids: ['E1', 'E2']}]};
+  if (shared) report.question_index.push({question: 'Is the same ownership wording recorded here?', excerpt_ids: ['E1']});
   const root = node('section'), doc = node('section'), evidence = node('section'), sources = node('aside');
   evidence.hidden = true; root.append(doc, evidence); evidence.append(sources);
   if (!detached) document.body.append(root);
@@ -127,6 +128,15 @@ function setup(t, {corruptTail = false, detached = false} = {}) {
     nav.bind(citation, report.document_references[index]);
     return {details, pre, originalButton, target, citation};
   });
+
+  let sharedEntry = null;
+  if (shared) {
+    const passage = casebookQuestionEvidence(report)[1].matches[0];
+    const details = node('details'), pre = node('pre', passage.quote);
+    details.append(pre); evidence.append(details);
+    nav.register({questionIndex: 1, passage, details, quoteNode: pre});
+    sharedEntry = {details, pre};
+  }
   const secondInvoker = node('button', 'Passage 1');
   doc.append(secondInvoker); nav.bind(secondInvoker, report.document_references[0]);
   drafts.registerReportDraft(report, documentMarkdown(report), {saved: true});
@@ -144,7 +154,7 @@ function setup(t, {corruptTail = false, detached = false} = {}) {
   };
   const back = () => root.querySelector('.passage-return');
   return {report, root, doc, evidence, sources, original, originalText, entries, secondInvoker,
-    nav, snapshot, switches, fallback, open, full, back, setActive: value => {active = value;}};
+    nav, snapshot, switches, fallback, open, full, back, sharedEntry, setActive: value => {active = value;}};
 }
 
 test('two identical quotations in one historical source retain distinct Unicode ranges and exact return origins', async t => {
@@ -327,6 +337,29 @@ test('an unbound original return origin with changed wording uses the honest hea
   assert.equal(document.activeElement.tag, 'h2');
   assert.deepEqual(f.switches, ['evidence', 'evidence', 'document']);
   assert.deepEqual(f.snapshot(), before);
+});
+
+
+test('a shared global alias discloses recorded questions and returns to each actual invoker', async t => {
+  const f = setup(t, {shared: true}), before = f.snapshot();
+  for (const invoker of [f.entries[0].citation, f.secondInvoker]) {
+    assert.equal(await f.open(invoker), true);
+    const bar = f.back().parentNode;
+    assert.match(bar.textContent, /Passage 1 is recorded under Questions 1, 2\. Showing Passage 1 under Question 1\./);
+    assert.equal(bar.parentNode, f.entries[0].details);
+    assert.notEqual(bar.parentNode, f.sharedEntry.details);
+    assert.equal(f.entries[0].pre.textContent, f.report.excerpts[0].quote);
+    await f.back().fire(); assert.equal(document.activeElement, invoker);
+    assert.deepEqual(f.snapshot(), before);
+  }
+});
+
+test('changing another recorded question scope during hashing refuses the earlier shared description', async t => {
+  const f = setup(t, {shared: true}), calls = delayedCrypto(), pending = f.open(f.entries[0].citation);
+  f.report.question_index[1].source_scope = [];
+  const changed = f.snapshot();
+  await calls[0].pass(); assert.equal(await pending, false);
+  assert.equal(f.back(), null); assert.deepEqual(f.switches, []); assert.deepEqual(f.snapshot(), changed);
 });
 
 test.after(() => {

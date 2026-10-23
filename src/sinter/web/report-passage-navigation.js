@@ -39,7 +39,8 @@ function passagePin(report, entry) {
       hasScope: Object.hasOwn(question, 'source_scope'), scope: question.source_scope,
       hasScopes: Object.hasOwn(report, 'question_scopes'), scopes: report.question_scopes,
       excerptIds: report.excerpts.map(row => row?.id),
-      questions: report.question_index.map(row => [row?.question, row?.excerpt_ids])})];
+      questions: report.question_index.map(row => [row?.question, row?.excerpt_ids,
+        Object.hasOwn(row || {}, 'source_scope'), row?.source_scope])})];
 }
 
 export function reportPassageNavigation({
@@ -130,6 +131,14 @@ export function reportPassageNavigation({
     back.focus({preventScroll: true}); bar.scrollIntoView({block: 'center', behavior: 'instant'});
     return true;
   }
+  function passageDescription(entry) {
+    const positions = report.question_index.flatMap((row, index) =>
+      Array.isArray(row?.excerpt_ids) && row.excerpt_ids.includes(entry.excerptId) ? [index + 1] : []);
+    const shown = 'Showing ' + entry.label + ' under Question ' + (entry.questionIndex + 1) + '.';
+    return positions.length > 1
+      ? entry.label + ' is recorded under Questions ' + positions.join(', ') + '. ' + shown
+      : shown;
+  }
   async function open({invoker}) {
     const ticket = begin(invoker);
     if (!invokerCurrent(ticket)) return false;
@@ -139,7 +148,7 @@ export function reportPassageNavigation({
       if (!entry) throw unavailable();
       if (!await verify(entry, entry.sourceId, ticket)) return false;
       return commit(ticket, entry.details, entry.quoteNode,
-        'Showing ' + entry.label + ' under Question ' + (entry.questionIndex + 1) + '.',
+        passageDescription(entry),
         {view: 'document', node: invoker, binding: ticket.binding, caption: ticket.caption});
     } catch (error) { say(ticket, error.message, 'error'); return false; }
     finally { clearChecking(ticket); }

@@ -564,7 +564,10 @@ which decides whether an explicit directory entry actually selects that location
 
 In casebook documents, **Show Passage N** opens the matching retained quotation
 under its recorded question, with its excerpt ID, source ID and zero-based Unicode
-range. **Open original source for Passage N** remains a separate local inspection.
+range. Global passage aliases have no authoritative originating-question binding.
+When an excerpt is recorded under several questions, the landing names every
+recorded membership and identifies the first registered retained card it shows;
+it does not infer a question from human-edited prose. **Open original source for Passage N** remains a separate local inspection.
 **Return to document** restores the invoking citation and reading position.
 Ordinary source-ID citations keep their existing full-original route.
 

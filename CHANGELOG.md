@@ -3,7 +3,8 @@
 ## Unreleased
 
 - Open casebook passage citations at the exact retained quotation, with a visible
-  Return to the invoking reading position. Keep full-original inspection separate,
+  Return to the invoking reading position. Disclose shared question memberships
+  without inferring a question from edited prose. Keep full-original inspection separate,
   preserve the previous successful Return during failed or interrupted navigation,
   and refuse changed identities or stale views. Source text, human edits, historical
   review status, saved copies and exports remain unchanged.

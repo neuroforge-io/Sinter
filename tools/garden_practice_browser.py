@@ -49,12 +49,24 @@ def main(argv: list[str] | None = None) -> None:
 
     passage_observations = []
 
-    def inspect_passage_and_return(page, report, citation, sources, *, original=False):
+    def inspect_passage_and_return(page, report, citation, expected_report, *, original=False):
         """Prove an exact quote landing and an in-view, pointer-reachable Return."""
         label = citation.get_attribute("aria-label")
         match = re.fullmatch(r"Show (Passage [1-9][0-9]*): .+", label or "")
         assert match, label
         passage = match.group(1)
+        references = [item for item in expected_report["document_references"] if item["label"] == passage]
+        assert len(references) == 1, references
+        reference = references[0]
+        expected = [item for item in expected_report["excerpts"] if item["id"] == reference["excerpt_id"]]
+        assert len(expected) == 1, expected
+        excerpt = expected[0]
+        assert (excerpt["source_id"], excerpt["start"], excerpt["end"]) == (
+            reference["source_id"], reference["start"], reference["end"]
+        )
+        selected_sources = [item for item in expected_report["sources"] if item["id"] == excerpt["source_id"]]
+        assert len(selected_sources) == 1, selected_sources
+        source = selected_sources[0]
         citation.click()
         expect(report.get_by_role("tabpanel", name="Evidence", exact=True)).to_be_visible()
         quote = report.locator(".question-evidence-quote[open]:has(> .passage-return-controls)")
@@ -63,10 +75,11 @@ def main(argv: list[str] | None = None) -> None:
         match = re.fullmatch(r"Inspect question ([1-9][0-9]*) " + passage + r", source (.+)", summary or "")
         assert match, summary
         question, source_id = int(match.group(1)), match.group(2)
-        source = next(item for item in sources if item["id"] == source_id)
+        assert source_id == reference["source_id"], (source_id, reference)
+        assert 1 <= question <= len(expected_report["question_index"])
+        assert excerpt["id"] in expected_report["question_index"][question - 1]["excerpt_ids"]
         ids = quote.locator(":scope > .source-id").all_text_contents()
-        assert len(ids) == 2 and ids[0].startswith("Excerpt ID: ") and ids[0][12:], ids
-        assert ids[1] == "Source ID: " + source_id, ids
+        assert ids == ["Excerpt ID: " + excerpt["id"], "Source ID: " + source_id], ids
         wording = quote.locator(":scope > p").filter(
             has_text=re.compile(r"^Unicode characters [0-9]+–[0-9]+ ")
         ).inner_text()
@@ -76,8 +89,10 @@ def main(argv: list[str] | None = None) -> None:
         )
         assert match, wording
         start, end = map(int, match.groups())
+        assert (start, end) == (reference["start"], reference["end"]), ((start, end), reference)
         assert 0 <= start < end <= len(source["content"])
-        assert quote.locator(":scope > pre").text_content() == source["content"][start:end]
+        assert source["content"][start:end] == excerpt["quote"]
+        assert quote.locator(":scope > pre").text_content() == excerpt["quote"]
         expect(quote.locator(".passage-return-controls")).to_contain_text(
             f"Showing {passage} under Question {question}."
         )
@@ -276,7 +291,7 @@ def main(argv: list[str] | None = None) -> None:
                     ).first
                     prepared_report = casebooks.build(bundle["casebook"], "handover")
                     prepared_navigation = inspect_passage_and_return(
-                        page, report, prepared_passage, prepared_report["sources"], original=True
+                        page, report, prepared_passage, prepared_report, original=True
                     )
                     assert next(
                         source["content"] for source in prepared_report["sources"]
@@ -1023,11 +1038,23 @@ def main(argv: list[str] | None = None) -> None:
                             return hit === element || element.contains(hit);
                         }""")
                         assert reading_page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-                        metric["passage_navigation"] = inspect_passage_and_return(
-                            reading_page, reading_view, passage, reading_report["sources"]
-                        )
+                        first_fold = out / f"garden-saved-reading-{width}.png"
+                        reading_page.screenshot(path=str(first_fold))
+                        metric["first_fold_image"] = {
+                            "scope": "viewport", "bytes": first_fold.stat().st_size,
+                            "sha256": hashlib.sha256(first_fold.read_bytes()).hexdigest(),
+                        }
                         retain_layout_metrics(layout_receipt, reading_metrics)
-                        reading_page.screenshot(path=str(out / f"garden-saved-reading-{width}.png"))
+                        metric["passage_navigation"] = inspect_passage_and_return(
+                            reading_page, reading_view, passage, reading_report
+                        )
+                        returned = out / f"garden-saved-return-{width}.png"
+                        reading_page.screenshot(path=str(returned))
+                        metric["returned_origin_image"] = {
+                            "scope": "viewport", "bytes": returned.stat().st_size,
+                            "sha256": hashlib.sha256(returned.read_bytes()).hexdigest(),
+                        }
+                        retain_layout_metrics(layout_receipt, reading_metrics)
                         reading_page.get_by_role("button", name="Back to saved copies", exact=True).click()
                         saved_filter = reading_page.get_by_label("Find saved drafts", exact=True)
                         expect(saved_filter).to_be_focused()
