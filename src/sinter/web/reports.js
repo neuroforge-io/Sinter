@@ -12,7 +12,8 @@ import {registerReportDraft, trackReportEdits, trackReportEditor, reportEditorDr
   rememberReportSavedCopy} from './report-drafts.js';
 import {reportCitationIndex, reportCitationMatcher} from './report-citations.js';
 import {casebookQuestionEvidence} from './casebook-question-evidence.js';
-import {retainedCasebookSource, retainedQuestionContext} from './casebook-retained-context.js';
+import {retainedQuestionContext} from './casebook-retained-context.js';
+import {reportPassageNavigation} from './report-passage-navigation.js';
 import {handoverSummaryEditor, handoverSummaryAvailable, presentHandoverSummary, handoverSummaryTableHint} from './handover-summary.js';
 
 let reportViewSequence = 0;
@@ -26,7 +27,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   const saveState = h('p', {class: 'document-save-state non-print', role: 'status', 'aria-label': 'Document save state',
     id: `report-save-state-${++reportViewSequence}`});
   let savePending = false, viewDisposed = false, copyDecision = false, copyController = null, checkingCopies = false;
-  let reader = null, duplicateCopy = null, checkCopies = null;
+  let reader = null, duplicateCopy = null, checkCopies = null, passageNavigation = null;
   function refreshSaveState() {
     const saveHadFocus = Boolean(reader && document.activeElement === save);
     const state = reportSaveState(report);
@@ -157,7 +158,8 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   const evidencePanel = h('section', {class: 'evidence-panel non-print', role: 'tabpanel', 'aria-label': evidenceLabel, hidden: true});
   const tabs = h('div', {class: 'report-tabs non-print', role: 'tablist', 'aria-label': isCampaign ? 'Campaign views' : 'Draft views'});
   const completion = h('div', {class: 'completion-panel non-print'});
-  function select(view) {
+  function select(view, {passageTicket = null} = {}) {
+    if (!passageNavigation?.owns(passageTicket)) passageNavigation?.invalidate();
     documentPanel.hidden = view !== 'document'; evidencePanel.hidden = view !== 'evidence';
     for (const tab of tabs.children) { const selected = tab.dataset.view === view; tab.setAttribute('aria-selected', String(selected)); tab.tabIndex = selected ? 0 : -1; }
   }
@@ -200,6 +202,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
     }
   }
   function updateDocument() {
+    passageNavigation?.invalidate();
     const article = markdown(documentMarkdown(report));
     if (isCampaign) article.classList.add('campaign-decision-document');
     const hasSummary = handoverSummaryAvailable(report) && documentMarkdown(report).includes('## At a glance\n');
@@ -215,7 +218,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
       else result.insertBefore(summaryEditor, tabs);
     }
     if (hasSummary) article.classList.add('handover-summary-document');
-    connectCitations(article, report, sources, () => select('evidence'), true);
+    connectCitations(article, report, sources, () => select('evidence'), true, passageNavigation);
     paper.replaceChildren(h('div', {class: 'paper-label'}, report.workflow === 'campaign'
       ? 'CAMPAIGN DECISION RECORD'
       : report.incomplete ? 'INCOMPLETE MODEL DRAFT' : report.demo ? 'FICTIONAL EXAMPLE' : report.model_draft ? 'MODEL-GENERATED DRAFT' : report.document_edits ? 'EDITED DRAFT' : 'DRAFT FOR REVIEW'),
@@ -231,7 +234,19 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   connectCitations(evidenceArticle, report, sources);
   const campaignEvidence = campaignEvidenceCounts(report.campaign);
   const questionEvidence = casebookQuestionEvidence(report);
-  if (questionEvidence) evidencePanel.append(questionEvidenceView(report, questionEvidence, sources));
+  if (questionEvidence) {
+    passageNavigation = reportPassageNavigation({report, root: result, sources,
+      isActive: () => !viewDisposed && result.isConnected
+        && !result.closest('[hidden],[inert]') && result.getClientRects().length > 0,
+      showEvidence: ticket => select('evidence', {passageTicket: ticket}),
+      showDocument: ticket => select('document', {passageTicket: ticket}),
+      focusReader: reason => {
+        headingTitle.focus({preventScroll: true});
+        headingTitle.scrollIntoView({block: 'center', behavior: 'instant'}); announce(reason);
+      },
+    });
+    evidencePanel.append(questionEvidenceView(report, questionEvidence, sources, passageNavigation));
+  }
   if (isAssistant) evidencePanel.append(assistantEvidence(report, evidenceArticle));
   else evidencePanel.append(...[h('div', {class: 'evidence-overview'},
     h('div', {}, h('h3', {}, isCampaign ? 'Campaign evidence at a glance' : 'What supports this draft'),
@@ -314,7 +329,7 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
   }
   if (onCorrect && report.segments?.length) documentPanel.append(correctionForm(report, onCorrect));
   const unsubscribe = observeReportSaveState(report, refreshSaveState, () => !viewDisposed && result.isConnected);
-  result.dispose = () => { viewDisposed = true; copyController?.abort(); unsubscribe(); };
+  result.dispose = () => { viewDisposed = true; passageNavigation?.dispose(); copyController?.abort(); unsubscribe(); };
   // Only presentation: no new registry entry, replacement decision or save.
   result.revealReadingStart = ({anchor = null} = {}) => {
     if (viewDisposed || !result.isConnected) return false;
@@ -332,18 +347,11 @@ export function renderReport(report, {onCorrect, onEditInputs, onCampaignUpdated
 }
 
 /** A local view of this report's historical search choices and exact quotations. */
-function questionEvidenceView(report, rows, sources) {
+function questionEvidenceView(report, rows, sources, navigation) {
   const panel = h('section', {class: 'casebook-question-evidence', 'aria-label': 'Questions and evidence'},
     h('h3', {}, 'Questions and evidence'),
     h('p', {class: 'muted'}, 'Recorded wording-search choices and passages from this report. Related wording is not an answer; no match does not prove an issue is absent.'),
     h('p', {class: 'fine'}, 'This view retains the report’s own evidence. Later project edits are not included. Opening a quote does not send anything.'));
-  const jumpToOriginal = sourceId => {
-    const original = [...sources.querySelectorAll('[data-source-id]')]
-      .find(item => item.dataset.sourceId === sourceId);
-    if (!original) throw new Error('The original text is not available in this report. No current source was substituted.');
-    original.open = true; original.scrollIntoView({block: 'center'});
-    original.querySelector('summary').focus({preventScroll: true});
-  };
   for (const row of rows) {
     const card = h('article', {class: 'question-evidence-row', 'aria-label': `Question ${row.position} evidence`},
       h('h4', {}, `Question ${row.position}`, h('span', {class: 'question-evidence-state'}, row.status)),
@@ -368,12 +376,8 @@ function questionEvidenceView(report, rows, sources) {
             const item = h('div', {}, h('p', {}, source.title || 'Title not retained'),
               h('p', {class: 'source-id'}, `Source reference: ${source.id}`),
               ...(source.date ? [h('p', {class: 'fine'}, `Supplied date (unverified): ${source.date}`)] : []));
-            if (source.originalRetained) item.append(button(`Inspect retained original for question ${row.position}, source ${source.id}`, async event => {
-              const control = event.currentTarget; control.disabled = true;
-              try { await retainedCasebookSource(report, source.id); if (control.isConnected) jumpToOriginal(source.id); }
-              catch (error) { if (control.isConnected) feedback.textContent = error.message; }
-              finally { control.disabled = false; }
-            }, 'quiet'));
+            if (source.originalRetained) item.append(button('Inspect retained original for question ' + row.position + ', source ' + source.id, event =>
+              navigation.followOriginal({sourceId: source.id, invoker: event.currentTarget}), 'quiet'));
             else item.append(h('p', {class: 'fine'}, 'This report retains the source record, but not its original text. Inspect the project or backup that produced this report; a newer project is not a substitute.'));
             item.append(feedback); contents.append(item);
           }
@@ -392,9 +396,10 @@ function questionEvidenceView(report, rows, sources) {
       const contextStatus = h('p', {role: 'status', class: 'fine'});
       const surrounding = button(`Inspect surrounding text for question ${row.position} ${displayLabel}`, async event => {
         const control = event.currentTarget; control.disabled = true;
+        const stillHere = navigation.viewGuard(control);
         try {
           const retained = await retainedQuestionContext(report, row.position - 1, passage.excerptId);
-          if (!control.isConnected) return;
+          if (!stillHere()) return;
           context.replaceChildren(notice('Additional original text shown locally. It is not included in this report’s quotations, Word document or optional AI preview.'),
             h('p', {class: 'fine'}, `Retained original: ${retained.originalCharacters} Unicode characters. The quotation remains ${retained.start}–${retained.end}. These windows may end inside a section or table; inspect the full original if needed.`),
             h('p', {class: 'fine'}, `Before the quote: Unicode characters ${retained.beforeStart}–${retained.start}.`),
@@ -402,23 +407,22 @@ function questionEvidenceView(report, rows, sources) {
             h('p', {class: 'fine'}, `After the quote: Unicode characters ${retained.end}–${retained.afterEnd}.`),
             retained.after ? h('pre', {class: 'plain-wrap'}, retained.after) : h('p', {class: 'fine'}, 'The quote ends at the end of this original.'));
           contextStatus.textContent = 'Surrounding text inspected locally; the recorded quotation is unchanged.';
-        } catch (error) { if (control.isConnected) contextStatus.textContent = error.message; }
+        } catch (error) { if (stillHere()) contextStatus.textContent = error.message; }
         finally { control.disabled = false; }
       }, 'quiet');
+      const quoteText = h('pre', {class: 'plain-wrap'}, passage.quote);
+      let target = null;
       const quote = h('details', {class: 'question-evidence-quote'},
         h('summary', {'aria-label': `Inspect question ${row.position} ${displayLabel}, source ${passage.sourceId}`},
           `Inspect ${displayLabel}: ${passage.sourceTitle || 'Title not retained'}`),
-        h('pre', {class: 'plain-wrap'}, passage.quote),
+        quoteText,
         h('p', {class: 'source-id'}, `Excerpt ID: ${passage.excerptId}`),
         h('p', {class: 'source-id'}, `Source ID: ${passage.sourceId}`),
         h('p', {class: 'fine'}, `Unicode characters ${passage.start}–${passage.end} (zero-based, end-exclusive) in the retained original.`),
         surrounding, contextStatus, context,
-        button(`Open original source for ${displayLabel}`, async event => {
-          const control = event.currentTarget; control.disabled = true;
-          try { await retainedCasebookSource(report, passage.sourceId); if (control.isConnected) jumpToOriginal(passage.sourceId); }
-          catch (error) { if (control.isConnected) contextStatus.textContent = error.message; }
-          finally { control.disabled = false; }
-        }, 'quiet'));
+        button('Open original source for ' + displayLabel, event =>
+          navigation.followOriginal({target, sourceId: passage.sourceId, invoker: event.currentTarget}), 'quiet'));
+      target = navigation.register({questionIndex: row.position - 1, passage, details: quote, quoteNode: quoteText});
       card.append(quote);
     }
     if (!row.matches.length && !row.gaps.length) card.append(h('p', {class: 'fine'}, row.status === 'No sources selected'
@@ -565,7 +569,7 @@ function campaignDraftLog(report, feedback, onCampaignUpdated, canSave, onChange
 }
 
 /** Source IDs become local disclosure controls; no navigation or HTML parsing. */
-function connectCitations(article, report, sources, beforeJump = () => {}, includePassages = false) {
+function connectCitations(article, report, sources, beforeJump = () => {}, includePassages = false, navigation = null) {
   const {references, passages} = reportCitationIndex(report, {includePassages});
   const citationMatches = reportCitationMatcher(references);
   const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
@@ -581,14 +585,20 @@ function connectCitations(article, report, sources, beforeJump = () => {}, inclu
       const parent = (report.sources || []).find(item => item.id === sourceId);
       const sourceNumber = (report.sources || []).findIndex(item => item.id === sourceId) + 1;
       const passage = passages.get(match.id);
-      const jump = button(passage?.label || 'Source ' + sourceNumber, () => {
+      const exact = passage && navigation?.has(passage);
+      const label = passage ? (exact ? passage.label : 'Original source for ' + passage.label) : 'Source ' + sourceNumber;
+      const jump = button(label, event => {
+        if (exact) { void navigation.open({invoker: event.currentTarget}); return; }
+        if (passage && navigation) { void navigation.followOriginal({sourceId, invoker: event.currentTarget, view: 'document'}); return; }
         beforeJump();
         const source = [...sources.querySelectorAll('details')].find(item => item.dataset.sourceId === sourceId);
         if (source) { source.open = true; source.scrollIntoView({block: 'center'}); source.querySelector('summary').focus({preventScroll: true}); }
       }, 'citation-link');
-      jump.setAttribute('aria-label', passage
-        ? `Show ${passage.label}: ${parent?.title || sourceId}`
-        : `Show source: ${parent?.title || sourceId}`);
+      if (exact) navigation.bind(jump, passage);
+      jump.setAttribute('aria-label', exact
+        ? 'Show ' + passage.label + ': ' + (parent?.title || sourceId)
+        : passage ? 'Show original source for ' + passage.label + ': ' + (parent?.title || sourceId)
+          : 'Show source: ' + (parent?.title || sourceId));
       if (passage) jump.title = `Unicode characters ${passage.start}–${passage.end} (zero-based, end-exclusive) in the retained original.`;
       fragment.append(jump); start = match.index + match.id.length;
     }

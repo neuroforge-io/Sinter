@@ -47,6 +47,100 @@ def main(argv: list[str] | None = None) -> None:
     args = browser_arguments(__doc__, argv)
     from playwright.sync_api import expect, sync_playwright
 
+    passage_observations = []
+
+    def inspect_passage_and_return(page, report, citation, expected_report, *, original=False):
+        """Prove an exact quote landing and an in-view, pointer-reachable Return."""
+        label = citation.get_attribute("aria-label")
+        match = re.fullmatch(r"Show (Passage [1-9][0-9]*): .+", label or "")
+        assert match, label
+        passage = match.group(1)
+        references = [item for item in expected_report["document_references"] if item["label"] == passage]
+        assert len(references) == 1, references
+        reference = references[0]
+        expected = [item for item in expected_report["excerpts"] if item["id"] == reference["excerpt_id"]]
+        assert len(expected) == 1, expected
+        excerpt = expected[0]
+        assert (excerpt["source_id"], excerpt["start"], excerpt["end"]) == (
+            reference["source_id"], reference["start"], reference["end"]
+        )
+        selected_sources = [item for item in expected_report["sources"] if item["id"] == excerpt["source_id"]]
+        assert len(selected_sources) == 1, selected_sources
+        source = selected_sources[0]
+        citation.click()
+        expect(report.get_by_role("tabpanel", name="Evidence", exact=True)).to_be_visible()
+        quote = report.locator(".question-evidence-quote[open]:has(> .passage-return-controls)")
+        expect(quote).to_have_count(1)
+        summary = quote.locator(":scope > summary").get_attribute("aria-label")
+        match = re.fullmatch(r"Inspect question ([1-9][0-9]*) " + passage + r", source (.+)", summary or "")
+        assert match, summary
+        question, source_id = int(match.group(1)), match.group(2)
+        assert source_id == reference["source_id"], (source_id, reference)
+        assert 1 <= question <= len(expected_report["question_index"])
+        assert excerpt["id"] in expected_report["question_index"][question - 1]["excerpt_ids"]
+        ids = quote.locator(":scope > .source-id").all_text_contents()
+        assert ids == ["Excerpt ID: " + excerpt["id"], "Source ID: " + source_id], ids
+        wording = quote.locator(":scope > p").filter(
+            has_text=re.compile(r"^Unicode characters [0-9]+–[0-9]+ ")
+        ).inner_text()
+        match = re.fullmatch(
+            r"Unicode characters ([0-9]+)–([0-9]+) \(zero-based, end-exclusive\) in the retained original.",
+            wording,
+        )
+        assert match, wording
+        start, end = map(int, match.groups())
+        assert (start, end) == (reference["start"], reference["end"]), ((start, end), reference)
+        assert 0 <= start < end <= len(source["content"])
+        assert source["content"][start:end] == excerpt["quote"]
+        assert quote.locator(":scope > pre").text_content() == excerpt["quote"]
+        expect(quote.locator(".passage-return-controls")).to_contain_text(
+            f"Showing {passage} under Question {question}."
+        )
+
+        def reachable(control, phase):
+            bounds = control.bounding_box()
+            width, height = page.viewport_size["width"], page.viewport_size["height"]
+            hit = bool(bounds) and control.evaluate("""element => {
+                const r = element.getBoundingClientRect();
+                const target = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                return target === element || element.contains(target);
+            }""")
+            passage_observations.append({
+                "phase": phase, "passage": passage, "question": question,
+                "viewport": [width, height], "bounds": bounds, "pointer_hit": hit,
+            })
+            retain_layout_metrics(out / "garden-passage-navigation.json", passage_observations)
+            assert bounds and bounds["width"] >= 44 and bounds["height"] >= 44, bounds
+            assert bounds["x"] >= 16 and bounds["x"] + bounds["width"] <= width - 16, bounds
+            assert bounds["y"] >= 16 and bounds["y"] + bounds["height"] <= height - 16, bounds
+            assert hit, bounds
+            return bounds
+
+        back = report.locator(".passage-return-controls").get_by_role(
+            "button", name="Return to document", exact=True
+        )
+        expect(back).to_be_focused()
+        quote_return = reachable(back, "quote-return")
+        original_return = None
+        if original:
+            quote.get_by_role("button", name="Open original source for " + passage, exact=True).click()
+            original_text = report.locator(".source-jump[open]:has(> .passage-return-controls) > pre")
+            expect(original_text).to_have_count(1)
+            assert original_text.text_content() == source["content"]
+            expect(back).to_be_focused()
+            original_return = reachable(back, "original-return")
+        back.click()
+        expect(report.get_by_role("tabpanel", name="Document", exact=True)).to_be_visible()
+        expect(citation).to_be_focused()
+        origin = reachable(citation, "returned-origin")
+        expect(report.locator(".passage-return-controls")).to_have_count(0)
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        return {
+            "passage": passage, "question": question, "source_id": source_id,
+            "excerpt_id": ids[0][12:], "range": [start, end],
+            "quote_return": quote_return, "original_return": original_return, "origin": origin,
+        }
+
     out = Path(os.environ.get("SINTER_BROWSER_ARTIFACTS") or ROOT / "browser-artifacts")
     out.mkdir(parents=True, exist_ok=True)
     receipt = out / "garden-practice-summary.json"
@@ -57,6 +151,7 @@ def main(argv: list[str] | None = None) -> None:
         "src/sinter/casebooks.py",
         "src/sinter/handover.py",
         "src/sinter/web/report-citations.js",
+        "src/sinter/web/report-passage-navigation.js",
         "src/sinter/web/reports.js",
         "src/sinter/web/report-drafts.js",
         "src/sinter/web/documents.js",
@@ -187,22 +282,26 @@ def main(argv: list[str] | None = None) -> None:
                     expect(document).not_to_contain_text(
                         "Action,Scope,Owner,Proposed target date"
                     )
-                    document.get_by_role(
+                    prepared_passage = document.get_by_role(
                         "button",
                         name=re.compile(
                             r"^Show Passage \d+: Review note - "
                             r"fictional practice conditions$"
                         ),
-                    ).first.click()
-                    original_note = report.locator(".source-jump[open] pre")
-                    expect(original_note).to_have_text(
-                        bundle["casebook"]["documents"][3]["content"]
+                    ).first
+                    prepared_report = casebooks.build(bundle["casebook"], "handover")
+                    prepared_navigation = inspect_passage_and_return(
+                        page, report, prepared_passage, prepared_report, original=True
                     )
+                    assert next(
+                        source["content"] for source in prepared_report["sources"]
+                        if source["id"] == prepared_navigation["source_id"]
+                    ) == bundle["casebook"]["documents"][3]["content"]
+                    retain_layout_metrics(out / "garden-prepared-passage-return.json", [prepared_navigation])
                     checks.append(
-                        "handover lays out question-specific checks and quoted "
-                        "table; document citations open exact original wording"
+                        "handover citations open the exact retained quote and complete "
+                        "original, then Return restores the invoking reading position"
                     )
-                    report.get_by_role("tab", name="Document", exact=True).click()
                     expect(report.get_by_label("Document save state")).to_contain_text(
                         "Prepared locally; not saved"
                     )
@@ -939,7 +1038,23 @@ def main(argv: list[str] | None = None) -> None:
                             return hit === element || element.contains(hit);
                         }""")
                         assert reading_page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-                        reading_page.screenshot(path=str(out / f"garden-saved-reading-{width}.png"))
+                        first_fold = out / f"garden-saved-reading-{width}.png"
+                        reading_page.screenshot(path=str(first_fold))
+                        metric["first_fold_image"] = {
+                            "scope": "viewport", "bytes": first_fold.stat().st_size,
+                            "sha256": hashlib.sha256(first_fold.read_bytes()).hexdigest(),
+                        }
+                        retain_layout_metrics(layout_receipt, reading_metrics)
+                        metric["passage_navigation"] = inspect_passage_and_return(
+                            reading_page, reading_view, passage, reading_report
+                        )
+                        returned = out / f"garden-saved-return-{width}.png"
+                        reading_page.screenshot(path=str(returned))
+                        metric["returned_origin_image"] = {
+                            "scope": "viewport", "bytes": returned.stat().st_size,
+                            "sha256": hashlib.sha256(returned.read_bytes()).hexdigest(),
+                        }
+                        retain_layout_metrics(layout_receipt, reading_metrics)
                         reading_page.get_by_role("button", name="Back to saved copies", exact=True).click()
                         saved_filter = reading_page.get_by_label("Find saved drafts", exact=True)
                         expect(saved_filter).to_be_focused()

@@ -27,6 +27,7 @@ PATHS = (
     "src/sinter/web/casebook-retained-context.js",
     "src/sinter/web/reports.js",
     "src/sinter/web/report-citations.js",
+    "src/sinter/web/report-passage-navigation.js",
     "src/sinter/web/documents.js",
     "src/sinter/web/dom.js",
     "src/sinter/casebooks.py",
@@ -109,6 +110,34 @@ def main(argv=None):
     def check(name, condition, **extra):
         checks.append({"name": name, "passed": bool(condition), **extra})
         assert condition, name
+
+
+    def return_to_inspector(original, invoker, expected_text, name):
+        """Inspect complete historical text, then return to the actual control."""
+        back = original.locator(".passage-return-controls").get_by_role(
+            "button", name="Return to evidence", exact=True
+        )
+        expect(back).to_be_focused()
+        check(prefix + "/" + name + " complete original", original.locator("pre").text_content() == expected_text)
+        for control, phase in [(back, "Return"), (invoker, "inspector")]:
+            if phase == "inspector":
+                back.click()
+                expect(invoker).to_be_focused()
+            bounds = control.bounding_box()
+            hit = bool(bounds) and control.evaluate("""element => {
+                const r = element.getBoundingClientRect();
+                const target = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                return target === element || element.contains(target);
+            }""")
+            check(
+                prefix + "/" + name + " visible " + phase,
+                bool(bounds) and bounds["width"] >= 44 and bounds["height"] >= 44
+                and bounds["x"] >= 16 and bounds["x"] + bounds["width"] <= width - 16
+                and bounds["y"] >= 16 and bounds["y"] + bounds["height"] <= height - 16 and hit,
+                bounds=bounds, pointer_hit=hit,
+            )
+        expect(page.locator(".passage-return-controls")).to_have_count(0)
+        check(prefix + "/" + name + " has no requests", len(requests) == baseline_requests)
 
     with (
         tempfile.TemporaryDirectory(prefix="sinter-context-fictional-") as data,
@@ -228,11 +257,12 @@ def main(argv=None):
                         "Exact retained quotes from 0 of 1 chosen source."
                     )
                     third.locator(".question-evidence-unrepresented summary").click()
-                    third.get_by_role(
+                    third_inspector = third.get_by_role(
                         "button",
                         name=f"Inspect retained original for question 3, source {ids[0]}",
                         exact=True,
-                    ).click()
+                    )
+                    third_inspector.click()
                     original = page.locator(".sources-panel [data-source-id]").filter(
                         has=page.locator("summary").filter(has_text=TITLE)
                     )
@@ -241,12 +271,14 @@ def main(argv=None):
                             has_text=book["documents"][0]["content"]
                         )
                     )
-                    expect(target.locator("summary").first).to_be_focused()
                     check(
                         prefix
                         + "/unused for this question can inspect retained original from other question",
                         target.locator("pre").inner_text()
                         == book["documents"][0]["content"],
+                    )
+                    return_to_inspector(
+                        target, third_inspector, book["documents"][0]["content"], "unrepresented original"
                     )
                     quote = row.locator(".question-evidence-quote").filter(
                         has_text=passage["id"]
@@ -277,15 +309,15 @@ def main(argv=None):
                         "element => element.scrollIntoView({block: 'start'})"
                     )
                     page.screenshot(path=str(artifacts / (prefix + "-context.png")))
-                    quote.get_by_role(
+                    quote_inspector = quote.get_by_role(
                         "button",
                         name="Open original source for " + reference,
                         exact=True,
-                    ).click()
+                    )
+                    quote_inspector.click()
                     original = page.locator(
                         f'.sources-panel [data-source-id="{ids[1]}"]'
                     )
-                    expect(original.locator("summary").first).to_be_focused()
                     expect(original.locator("pre")).to_have_text(
                         book["documents"][1]["content"]
                     )
@@ -293,6 +325,9 @@ def main(argv=None):
                         prefix
                         + "/full original is historical despite current replacement",
                         "CURRENT PROJECT" not in original.inner_text(),
+                    )
+                    return_to_inspector(
+                        original, quote_inspector, book["documents"][1]["content"], "quoted original"
                     )
                     page.get_by_role("tab", name="Document", exact=True).click()
                     check(

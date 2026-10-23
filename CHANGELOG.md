@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Keep inline document evidence links at least 44 pixels on screens, including
+  the citation reached by Return. Preserve compact printed markers.
+
+- Open casebook passage citations at the exact retained quotation, with a visible
+  Return to the invoking reading position. Disclose shared question memberships
+  without inferring a question from edited prose. Keep full-original inspection separate,
+  preserve the previous successful Return during failed or interrupted navigation,
+  and refuse changed identities or stale views. Source text, human edits, historical
+  review status, saved copies and exports remain unchanged.
+
 - Resolve the first admitted Windows PATH Python inside CMD, avoiding external
   lookup processes on that path and normalising quoted lookup entries without
   changing the application PATH. Preserve later enumeration after refusal,

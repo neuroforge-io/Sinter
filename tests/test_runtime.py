@@ -61,6 +61,9 @@ def test_modular_entrypoint_and_security_headers(server):
     assert 'Access-Control-Allow-Origin' not in headers
     assert request(server, '/static/app.js')[0] == 200
     assert request(server, '/static/icon.svg')[0] == 200
+    code, asset_headers, asset = request(server, '/static/report-passage-navigation.js')
+    assert code == 200 and 'javascript' in asset_headers['Content-Type']
+    assert asset == (Path(__file__).parents[1] / 'src/sinter/web/report-passage-navigation.js').read_bytes()
     assert request(server, '/', 'HEAD')[2] == b''
 
 
@@ -330,7 +333,11 @@ def test_zipapp_includes_assets_and_runs(tmp_path):
     from build_zipapp import build
     output = build(tmp_path / 'sinter.pyz')
     with zipfile.ZipFile(output) as archive:
-        assert {'LICENSE', 'NOTICE', 'sinter/web/index.html', 'sinter/web/app.js'} <= set(archive.namelist())
+        assert {'LICENSE', 'NOTICE', 'sinter/web/index.html', 'sinter/web/app.js',
+                'sinter/web/report-passage-navigation.js'} <= set(archive.namelist())
+        assert archive.read('sinter/web/report-passage-navigation.js') == (
+            root / 'src/sinter/web/report-passage-navigation.js'
+        ).read_bytes()
         assert not any('__pycache__' in name for name in archive.namelist())
     result = subprocess.run([sys.executable, str(output), '--version'], capture_output=True, text=True, check=True)
     assert __version__ in result.stdout
