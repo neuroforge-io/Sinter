@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep inline document evidence links at least 44 pixels on screens, including
+  the citation reached by Return. Preserve compact printed markers.
+
 - Open casebook passage citations at the exact retained quotation, with a visible
   Return to the invoking reading position. Disclose shared question memberships
   without inferring a question from edited prose. Keep full-original inspection separate,
