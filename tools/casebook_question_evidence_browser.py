@@ -28,6 +28,7 @@ PATHS = (
     "src/sinter/web/casebook-retained-context.js",
     "src/sinter/web/reports.js",
     "src/sinter/web/report-citations.js",
+    "src/sinter/web/report-passage-navigation.js",
     "src/sinter/web/documents.css",
     "src/sinter/web/dom.js",
     "src/sinter/casebooks.py",
@@ -93,6 +94,7 @@ def run_flow(
     page, base, server, report, report_id, current_id, label, artifacts, expect
 ):
     requests, word_requests = [], []
+    return_positions = []
     page.on("request", lambda request: requests.append(request.url))
     page.on(
         "request",
@@ -163,20 +165,44 @@ def run_flow(
         )
         expect(summary).to_contain_text(TITLE)
         assert not summary.locator("script,a").count()
-        quote.get_by_role(
+        inspector = quote.get_by_role(
             "button", name="Open original source for " + reference["label"], exact=True
-        ).click()
+        )
+        inspector.click()
         original = page.locator(
             ".sources-panel [data-source-id='" + excerpt["source_id"] + "']"
         )
         expect(original).to_have_attribute("open", "")
-        expect(original.locator("summary").first).to_be_focused()
         expected_source = next(
             source
             for source in report["sources"]
             if source["id"] == excerpt["source_id"]
         )
-        expect(original.locator("pre")).to_have_text(expected_source["content"])
+        assert original.locator("pre").text_content() == expected_source["content"]
+        back = original.locator(".passage-return-controls").get_by_role(
+            "button", name="Return to evidence", exact=True
+        )
+        expect(back).to_be_focused()
+        for control, phase in [(back, "Return"), (inspector, "inspector")]:
+            if phase == "inspector":
+                back.click()
+                expect(inspector).to_be_focused()
+            bounds = control.bounding_box()
+            width, height = page.viewport_size["width"], page.viewport_size["height"]
+            hit = bool(bounds) and control.evaluate("""element => {
+                const r = element.getBoundingClientRect();
+                const target = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                return target === element || element.contains(target);
+            }""")
+            return_positions.append({
+                "phase": phase, "source_id": excerpt["source_id"], "excerpt_id": excerpt["id"],
+                "bounds": bounds, "pointer_hit": hit,
+            })
+            assert bounds and bounds["width"] >= 44 and bounds["height"] >= 44, (phase, bounds)
+            assert bounds["x"] >= 16 and bounds["x"] + bounds["width"] <= width - 16, (phase, bounds)
+            assert bounds["y"] >= 16 and bounds["y"] + bounds["height"] <= height - 16, (phase, bounds)
+            assert hit, (phase, bounds)
+        expect(page.locator(".passage-return-controls")).to_have_count(0)
     assert len(requests) == request_count, "Opening evidence made a request"
     assert server.app.store.report(report_id) == before
     assert server.app.casebooks.get(current_id) == current_before
@@ -234,6 +260,7 @@ def run_flow(
         "duplicate_titles_literal_and_keyboard_source_jump": True,
         "stored_report_document_and_current_project_unchanged": True,
         "evidence_requests": 0,
+        "exact_original_inspector_return": return_positions,
         "word_compile_requests": len(word_requests),
         "pending_editor_and_actual_word_export_unchanged": True,
         "raw_timings_ms": {
