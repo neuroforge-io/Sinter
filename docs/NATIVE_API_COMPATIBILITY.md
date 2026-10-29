@@ -10,18 +10,23 @@ The versioned public gateway fixture is
 `tests/fixtures/public_native_model_api_contract.v1.json`, copied verbatim from the
 NeuroForge site fixture generator. Its contract identifier is
 `neuroforge.public-native-model-client-fixtures.v1`; SHA-256 is
-`88cc078232ed0c29fff3ce70e1e3c2584d3594d7e270c8bb6f7769d48b01f423`.
+`fa8c393af38ed53808f2a9fdbd402546d1041e3b5c1b1a8e92cc2027c8e28dcd`.
 The 57 synthetic gateway cases record source-file hashes and the cutover receipt.
 They establish reproducible protocol behavior, not live deployment availability,
 language quality, a paid-service promise, or installed-client acceptance.
-This pack comes verbatim from site commit
+The preceding pack came verbatim from site commit
 [`1898e9eeb5cc1b9330ce06954d3e264ea43863c9`](https://github.com/Ace1928/neuroforge_site/blob/1898e9eeb5cc1b9330ce06954d3e264ea43863c9/tests/fixtures/public_native_model_api_contract.json).
 Its generator check and the site's two focused contract suites passed against
 those exact immutable inputs on 16 October: 29 tests, no failures or skips.
 Compared with the earlier `22aad400` pack, only the declared OpenAPI source hash
 changed; all 57 cases, capabilities, limits and preflight restrictions are
 identical. This is fixture provenance reconciliation, not a new runtime or live
-availability qualification. Historical acceptance receipts retain their original
+availability qualification. The current pack comes verbatim from site source commit
+[`8cc2c42421afa07e9d38bb7117b7be2307f3909d`](https://github.com/Ace1928/neuroforge_site/blob/8cc2c42421afa07e9d38bb7117b7be2307f3909d/tests/fixtures/public_native_model_api_contract.json).
+Compared with the preceding pack, only the OpenAPI source hash changed; the 57
+cases, capabilities, limits and preflight restrictions are unchanged. This
+source reference does not establish deployment or live service availability.
+Historical acceptance receipts retain their original
 source identities. Public worker deployment
 `d0425e8a8a844833abf7daf8b026881cadc3b885` restored text discovery on
 30 September 2026. Live Sinter generation acceptance is recorded separately.

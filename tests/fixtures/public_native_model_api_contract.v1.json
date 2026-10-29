@@ -74,7 +74,7 @@
   "source_sha256": {
     "workers/public_model_api.mjs": "37fb08e914100f42422e935c0b856b0ffa101379841b7e3c886158cff4d19b12",
     "workers/native_model_api_contract.mjs": "71ec0f97d42d8832cf1cbe5560a9599a87c55fa30cc267105291aca75344b050",
-    "static/openapi.json": "be6352182654e136015bf8c1455502da822116f5cd0276f62e63b22d53231a89",
+    "static/openapi.json": "1068f6ae6f3d9627be5d1269db4dd2d6b1f57b91bf7223a3b1767efbcfeef332",
     "docs/releases/NATIVE_CONSUMER_CUTOVER_20260929.json": "391c3908db28d3c9dd3dd34992023ceec1b1414b5a7ffbbad4c07bf56f0e94e6",
     "docs/releases/NATIVE_API_AVAILABILITY_20260930.json": "590af83ca28097c167ebfb960f21c1132ef28ed473560bc16a141ef1f25869de",
     "docs/releases/NATIVE_API_ORIGIN_OBSERVATION_20260930.json": "383ed0250fc09ba2129368037c9c93ed44892c37a0150fd4d3e39113932660b3"
