@@ -1,0 +1,21 @@
+{
+  "workflow": "research",
+  "title": "Fictional Copper Kite workshop access review",
+  "demo": true,
+  "use_search": false,
+  "use_model": false,
+  "query": "workshop entrance seating opening time",
+  "questions": "What is recorded about the workshop entrance and seating?\nHas an opening time been agreed?",
+  "sources": [
+    {
+      "title": "Fictional workshop inspection",
+      "kind": "sample",
+      "content": "The fictional Copper Kite workshop entrance has not been measured.\nTwo movable chairs were recorded in the fictional workshop inspection.\nNo opening time has been agreed."
+    },
+    {
+      "title": "Fictional planning note",
+      "kind": "sample",
+      "content": "Robin Example will ask the fictional venue coordinator about the entrance width.\nSeating needs still require review with the fictional participants."
+    }
+  ]
+}

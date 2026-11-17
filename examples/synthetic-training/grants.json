@@ -1,0 +1,26 @@
+{
+  "workflow": "grants",
+  "title": "Fictional Copper Kite materials funding exercise",
+  "demo": true,
+  "use_search": false,
+  "use_model": false,
+  "query": "fictional workshop materials budget",
+  "profile": {"organisation_type": "fictional volunteer group", "budget": 120},
+  "sources": [
+    {
+      "title": "Fictional materials programme",
+      "kind": "sample",
+      "content": "FICTIONAL TRAINING ONLY: no funding offer exists.\nThis fictional programme has a materials budget maximum of 200 practice units.\nNo application window or applicant conditions have been confirmed."
+    }
+  ],
+  "criteria": [
+    {
+      "field": "budget",
+      "operator": "maximum",
+      "value": 200,
+      "source_title": "Fictional materials programme",
+      "quote": "This fictional programme has a materials budget maximum of 200 practice units.",
+      "confirmed": true
+    }
+  ]
+}
