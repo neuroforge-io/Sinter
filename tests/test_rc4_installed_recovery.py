@@ -15,6 +15,7 @@ import tarfile
 import tempfile
 import threading
 import time
+from contextlib import closing
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -596,7 +597,7 @@ def test_raw_conservation_guard_precedes_any_reader_and_does_not_repair(tmp_path
     output.mkdir()
     (output / "process").mkdir()
     baseline = seed(runtime / "data")["snapshot"]
-    with sqlite3.connect(runtime / "data/workspace.sqlite3") as db:
+    with closing(sqlite3.connect(runtime / "data/workspace.sqlite3")) as db, db:
         db.execute("PRAGMA user_version=0")
     lifecycle = producer.InstalledLifecycle.__new__(producer.InstalledLifecycle)
     lifecycle.runtime, lifecycle.output, lifecycle.profile, lifecycle.baseline = (
@@ -843,7 +844,9 @@ def test_cli_record_change_refuses_before_any_next_reader(tmp_path, monkeypatch)
         rows.append(synthetic_command_row(argv, stdout=raw))
         for name, path in kw["save_streams"].items():
             path.write_bytes(raw if name == "stdout" else b"")
-        with sqlite3.connect(lifecycle.runtime / "data/workspace.sqlite3") as db:
+        with closing(
+            sqlite3.connect(lifecycle.runtime / "data/workspace.sqlite3")
+        ) as db, db:
             db.execute("PRAGMA application_id=987")
         return 0, raw
 
@@ -985,6 +988,16 @@ def test_actual_unix_partial_request_worker_is_closed_before_ownership_pass(
             relay.server_close()
             thread.join(timeout=2)
         (tmp_path / "relay.sock").unlink(missing_ok=True)
+
+
+def test_inner_relay_refuses_missing_unix_transport(tmp_path, monkeypatch):
+    from tools import installed_workflow_browser as transport
+
+    monkeypatch.delattr(socket, "AF_UNIX", raising=False)
+    with pytest.raises(
+        ValueError, match="Installed Linux qualification needs Unix sockets"
+    ):
+        transport.InnerRelay(tmp_path)
 
 
 def test_inner_ui_observations_are_bound_to_exact_complete_rpc_results(tmp_path):

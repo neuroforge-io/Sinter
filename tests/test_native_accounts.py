@@ -246,15 +246,27 @@ def licence_environment(tmp_path, monkeypatch):
 def test_collect_licences_preserves_each_upstream_variant_and_provenance(
     licence_environment,
 ):
-    directory, _ = licence_environment
+    directory, distributions = licence_environment
     notices = directory / "notices"
     inventory = package.collect_licences(notices)
     crypto = next(row for row in inventory if row["name"] == "cryptography")
+    expected_crypto = {
+        "cryptography/licenses/LICENSE",
+        "cryptography/licenses/LICENSE.APACHE",
+        "cryptography/licenses/LICENSE.BSD",
+    }
     assert len(crypto["licences"]) == 3
-    assert (
-        sum(path.is_file() for path in (notices / "cryptography").rglob("LICENSE*"))
-        == 3
-    )
+    assert {record["path"] for record in crypto["licences"]} == expected_crypto
+    assert {
+        path.relative_to(notices).as_posix()
+        for path in (notices / "cryptography").rglob("*")
+        if path.is_file()
+    } == expected_crypto
+    distribution = distributions["cryptography"]
+    for entry in distribution.files:
+        assert (notices / "cryptography" / "licenses" / entry.name).read_bytes() == (
+            distribution.locate_file(entry).read_bytes()
+        )
     for row in inventory:
         for record in row["licences"]:
             assert (
