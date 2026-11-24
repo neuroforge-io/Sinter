@@ -16,6 +16,8 @@ import threading
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from .speech_backends import registry
+
 MODEL_NAMES = {"tiny", "base", "small", "tiny.en", "base.en", "small.en"}
 MAX_UPLOAD = 25 * 1024 * 1024
 _LOCK = threading.Lock()
@@ -25,9 +27,12 @@ _CACHE: tuple[str, object] | None = None
 def capabilities() -> dict:
     """Fast, local-only discovery; importing native engines is deferred to use."""
     available = importlib.util.find_spec("faster_whisper") is not None
+    discovered = registry.capabilities(tuple(sorted(MODEL_NAMES)))
     return {"available": available, "speaker_diarization": False,
             "channel_separation": True, "identity_verification": False,
             "models": sorted(MODEL_NAMES), "max_upload_bytes": MAX_UPLOAD,
+            "backends": discovered["backends"],
+            "available_backends": discovered["available_backends"],
             "notice": ("Local speech package found. First use also needs a cached model or download permission."
                        if available else "Install the optional speech package, then restart Sinter. Transcript import works without it.")}
 
@@ -79,10 +84,21 @@ def _channel_inputs(path: Path):
 
 def transcribe(path: Path, model: str = "base", consent: bool = False,
                allow_download: bool = False, progress=lambda message: None,
-               *, language: str = "auto", split_channels: bool = False) -> dict:
+               *, language: str = "auto", split_channels: bool = False,
+               backend: str | None = None) -> dict:
     global _CACHE
     if consent is not True:
         raise ValueError("Confirm you have permission to process this recording before transcribing.")
+    if backend not in {None, "faster-whisper", "erais-native"}:
+        raise ValueError("Choose faster-whisper or erais-native as the local speech backend.")
+    if backend == "erais-native":
+        from .speech_backends import TranscriptionRequest
+        from .speech_backends import erais_native_backend
+
+        return erais_native_backend.transcribe(TranscriptionRequest(
+            source=Path(path), model=model, language=language,
+            split_channels=split_channels, allow_download=allow_download,
+            consent=consent, backend=backend), progress)
     if not isinstance(model, str) or model not in MODEL_NAMES:
         raise ValueError("Choose tiny, base or small, optionally with .en for English-only recordings.")
     if not isinstance(language, str) or (language != "auto" and not re.fullmatch("[a-z]{2,3}", language)):
@@ -188,4 +204,5 @@ def transcribe_upload(payload: dict, progress=lambda message: None) -> dict:
         return transcribe(path, payload.get("model", "base"), True,
                           payload.get("allow_download", False), progress,
                           language=payload.get("language", "auto"),
-                          split_channels=payload.get("split_channels", False))
+                          split_channels=payload.get("split_channels", False),
+                          backend=payload.get("backend"))
