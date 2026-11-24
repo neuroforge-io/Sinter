@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 
-from . import erais_native_backend
+from . import erais_http_backend, erais_native_backend
 from .contracts import BackendCapabilities
 
-BACKEND_IDS = ("faster-whisper", "erais-native")
+BACKEND_IDS = ("faster-whisper", "erais-native", "erais-neuroforge")
 
 
 def faster_whisper_capabilities(models: tuple[str, ...]) -> BackendCapabilities:
@@ -33,6 +33,7 @@ def capabilities(models: tuple[str, ...]) -> dict:
     descriptors = [
         faster_whisper_capabilities(models),
         erais_native_backend.capabilities(),
+        erais_http_backend.capabilities(),
     ]
     return {
         "backends": [item.to_mapping() for item in descriptors],
@@ -44,6 +45,8 @@ def capabilities(models: tuple[str, ...]) -> dict:
 def get(backend_id: str):
     if backend_id == "erais-native":
         return erais_native_backend
+    if backend_id == "erais-neuroforge":
+        return erais_http_backend
     if backend_id == "faster-whisper":
         return None
     raise ValueError("Choose a supported local speech backend.")

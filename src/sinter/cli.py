@@ -75,7 +75,7 @@ def build_parser(prog: str = "sinter") -> argparse.ArgumentParser:
     speech.add_argument("--model", default="base")
     speech.add_argument("--language", default="auto", help="auto or a language code such as en")
     speech.add_argument("--split-channels", action="store_true", help="Two isolated recording tracks; not voice identification")
-    speech.add_argument("--backend", choices=["faster-whisper", "erais-native"], default=None, help="Local speech backend; default preserves faster-whisper")
+    speech.add_argument("--backend", choices=["faster-whisper", "erais-native", "erais-neuroforge"], default=None, help="Local speech backend; default preserves faster-whisper")
     speech.add_argument("--format", choices=["json", "txt", "srt", "vtt"], default="json")
     speech.add_argument("-o", "--output", help="Output file; default transcript.FORMAT")
     sub.add_parser("templates", help="List templates")

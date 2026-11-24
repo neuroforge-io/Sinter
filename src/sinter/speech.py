@@ -89,13 +89,15 @@ def transcribe(path: Path, model: str = "base", consent: bool = False,
     global _CACHE
     if consent is not True:
         raise ValueError("Confirm you have permission to process this recording before transcribing.")
-    if backend not in {None, "faster-whisper", "erais-native"}:
-        raise ValueError("Choose faster-whisper or erais-native as the local speech backend.")
-    if backend == "erais-native":
-        from .speech_backends import TranscriptionRequest
-        from .speech_backends import erais_native_backend
+    if backend not in {None, "faster-whisper", "erais-native",
+                       "erais-neuroforge"}:
+        raise ValueError(
+            "Choose faster-whisper, erais-native or erais-neuroforge as the "
+            "local speech backend.")
+    if backend in {"erais-native", "erais-neuroforge"}:
+        from .speech_backends import TranscriptionRequest, get
 
-        return erais_native_backend.transcribe(TranscriptionRequest(
+        return get(backend).transcribe(TranscriptionRequest(
             source=Path(path), model=model, language=language,
             split_channels=split_channels, allow_download=allow_download,
             consent=consent, backend=backend), progress)

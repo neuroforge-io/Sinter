@@ -23,6 +23,7 @@ class BackendCapabilities:
     word_timing: str = "unavailable"
     channel_separation: bool = False
     speaker_diarization: bool = False
+    meeting_stream: bool = False
     network_required: bool = False
     notice: str = ""
     runtime_identity: str = ""
@@ -38,6 +39,7 @@ class BackendCapabilities:
             "word_timing": self.word_timing,
             "channel_separation": self.channel_separation,
             "speaker_diarization": self.speaker_diarization,
+            "meeting_stream": self.meeting_stream,
             "network_required": self.network_required,
             "notice": self.notice,
             "runtime_identity": self.runtime_identity,
