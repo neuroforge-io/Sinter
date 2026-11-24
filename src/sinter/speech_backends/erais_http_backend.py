@@ -109,6 +109,8 @@ def capabilities() -> BackendCapabilities:
     audio = value.get("audio") if isinstance(value.get("audio"), dict) else {}
     meeting = value.get("meeting_stream") if isinstance(
         value.get("meeting_stream"), dict) else {}
+    identity = meeting.get("speaker_identity") if isinstance(
+        meeting.get("speaker_identity"), dict) else {}
     models = tuple(
         item for item in (model.get("id"),) if isinstance(item, str) and item)
     return BackendCapabilities(
@@ -119,7 +121,9 @@ def capabilities() -> BackendCapabilities:
         supported_languages=(),
         word_timing="word_estimated" if meeting else "unavailable",
         channel_separation=False,
-        speaker_diarization=bool(meeting.get("speaker_diarization") is True),
+        speaker_diarization=bool(
+            meeting.get("speaker_diarization") is True
+            and identity.get("available") is True),
         meeting_stream=bool(
             meeting.get("contract") == "erais.audio.meeting-stream.v1"),
         network_required=True,
@@ -188,9 +192,14 @@ def _segment(event: dict) -> dict | None:
         "speaker": str(event.get("speaker", "Unidentified")),
         "text": text.strip(),
         "review_flags": [
-            "Speaker identity is unconfirmed. Confirm names against the recording."
-            if event.get("speaker_identity_status") != "confirmed" else
-            "Speaker identity is not independently verified."],
+            "Speaker identity matched a consented introduction voiceprint; "
+            "confirm the named introduction against the recording."
+            if event.get("speaker_identity_status") in {
+                "enrolled_introduction", "voiceprint_match"} else
+            "Speaker identity is unconfirmed. Confirm names against the recording."],
+        "speaker_identity_status": str(
+            event.get("speaker_identity_status", "unconfirmed")),
+        "speaker_match_score": event.get("speaker_match_score"),
         "words": words,
     }
 
@@ -216,7 +225,9 @@ def transcribe(request: TranscriptionRequest, progress=lambda _message: None) ->
     if health.models and request.model not in health.models:
         raise SpeechBackendError("The requested model is not provided by the ERAIS service.")
     progress("Creating a local ERAIS meeting session")
-    created = _request("POST", MEETINGS)
+    created = _request(
+        "POST", MEETINGS, body=b'{"consent":true}',
+        content_type="application/json")
     session_id = created.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         raise SpeechBackendError("ERAIS did not create a meeting session.")
@@ -262,7 +273,8 @@ def transcribe(request: TranscriptionRequest, progress=lambda _message: None) ->
         "engine_version": health.manifest_identity[:12],
         "runtime_identity": health.runtime_identity,
         "meeting_session_id": session_id,
-        "speaker_diarization": False,
+        "speaker_diarization": health.speaker_diarization,
+        "speaker_identity_available": health.speaker_diarization,
         "speaker_identity_verified": False,
         "channel_separation": False,
         "review_count": sum(bool(item["review_flags"]) for item in segments),
