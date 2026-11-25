@@ -1,0 +1,11 @@
+{
+  "duration_s": 600.064,
+  "elapsed_s": 21.15,
+  "mode": "full",
+  "peak_rss_mb": 1287.1,
+  "recording": "measure_10min.wav",
+  "segments": 82,
+  "sha256": "edea4a82bc94919d38e4bcea13db147eb7c468dab9c5f637b2f3a1b58fcc131e",
+  "source_mode": "full_pcm",
+  "throughput_x": 28.38
+}

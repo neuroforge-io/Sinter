@@ -39,6 +39,22 @@ public release still needs distribution rights.
 The 104.5-minute file concatenates six meetings; it is not one continuous
 source recording. Throughput on a lower-powered laptop is unmeasured.
 
+### Bounded source scaling
+
+Paired in-process measurements with the same model and two threads:
+
+| Duration | Bounded peak | Full-PCM peak |
+|---|---:|---:|
+| 10 min | 1,264.3 MB | 1,287.1 MB |
+| 60 min | 1,350.3 MB | 1,459.2 MB |
+| 104 min | 1,363.6 MB | 1,554.3 MB |
+| 164.5 min | 1,356.8 MB | not measured |
+
+Bounded input is flat from 60 minutes onward and produces identical SHA-256,
+segments and duration to the full-PCM path. Compressed formats and
+non-conforming WAV are decoded once to a private temporary WAV and then streamed;
+the temporary file is removed. See `MEMORY_SCALING_20261125.md`.
+
 ## Blocking external decisions
 
 1. **Distribution rights.** ERAIS runtime terms, LibriSpeech and GigaSpeech
