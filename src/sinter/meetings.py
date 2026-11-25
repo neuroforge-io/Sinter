@@ -1,13 +1,16 @@
 """Transcript-preserving draft minutes with human-confirmed speaker labels."""
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import os
 import re
 from dataclasses import asdict, dataclass, field
 
 from .evidence import literal, text
 from .meeting_semantics import Passage, analyze
+from .experience_feedback import from_environment as experience_from_environment
 from .organizational_interpreter import from_environment
 
 
@@ -220,6 +223,16 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
         semantic_passages,
         interpreter=interpreter,
         revision_source=source_passages if corrections else None)
+    experience_receipts = []
+    feedback = experience_from_environment()
+    if feedback is not None and audit:
+        scope_id = "meeting:" + hashlib.sha256(
+            title.encode("utf-8")).hexdigest()[:16]
+        for change in audit:
+            experience_receipts.append(feedback.record(
+                change, scope_id=scope_id,
+                source_revision=os.environ.get(
+                    "SINTER_SOURCE_REVISION", "unknown")))
     claim_records = semantics["claims"]
     changes_by_id = {change["segment_id"]: change for change in corrections}
     for record in claim_records:
@@ -335,4 +348,5 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
             "motions": semantics["motions"],
             "semantic_revision": semantics["revision"],
             "organizational_interpreter": (
-                "erais" if interpreter is not None else "deterministic")}
+                "erais" if interpreter is not None else "deterministic"),
+            "experience_receipts": experience_receipts}

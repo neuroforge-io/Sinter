@@ -58,6 +58,11 @@ def test_bridge_forwards_only_episode_routes(monkeypatch):
             "/api/organizational/interpret", method="POST",
             payload={"passage_id": "T1", "speaker": "Alex", "text": "x"})
         assert value["body"]["passage_id"] == "T1"
+        value = comprehension_bridge.request(
+            "/api/experience/corrections", method="POST",
+            payload={"original_interpretation": "a",
+                     "corrected_interpretation": "b"})
+        assert value["body"]["original_interpretation"] == "a"
         with pytest.raises(ValueError, match="not available"):
             comprehension_bridge.request("/api/transcribe", method="POST",
                                           payload={})
