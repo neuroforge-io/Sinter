@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  mergeSpeaker, relabelPassage, renameSpeaker, speakerGroups,
-  undoSpeakerRevision,
+  mergeSpeaker, relabelPassage, renameSpeaker, representativePassage,
+  speakerGroups, undoSpeakerRevision,
 } from '../src/sinter/web/transcription.js';
 
 test('speaker groups count passages and expose anonymous clusters', () => {
@@ -82,4 +82,16 @@ test('relabelling one passage keeps earlier group renaming reversible', () => {
   undoSpeakerRevision(transcript);
   assert.equal(transcript.segments[0].speaker, 'Speaker A');
   assert.equal(transcript.segments[1].speaker, 'Speaker A');
+});
+
+test('the representative passage prefers the longest unflagged turn', () => {
+  const transcript = {segments: [
+    {speaker: 'Speaker A', start: 0, end: 2, review_flags: []},
+    {speaker: 'Speaker A', start: 10, end: 15, review_flags: []},
+    {speaker: 'Speaker A', start: 20, end: 22, review_flags: ['Check amount']},
+    {speaker: 'Speaker B', start: 30, end: 40, review_flags: []},
+  ]};
+  assert.equal(representativePassage(transcript, 'Speaker A').index, 1);
+  assert.equal(representativePassage(transcript, 'Speaker B').index, 3);
+  assert.equal(representativePassage(transcript, 'Missing'), null);
 });

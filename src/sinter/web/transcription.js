@@ -56,6 +56,21 @@ export function renameSpeaker(edited, from, to, {operation = 'rename_group', rea
   return changed.length;
 }
 
+export function representativePassage(edited, label) {
+  const candidates = (edited?.segments || [])
+    .map((segment, index) => ({segment, index}))
+    .filter(({segment}) => (segment.speaker || 'Unidentified') === label);
+  if (!candidates.length) return null;
+  const score = ({segment}) => {
+    const start = Number(segment.start), end = Number(segment.end);
+    const duration = Number.isFinite(start) && Number.isFinite(end) && end > start
+      ? end - start : 0;
+    const flagged = (segment.review_flags || []).length;
+    return (flagged ? 0 : 1_000_000) + duration;
+  };
+  return candidates.sort((a, b) => score(b) - score(a))[0];
+}
+
 export function mergeSpeaker(edited, from, into, reason = '') {
   return renameSpeaker(edited, from, into, {operation: 'merge_group', reason});
 }
@@ -114,9 +129,8 @@ export function reviewTranscript(transcript, player, onChange) {
       const name = field(`Rename ${group.label}`, 'text', group.anonymous ? '' : group.label,
         `${group.count} passage${group.count === 1 ? '' : 's'} / ${timestamp(group.duration)}.`, {maxLength: 100});
       const listen = button('Listen to a passage', async () => {
-        const index = edited.segments.findIndex(segment =>
-          (segment.speaker || 'Unidentified') === group.label);
-        const segment = edited.segments[index];
+        const chosen = representativePassage(edited, group.label);
+        const segment = chosen?.segment;
         if (!segment) return;
         try {
           player.currentTime = Number(segment.start) || 0;
