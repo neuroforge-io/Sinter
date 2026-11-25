@@ -31,6 +31,28 @@ this file concatenates six meetings, a label is not a cross-meeting identity.
 Receipt: `docs/audio/receipts/local_multihour_20261125.json` (job
 `a3d741dcff924f77925d31c11cb83a1d`, ERAIS `9d0b9bdf8`).
 
+## Memory-bounded rerun
+
+The first receipt used a VAD frame-RMS implementation that cast the whole PCM
+buffer to float64. After converting in bounded blocks (same values, regression
+tested), the same recording on the same host produced:
+
+| Measurement | First run | Bounded RMS |
+|---|---:|---:|
+| Status | done | done |
+| Segments | 603 | 603 |
+| Processing time | 521.85 s | **404.80 s** |
+| Throughput | 12.0× | **15.5×** |
+| Peak worker RSS | 2,489.4 MB | **1,948.3 MB** |
+| First segment | 285.1 s | **180.9 s** |
+| Review count | 603/603 (old generic flag) | **143/603** |
+| Speaker distribution | identical | identical |
+
+The 542 MB reduction matches the removed float64 copy; the faster first segment
+and total time are consistent with less allocation and swapping. Receipt:
+`docs/audio/receipts/local_multihour_memory_20261125.json`
+(job `8b04974ea1ec4c399740ac47791308bc`, ERAIS with ECM blocks).
+
 ## Why it is slower than the 4-minute benchmark
 
 The 4-minute AMI benchmark reaches 36–41× real time because most of the cost is
@@ -62,6 +84,7 @@ Cancellation on the same recording is recorded separately; see
 ## Limits
 
 - Six meetings concatenated, not one continuous source recording.
-- WAV is loaded before processing; incremental decoding is still outstanding.
+- WAV is still loaded whole; the frame-RMS conversion is bounded, not the
+  source buffer. Incremental decoding remains outstanding.
 - Diarization is experimental and time-only; no DER claim is made here.
 - Single host (8 vCPU desktop, 2 threads); ordinary-laptop figures differ.

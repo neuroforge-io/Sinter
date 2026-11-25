@@ -41,7 +41,9 @@ The excerpt is uniformly quiet (whole-file mean -52.6 dB, peak -28.8 dB, RMS
 -41 dBFS), which is exactly the case an absolute quiet threshold handles
 badly. The 1 h 44 min receipt in `MULTIHOUR_QUALIFICATION_20261125.md`
 reported `review_count = 603` under the old rule; that number is historical and
-does not represent consequential risk.
+does not represent consequential risk. After the change, the same recording
+reports **143/603** flagged passages, with the other 460 passages still
+reviewable but not pre-flagged.
 
 ## Verification
 
