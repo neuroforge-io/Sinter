@@ -1,0 +1,11 @@
+{
+  "duration_s": 3600.0,
+  "elapsed_s": 125.09,
+  "mode": "bounded",
+  "peak_rss_mb": 1350.3,
+  "recording": "measure_60min.wav",
+  "segments": 366,
+  "sha256": "9bfd6cfbeeba6ad1759aeeb99ca247bfe516a7204faaad21c152151675b1b9fb",
+  "source_mode": "bounded_wav",
+  "throughput_x": 28.78
+}

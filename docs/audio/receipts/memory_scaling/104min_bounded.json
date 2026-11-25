@@ -1,0 +1,11 @@
+{
+  "duration_s": 6267.338813,
+  "elapsed_s": 223.34,
+  "mode": "bounded",
+  "peak_rss_mb": 1363.6,
+  "recording": "ami_six_meetings.wav",
+  "segments": 603,
+  "sha256": "87cbf4803b8ba6e3b3f1c7fae326c8c63e57fa5a7af90ae0dd92c08a25e97b44",
+  "source_mode": "bounded_wav",
+  "throughput_x": 28.06
+}
