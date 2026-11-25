@@ -16,6 +16,7 @@ import {rememberDraft, shouldWarnBeforeExit} from './draft-state.js';
 import {hasUnsavedReportDrafts, clearReportDrafts} from './report-drafts.js';
 import {gardenSeed, GARDEN_PRACTICE} from './garden-practice.js';
 import {helpPage} from './help.js';
+import {comprehensionPage} from './comprehension.js';
 import {confirmAction} from './confirm-action.js';
 
 const view = document.getElementById('view');
@@ -89,6 +90,7 @@ async function route() {
         go('research');
       }});
     else if (id === 'atlas') content = atlasPage(options);
+    else if (id === 'comprehension') content = comprehensionPage();
     else if (id === 'tools') content = communityPage(options);
     else if (id === 'settings') content = await settingsPage();
     else if (id === 'help') content = helpPage({go, openGarden, checkConnection: () => request('/api/health')});

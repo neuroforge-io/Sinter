@@ -12,6 +12,7 @@ export const tools = [
   {id: 'grants', label: 'Find funding', group: 'CREATE', icon: '◇', description: 'Discover opportunities and check requirements', keywords: 'grants money fund eligibility'},
   {id: 'brief', label: 'Briefs & letters', group: 'CREATE', icon: '↗', description: 'Prepare an enquiry, briefing or agenda item', keywords: 'enquiry email writing draft'},
   {id: 'meeting', label: 'Meeting minutes', group: 'CREATE', icon: '≋', description: 'Review a transcript and prepare traceable minutes', keywords: 'audio speech recording transcript speakers'},
+  {id: 'comprehension', label: 'Comprehension lab', group: 'EXPLORE', icon: '✎', description: 'Teach a lesson, inspect understanding and transfer a capability', keywords: 'education lesson concept comprehension transfer capability situation'},
   {id: 'tools', label: 'Community tools', group: 'EXPLORE', icon: '⊞', description: 'Compare wording or build a plan and calendar', keywords: 'compare difference diff event volunteer action register calendar'},
   {id: 'watches', label: 'Search watches', group: 'EXPLORE', icon: '◉', description: 'Keep track of changes in repeat searches', keywords: 'monitor schedule alerts funding'},
   {id: 'explore', label: 'Explore AI', group: 'EXPLORE', icon: '✧', description: 'Chat, search or use a guided drafting template', keywords: 'chat ai model templates recipes consultation newsletter enquiry'},

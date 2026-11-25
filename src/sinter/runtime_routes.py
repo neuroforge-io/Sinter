@@ -17,6 +17,7 @@ from . import (
     casebooks,
     client,
     community,
+    comprehension_bridge,
     practice,
     speech,
     workbench,
@@ -320,6 +321,10 @@ class RouteDispatch:
             )
         elif path == "/api/speech":
             self._json(speech.capabilities())
+        elif path == "/api/comprehension/health":
+            self._json(comprehension_bridge.request("/api/health"))
+        elif path.startswith("/api/comprehension/"):
+            self._json(comprehension_bridge.request(path))
         else:
             raise KeyError("Unknown route")
 
@@ -792,6 +797,12 @@ class RouteDispatch:
                     identifier, status="failed", error=str(error))
                 raise
             self._json({"id": job, "project": identifier}, 202)
+        elif path == "/api/comprehension/episodes":
+            self._json(comprehension_bridge.request(
+                path, method="POST", payload=body), 201)
+        elif path.startswith("/api/comprehension/"):
+            self._json(comprehension_bridge.request(
+                path, method="POST", payload=body))
         elif path == "/api/transcribe":
             identifier = body.get("recording_id")
             if identifier is not None:
