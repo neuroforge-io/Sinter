@@ -32,6 +32,11 @@ merged. The final runtime receipt reports `source_mode=bounded_wav`,
 `resumed=true`, `resume_after_s=13.62`, FP32, leader clustering and the same
 model bundle digest.
 
+A separate uninterrupted run of the same source produced **14 segments**, and
+the resumed project produced the **same 14 segments** with equal id, start, end,
+text and speaker. Receipt:
+`docs/audio/receipts/transcription_restart_parity_20261125.json`.
+
 ## What is persisted
 
 ```text

@@ -1,0 +1,12 @@
+{
+  "recording": "restart_60s.wav",
+  "project": "4274e833cf2f4a83ac4ba595b27957da",
+  "source_sha256": "390756292c1b641ee14378abf009f28bd39c8150780fbf6962797461eed69f35",
+  "uninterrupted_segments": 14,
+  "resumed_segments": 14,
+  "segments_equal": true,
+  "comparison_fields": ["id", "start", "end", "text", "speaker"],
+  "uninterrupted_worker_events": 16,
+  "resumed_status": "done",
+  "attempt": 2
+}
