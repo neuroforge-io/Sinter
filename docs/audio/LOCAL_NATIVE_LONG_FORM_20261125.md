@@ -35,6 +35,22 @@ message            Cancelled; the meeting session was closed and the partial
 
 No worker process remained after cancellation.
 
+Hour scale, same runtime, on a 31 GB eight-core desktop with two worker threads:
+
+```text
+recording           six AMI meetings, 6267 s, 191.26 MB, 16 kHz mono WAV
+segments            603
+first segment       180.9 s (all speaker windows are embedded first)
+elapsed             404.8 s (15.5x real time)
+peak worker RSS     1948 MB
+review triage       143/603 passages pre-flagged
+status              done, no worker left running
+```
+
+Full receipts: `MULTIHOUR_QUALIFICATION_20261125.md` and
+`MULTIHOUR_CANCELLATION_20261125.md`. The file is a concatenation of six
+meetings, not one continuous source.
+
 Offline proof: the installed worker was run inside a network namespace with no
 interfaces:
 
@@ -57,6 +73,13 @@ python3 scripts/install_sinter_native.py \
   --runtime-id erais-native-zipformer-gigaspeech \
   --speech-manifest ~/.local/share/sinter/erais-audio/speech-manifest.json
 ```
+
+The installer now snapshots the pinned source under `runtime/erais` and writes a
+`$BASE`-relative launcher, so the install does not need the ERAIS checkout.
+`--speaker-clustering --speaker-model campplus.onnx` bundles the CAM++ encoder.
+`--rollback` restores the previous source snapshot and manifest after an
+upgrade. Python and its numerical dependencies still come from the named
+interpreter; see `PORTABLE_RUNTIME_20261125.md`.
 
 It verifies the model bundle against the speech manifest, writes an executable
 launcher and a `manifest.json` with:
