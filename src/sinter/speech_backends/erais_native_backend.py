@@ -12,8 +12,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import queue
 import re
 import subprocess
+import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -31,7 +34,11 @@ REQUEST_SCHEMA = "sinter.audio.transcription.request.v1"
 RESULT_SCHEMA = "sinter.audio.transcription.result.v1"
 MAX_INPUT_BYTES = 500 * 1024 * 1024
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_EVENT_LINE_BYTES = 2 * 1024 * 1024
+MAX_STDERR_BYTES = 64 * 1024
+EVENT_SCHEMA = "erais.sinter-audio-worker.event.v1"
 DEFAULT_TIMEOUT = 3600
+MAX_MEETING_SECONDS = 4 * 3600
 _SHA = re.compile(r"[0-9a-f]{40}\Z")
 _MODEL = re.compile(r"[A-Za-z][A-Za-z0-9_.:-]{0,127}\Z")
 _LANG = re.compile(r"[a-z]{2,3}\Z")
@@ -80,6 +87,14 @@ def _read_manifest(path: Path) -> dict | None:
     timeout = value.get("timeout_seconds", DEFAULT_TIMEOUT)
     if type(timeout) is not int or not 30 <= timeout <= 24 * 3600:
         return None
+    meeting = value.get("meeting_stream", False)
+    if not isinstance(meeting, bool):
+        return None
+    if meeting:
+        maximum = value.get("max_meeting_seconds")
+        if (type(maximum) is not int
+                or not 60 <= maximum <= MAX_MEETING_SECONDS):
+            return None
     return value
 
 
@@ -110,6 +125,7 @@ def capabilities() -> BackendCapabilities:
         word_timing=str(value.get("word_timing", "estimated")),
         channel_separation=value.get("channel_separation") is True,
         speaker_diarization=value.get("speaker_diarization") is True,
+        meeting_stream=value.get("meeting_stream") is True,
         network_required=False,
         notice="Verified local ERAIS audio runtime manifest.",
         runtime_identity=str(value["runtime_id"]),
@@ -117,7 +133,11 @@ def capabilities() -> BackendCapabilities:
     )
 
 
-def _request_payload(request: TranscriptionRequest, digest: str) -> dict:
+def _request_payload(
+    request: TranscriptionRequest, digest: str, *, meeting: bool,
+) -> dict:
+    maximum = (
+        MAX_MEETING_SECONDS if meeting else 30)
     return {
         "schema": REQUEST_SCHEMA,
         "request_id": request.request_id or uuid.uuid4().hex,
@@ -131,8 +151,42 @@ def _request_payload(request: TranscriptionRequest, digest: str) -> dict:
         "timing_requirement": "word_estimated",
         "allow_download": False,
         "retention_policy": request.retention_policy,
-        "resource_envelope": {"maximum_input_duration_seconds": 4 * 3600},
+        "processing": "meeting" if meeting else "utterance",
+        "stream": meeting,
+        "resource_envelope": {
+            "maximum_input_duration_seconds": maximum,
+        },
     }
+
+
+def _worker_env() -> dict:
+    env = {key: item for key in ("PATH", "LANG", "TZ", "HOME")
+           if (item := os.environ.get(key)) is not None}
+    env.update({"PYTHONDONTWRITEBYTECODE": "1"})
+    return env
+
+
+def _validate_result(
+    result: object, *, request: TranscriptionRequest, value: dict, digest: str,
+) -> dict:
+    if (not isinstance(result, dict) or result.get("schema") != RESULT_SCHEMA
+            or not isinstance(result.get("segments"), list)
+            or not isinstance(result.get("duration"), (int, float))
+            or isinstance(result.get("duration"), bool)
+            or result["duration"] < 0
+            or not isinstance(result.get("language"), str)
+            or not isinstance(result.get("model"), str)):
+        raise SpeechBackendError("The ERAIS audio worker result failed validation.")
+    # The worker is trusted only for the declared result shape. Sinter still
+    # supplies its own provenance receipt and does not infer speaker identity.
+    result.setdefault("engine", "ERAIS native audio worker")
+    result.setdefault("speaker_diarization", False)
+    result.setdefault("channel_separation", request.split_channels)
+    result.setdefault("status", "draft" if result["segments"] else "no_speech")
+    result["audio_sha256"] = digest
+    result["runtime_identity"] = value["runtime_id"]
+    result["source_revision"] = value["source_revision"]
+    return result
 
 
 def transcribe(
@@ -170,11 +224,22 @@ def transcribe(
     with source.open("rb") as recording:
         for block in iter(lambda: recording.read(1024 * 1024), b""):
             digest.update(block)
-    payload = _request_payload(request, digest.hexdigest())
-    progress("Starting the verified local ERAIS audio worker")
-    env = {key: item for key in ("PATH", "LANG", "TZ", "HOME")
-           if (item := os.environ.get(key)) is not None}
-    env.update({"PYTHONDONTWRITEBYTECODE": "1"})
+    meeting = value.get("meeting_stream") is True
+    payload = _request_payload(
+        request, digest.hexdigest(), meeting=meeting)
+    progress(
+        "Starting the verified local ERAIS meeting worker"
+        if meeting else "Starting the verified local ERAIS audio worker")
+    if meeting:
+        return _transcribe_meeting(value, payload, progress, request, digest.hexdigest())
+    return _transcribe_utterance(
+        value, payload, progress, request, digest.hexdigest())
+
+
+def _transcribe_utterance(
+    value: dict, payload: dict, progress, request: TranscriptionRequest,
+    digest: str,
+) -> dict:
     try:
         completed = subprocess.run(
             value["worker"],
@@ -182,7 +247,7 @@ def transcribe(
             text=True,
             capture_output=True,
             timeout=value.get("timeout_seconds", DEFAULT_TIMEOUT),
-            env=env,
+            env=_worker_env(),
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
@@ -202,24 +267,176 @@ def transcribe(
     except json.JSONDecodeError as error:
         raise SpeechBackendError(
             "The ERAIS audio worker returned an invalid result.") from error
-    if (not isinstance(result, dict) or result.get("schema") != RESULT_SCHEMA
-            or not isinstance(result.get("segments"), list)
-            or not isinstance(result.get("duration"), (int, float))
-            or isinstance(result.get("duration"), bool)
-            or result["duration"] < 0
-            or not isinstance(result.get("language"), str)
-            or not isinstance(result.get("model"), str)):
-        raise SpeechBackendError("The ERAIS audio worker result failed validation.")
-    # The worker is trusted only for the declared result shape. Sinter still
-    # supplies its own provenance receipt and does not infer speaker identity.
-    result.setdefault("engine", "ERAIS native audio worker")
-    result.setdefault("speaker_diarization", False)
-    result.setdefault("channel_separation", request.split_channels)
-    result.setdefault("status", "draft" if result["segments"] else "no_speech")
-    result["audio_sha256"] = digest.hexdigest()
-    result["runtime_identity"] = value["runtime_id"]
-    result["source_revision"] = value["source_revision"]
-    return result
+    return _validate_result(
+        result, request=request, value=value, digest=digest)
+
+
+def _stop_worker(process: subprocess.Popen) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        process.terminate()
+        process.wait(timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        try:
+            process.kill()
+            process.wait(timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+
+def _transcribe_meeting(
+    value: dict, payload: dict, progress, request: TranscriptionRequest,
+    digest: str,
+) -> dict:
+    """Supervise one streaming meeting worker with cancellation and cleanup."""
+    timeout = float(value.get("timeout_seconds", DEFAULT_TIMEOUT))
+    try:
+        process = subprocess.Popen(
+            value["worker"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            env=_worker_env(),
+        )
+    except OSError as error:
+        raise SpeechBackendError(
+            "The ERAIS meeting worker could not be started. Check the installed "
+            "runtime and retry.") from error
+    assert process.stdin and process.stdout and process.stderr
+    stderr_chunks: list[str] = []
+    stderr_size = 0
+
+    def drain_stderr() -> None:
+        nonlocal stderr_size
+        for line in process.stderr:
+            if stderr_size < MAX_STDERR_BYTES:
+                stderr_chunks.append(line[:4096])
+                stderr_size += len(line)
+
+    reader_error: list[Exception] = []
+    lines: queue.Queue[str | None] = queue.Queue()
+
+    def read_stdout() -> None:
+        try:
+            for line in process.stdout:
+                lines.put(line)
+        except Exception as error:  # noqa: BLE001 - reported to the caller
+            reader_error.append(error)
+        finally:
+            lines.put(None)
+
+    stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+    stdout_thread = threading.Thread(target=read_stdout, daemon=True)
+    stderr_thread.start()
+    stdout_thread.start()
+    deadline = time.monotonic() + timeout
+    segments: dict[object, dict] = {}
+    result: dict | None = None
+    received_bytes = 0
+    started_at = time.monotonic()
+    try:
+        try:
+            process.stdin.write(json.dumps(payload))
+            process.stdin.close()
+        except OSError as error:
+            raise SpeechBackendError(
+                "The ERAIS meeting worker stopped before reading the request.") from error
+        while True:
+            try:
+                line = lines.get(timeout=0.5)
+            except queue.Empty:
+                if time.monotonic() > deadline:
+                    raise SpeechBackendError(
+                        "The ERAIS meeting worker did not finish within its "
+                        "declared time budget.")
+                progress(
+                    "The local ERAIS meeting worker is processing audio "
+                    f"({time.monotonic() - started_at:.0f} s)")
+                continue
+            if line is None:
+                break
+            encoded = line.encode("utf-8", "replace")
+            received_bytes += len(encoded)
+            if len(encoded) > MAX_EVENT_LINE_BYTES:
+                raise SpeechBackendError(
+                    "The ERAIS meeting worker returned an oversized event.")
+            if received_bytes > MAX_OUTPUT_BYTES:
+                raise SpeechBackendError(
+                    "The ERAIS meeting worker returned too much output.")
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise SpeechBackendError(
+                    "The ERAIS meeting worker returned an invalid event.") from error
+            if not isinstance(event, dict) or event.get("schema") != EVENT_SCHEMA:
+                raise SpeechBackendError(
+                    "The ERAIS meeting worker returned an invalid event.")
+            kind = event.get("event")
+            if kind == "started":
+                progress({
+                    "event": "session",
+                    "phase": "recording",
+                    "session": {
+                        "id": None,
+                        "model": str(event.get("model") or request.model),
+                        "backend": "erais-native",
+                    },
+                })
+            elif kind == "segment":
+                segment = event.get("segment")
+                if not isinstance(segment, dict):
+                    raise SpeechBackendError(
+                        "The ERAIS meeting worker returned an invalid segment.")
+                key = segment.get("id") or len(segments)
+                segments[key] = segment
+                end = segment.get("end")
+                processed = float(end) if isinstance(end, (int, float)) else 0.0
+                progress({
+                    "event": "segments",
+                    "segments": [segment],
+                    "received_s": processed,
+                    "processed_s": processed,
+                    "phase": "transcribing",
+                    "message": (
+                        f"Transcribed {len(segments)} segments on this computer"),
+                })
+            elif kind == "complete":
+                completed = event.get("result")
+                if not isinstance(completed, dict):
+                    raise SpeechBackendError(
+                        "The ERAIS meeting worker completed without a result.")
+                result = completed
+                break
+            elif kind == "cancelled":
+                raise SpeechBackendError(
+                    "The ERAIS meeting worker cancelled the recording.")
+            else:
+                raise SpeechBackendError(
+                    "The ERAIS meeting worker returned an unknown event.")
+        process.wait(timeout=15)
+        if result is None:
+            if reader_error:
+                raise SpeechBackendError(
+                    "The ERAIS meeting worker output could not be read.") from reader_error[0]
+            reason = "".join(stderr_chunks).strip()
+            raise SpeechBackendError(
+                "The ERAIS meeting worker did not return a result."
+                + (f" {reason[:300]}" if reason else ""))
+        if process.returncode not in (0,):
+            raise SpeechBackendError(
+                "The ERAIS meeting worker reported a failure after its result.")
+        return _validate_result(
+            result, request=request, value=value, digest=digest)
+    finally:
+        _stop_worker(process)
+        for stream in (process.stdin, process.stdout, process.stderr):
+            try:
+                stream.close()
+            except (OSError, ValueError):
+                pass
 
 
 __all__ = [
