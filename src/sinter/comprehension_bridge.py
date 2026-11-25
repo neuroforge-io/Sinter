@@ -19,7 +19,7 @@ MAX_BODY = 8 * 1024 * 1024
 EPISODE = re.compile(
     r"/api/comprehension/episodes"
     r"(?:/[0-9a-f]{32}(?:/(?:lesson|task|transfer|observe|clarify|correct|"
-    r"situation|inspection))?)?\Z")
+    r"objective|situation|inspection))?)?\Z")
 HEALTH = "/api/health"
 
 
