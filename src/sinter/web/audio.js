@@ -54,7 +54,7 @@ async function uploadRecording(file, onProgress) {
 }
 
 export function audioForm(onTranscript, setBusy, isBusy) {
-  const file = field('Meeting recording', 'file', '', 'WAV, MP3, M4A, OGG, FLAC, WebM or MP4. Up to 25 MB; the CLI accepts up to 500 MB.', {accept: '.wav,.mp3,.m4a,.ogg,.flac,.webm,.mp4'});
+  const file = field('Meeting recording', 'file', '', 'WAV, MP3, M4A, OGG, FLAC, WebM or MP4. Large files are admitted in 1 MB chunks up to 2 GB.', {accept: '.wav,.mp3,.m4a,.ogg,.flac,.webm,.mp4'});
   const backend = selectField('Recognition backend', [], '', 'The actual backend is reported with the transcript.');
   const model = selectField('Recognition model', [], '', 'Models are populated from the selected installed backend.');
   const language = selectField('Recording language', [['en', 'English'], ['auto', 'Detect automatically'], ['fr', 'French'], ['de', 'German'], ['es', 'Spanish'], ['it', 'Italian'], ['pt', 'Portuguese'], ['zh', 'Chinese'], ['ja', 'Japanese'], ['ar', 'Arabic'], ['hi', 'Hindi']], 'en', 'Choose the known language to avoid unnecessary guessing.');
