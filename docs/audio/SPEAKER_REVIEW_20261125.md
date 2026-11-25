@@ -6,7 +6,8 @@ The transcript review panel now exposes the information a reviewer needs to
 judge an anonymous cluster, and every correction is reversible:
 
 - each group shows passage count and **speaking duration**;
-- **Listen to a passage** seeks the recording to that group's first passage;
+- **Listen to a passage** seeks the recording to the group's longest
+  unflagged passage;
 - **Merge groups** reassigns every passage of one group into another;
 - **Undo last speaker change** reverts the most recent group rename, merge or
   single-passage relabel;
@@ -27,7 +28,8 @@ label.
   meeting/project flow; they are not a durable database table yet.
 - There is no split operation that partitions a passage by time; review can
   relabel passages but not sub-passage turns.
-- Representative audio is the first passage, not a quality-ranked clip.
+- Representative audio is the longest unflagged passage, not an acoustic
+  quality-ranked clip with a similarity score.
 - No biometric template or embedding is exported.
 
 ## Verification
