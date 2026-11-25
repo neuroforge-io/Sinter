@@ -1,0 +1,22 @@
+{
+  "recording": "ES2003a_10min.wav",
+  "upload_mb": 18.31,
+  "model": "zipformer-gigaspeech-fp32",
+  "backend": "erais-neuroforge",
+  "job_id": "36e022bc83834773ab1d93e7607a7de3",
+  "first_segment_s": 2.76,
+  "status": "done",
+  "elapsed_s": 95.99,
+  "event_count": 47,
+  "segment_events": 46,
+  "session_events": 1,
+  "final_message": "Ready for review",
+  "received_s": 600.0,
+  "processed_s": 598.54,
+  "duration": 600.0,
+  "segments": 46,
+  "review_count": 46,
+  "runtime_identity": "erais-native-zipformer-gigaspeech",
+  "engine_version": "071f9d009e66",
+  "replay_verified": true
+}

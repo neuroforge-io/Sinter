@@ -176,7 +176,7 @@ export async function waitForJob(id, onStatus = () => {}) {
     onStatus(job);
     if (job.status === 'done') return job.result;
     if (job.status === 'failed') { const error = new Error(job.error); error.partialResult = job.result; error.jobId = id; throw error; }
-    if (job.status === 'cancelled') throw new Error('Cancelled. No report was saved.');
+    if (job.status === 'cancelled') throw new Error(job.message || 'Cancelled. No report was saved.');
     await new Promise(resolve => setTimeout(resolve, delay));
     delay = Math.min(delay + 100, 2000);
   }

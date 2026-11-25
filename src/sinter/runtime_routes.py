@@ -193,7 +193,17 @@ class RouteDispatch:
             self._admit_casebook_reader(saved["document"])
             self._json(saved)
         elif path.startswith("/api/jobs/"):
-            self._json(self.app.jobs.get(path.removeprefix("/api/jobs/")))
+            query = parse_qs(parsed.query, max_num_fields=4)
+            after_text = query.get("after", [None])[0]
+            after = None
+            if after_text is not None:
+                try:
+                    after = int(after_text)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        "Job cursor must be a non-negative integer.") from exc
+            self._json(self.app.jobs.get(
+                path.removeprefix("/api/jobs/"), after))
         elif path == "/api/reports":
             self._json({"reports": self.app.store.reports()})
         elif path.startswith("/api/reports/"):

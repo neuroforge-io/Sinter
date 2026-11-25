@@ -259,6 +259,42 @@ def transcribe(request: TranscriptionRequest, progress=lambda _message: None) ->
     session_manifest = created.get("manifest_sha256")
     events: dict[int, dict] = {}
     received = 0
+    processed = 0.0
+    progress({
+        "event": "session",
+        "phase": "recording",
+        "session": {
+            "id": session_id,
+            "model": selected or request.model,
+            "backend": session_backend or "",
+        },
+    })
+
+    def commit(value: dict) -> None:
+        nonlocal processed
+        fresh = []
+        for event in value.get("events") or ():
+            if not isinstance(event, dict) or not isinstance(event.get("sequence"), int):
+                continue
+            if event["sequence"] in events:
+                continue
+            events[event["sequence"]] = event
+            segment = _segment(event)
+            if segment is not None:
+                fresh.append(segment)
+        for segment in fresh:
+            processed = max(processed, segment["end"])
+        progress({
+            "event": "segments" if fresh else "progress",
+            "segments": fresh,
+            "received_s": received / 32000,
+            "processed_s": processed,
+            "phase": "transcribing",
+            "message": (
+                f"Transcribed {len(events)} segments; "
+                f"{received // 32000} seconds sent to ERAIS"),
+        })
+
     try:
         for chunk in _pcm_chunks(source):
             received += len(chunk)
@@ -266,14 +302,10 @@ def transcribe(request: TranscriptionRequest, progress=lambda _message: None) ->
             value = _request(
                 "POST", f"{MEETINGS}/{session_id}", body=chunk,
                 content_type="audio/pcm")
-            for event in value.get("events") or ():
-                if isinstance(event, dict) and isinstance(event.get("sequence"), int):
-                    events[event["sequence"]] = event
+            commit(value)
         progress("Finishing the ERAIS meeting session")
         value = _request("POST", f"{MEETINGS}/{session_id}/finish")
-        for event in value.get("events") or ():
-            if isinstance(event, dict) and isinstance(event.get("sequence"), int):
-                events[event["sequence"]] = event
+        commit(value)
     except Exception:
         try:
             _request("POST", f"{MEETINGS}/{session_id}/cancel")
@@ -286,7 +318,7 @@ def transcribe(request: TranscriptionRequest, progress=lambda _message: None) ->
     with source.open("rb") as recording:
         for block in iter(lambda: recording.read(1024 * 1024), b""):
             digest.update(block)
-    duration = max((item["end"] for item in segments), default=received / 32000)
+    duration = received / 32000
     return {
         "schema_version": 1,
         "segments": segments,
