@@ -63,6 +63,7 @@ export function audioForm(onTranscript, setBusy, isBusy) {
   const transmit = check('I authorize sending this recording to the configured ERAIS network service.');
   transmit.wrap.hidden = true;
   const downloads = check('Allow a speech model download if it is not already on this computer.');
+  const saveProject = check('Save this recording and transcript on this computer for later review.', false);
   const message = h('div', {'aria-live': 'polite'}), capability = h('div', {'aria-live': 'polite'});
   const player = h('audio', {controls: true, preload: 'metadata', 'aria-label': 'Local recording playback'});
   player.hidden = true;
@@ -135,8 +136,9 @@ export function audioForm(onTranscript, setBusy, isBusy) {
       });
       const job = await request('/api/transcribe', {data: {recording_id: recording.recording_id, consent: true,
         allow_download: downloads.input.checked, model: model.input.value, language: language.input.value,
-        split_channels: channels.input.checked, backend: backend.input.value}});
-      jobId = job.id; cancel.disabled = false;
+        split_channels: channels.input.checked, backend: backend.input.value,
+        save: saveProject.input.checked, filename: chosen.name}});
+      jobId = job.id; savedProjectId = job.project || null; cancel.disabled = false;
       const transcript = await waitForJob(jobId, job => { message.textContent = job.message || 'Transcribing locally...'; });
       if (!transcript.segments.length) {
         message.replaceChildren(notice('No speech detected. Check the recording and microphone level. Your existing transcript was not replaced.')); return;
@@ -144,16 +146,74 @@ export function audioForm(onTranscript, setBusy, isBusy) {
       reviewUI?.dispose(); reviewUI = reviewTranscript(transcript, player, onTranscript); review.replaceChildren(reviewUI);
       await onTranscript(transcript);
       message.replaceChildren(notice('Transcript ready for review. Listen back below; no names, decisions or missing words have been inferred.', 'success'));
+      if (savedProjectId) await refreshSaved();
     } catch (error) { message.replaceChildren(notice(error.message, 'error')); }
     finally { setBusy(false); controls.disabled = false; cancel.hidden = true; jobId = null; }
   }, 'primary');
   controls.append(file.wrap, h('div', {class: 'form-grid'}, backend.wrap, model.wrap, language.wrap), channels.wrap,
     h('p', {class: 'fine'}, 'Leave channel separation off for a room microphone or ordinary stereo mix. A track can still contain more than one voice.'),
-    permission.wrap, transmit.wrap, downloads.wrap, start);
+    permission.wrap, transmit.wrap, downloads.wrap, saveProject.wrap, start);
+  const savedPanel = h('div', {'aria-live': 'polite'});
+  async function openSavedProject(identifier) {
+    const project = await request(`/api/transcriptions/${identifier}`);
+    if (!project?.transcript?.segments?.length) throw new Error('This saved transcription has no committed passages yet.');
+    player.pause(); player.src = `/api/transcriptions/${identifier}/audio`; player.hidden = false;
+    reviewUI?.dispose();
+    reviewUI = reviewTranscript(project.transcript, player, onTranscript);
+    review.replaceChildren(reviewUI);
+    await onTranscript(project.transcript);
+    message.replaceChildren(notice(`Opened saved transcription ${project.title}. ${project.next_cursor} committed events restored.`, 'success'));
+    savedProjectId = identifier;
+    await refreshSaved();
+  }
+  async function refreshSaved() {
+    try {
+      const {transcriptions} = await request('/api/transcriptions');
+      if (!transcriptions.length) { savedPanel.replaceChildren(); return; }
+      savedPanel.replaceChildren(
+        h('h4', {}, 'Saved recordings on this computer'),
+        h('p', {class: 'fine'}, 'A saved project keeps a private copy of the recording, its committed transcript events and the runtime identities. Resume verifies the source digest and installed model first.'),
+        ...transcriptions.slice(0, 12).map(item => {
+          const open = button('Open saved transcript', async () => {
+            try { await openSavedProject(item.id); }
+            catch (error) { message.replaceChildren(notice(error.message, 'error')); }
+          }, 'quiet');
+          const resume = button('Resume after the last committed passage', async () => {
+            if (!permission.input.checked) {
+              message.replaceChildren(notice('Confirm permission before continuing a saved recording.', 'error')); return;
+            }
+            try {
+              const compatibility = await request(`/api/transcriptions/${item.id}/compatibility`);
+              if (!compatibility.compatible) throw new Error(compatibility.issues.join(' '));
+              if (!compatibility.resumable) throw new Error('This saved transcription is already complete or running.');
+              message.textContent = `Continuing after ${timestamp(compatibility.resume_after_s)}...`;
+              const started = await request(`/api/transcriptions/${item.id}/resume`, {data: {consent: true}});
+              jobId = started.id; cancel.disabled = false; setBusy(true); controls.disabled = true;
+              const transcript = await waitForJob(jobId, job => { message.textContent = job.message || 'Continuing locally...'; });
+              if (!transcript.segments.length) throw new Error('No new speech was committed.');
+              await openSavedProject(item.id);
+            } catch (error) { message.replaceChildren(notice(error.message, 'error')); }
+            finally { setBusy(false); controls.disabled = false; cancel.disabled = true; jobId = null; }
+          }, 'quiet');
+          resume.disabled = !['interrupted', 'cancelled', 'failed'].includes(item.status);
+          return h('article', {class: 'transcript-passage'},
+            h('strong', {}, item.title),
+            h('p', {class: 'fine'}, `${item.status} · ${item.segment_count || 0} passages · ${timestamp(item.duration)} · ${item.model || 'model not recorded'} · attempt ${item.attempt || 1}`),
+            h('div', {class: 'button-row'}, open, resume));
+        }));
+    } catch (error) {
+      savedPanel.replaceChildren(notice(error.message, 'error'));
+    }
+  }
+  let savedProjectId = null;
   const root = h('details', {'data-audio-panel': ''}, h('summary', {}, 'Start with an audio recording (optional)'),
     notice('Local backends process on this computer. A configured ERAIS service receives the recording at its explicit endpoint. Model downloads require permission. Recognition can omit or invent words; review the original recording.'),
-    button('Check transcription setup', diagnose, 'quiet'), capability, controls, player, cancel, message, review);
-  root.addEventListener('toggle', () => { if (root.open && !capability.childNodes.length) diagnose(); });
+    button('Check transcription setup', diagnose, 'quiet'), capability, controls, player, cancel, message, review, savedPanel);
+  root.addEventListener('toggle', () => {
+    if (!root.open) return;
+    if (!capability.childNodes.length) diagnose();
+    refreshSaved();
+  });
   root.dispose = () => { disposed = true; player.pause(); player.removeAttribute('src'); if (objectURL) URL.revokeObjectURL(objectURL); reviewUI?.dispose(); };
   return root;
 }

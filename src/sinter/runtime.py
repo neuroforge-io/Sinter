@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
 
-from . import __version__, accounts, campaigns, casebooks, client, recordings
+from . import __version__, accounts, campaigns, casebooks, client, recordings, transcriptions
 from .jobs import Jobs
 from .outputs import validate_output
 from .preferences import Preferences
@@ -65,6 +65,8 @@ class Application:
         self.campaigns = campaigns.CampaignStore(self.store.directory)
         self.recordings = recordings.Recordings(
             self.store.directory / "recordings")
+        self.transcriptions = transcriptions.Transcriptions(
+            self.store.directory / "transcriptions")
         self.desktop_shutdown = None
         self.jobs = Jobs()
         self.token = secrets.token_urlsafe(32)
@@ -82,6 +84,7 @@ class Application:
         self.stop.set()
         self.jobs.close()
         self.recordings.close()
+        self.transcriptions.close()
         self.accounts.close()
 
     def connection(self, candidate=None):

@@ -155,6 +155,7 @@ def _request_payload(
         "processing": "meeting" if meeting else "utterance",
         "stream": meeting,
         "anonymous_speakers": anonymous_speakers,
+        "resume_after_s": float(request.resume_after_s),
         "resource_envelope": {
             "maximum_input_duration_seconds": maximum,
         },

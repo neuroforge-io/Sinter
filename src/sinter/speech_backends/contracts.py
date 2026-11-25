@@ -60,6 +60,7 @@ class TranscriptionRequest:
     backend: str = "erais-native"
     request_id: str = ""
     retention_policy: str = "temporary_only"
+    resume_after_s: float = 0.0
 
 
 class SpeechBackend(Protocol):
