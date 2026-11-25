@@ -1,6 +1,6 @@
 import {h, button, field, selectField, check, notice} from './ui.js';
 import {request, waitForJob} from './api.js';
-import {reviewTranscript} from './transcription.js';
+import {reviewTranscript, timestamp} from './transcription.js';
 
 const BACKEND_LABELS = {
   'erais-native': 'ERAIS native — this computer',
