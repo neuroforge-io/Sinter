@@ -1,0 +1,20 @@
+{
+  "recording": "ami_six_meetings.wav",
+  "size_mb": 191.26,
+  "backend": "erais-native",
+  "model": "zipformer-gigaspeech-fp32",
+  "job_id": "ac756de9191f445b898585b73f190cae",
+  "cancel_requested_at_segment": 13,
+  "status": "cancelled",
+  "error": "",
+  "message": "Cancelled; the meeting session was closed and the partial transcript keeps 13 segments.",
+  "elapsed_s": 264.38,
+  "first_segment_s": 260.3,
+  "segment_events": 13,
+  "event_count": 14,
+  "peak_worker_rss_mb": 2501.2,
+  "peak_sinter_rss_mb": 32.0,
+  "received_s": 54.8,
+  "processed_s": 54.8,
+  "worker_processes_after": 0
+}
