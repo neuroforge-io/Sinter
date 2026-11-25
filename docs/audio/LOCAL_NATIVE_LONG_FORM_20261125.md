@@ -77,6 +77,23 @@ launcher pins the intended virtual-environment interpreter rather than resolving
 its symlink to the base Python. Sinter finds the install at its default path and
 lists `erais-native` as available.
 
+## Anonymous speaker clustering
+
+The installer can bundle the pinned CAM++ speaker encoder:
+
+```sh
+python3 scripts/install_sinter_native.py ...   --speaker-clustering   --speaker-model ~/.cache/erais-public-bench/campplus.onnx
+```
+
+It copies the encoder into the runtime directory, exports
+`ERAIS_SPEAKER_MODEL`, records its SHA-256 in the manifest and sets
+`speaker_diarization: true`. Sinter then sends `anonymous_speakers: true` with
+each meeting request.
+
+The installed worker uses the ONNX Runtime CAM++ donor (about 30 ms per 1.5 s
+window). The native graph speaker path costs roughly a second per window and
+was not viable for long meetings; it remains only as a fallback.
+
 ## Protocol
 
 The local worker remains one request on stdin. In meeting mode it streams JSON
