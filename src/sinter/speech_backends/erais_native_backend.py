@@ -421,7 +421,11 @@ def _transcribe_meeting(
             else:
                 raise SpeechBackendError(
                     "The ERAIS meeting worker returned an unknown event.")
-        process.wait(timeout=15)
+        try:
+            process.wait(timeout=60)
+        except subprocess.TimeoutExpired as error:
+            raise SpeechBackendError(
+                "The ERAIS meeting worker returned its result but did not exit.") from error
         if result is None:
             if reader_error:
                 raise SpeechBackendError(
