@@ -53,11 +53,11 @@ export function comprehensionPage() {
       {text: observation.input.value});
   });
   const question = field('Question', 'text',
-    'How many items are in the smaller container?');
+    'What is the state of the valve?');
   const query = button('Ask the situation', () => {
     if (!episode) return show({error: 'Create an episode first.'});
-    return call(`/api/comprehension/episodes/${episode}/observe`,
-      {text: question.input.value});
+    return call(`/api/comprehension/episodes/${episode}/ask`,
+      {question: question.input.value});
   });
   const observationId = field('Observation ID to correct', 'text', '');
   const correction = field('Corrected observation', 'textarea',
