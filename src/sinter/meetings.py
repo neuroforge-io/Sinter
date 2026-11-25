@@ -80,6 +80,98 @@ def parse_transcript(value: str) -> list[Segment]:
     return result
 
 
+# ---------------------------------------------------------------- claims
+#
+# A transcript establishes what a participant *said*. It does not establish
+# that the asserted state of the world is true. These records keep that
+# distinction explicit: every claim is "stated" evidence from one passage,
+# unconfirmed unless a human reviewer confirms it, and stale when a reviewed
+# correction changes its outcome or amount.
+
+CLAIM_RULES = (
+    ("motion", r"\b(motion|moved|move that|proposal)\b"),
+    ("vote", r"\b(vote|voted|unanimous|abstain|abstained|carried|lost)\b"),
+    ("decision", r"\b(agreed|resolved|approved|accepted|adopted|decided|rejected)\b"),
+    ("action", r"\b(will|shall|is to|are to|action item|action:)\b"),
+    ("attendance", r"\b(absent|present|apolog(?:y|ies|ised|ized)|attendance|quorum)\b"),
+    ("financial", r"(?:[$\u00a3\u20ac]\s?\d[\d,]*(?:\.\d+)?|\b\d[\d,]*(?:\.\d+)?\s?(?:dollars|euros|pounds|cents)\b)"),
+    ("due_date", r"\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?|(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|january|february|march|april|may|june|july|august|september|october|november|december)\b"),
+    ("question", r"\?\s*$"),
+)
+
+POLARITY = {
+    "not", "no", "never", "none", "carried", "lost", "approved", "rejected",
+    "accepted", "withdrawn", "pending", "unanimous",
+}
+AMOUNT = re.compile(
+    r"(?:[$\u00a3\u20ac]\s?\d[\d,]*(?:\.\d+)?|"
+    r"\b\d[\d,]*(?:\.\d+)?\s?(?:dollars|euros|pounds|cents)\b)",
+    re.I)
+
+
+def _amounts(value: str) -> tuple[str, ...]:
+    return tuple(sorted(match.group(0).replace(" ", "").lower()
+                        for match in AMOUNT.finditer(value)))
+
+
+def _polarity(value: str) -> tuple[str, ...]:
+    return tuple(sorted(word for word in POLARITY
+                        if re.search(rf"\b{word}\b", value, re.I)))
+
+
+def claims(segments: list[Segment], corrections: list[dict],
+           corrected: dict[str, str]) -> list[dict]:
+    """Classify candidate claims while preserving their evidentiary status.
+
+    Only explicit keywords and amounts create a candidate. Nothing here infers
+    that a motion passed, that an amount was approved, or that an absent person
+    attended. A later reviewed correction that changes outcome words or values
+    marks the dependent claim stale instead of silently rewriting it.
+    """
+    changes = {}
+    for change in corrections:
+        changes[change["segment_id"]] = change
+    result = []
+    for segment in segments:
+        content = corrected.get(segment.id, segment.text)
+        types = [name for name, pattern in CLAIM_RULES
+                 if re.search(pattern, content, re.I)]
+        if not types:
+            continue
+        for kind in types:
+            identifier = f"C{len(result) + 1:04d}"
+            record = {
+                "claim_id": identifier,
+                "claim_type": kind,
+                "asserted_content": content,
+                "source_passage_id": segment.id,
+                "source_speaker": segment.speaker,
+                "source_start": segment.start,
+                "source_end": segment.end,
+                "assertion_status": "stated",
+                "evidence_status": "transcript_only",
+                "confirmation_status": "unconfirmed",
+                "claim_status": "current",
+                "reinterpretation_required": False,
+            }
+            change = changes.get(segment.id)
+            if change is not None:
+                before = change["original"]
+                after = corrected.get(segment.id, segment.text)
+                amounts_changed = _amounts(before) != _amounts(after)
+                polarity_changed = _polarity(before) != _polarity(after)
+                record["transcript_revision"] = {
+                    "original": before,
+                    "replacement": after,
+                    "reason": change.get("reason", ""),
+                }
+                if amounts_changed or polarity_changed:
+                    record["claim_status"] = "stale"
+                    record["reinterpretation_required"] = True
+            result.append(record)
+    return result
+
+
 def minutes(title: str, transcript: str, speaker_map: dict | None = None,
             corrections: list[dict] | None = None) -> dict:
     text(title, "Meeting title", 200, True)
@@ -110,6 +202,7 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
         corrected[original.id] = replacement
         audit.append({"segment_id": original.id, "original": original.text,
                       "replacement": replacement, "reason": reason, "author": "human reviewer"})
+    claim_records = claims(segments, corrections, corrected)
     lines = [f"# {literal(title)}", "DRAFT MINUTES - NOT APPROVED",
              "Speaker labels and transcription are not proof of identity. Names below are human-supplied mappings. "
              "Check against the recording; attendance, resolutions, votes and deadlines are not inferred.",
@@ -122,6 +215,32 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
             lines.append(f"- [{segment.id}] {literal(content)} (candidate only; confirm the outcome)")
     if not candidates:
         lines.append("No explicit action/decision keywords were found. Review the transcript; this is not proof none occurred.")
+    if claim_records:
+        lines.append("## Candidate meeting claims")
+        lines.append(
+            "Each row records what a participant stated. It is not evidence "
+            "that the asserted state, outcome or amount is true. Confirm "
+            "against the recording and the chair before issuing minutes.")
+        for record in claim_records:
+            state = record["claim_status"]
+            note = (" (transcript corrected; reinterpret before relying on it)"
+                    if state == "stale" else "")
+            lines.append(
+                f"- [{record['claim_id']}] {record['claim_type']}: "
+                f"\"{literal(record['asserted_content'])}\" "
+                f"[{record['source_passage_id']}, {record['source_speaker']}] "
+                f"- stated only, unconfirmed{note}")
+        stale = [record for record in claim_records
+                 if record["reinterpretation_required"]]
+        if stale:
+            lines.append("## Claims invalidated by transcript revision")
+            for record in stale:
+                revision = record["transcript_revision"]
+                lines.append(
+                    f"- [{record['claim_id']}] Original: "
+                    f"\"{literal(revision['original'])}\" -> Corrected: "
+                    f"\"{literal(revision['replacement'])}\" "
+                    f"({literal(revision['reason'])})")
     flagged = [segment for segment in segments if segment.review_flags]
     if flagged:
         lines.append("## Passages requiring an audio check")
@@ -140,5 +259,7 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
         for change in audit:
             lines.append(f"[{change['segment_id']}] Original: {literal(change['original'])}\n\n"
                          f"Replacement: {literal(change['replacement'])}\n\nReason: {literal(change['reason'])}")
-    return {"markdown": "\n\n".join(lines), "segments": [asdict(segment) for segment in segments],
-            "speaker_map": speaker_map, "corrections": audit, "candidates": candidates}
+    return {"markdown": "\n\n".join(lines),
+            "segments": [asdict(segment) for segment in segments],
+            "speaker_map": speaker_map, "corrections": audit,
+            "candidates": candidates, "claims": claim_records}
