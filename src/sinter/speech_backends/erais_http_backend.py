@@ -251,6 +251,12 @@ def transcribe(request: TranscriptionRequest, progress=lambda _message: None) ->
     session_id = created.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         raise SpeechBackendError("ERAIS did not create a meeting session.")
+    selected = created.get("model")
+    if isinstance(selected, str) and selected and selected != request.model:
+        raise SpeechBackendError(
+            "ERAIS opened a different recognition profile than the one selected.")
+    session_backend = created.get("backend_id")
+    session_manifest = created.get("manifest_sha256")
     events: dict[int, dict] = {}
     received = 0
     try:
@@ -290,8 +296,9 @@ def transcribe(request: TranscriptionRequest, progress=lambda _message: None) ->
         "model": request.model,
         "audio_sha256": digest.hexdigest(),
         "engine": "ERAIS native meeting service",
-        "engine_version": health.manifest_identity[:12],
-        "runtime_identity": health.runtime_identity,
+        "engine_version": str(
+            session_manifest or health.manifest_identity or "")[:12],
+        "runtime_identity": str(session_backend or health.runtime_identity),
         "meeting_session_id": session_id,
         "speaker_diarization": health.speaker_diarization,
         "speaker_identity_available": health.speaker_diarization,
