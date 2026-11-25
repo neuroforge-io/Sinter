@@ -1,0 +1,33 @@
+{
+  "admitted_bytes": 200554920,
+  "duration": 6267.338813,
+  "elapsed_seconds": 409.88,
+  "error": "",
+  "event_count": 604,
+  "first_segment_seconds": 180.58,
+  "peak_worker_rss_mb": 2000.9,
+  "recording": "ami_six_meetings.wav",
+  "review_count": 143,
+  "segments": 603,
+  "sha256": "cc72712783cf48e4d4882862489b2ad804000ac1dbd354843253409d78badb4e",
+  "size_bytes": 200554920,
+  "speakers": {
+    "Overlap": 62,
+    "Speaker A": 80,
+    "Speaker B": 29,
+    "Speaker C": 58,
+    "Speaker D": 2,
+    "Speaker E": 31,
+    "Speaker F": 10,
+    "Speaker G": 5,
+    "Speaker H": 14,
+    "Speaker I": 29,
+    "Speaker J": 14,
+    "Speaker K": 8,
+    "Speaker L": 5,
+    "Uncertain": 37,
+    "Unidentified": 219
+  },
+  "status": "done",
+  "upload_seconds": 4.38
+}
