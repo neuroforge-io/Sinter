@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from dataclasses import asdict
 from importlib import resources
+from pathlib import Path
 import shutil
 from urllib.parse import parse_qs
 
@@ -807,6 +808,15 @@ class RouteDispatch:
                     entry = next(
                         (item for item in backends
                          if item.get("id") == backend_id), {})
+                    manifest_value = {}
+                    if entry.get("manifest_identity"):
+                        try:
+                            import json as _json
+                            manifest_value = _json.loads(
+                                Path(entry["manifest_identity"]).read_text(
+                                    encoding="utf-8"))
+                        except (OSError, ValueError):
+                            manifest_value = {}
                     saved = self.app.transcriptions.create(
                         source,
                         filename=body.get("filename") or source.name,
@@ -818,6 +828,10 @@ class RouteDispatch:
                             entry.get("runtime_identity") or ""),
                         manifest_identity=str(
                             entry.get("manifest_identity") or ""),
+                        model_bundle_sha256=str(
+                            manifest_value.get("model_bundle_sha256") or ""),
+                        source_revision=str(
+                            manifest_value.get("source_revision") or ""),
                     )
                     project_source = self.app.transcriptions.source_path(
                         saved["id"])

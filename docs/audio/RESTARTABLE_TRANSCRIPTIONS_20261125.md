@@ -14,6 +14,7 @@ stage 1 (process A)
   event cursor        5
   resume boundary     13.62 s
   source SHA-256      39075629...f35 (file bytes)
+  model bundle SHA    stored from the installed manifest
 
 stage 2 (process B, same workspace)
   listed status       cancelled, 4 committed passages
@@ -78,13 +79,14 @@ stage 2 receipt  docs/audio/receipts/transcription_restart_stage2_20261125.json
 ## Verification
 
 ```text
-tests/test_transcription_projects.py   6 passed
+tests/test_transcription_projects.py   7 passed
   saved project survives a server restart with cursor/segments
   interrupted project restores and resumes after 4.0 s
   tampered source is refused
   audio endpoint serves the private copy
   consent is required before copying
   unknown identifier is refused
+  changed model-bundle digest is refused
 tests/test_sinter_longform.py          34 passed
   resume skips committed regions and rejoins the transcript exactly
 ```

@@ -140,7 +140,8 @@ class Transcriptions:
     def create(
         self, source: Path, *, filename: str, backend: str, model: str,
         language: str, split_channels: bool, runtime_identity: str = "",
-        manifest_identity: str = "",
+        manifest_identity: str = "", model_bundle_sha256: str = "",
+        source_revision: str = "",
     ) -> dict:
         source = Path(source)
         if not source.is_file() or source.is_symlink():
@@ -199,6 +200,8 @@ class Transcriptions:
                 "runtime": {
                     "runtime_identity": runtime_identity,
                     "manifest_identity": manifest_identity,
+                    "model_bundle_sha256": model_bundle_sha256,
+                    "source_revision": source_revision,
                     "source_mode": "",
                 },
                 "progress": {
@@ -343,6 +346,18 @@ class Transcriptions:
               != backend["runtime_identity"]):
             issues.append(
                 "The installed runtime identity differs from the saved one.")
+        if backend is not None:
+            manifest_path = backend.get("manifest_identity")
+            current_bundle = ""
+            if isinstance(manifest_path, str) and manifest_path:
+                current = _read_json(Path(manifest_path))
+                if current is not None:
+                    current_bundle = str(
+                        current.get("model_bundle_sha256") or "")
+            saved_bundle = meta["runtime"].get("model_bundle_sha256", "")
+            if saved_bundle and current_bundle and saved_bundle != current_bundle:
+                issues.append(
+                    "The installed model bundle differs from the saved one.")
         events = self._events(identifier)
         segments = _segments(events)
         resume_after = max(
