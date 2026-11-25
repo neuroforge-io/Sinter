@@ -40,8 +40,10 @@ after the job.
 
 ## Limits
 
-- Audio is still decoded by the selected backend; the local ERAIS worker still
-  requires 16 kHz mono WAV and does not decode M4A/MP3/MP4 itself.
+- The local ERAIS worker now decodes MP3, M4A, MP4, FLAC, OGG/Opus, WebM, AAC
+  and WMA through host `ffmpeg`, and converts non-16 kHz or stereo WAV exports.
+  Without `ffmpeg` it reports that instead of failing silently. Decoding still
+  materializes a full PCM buffer, so memory is not yet duration-independent.
 - Admission copies the file into the workspace; it does not yet use a desktop
   file handle to avoid duplication.
 - Resume after an application restart is not implemented; an interrupted
