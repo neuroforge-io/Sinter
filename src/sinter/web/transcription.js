@@ -7,22 +7,66 @@ export function timestamp(value) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+export function speakerGroups(segments) {
+  const groups = new Map();
+  for (const segment of Array.isArray(segments) ? segments : []) {
+    const label = typeof segment?.speaker === 'string' && segment.speaker.trim()
+      ? segment.speaker.trim() : 'Unidentified';
+    const entry = groups.get(label) || {label, count: 0, anonymous: false};
+    entry.count += 1;
+    if (/^Speaker [A-Z]$/.test(label)) entry.anonymous = true;
+    groups.set(label, entry);
+  }
+  return [...groups.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+export function renameSpeaker(edited, from, to) {
+  const value = String(to ?? '').trim();
+  if (!value || value === from) return 0;
+  let changed = 0;
+  for (const segment of edited?.segments || []) {
+    if ((segment.speaker || 'Unidentified') !== from) continue;
+    segment.original_speaker ??= segment.speaker;
+    segment.speaker = value;
+    segment.label_origin = 'human review against recording';
+    changed += 1;
+  }
+  return changed;
+}
+
 export function reviewTranscript(transcript, player, onChange) {
   let page = 0;
   const edited = structuredClone(transcript);
   const flagged = check('Show passages needing review only');
   const list = h('div', {class: 'transcript-list'}), feedback = h('div', {'aria-live': 'polite'});
-  const pagination = h('div', {class: 'button-row'});
+  const pagination = h('div', {class: 'button-row'}), groupsPanel = h('div', {class: 'speaker-groups'});
   const root = h('section', {class: 'transcript-review', 'aria-label': 'Review the recording'},
     h('h3', {}, 'Listen. Check. Keep the original.'),
     h('p', {class: 'muted'}, `${transcript.segments.length} passages / ${timestamp(transcript.duration)} / ${transcript.review_count || 0} flagged for review. Unflagged passages can still be wrong.`),
     notice('Use labels such as SPEAKER_01 after listening. Confirm their names in the speaker section. JSON keeps the original words, timings and review flags; subtitles do not.'),
-    flagged.wrap, list, pagination, feedback);
+    groupsPanel, flagged.wrap, list, pagination, feedback);
   let stopAt = null;
   const stop = () => { if (stopAt !== null && player.currentTime >= stopAt) { player.pause(); stopAt = null; } };
   player.addEventListener('timeupdate', stop);
   root.dispose = () => player.removeEventListener('timeupdate', stop);
+  function renderGroups() {
+    const groups = speakerGroups(edited.segments);
+    const rows = groups.filter(group => group.anonymous || group.count > 1).map(group => {
+      const name = field(`Rename ${group.label}`, 'text', group.anonymous ? '' : group.label,
+        `${group.count} passage${group.count === 1 ? '' : 's'} uses this label.`, {maxLength: 100});
+      const apply = button('Rename every passage', async () => {
+        const value = name.input.value.trim();
+        const changed = renameSpeaker(edited, group.label, value);
+        if (!changed) { feedback.replaceChildren(notice('Enter a different non-empty label.', 'error')); return; }
+        try { await onChange(edited); feedback.replaceChildren(notice(`Renamed ${changed} passages. Original labels remain in the JSON transcript.`, 'success')); render(); }
+        catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
+      }, 'quiet');
+      return h('details', {}, h('summary', {}, `${group.label} — ${group.count} passages`), name.wrap, apply);
+    });
+    groupsPanel.replaceChildren(...(rows.length ? [h('h4', {}, 'Speaker groups in this transcript'), ...rows] : []));
+  }
   function render() {
+    renderGroups();
     const rows = edited.segments.map((segment, index) => ({segment, index}))
       .filter(({segment}) => !flagged.input.checked || segment.review_flags?.length);
     const pages = Math.max(1, Math.ceil(rows.length / 20)); page = Math.min(page, pages - 1);
