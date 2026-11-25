@@ -19,7 +19,7 @@ public release still needs distribution rights.
 | 11 traceable correction | JSON revisions, corrections with original/reason; tests | yes | no | no |
 | 12 anonymous speaker review | 74/101 confident labels, 49/51 pairs (96.1%) on four AMI excerpts; reversible UI | experimental | no (four-meeting cohort) | no |
 | 13 consistent exports | minutes/claims share one record; SRT/VTT/TXT projections tested | yes | no | no |
-| 14 evidence-grounded minutes | structured claims + stale-on-revision; 6 tests | yes | no | no |
+| 14 evidence-grounded minutes | cross-passage motion/amendment/acceptance, responsibility/deadline, budget; 6 semantic tests | yes | no | no |
 | 15 offline operation | earlier `unshare -n` 10-min run; re-run blocked by host namespace policy | previously | no | no |
 | 16 clean install/upgrade | source bundle, relocation proof, `--rollback`, `--verify`, tamper tests | yes | no | no |
 | 17 free distribution rights | not obtained | no | no | **blocked** |

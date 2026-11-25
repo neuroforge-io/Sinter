@@ -7,6 +7,7 @@ import re
 from dataclasses import asdict, dataclass, field
 
 from .evidence import literal, text
+from .meeting_semantics import Passage, analyze
 
 
 @dataclass(frozen=True)
@@ -202,7 +203,31 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
         corrected[original.id] = replacement
         audit.append({"segment_id": original.id, "original": original.text,
                       "replacement": replacement, "reason": reason, "author": "human reviewer"})
-    claim_records = claims(segments, corrections, corrected)
+    semantic_passages = [
+        Passage(segment.id, segment.speaker,
+                corrected.get(segment.id, segment.text),
+                segment.start, segment.end)
+        for segment in segments
+    ]
+    source_passages = [
+        Passage(segment.id, segment.speaker, segment.text,
+                segment.start, segment.end)
+        for segment in segments
+    ]
+    semantics = analyze(
+        semantic_passages,
+        revision_source=source_passages if corrections else None)
+    claim_records = semantics["claims"]
+    changes_by_id = {change["segment_id"]: change for change in corrections}
+    for record in claim_records:
+        change = changes_by_id.get(record.get("source_passage_id"))
+        if change is not None:
+            record["transcript_revision"] = {
+                "original": change["original"],
+                "replacement": corrected.get(change["segment_id"],
+                                             change["original"]),
+                "reason": change.get("reason", ""),
+            }
     lines = [f"# {literal(title)}", "DRAFT MINUTES - NOT APPROVED",
              "Speaker labels and transcription are not proof of identity. Names below are human-supplied mappings. "
              "Check against the recording; attendance, resolutions, votes and deadlines are not inferred.",
@@ -216,6 +241,40 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
     if not candidates:
         lines.append("No explicit action/decision keywords were found. Review the transcript; this is not proof none occurred.")
     if claim_records:
+        if semantics["events"]:
+            lines.append("## Organizational event composition")
+            lines.append(
+                "Events are composed across passages. A motion remains a "
+                "proposal; an amendment is linked to its motion; agreement is "
+                "recorded as stated agreement, not formal approval.")
+            for event in semantics["events"]:
+                kind = event.get("event_type")
+                amount = event.get("amount") or {}
+                bits = [f"{kind.upper()} [{event.get('event_id')}]"]
+                if event.get("actor"):
+                    bits.append(f"actor={event['actor']}")
+                if event.get("action"):
+                    bits.append(f"action={literal(event['action'])}")
+                if event.get("object"):
+                    bits.append(f"object={literal(event['object'])}")
+                if amount:
+                    bits.append(f"amount={amount.get('raw')}")
+                if event.get("due_date"):
+                    bits.append(f"due={literal(event['due_date'])}")
+                if event.get("outcome"):
+                    bits.append(f"outcome={event['outcome']}")
+                if event.get("motion_id"):
+                    bits.append(f"motion={event['motion_id']}")
+                lines.append("- " + "; ".join(bits))
+            for motion in semantics["motions"]:
+                history = motion.get("amount_history") or []
+                if len(history) > 1:
+                    lines.append(
+                        f"- MOTION CHAIN [{motion.get('event_id')}]: "
+                        + " -> ".join(
+                            str(row.get("amount", {}).get("raw"))
+                            for row in history if row.get("amount"))
+                        + f"; acceptance={motion.get('acceptance') or 'unconfirmed'}")
         lines.append("## Candidate meeting claims")
         lines.append(
             "Each row records what a participant stated. It is not evidence "
@@ -235,12 +294,18 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
         if stale:
             lines.append("## Claims invalidated by transcript revision")
             for record in stale:
-                revision = record["transcript_revision"]
-                lines.append(
-                    f"- [{record['claim_id']}] Original: "
-                    f"\"{literal(revision['original'])}\" -> Corrected: "
-                    f"\"{literal(revision['replacement'])}\" "
-                    f"({literal(revision['reason'])})")
+                revision = record.get("transcript_revision")
+                if revision is not None:
+                    lines.append(
+                        f"- [{record['claim_id']}] Original: "
+                        f"\"{literal(revision['original'])}\" -> Corrected: "
+                        f"\"{literal(revision['replacement'])}\" "
+                        f"({literal(revision['reason'])})")
+                else:
+                    changed = sorted((record.get("semantic_revision") or {}))
+                    lines.append(
+                        f"- [{record['claim_id']}] Depends on a changed "
+                        f"event: {', '.join(changed) or 'related event'}")
     flagged = [segment for segment in segments if segment.review_flags]
     if flagged:
         lines.append("## Passages requiring an audio check")
@@ -262,4 +327,7 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
     return {"markdown": "\n\n".join(lines),
             "segments": [asdict(segment) for segment in segments],
             "speaker_map": speaker_map, "corrections": audit,
-            "candidates": candidates, "claims": claim_records}
+            "candidates": candidates, "claims": claim_records,
+            "organizational_events": semantics["events"],
+            "motions": semantics["motions"],
+            "semantic_revision": semantics["revision"]}
