@@ -375,6 +375,9 @@ class Transcriptions:
             "committed_segments": len(segments),
             "next_cursor": len(events),
             "runtime_identity": meta["runtime"].get("runtime_identity", ""),
+            "model_bundle_sha256": meta["runtime"].get(
+                "model_bundle_sha256", ""),
+            "source_revision": meta["runtime"].get("source_revision", ""),
         }
 
     def list(self) -> list[dict]:
