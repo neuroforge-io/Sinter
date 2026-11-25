@@ -11,9 +11,9 @@ public release still needs distribution rights.
 | 03 local ERAIS installation | installer tests pass; desktop install | yes (Linux) | no | no |
 | 04 model/executable integrity | manifest + model/tree SHA-256; 9 installer tests | yes | no signature | no |
 | 05 supported recording formats | MP3/M4A/MP4/FLAC/OGG/WebM/AAC/WMA and non-16k WAV decode tests; 30 s stereo MP3 run | yes | no | no |
-| 06 long admission | 4 chunk-admission tests; 18 MB ten-minute file; no end-to-end browser upload of the 191 MB file | partial | no | no |
-| 07 stable source-time mapping | absolute-clock tests; 603 segments on 104 min | yes | no | no |
-| 08 incremental transcript | 604 events on 104 min; cursor tests | yes | no | no |
+| 06 long admission | 4 chunk tests + **191 MB end-to-end HTTP admission (4.38 s, SHA match, cleaned up)**; literal browser click-through still absent | yes | no | no |
+| 07 stable source-time mapping | absolute-clock tests; 603 segments on 104 min via the application route | yes | no | no |
+| 08 incremental transcript | 604 events on 104 min through `/api/jobs/<id>?after=`; cursor tests | yes | no | no |
 | 09 cancellation/cleanup | 13 retained segments, 0 processes on 104 min; 5 retained on 10 min | yes | no | no |
 | 10 saved-project restoration | not implemented for transcription jobs | no | no | no |
 | 11 traceable correction | JSON revisions, corrections with original/reason; tests | yes | no | no |
