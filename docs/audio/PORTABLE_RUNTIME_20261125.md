@@ -52,6 +52,12 @@ exactly (same five segments and final end time).
 - Models are referenced by absolute path and are not copied by default.
 - There is no signature/trust root on the snapshot yet; the manifest carries
   digests but not a verified publisher signature.
+- Upgrade is now atomic enough to recover from a bad install: the previous
+  source tree is kept as `runtime.previous`, a valid `manifest.json` is copied
+  to `manifest.previous.json` only after the new launcher passes its import
+  check, and `install_sinter_native.py --rollback` swaps them back and verifies
+  the restored launcher. Model files are shared by absolute path, so a rollback
+  does not revert a model swap.
 - Linux x86-64 only; Windows and macOS remain unqualified.
 
 ## Verification
