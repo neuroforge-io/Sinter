@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass, field
 
 from .evidence import literal, text
 from .meeting_semantics import Passage, analyze
+from .organizational_interpreter import from_environment
 
 
 @dataclass(frozen=True)
@@ -214,8 +215,10 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
                 segment.start, segment.end)
         for segment in segments
     ]
+    interpreter = from_environment()
     semantics = analyze(
         semantic_passages,
+        interpreter=interpreter,
         revision_source=source_passages if corrections else None)
     claim_records = semantics["claims"]
     changes_by_id = {change["segment_id"]: change for change in corrections}
@@ -330,4 +333,6 @@ def minutes(title: str, transcript: str, speaker_map: dict | None = None,
             "candidates": candidates, "claims": claim_records,
             "organizational_events": semantics["events"],
             "motions": semantics["motions"],
-            "semantic_revision": semantics["revision"]}
+            "semantic_revision": semantics["revision"],
+            "organizational_interpreter": (
+                "erais" if interpreter is not None else "deterministic")}
