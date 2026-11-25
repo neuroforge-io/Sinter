@@ -32,8 +32,8 @@ and segment count for every paired input.
 
 The throughput difference with clustering off is within 4%; bounded mode avoids
 memory, not recognition work. With anonymous clustering enabled, the same
-104-minute recording took 404.8 s in the installed worker because the CAM++
-window pass dominates.
+104-minute recording took 402.1 s and peaked at 1,816.9 MB in the installed
+worker because the CAM++ window pass and its session dominate.
 
 ## What changed
 

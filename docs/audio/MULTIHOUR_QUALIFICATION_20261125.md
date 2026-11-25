@@ -53,6 +53,23 @@ and total time are consistent with less allocation and swapping. Receipt:
 `docs/audio/receipts/local_multihour_memory_20261125.json`
 (job `8b04974ea1ec4c399740ac47791308bc`, ERAIS with ECM blocks).
 
+A third installed-worker run used the bounded source path (the PCM is no longer
+held in memory; each VAD region is read from disk):
+
+| Measurement | ECM only | Bounded source |
+|---|---:|---:|
+| Status | done | done |
+| Segments | 603 | 603 |
+| Processing time | 404.80 s | **402.14 s** |
+| Throughput | 15.5× | **15.6×** |
+| Peak worker RSS | 1,948.3 MB | **1,816.9 MB** |
+| First segment | 180.9 s | **178.6 s** |
+| Review count | 143/603 | 143/603 |
+| Speaker distribution | identical | identical |
+
+Receipt: `docs/audio/receipts/local_multihour_streaming_20261125.json`
+(job `9bc0c285d16e41a4a1cb99d23e1181d5`).
+
 ## Why it is slower than the 4-minute benchmark
 
 The 4-minute AMI benchmark reaches 36–41× real time because most of the cost is
