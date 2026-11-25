@@ -1,0 +1,271 @@
+{
+  "chain_checks": {
+    "first_acceptance": true,
+    "first_amount_history": true,
+    "first_responsibility": true,
+    "motion_count": true,
+    "responsibility_deadline": true,
+    "second_motion": true,
+    "third_motion": true
+  },
+  "claims": {
+    "motion_amendment": 1,
+    "total": 12
+  },
+  "correction": {
+    "amendment_changed": true,
+    "history": [
+      "$600",
+      "$425"
+    ],
+    "history_corrected": true,
+    "motion_amendment_stale": true,
+    "stale_claims": 3
+  },
+  "deterministic_scores": {
+    "evidence_accuracy": 1.0,
+    "gold_events": 7,
+    "matched": 2,
+    "participant_accuracy": 1.0,
+    "precision": 0.2857,
+    "predicted_events": 7,
+    "recall": 0.2857,
+    "unmatched_gold": [
+      {
+        "actor": "Alex",
+        "amount": {
+          "raw": "$600"
+        },
+        "due_date": null,
+        "event_type": "motion",
+        "object": "equipment",
+        "outcome": null
+      },
+      {
+        "actor": "Sam",
+        "amount": {
+          "raw": "$450"
+        },
+        "due_date": null,
+        "event_type": "amendment",
+        "object": null,
+        "outcome": null
+      },
+      {
+        "actor": "Alex",
+        "amount": null,
+        "due_date": null,
+        "event_type": "acceptance",
+        "object": null,
+        "outcome": null
+      },
+      {
+        "actor": "Sam",
+        "amount": null,
+        "due_date": "Friday",
+        "event_type": "responsibility",
+        "object": "equipment",
+        "outcome": null
+      },
+      {
+        "actor": "Alex",
+        "amount": null,
+        "due_date": "next month",
+        "event_type": "discussion",
+        "object": "training budget",
+        "outcome": null
+      }
+    ],
+    "unmatched_predicted": [
+      {
+        "acceptance": "stated_agreement",
+        "acceptance_event_id": "E0003:acceptance:01",
+        "action": null,
+        "actor": "Alex",
+        "amendments": [
+          "E0002:amendment:01"
+        ],
+        "amount": {
+          "currency": "USD",
+          "raw": "$600",
+          "value": 600.0
+        },
+        "amount_history": [
+          {
+            "amount": {
+              "currency": "USD",
+              "raw": "$600",
+              "value": 600.0
+            },
+            "event_id": "E0001:motion:01",
+            "kind": "proposal"
+          },
+          {
+            "amount": {
+              "currency": "USD",
+              "raw": "$450",
+              "value": 450.0
+            },
+            "event_id": "E0002:amendment:01",
+            "kind": "amendment"
+          }
+        ],
+        "assertion_status": "stated",
+        "chain_id": "E0001:motion:01",
+        "confidence": 0.8,
+        "confirmation_status": "unconfirmed",
+        "current_amount": {
+          "currency": "USD",
+          "raw": "$450",
+          "value": 450.0
+        },
+        "due_date": null,
+        "event_id": "E0001:motion:01",
+        "event_type": "motion",
+        "evidence": "I propose we spend $600 on equipment.",
+        "object": "on equipment",
+        "outcome": null,
+        "related_event_ids": [
+          "E0001:budget:01",
+          "E0002:amendment:01",
+          "E0002:budget:01",
+          "E0003:acceptance:01",
+          "E0004:responsibility:01"
+        ],
+        "responsibility_ids": [
+          "E0004:responsibility:01"
+        ],
+        "schema": "sinter.organizational-event.v1",
+        "source_end": null,
+        "source_passage_id": "T1",
+        "source_speaker": "Alex",
+        "source_start": null,
+        "status": "proposed"
+      },
+      {
+        "action": null,
+        "actor": "Sam",
+        "amount": {
+          "currency": "USD",
+          "raw": "$450",
+          "value": 450.0
+        },
+        "assertion_status": "stated",
+        "confidence": 0.8,
+        "confirmation_status": "unconfirmed",
+        "due_date": null,
+        "event_id": "E0002:amendment:01",
+        "event_type": "amendment",
+        "evidence": "Can we change that to $450?",
+        "motion_id": "E0001:motion:01",
+        "object": "?",
+        "outcome": null,
+        "related_event_ids": [
+          "E0001:motion:01"
+        ],
+        "schema": "sinter.organizational-event.v1",
+        "source_end": null,
+        "source_passage_id": "T2",
+        "source_speaker": "Sam",
+        "source_start": null
+      },
+      {
+        "acceptance_status": "stated_agreement",
+        "action": null,
+        "actor": null,
+        "amount": null,
+        "assertion_status": "stated",
+        "confidence": 0.7,
+        "confirmation_status": "unconfirmed",
+        "due_date": null,
+        "event_id": "E0003:acceptance:01",
+        "event_type": "acceptance",
+        "evidence": "Agreed.",
+        "motion_id": "E0001:motion:01",
+        "object": "Agreed",
+        "outcome": null,
+        "related_event_ids": [
+          "E0001:motion:01"
+        ],
+        "schema": "sinter.organizational-event.v1",
+        "source_end": null,
+        "source_passage_id": "T3",
+        "source_speaker": "Alex",
+        "source_start": null
+      },
+      {
+        "_link_motion": true,
+        "action": "order the equipment by Friday",
+        "actor": "Sam",
+        "amount": null,
+        "assertion_status": "stated",
+        "confidence": 0.7,
+        "confirmation_status": "unconfirmed",
+        "due_date": "Friday",
+        "event_id": "E0004:responsibility:01",
+        "event_type": "responsibility",
+        "evidence": "I will order the equipment by Friday.",
+        "motion_id": "E0001:motion:01",
+        "object": "will order equipment by Friday",
+        "outcome": null,
+        "related_event_ids": [
+          "E0001:motion:01",
+          "E0004:responsibility:01"
+        ],
+        "responsibility_status": "stated",
+        "schema": "sinter.organizational-event.v1",
+        "source_end": null,
+        "source_passage_id": "T4",
+        "source_speaker": "Sam",
+        "source_start": null
+      },
+      {
+        "acceptance": null,
+        "action": null,
+        "actor": "Alex",
+        "amendments": [],
+        "amount": null,
+        "amount_history": [],
+        "assertion_status": "stated",
+        "chain_id": "E0007:motion:01",
+        "confidence": 0.8,
+        "confirmation_status": "unconfirmed",
+        "due_date": null,
+        "event_id": "E0007:motion:01",
+        "event_type": "motion",
+        "evidence": "We should review the training budget next month.",
+        "object": "review training next month",
+        "outcome": null,
+        "related_event_ids": [],
+        "responsibility_ids": [],
+        "schema": "sinter.organizational-event.v1",
+        "source_end": null,
+        "source_passage_id": "T7",
+        "source_speaker": "Alex",
+        "source_start": null,
+        "status": "proposed"
+      }
+    ]
+  },
+  "environment": {
+    "platform": "linux",
+    "python": "3.12.3"
+  },
+  "erais_revision": "c19d2e15e85ecdd53b395abbeb30ae45eaabed4e",
+  "erais_scores": {
+    "evidence_accuracy": 1.0,
+    "gold_events": 7,
+    "matched": 7,
+    "participant_accuracy": 1.0,
+    "precision": 1.0,
+    "predicted_events": 7,
+    "recall": 1.0,
+    "unmatched_gold": [],
+    "unmatched_predicted": []
+  },
+  "generated_at": "2026-11-25T14:37:38.943158+00:00",
+  "interpreter": "erais.canonical.organizational.v1",
+  "schema": "sinter.erais-organizational-qualification.v1",
+  "sinter_revision": "43c647b7bf131d22524e046e698b83379a1c3d42",
+  "status": "qualified"
+}

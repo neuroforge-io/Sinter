@@ -21,6 +21,7 @@ EPISODE = re.compile(
     r"(?:/[0-9a-f]{32}(?:/(?:lesson|task|transfer|observe|clarify|correct|"
     r"objective|ask|situation|inspection))?)?\Z")
 HEALTH = "/api/health"
+ORGANIZATIONAL = "/api/organizational/interpret"
 
 
 class ComprehensionUnavailable(ValueError):
@@ -44,7 +45,8 @@ def _base() -> tuple[str, int]:
 
 
 def _allowed(path: str) -> bool:
-    return path == HEALTH or bool(EPISODE.fullmatch(path))
+    return (path in {HEALTH, ORGANIZATIONAL}
+            or bool(EPISODE.fullmatch(path)))
 
 
 def request(path: str, *, method: str = "GET", payload=None) -> dict:
@@ -83,4 +85,6 @@ def request(path: str, *, method: str = "GET", payload=None) -> dict:
     return value
 
 
-__all__ = ["ComprehensionUnavailable", "ENV", "request"]
+__all__ = [
+    "ComprehensionUnavailable", "ENV", "HEALTH", "ORGANIZATIONAL", "request",
+]
