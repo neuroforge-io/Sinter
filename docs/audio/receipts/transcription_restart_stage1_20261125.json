@@ -3,7 +3,7 @@
   "job_status": "cancelled",
   "model": "zipformer-gigaspeech-fp32",
   "next_cursor": 5,
-  "project": "4274e833cf2f4a83ac4ba595b27957da",
+  "project": "6eae2e9556ad481a878a9ef93a2f105a",
   "project_status": "cancelled",
   "recording": "restart_60s.wav",
   "resume_after_s": 9.74,

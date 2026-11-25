@@ -8,17 +8,19 @@ resumed in a **new process**:
 
 ```text
 stage 1 (process A)
-  project             4274e833cf2f4a83ac4ba595b27957da
+  project             6eae2e9556ad481a878a9ef93a2f105a
   status after cancel cancelled
   committed passages  4
   event cursor        5
-  resume boundary     13.62 s
+  resume boundary     13.62 s (after the fourth committed passage)
   source SHA-256      39075629...f35 (file bytes)
-  model bundle SHA    stored from the installed manifest
+  model bundle SHA    52b171e1...388a28 (installed manifest)
+  source revision     3fa70bc1...9309d35
 
 stage 2 (process B, same workspace)
   listed status       cancelled, 4 committed passages
-  compatibility       compatible, source intact, runtime identity matched
+  compatibility       compatible, source intact, runtime identity and
+                      model-bundle SHA-256 matched
   resume requested    13.62 s
   job status          done
   attempt             2
