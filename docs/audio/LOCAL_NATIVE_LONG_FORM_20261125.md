@@ -114,9 +114,10 @@ needed. Utterance-only runtimes keep the original one-shot path.
 
 - The browser upload route is still 25 MB; this ten-minute file fits, longer
   recordings need the API/CLI path.
-- The local meeting path uses the shared adaptive VAD and does not yet run the
-  anonymous speaker clustering available on the HTTP service; local segments
-  remain `Unidentified`.
+- The local meeting path can run the same meeting-local anonymous clustering
+  when the installer bundles the CAM++ encoder (`--speaker-clustering`). It is
+  experimental; passages still carry `Uncertain` and `Unidentified` states and
+  must be reviewed.
 - This is a development installation tied to an ERAIS source checkout and
   virtual environment. It is not yet a standalone signed bundle, and the free
   community distribution/licensing gate remains open.
