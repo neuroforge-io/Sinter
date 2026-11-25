@@ -1,0 +1,58 @@
+{
+  "after_restart": {
+    "revision": 3,
+    "status": "transferred",
+    "turns": 2
+  },
+  "capability_id": "capability:sha256:585ac5ac4dc033af54c5f3eab8c6e4f87a534d82da9c2c0eef0cc60e9beb8574",
+  "comprehension_port": 53213,
+  "comprehension_revision": "3f92f84f2c22f681881023ab9e098f602f665af7",
+  "episode_id": "d05dfac0e44f48ce856c049403251204",
+  "generated_at": "2026-11-25T13:13:09.085083+00:00",
+  "processes": [
+    {
+      "pid": 2844239,
+      "revision": "3f92f84f2c22f681881023ab9e098f602f665af7",
+      "service": "comprehension"
+    },
+    {
+      "pid": 2844243,
+      "revision": "0fd9b3f9b3e7b63f743b924daabd1615cf7afce8",
+      "service": "sinter"
+    },
+    {
+      "phase": "after_restart",
+      "pid": 2844254,
+      "revision": "0fd9b3f9b3e7b63f743b924daabd1615cf7afce8",
+      "service": "sinter"
+    }
+  ],
+  "retained_after_restart": true,
+  "schema": "sinter.comprehension-transfer-qualification.v1",
+  "sinter_page": {
+    "has_teaching_controls": true,
+    "has_transfer_controls": true,
+    "status": 200
+  },
+  "sinter_port": 38769,
+  "sinter_revision": "0fd9b3f9b3e7b63f743b924daabd1615cf7afce8",
+  "sinter_root": "/tmp/user/1000/opencode/sinter-comp-witness/sinter",
+  "state_digest": "eaaae5e23866efeda4cf6229f30fe4e1d58994224cfec4299242caca22dbc0c7",
+  "status": "qualified",
+  "transfers": [
+    {
+      "answer": "32",
+      "application": "inventory",
+      "capability_id": "capability:sha256:585ac5ac4dc033af54c5f3eab8c6e4f87a534d82da9c2c0eef0cc60e9beb8574",
+      "expected": "32",
+      "phase": "before_restart"
+    },
+    {
+      "answer": "16",
+      "application": "workspace",
+      "capability_id": "capability:sha256:585ac5ac4dc033af54c5f3eab8c6e4f87a534d82da9c2c0eef0cc60e9beb8574",
+      "expected": "16",
+      "phase": "after_restart"
+    }
+  ]
+}
