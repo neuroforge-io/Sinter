@@ -28,6 +28,21 @@ a separate review axis.
 - `review_count` counts passages with at least one flag; a passage may carry
   several.
 
+## Observed effect
+
+On a 30 s AMI mixed-headset MP3 through the installed desktop worker:
+
+```text
+before: 5/5 passages flagged with the same generic warning
+after:  0/5 flagged
+```
+
+The excerpt is uniformly quiet (whole-file mean -52.6 dB, peak -28.8 dB, RMS
+-41 dBFS), which is exactly the case an absolute quiet threshold handles
+badly. The 1 h 44 min receipt in `MULTIHOUR_QUALIFICATION_20261125.md`
+reported `review_count = 603` under the old rule; that number is historical and
+does not represent consequential risk.
+
 ## Verification
 
 ```text
