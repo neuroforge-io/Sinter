@@ -23,5 +23,7 @@
   "runtime_identity": "erais-native-zipformer-gigaspeech",
   "segments_before_cancel": 12,
   "source_bytes": 200554920,
+  "source_sha256": "cc72712783cf48e4d4882862489b2ad804000ac1dbd354843253409d78badb4e",
+  "source_sha256_verified": true,
   "upload_and_start_s": 142.58
 }

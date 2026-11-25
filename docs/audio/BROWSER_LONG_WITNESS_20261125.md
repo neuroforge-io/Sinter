@@ -13,6 +13,7 @@ session.
 stage 1 — browser upload and save
   file                        ami_six_meetings.wav
   size                        200,554,920 bytes
+  SHA-256                     cc727127...badb4e (matches source)
   upload + worker start       142.58 s
   committed before cancel     12 passages
   retained after cancel       15 passages, cursor 16
