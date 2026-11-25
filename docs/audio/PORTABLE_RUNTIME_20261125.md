@@ -12,7 +12,7 @@ snapshot** beside the worker launcher:
     speech-manifest.json       selected model identity
     speaker-encoder.onnx       CAM++ when clustering is enabled
     runtime/
-        erais/                 pinned package snapshot (3,118 files, 73.8 MB)
+        erais/                 pinned package snapshot (3,121 files, 73.9 MiB at 4cf17e04)
 ```
 
 The launcher resolves its own directory and uses `$BASE/runtime` on
@@ -22,7 +22,9 @@ does not depend on the file it was installed from either.
 
 `manifest.json` records `self_contained_source` and `runtime_bundle`
 (`tree_sha256`, `files`, `bytes`). `--no-bundle-runtime` retains the previous
-development-checkout mode for editing.
+development-checkout mode for editing. `--verify` recomputes the tree, model and
+speaker digests and re-runs the launcher import check without changing
+anything.
 
 ## Relocation evidence
 
@@ -63,7 +65,7 @@ exactly (same five segments and final end time).
 ## Verification
 
 ```text
-tests/test_install_sinter_native.py   7 passed
+tests/test_install_sinter_native.py   11 passed
   including a bundled-snapshot test that runs the launcher from a foreign
   working directory with no repository PYTHONPATH
 ```

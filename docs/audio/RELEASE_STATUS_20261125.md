@@ -9,7 +9,7 @@ public release still needs distribution rights.
 | 01 faster-whisper preserved | code path untouched; backend selection tests pass | not re-run this sprint | no | unchanged |
 | 02 browser backend selection | 4 JS tests pass | UI present | no | not released |
 | 03 local ERAIS installation | installer tests pass; desktop install | yes (Linux) | no | no |
-| 04 model/executable integrity | manifest + model/tree SHA-256; 9 installer tests | yes | no signature | no |
+| 04 model/executable integrity | manifest + model/tree/speaker SHA-256; `--verify` passes on the installed desktop runtime; 11 installer tests | yes | no signature | no |
 | 05 supported recording formats | MP3/M4A/MP4/FLAC/OGG/WebM/AAC/WMA and non-16k WAV decode tests; 30 s stereo MP3 run | yes | no | no |
 | 06 long admission | 4 chunk tests + **191 MB end-to-end HTTP admission (4.38 s, SHA match, cleaned up)**; literal browser click-through still absent | yes | no | no |
 | 07 stable source-time mapping | absolute-clock tests; 603 segments on 104 min via the application route | yes | no | no |
@@ -21,7 +21,7 @@ public release still needs distribution rights.
 | 13 consistent exports | minutes/claims share one record; SRT/VTT/TXT projections tested | yes | no | no |
 | 14 evidence-grounded minutes | structured claims + stale-on-revision; 6 tests | yes | no | no |
 | 15 offline operation | earlier `unshare -n` 10-min run; re-run blocked by host namespace policy | previously | no | no |
-| 16 clean install/upgrade | source bundle, relocation proof, `--rollback` with tests | yes | no | no |
+| 16 clean install/upgrade | source bundle, relocation proof, `--rollback`, `--verify`, tamper tests | yes | no | no |
 | 17 free distribution rights | not obtained | no | no | **blocked** |
 | 18 privacy/security qualification | no embedding export; admission confinement tests | partial | no | no |
 | 19 native accessibility synthesis | injected-renderer contract only | no | no | no |
