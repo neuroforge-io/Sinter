@@ -251,7 +251,7 @@
     "platform": "linux",
     "python": "3.12.3"
   },
-  "erais_revision": "895787196c2aaf86363afc4a58d895a9adc5e763",
+  "erais_revision": "db162b173b7e1790836c30f26b8b07442d9e983e",
   "erais_scores": {
     "evidence_accuracy": 1.0,
     "gold_events": 7,
@@ -263,9 +263,9 @@
     "unmatched_gold": [],
     "unmatched_predicted": []
   },
-  "generated_at": "2026-11-25T14:38:58.412794+00:00",
+  "generated_at": "2026-11-25T14:41:12.545119+00:00",
   "interpreter": "erais.canonical.organizational.v1",
   "schema": "sinter.erais-organizational-qualification.v1",
-  "sinter_revision": "4dc5f5f7d38821f3264f4871f9b3474a0b77212e",
+  "sinter_revision": "1feb74f900f8ebd5a6121f6c0e723a385a580870",
   "status": "qualified"
 }
