@@ -222,3 +222,58 @@ def test_meeting_worker_cancellation_terminates_the_process(tmp_path, monkeypatc
         time.sleep(0.05)
     else:
         raise AssertionError("the meeting worker was not terminated")
+
+
+def test_meeting_manifest_can_request_anonymous_speaker_clustering(
+        tmp_path, monkeypatch):
+    worker = tmp_path / "worker.py"
+    worker.write_text(
+        "import json, sys\n"
+        "request = json.load(sys.stdin)\n"
+        "assert request['anonymous_speakers'] is True\n"
+        "event_schema = 'erais.sinter-audio-worker.event.v1'\n"
+        "result_schema = 'sinter.audio.transcription.result.v1'\n"
+        "segment = {'id': 'T0001', 'start': 0, 'end': 1,\n"
+        "           'speaker': 'Speaker A', 'text': 'a motion',\n"
+        "           'review_flags': [], 'words': [], 'revision': 2,\n"
+        "           'speaker_identity_status': 'anonymous_cluster',\n"
+        "           'speaker_confidence': 0.9}\n"
+        "print(json.dumps({'schema': event_schema, 'event': 'started',\n"
+        "                  'model': request['model_id']}), flush=True)\n"
+        "print(json.dumps({'schema': event_schema, 'event': 'segment',\n"
+        "                  'segment': segment}), flush=True)\n"
+        "print(json.dumps({'schema': event_schema, 'event': 'complete',\n"
+        "                  'result': {'schema': result_schema,\n"
+        "                             'segments': [segment], 'language': 'en',\n"
+        "                             'duration': 1.0,\n"
+        "                             'speaker_diarization': True,\n"
+        "                             'model': request['model_id']}}), flush=True)\n",
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({
+        "schema": "erais.audio.runtime.v1",
+        "runtime_id": "test-meeting-runtime",
+        "source_revision": "c" * 40,
+        "protocol_version": 1,
+        "worker": [sys.executable, str(worker)],
+        "models": ["erais-native-large"],
+        "supported_languages": ["en"],
+        "word_timing": "estimated",
+        "meeting_stream": True,
+        "max_meeting_seconds": 14400,
+        "speaker_diarization": True,
+        "timeout_seconds": 600,
+    }), encoding="utf-8")
+    monkeypatch.setenv(erais_native_backend.MANIFEST_ENV, str(manifest))
+    recording = tmp_path / "meeting.wav"
+    recording.write_bytes(b"fictional meeting bytes")
+    result = speech.transcribe(
+        recording, model="erais-native-large", consent=True,
+        backend="erais-native")
+    assert result["speaker_diarization"] is True
+    assert result["segments"][0]["speaker"] == "Speaker A"
+    native = next(
+        item for item in speech.capabilities()["backends"]
+        if item["id"] == "erais-native")
+    assert native["speaker_diarization"] is True
