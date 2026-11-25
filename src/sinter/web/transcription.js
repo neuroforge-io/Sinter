@@ -1,5 +1,5 @@
 /** Review UI for local audio; labels are human edits, never biometric identity. */
-import {h, button, field, check, notice, download} from './ui.js';
+import {h, button, field, selectField, check, notice, download} from './ui.js';
 import {request} from './api.js';
 
 export function timestamp(value) {
@@ -12,26 +12,84 @@ export function speakerGroups(segments) {
   for (const segment of Array.isArray(segments) ? segments : []) {
     const label = typeof segment?.speaker === 'string' && segment.speaker.trim()
       ? segment.speaker.trim() : 'Unidentified';
-    const entry = groups.get(label) || {label, count: 0, anonymous: false};
+    const entry = groups.get(label) || {label, count: 0, duration: 0, anonymous: false};
     entry.count += 1;
+    const start = Number(segment?.start), end = Number(segment?.end);
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start)
+      entry.duration += end - start;
     if (/^Speaker [A-Z]$/.test(label)) entry.anonymous = true;
     groups.set(label, entry);
   }
   return [...groups.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
-export function renameSpeaker(edited, from, to) {
+function recordRevision(edited, revision) {
+  edited.speaker_revisions ??= [];
+  const previous = edited.speaker_revisions.filter(row => !row.undone).at(-1);
+  const record = {
+    revision_id: `R${edited.speaker_revisions.length + 1}`,
+    previous_revision: previous?.revision_id || null,
+    undone: false,
+    ...revision,
+  };
+  edited.speaker_revisions.push(record);
+  return record;
+}
+
+export function renameSpeaker(edited, from, to, {operation = 'rename_group', reason = ''} = {}) {
   const value = String(to ?? '').trim();
   if (!value || value === from) return 0;
-  let changed = 0;
-  for (const segment of edited?.segments || []) {
+  const changed = [];
+  const previous = {};
+  for (const [index, segment] of (edited?.segments || []).entries()) {
     if ((segment.speaker || 'Unidentified') !== from) continue;
+    previous[index] = segment.speaker || 'Unidentified';
     segment.original_speaker ??= segment.speaker;
     segment.speaker = value;
     segment.label_origin = 'human review against recording';
-    changed += 1;
+    changed.push(index);
   }
-  return changed;
+  if (!changed.length) return 0;
+  recordRevision(edited, {
+    operation, from, to: value, segment_indices: changed, previous, reason,
+  });
+  return changed.length;
+}
+
+export function mergeSpeaker(edited, from, into, reason = '') {
+  return renameSpeaker(edited, from, into, {operation: 'merge_group', reason});
+}
+
+export function relabelPassage(edited, index, to, reason = '') {
+  const segment = edited?.segments?.[index];
+  const value = String(to ?? '').trim();
+  if (!segment || !value) return 0;
+  const current = segment.speaker || 'Unidentified';
+  if (value === current) return 0;
+  const previous = {[index]: current};
+  segment.original_speaker ??= segment.speaker;
+  segment.speaker = value;
+  segment.label_origin = 'human review against recording';
+  recordRevision(edited, {
+    operation: 'relabel_passage', from: current, to: value,
+    segment_indices: [index], previous, reason,
+  });
+  return 1;
+}
+
+export function undoSpeakerRevision(edited) {
+  const revisions = edited?.speaker_revisions;
+  if (!Array.isArray(revisions)) return null;
+  const revision = [...revisions].reverse().find(row => !row.undone);
+  if (!revision) return null;
+  for (const index of revision.segment_indices || []) {
+    const segment = edited.segments?.[index];
+    const label = revision.previous?.[index];
+    if (segment && label) segment.speaker = label;
+  }
+  revision.undone = true;
+  revision.undone_at = new Date().toISOString();
+  return revision;
 }
 
 export function reviewTranscript(transcript, player, onChange) {
@@ -51,19 +109,54 @@ export function reviewTranscript(transcript, player, onChange) {
   root.dispose = () => player.removeEventListener('timeupdate', stop);
   function renderGroups() {
     const groups = speakerGroups(edited.segments);
+    const others = groups.filter(group => group.label !== 'Overlap');
     const rows = groups.filter(group => group.anonymous || group.count > 1).map(group => {
       const name = field(`Rename ${group.label}`, 'text', group.anonymous ? '' : group.label,
-        `${group.count} passage${group.count === 1 ? '' : 's'} uses this label.`, {maxLength: 100});
+        `${group.count} passage${group.count === 1 ? '' : 's'} / ${timestamp(group.duration)}.`, {maxLength: 100});
+      const listen = button('Listen to a passage', async () => {
+        const index = edited.segments.findIndex(segment =>
+          (segment.speaker || 'Unidentified') === group.label);
+        const segment = edited.segments[index];
+        if (!segment) return;
+        try {
+          player.currentTime = Number(segment.start) || 0;
+          stopAt = Math.min(Number(segment.end) || player.currentTime + 8, player.currentTime + 12);
+          await player.play();
+        } catch { feedback.replaceChildren(notice('Your browser could not play this format.', 'error')); }
+      }, 'quiet');
       const apply = button('Rename every passage', async () => {
         const value = name.input.value.trim();
         const changed = renameSpeaker(edited, group.label, value);
         if (!changed) { feedback.replaceChildren(notice('Enter a different non-empty label.', 'error')); return; }
-        try { await onChange(edited); feedback.replaceChildren(notice(`Renamed ${changed} passages. Original labels remain in the JSON transcript.`, 'success')); render(); }
-        catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
+        try { await onChange(edited); feedback.replaceChildren(notice(`Renamed ${changed} passages. Original labels and a revision event remain in the JSON transcript.`, 'success')); render(); }
+        catch (error) { undoSpeakerRevision(edited); feedback.replaceChildren(notice(error.message, 'error')); }
       }, 'quiet');
-      return h('details', {}, h('summary', {}, `${group.label} — ${group.count} passages`), name.wrap, apply);
+      const target = selectField(`Merge ${group.label} into`,
+        [['', 'Choose a group'], ...others.filter(other => other.label !== group.label)
+          .map(other => [other.label, `${other.label} (${other.count})`])]);
+      const merge = button('Merge groups', async () => {
+        const value = target.input.value;
+        if (!value) { feedback.replaceChildren(notice('Choose the group that should receive these passages.', 'error')); return; }
+        const changed = mergeSpeaker(edited, group.label, value);
+        if (!changed) { feedback.replaceChildren(notice('Those passages already use that label.', 'error')); return; }
+        try { await onChange(edited); feedback.replaceChildren(notice(`Merged ${changed} passages into ${value}. The merge is reversible in the JSON revisions.`, 'success')); render(); }
+        catch (error) { undoSpeakerRevision(edited); feedback.replaceChildren(notice(error.message, 'error')); }
+      }, 'quiet');
+      return h('details', {}, h('summary', {}, `${group.label} — ${group.count} passages / ${timestamp(group.duration)}`),
+        name.wrap, apply, listen, target.wrap, merge);
     });
-    groupsPanel.replaceChildren(...(rows.length ? [h('h4', {}, 'Speaker groups in this transcript'), ...rows] : []));
+    const revisions = (edited.speaker_revisions || []).filter(row => !row.undone);
+    const undo = button('Undo last speaker change', async () => {
+      const revision = undoSpeakerRevision(edited);
+      if (!revision) { feedback.replaceChildren(notice('There is no speaker change to undo.', 'error')); return; }
+      try { await onChange(edited); feedback.replaceChildren(notice(`Undid ${revision.operation}. The revision remains recorded as undone.`, 'success')); render(); }
+      catch (error) { feedback.replaceChildren(notice(error.message, 'error')); }
+    }, 'quiet');
+    undo.disabled = !revisions.length;
+    groupsPanel.replaceChildren(...(rows.length ? [
+      h('h4', {}, 'Speaker groups in this transcript'),
+      h('p', {class: 'fine'}, `${revisions.length} human speaker revision${revisions.length === 1 ? '' : 's'} in this review.`),
+      undo, ...rows] : [h('p', {class: 'fine'}, 'No speaker groups need review.')]));
   }
   function render() {
     renderGroups();
@@ -76,12 +169,11 @@ export function reviewTranscript(transcript, player, onChange) {
       const apply = button('Keep this speaker label', async () => {
         const value = label.input.value.trim();
         if (!value) { feedback.replaceChildren(notice('Enter a label or use Unidentified.', 'error')); return; }
-        const original = {...segment};
-        segment.original_speaker ??= segment.speaker;
-        segment.speaker = value;
-        segment.label_origin = 'human review against recording';
-        try { await onChange(edited); feedback.replaceChildren(notice('Speaker label recorded. Original label preserved in the JSON transcript.', 'success')); }
-        catch (error) { edited.segments[index] = original; feedback.replaceChildren(notice(error.message, 'error')); render(); }
+        if (!relabelPassage(edited, index, value)) {
+          feedback.replaceChildren(notice('Choose a different label.', 'error')); return;
+        }
+        try { await onChange(edited); feedback.replaceChildren(notice('Speaker label recorded. Original label and a revision event remain in the JSON transcript.', 'success')); }
+        catch (error) { undoSpeakerRevision(edited); feedback.replaceChildren(notice(error.message, 'error')); render(); }
       }, 'quiet');
       const play = button(`Listen ${timestamp(segment.start)} to ${timestamp(segment.end)}`, async () => {
         try { player.currentTime = segment.start; stopAt = segment.end; await player.play(); }
