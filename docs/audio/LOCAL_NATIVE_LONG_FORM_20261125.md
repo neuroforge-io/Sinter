@@ -94,6 +94,12 @@ The installed worker uses the ONNX Runtime CAM++ donor (about 30 ms per 1.5 s
 window). The native graph speaker path costs roughly a second per window and
 was not viable for long meetings; it remains only as a fallback.
 
+Measured on four AMI excerpts with leader clustering and reconciliation: 74 of
+101 passages received a confident anonymous label and 49 of 51 single-speaker
+pairs mapped correctly (96.1%), including ES2004a at 90.9% where the HTTP path
+merges two voices. See the ERAIS receipt
+`reports/audio/local_anonymous_diarization_20261125/`.
+
 ## Protocol
 
 The local worker remains one request on stdin. In meeting mode it streams JSON
