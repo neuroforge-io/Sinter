@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Protocol
 
-Progress = Callable[[str], None]
+Progress = Callable[[str | dict], None]
 
 
 class SpeechBackendError(ValueError):

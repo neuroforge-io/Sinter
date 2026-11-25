@@ -14,6 +14,9 @@ from .operations import Cancelled, DeadlineExceeded, budget, checkpoint
 
 log = logging.getLogger(__name__)
 
+MAX_JOB_EVENTS = 20_000
+TERMINAL = {"done", "failed", "cancelled"}
+
 
 @dataclass
 class Job:
@@ -27,6 +30,10 @@ class Job:
     message: str = "Waiting for an available worker"
     result: dict | None = None
     error: str = ""
+    events: list[dict] = field(default_factory=list)
+    received_s: float = 0.0
+    processed_s: float = 0.0
+    phase: str = "queued"
     cancel: threading.Event = field(default_factory=threading.Event)
 
 
@@ -38,7 +45,7 @@ class Jobs:
         self._jobs: dict[str, Job] = {}
 
     def _purge(self):
-        terminal = sorted((job for job in self._jobs.values() if job.status in {"done", "failed", "cancelled"}),
+        terminal = sorted((job for job in self._jobs.values() if job.status in TERMINAL),
                           key=lambda job: job.completed_at or job.created_at)
         for job in terminal:
             if time.time() - (job.completed_at or job.created_at) > 1800 or len(self._jobs) >= 20:
@@ -56,10 +63,45 @@ class Jobs:
             self._purge()
             self._jobs[job.id] = job
 
-        def progress(message: str):
+        def record(payload: dict) -> None:
+            """Commit one incremental job event under the job lock."""
+            with self._lock:
+                kind = payload.get("event")
+                if kind == "segments":
+                    additions = [
+                        {"event": "segment", **segment}
+                        for segment in payload.get("segments") or ()
+                        if isinstance(segment, dict)
+                    ]
+                elif kind in {"session", "warning", "phase"}:
+                    additions = [dict(payload)]
+                else:
+                    additions = []
+                for event in additions:
+                    if len(job.events) >= MAX_JOB_EVENTS:
+                        raise ValueError(
+                            "The recording produced more events than this task can hold.")
+                    job.events.append({"sequence": len(job.events) + 1, **event})
+                for key in ("received_s", "processed_s"):
+                    value = payload.get(key)
+                    if isinstance(value, (int, float)) and not isinstance(value, bool):
+                        setattr(job, key, float(value))
+                phase = payload.get("phase")
+                if isinstance(phase, str) and phase:
+                    job.phase = phase[:40]
+                if payload.get("message"):
+                    job.message = str(payload["message"])[:500]
+                job.updated_at = time.time()
+                job.started_at = job.started_at or job.updated_at
+                job.status = "running"
+
+        def progress(message):
             checkpoint()
             if job.cancel.is_set():
                 raise Cancelled()
+            if isinstance(message, dict):
+                record(message)
+                return
             with self._lock:
                 job.status, job.message = "running", str(message)[:500]
                 job.updated_at = time.time()
@@ -70,21 +112,30 @@ class Jobs:
                 with budget(timeout, job.cancel):
                     progress("Starting")
                     result = operation(progress)
-                    checkpoint()
                 with self._lock:
                     job.completed_at = time.time()
+                    job.status, job.message, job.result = "done", "Ready for review", result
+                    job.phase = "completed"
                     if job.cancel.is_set():
-                        job.status, job.message = "cancelled", "Cancelled; no report was saved"
-                    else:
-                        job.status, job.message, job.result = "done", "Ready for review", result
+                        job.message = (
+                            "Completed before the cancellation request took effect")
             except Cancelled:
                 with self._lock:
                     job.completed_at = time.time()
-                    job.status, job.message = "cancelled", "Cancelled; no report was saved"
+                    job.status = "cancelled"
+                    job.phase = "cancelled"
+                    transcribed = sum(
+                        1 for event in job.events if event.get("event") == "segment")
+                    job.message = (
+                        "Cancelled; the meeting session was closed and the partial "
+                        f"transcript keeps {transcribed} segments."
+                        if transcribed else
+                        "Cancelled; no report was saved")
             except (APIError, ValueError, DeadlineExceeded) as exc:
                 with self._lock:
                     job.completed_at = time.time()
-                    job.status, job.error = "failed", str(exc)
+                    job.status, job.phase = "failed", "failed"
+                    job.error = str(exc)
                     job.result = getattr(exc, "partial_result", None)
             except Exception:
                 log.exception("A workbench job failed")
@@ -102,16 +153,25 @@ class Jobs:
             raise ValueError("Sinter is shutting down. Restart before beginning another job.") from exc
         return job.id
 
-    def get(self, identifier: str) -> dict:
+    def get(self, identifier: str, after: int | None = None) -> dict:
         with self._lock:
             self._purge()
             job = self._jobs.get(identifier)
             if job is None:
                 raise KeyError("This temporary result expired. Run it again or open a saved report.")
-            return {"id": job.id, "status": job.status, "message": job.message,
-                    "result": job.result, "error": job.error, "created_at": job.created_at, "completed_at": job.completed_at,
-                    "started_at": job.started_at, "updated_at": job.updated_at, "label": job.label,
-                    "cancel_requested": job.cancel.is_set()}
+            payload = {"id": job.id, "status": job.status, "message": job.message,
+                       "result": job.result, "error": job.error, "created_at": job.created_at, "completed_at": job.completed_at,
+                       "started_at": job.started_at, "updated_at": job.updated_at, "label": job.label,
+                       "cancel_requested": job.cancel.is_set(),
+                       "received_s": round(job.received_s, 3),
+                       "processed_s": round(job.processed_s, 3),
+                       "phase": job.phase,
+                       "next_cursor": len(job.events)}
+            if after is not None:
+                if isinstance(after, bool) or not isinstance(after, int) or after < 0:
+                    raise ValueError("Job cursor must be a non-negative integer.")
+                payload["events"] = [dict(event) for event in job.events[after:]]
+            return payload
 
     def list(self) -> list[dict]:
         with self._lock:
