@@ -400,6 +400,10 @@ class Transcriptions:
                 "backend": meta.get("request", {}).get("backend"),
                 "runtime_identity": meta.get("runtime", {}).get(
                     "runtime_identity", ""),
+                "resumable": (
+                    meta.get("status") in RESUMABLE
+                    and meta.get("request", {}).get("backend")
+                    == "erais-native"),
                 "event_count": meta.get("progress", {}).get("event_count", 0),
                 "segment_count": sum(
                     1 for event in self._events(meta["id"])
