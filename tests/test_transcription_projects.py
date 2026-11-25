@@ -339,3 +339,33 @@ def test_saving_requires_consent_before_any_copy(tmp_path, monkeypatch):
         assert listing["transcriptions"] == []
     finally:
         _stop(server, thread)
+
+
+def test_compatibility_detects_a_changed_model_bundle(tmp_path, monkeypatch):
+    recording = tmp_path / "meeting.wav"
+    _wav(recording, 3.0)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"model_bundle_sha256": "a" * 64}))
+    backend = {**BACKEND, "manifest_identity": str(manifest)}
+    store = Transcriptions(tmp_path / "transcriptions")
+    project = store.create(
+        recording, filename="meeting.wav", backend="erais-native",
+        model="zipformer-test-fp32", language="en", split_channels=False,
+        runtime_identity="runtime-test", manifest_identity=str(manifest),
+        model_bundle_sha256="a" * 64)
+    store.append(project["id"], {"event": "segment",
+        "segment": _segment("T0001", 0.0, 2.0, "hello")})
+    monkeypatch.setattr(runtime_routes.speech, "capabilities", lambda: {
+        "backends": [backend]})
+    server, thread = _server(tmp_path)
+    try:
+        _, compatibility = _get(
+            server, f"/api/transcriptions/{project['id']}/compatibility")
+        assert compatibility["compatible"] is True
+        manifest.write_text(json.dumps({"model_bundle_sha256": "b" * 64}))
+        _, changed = _get(
+            server, f"/api/transcriptions/{project['id']}/compatibility")
+        assert changed["compatible"] is False
+        assert any("model bundle" in issue for issue in changed["issues"])
+    finally:
+        _stop(server, thread)
