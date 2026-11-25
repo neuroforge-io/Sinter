@@ -205,19 +205,31 @@ def _segment(event: dict) -> dict | None:
             "end": word.get("end_s"),
             "word": word["word"],
         })
+    status = str(event.get("speaker_identity_status", "unconfirmed"))
+    if status in {"enrolled_introduction", "voiceprint_match"}:
+        flag = ("Speaker identity matched a consented introduction voiceprint; "
+                "confirm the named introduction against the recording.")
+    elif status == "anonymous_cluster":
+        flag = ("Speaker is a meeting-local anonymous cluster, not an identity. "
+                "Listen and rename if the group is wrong.")
+    elif status == "anonymous_ambiguous":
+        flag = ("This passage mixes speaker evidence. Its label is not "
+                "confirmed; listen before assigning one.")
+    elif status == "insufficient_speaker_evidence":
+        flag = ("Too little speech to group this passage. Assign a label "
+                "after listening.")
+    else:
+        flag = ("Speaker identity is unconfirmed. Confirm names against "
+                "the recording.")
     return {
         "start": float(event.get("start_s", 0)),
         "end": float(event.get("end_s", 0)),
         "speaker": str(event.get("speaker", "Unidentified")),
         "text": text.strip(),
-        "review_flags": [
-            "Speaker identity matched a consented introduction voiceprint; "
-            "confirm the named introduction against the recording."
-            if event.get("speaker_identity_status") in {
-                "enrolled_introduction", "voiceprint_match"} else
-            "Speaker identity is unconfirmed. Confirm names against the recording."],
-        "speaker_identity_status": str(
-            event.get("speaker_identity_status", "unconfirmed")),
+        "review_flags": [flag],
+        "speaker_identity_status": status,
+        "speaker_cluster": event.get("speaker_cluster"),
+        "speaker_confidence": event.get("speaker_confidence"),
         "speaker_match_score": event.get("speaker_match_score"),
         "words": words,
     }
@@ -276,8 +288,16 @@ def transcribe(request: TranscriptionRequest, progress=lambda _message: None) ->
         for event in value.get("events") or ():
             if not isinstance(event, dict) or not isinstance(event.get("sequence"), int):
                 continue
-            if event["sequence"] in events:
-                continue
+            existing = events.get(event["sequence"])
+            incoming = event.get("revision", 1)
+            if not isinstance(incoming, int) or isinstance(incoming, bool):
+                incoming = 1
+            if existing is not None:
+                current = existing.get("revision", 1)
+                if not isinstance(current, int) or isinstance(current, bool):
+                    current = 1
+                if incoming <= current:
+                    continue
             events[event["sequence"]] = event
             segment = _segment(event)
             if segment is not None:
