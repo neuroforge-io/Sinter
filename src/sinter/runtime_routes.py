@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from dataclasses import asdict
 from importlib import resources
+import shutil
 from urllib.parse import parse_qs
 
 from . import (
@@ -24,9 +25,74 @@ from .docx_export import export_docx
 from .evidence import collect, text
 from .grants import screen
 from .meetings import parse_transcript
+from .operations import Cancelled
 from .preferences import PreferencesConflict
 from .store import calendar
 from .templates import available_templates, resolve_template, template_events
+
+def project_events(message: dict) -> list[dict]:
+    """Map one backend progress message to durable project events."""
+    kind = message.get("event")
+    if kind == "segments":
+        return [
+            {"event": "segment", "segment": segment}
+            for segment in message.get("segments") or ()
+            if isinstance(segment, dict)
+        ]
+    if kind in {"session", "warning", "phase", "unresolved"}:
+        return [dict(message)]
+    return []
+
+
+def project_progress(transcriptions, identifier: str, progress):
+    """Persist every committed event before forwarding it to the job."""
+    def capture(message):
+        if isinstance(message, dict):
+            received = message.get("received_s")
+            processed = message.get("processed_s")
+            for event in project_events(message):
+                transcriptions.append(
+                    identifier, event,
+                    received_s=received if isinstance(received, (int, float))
+                    else None,
+                    processed_s=processed if isinstance(processed, (int, float))
+                    else None)
+        return progress(message)
+    return capture
+
+
+def combine_resume(prior: list[dict], result: dict,
+                   resume_after_s: float) -> dict:
+    """Join saved segments with worker segments produced after the boundary."""
+    new = [
+        segment for segment in result.get("segments") or ()
+        if isinstance(segment, dict)
+        and float(segment.get("start") or 0) >= resume_after_s - 0.05
+    ]
+    combined = list(prior) + new
+    combined.sort(key=lambda segment: (
+        float(segment.get("start") or 0), str(segment.get("id") or "")))
+    merged = dict(result)
+    merged["segments"] = combined
+    merged["speech_duration"] = round(
+        sum(float(segment.get("end") or 0)
+            - float(segment.get("start") or 0)
+            for segment in combined), 4)
+    merged["review_count"] = (
+        sum(bool(segment.get("review_flags")) for segment in combined)
+        + len(merged.get("unresolved_regions") or ()))
+    if merged.get("unresolved_regions"):
+        merged["status"] = "partial"
+    elif combined:
+        merged["status"] = "draft"
+    else:
+        merged["status"] = "no_speech"
+    receipt = dict(merged.get("runtime_receipt") or {})
+    receipt["resumed"] = True
+    receipt["resume_after_s"] = round(float(resume_after_s), 4)
+    merged["runtime_receipt"] = receipt
+    return merged
+
 
 MIME = {
     ".html": "text/html",
@@ -182,6 +248,43 @@ class RouteDispatch:
             self._json(practice.garden())
         elif path == "/api/jobs":
             self._json({"jobs": self.app.jobs.list()})
+        elif path == "/api/transcriptions":
+            self._json({"transcriptions": self.app.transcriptions.list()})
+        elif (path.startswith("/api/transcriptions/")
+              and path.endswith("/compatibility")):
+            identifier = path.removeprefix(
+                "/api/transcriptions/").removesuffix(
+                "/compatibility").strip("/")
+            backends = speech.capabilities().get("backends", [])
+            self._json(self.app.transcriptions.compatibility(
+                identifier, backends))
+        elif (path.startswith("/api/transcriptions/")
+              and path.endswith("/audio")):
+            identifier = path.removeprefix(
+                "/api/transcriptions/").removesuffix("/audio").strip("/")
+            source = self.app.transcriptions.source_path(identifier)
+            suffix = source.suffix.lower()
+            content_type = {
+                ".wav": "audio/wav", ".mp3": "audio/mpeg",
+                ".m4a": "audio/mp4", ".mp4": "audio/mp4",
+                ".ogg": "audio/ogg", ".oga": "audio/ogg",
+                ".opus": "audio/ogg", ".webm": "audio/webm",
+                ".flac": "audio/flac", ".aac": "audio/aac",
+                ".wma": "audio/x-ms-wma",
+            }.get(suffix, "application/octet-stream")
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(source.stat().st_size))
+            self.send_header("Accept-Ranges", "none")
+            self._security_headers()
+            self.end_headers()
+            if self.command != "HEAD":
+                with source.open("rb") as audio:
+                    shutil.copyfileobj(audio, self.wfile, length=1024 * 1024)
+        elif path.startswith("/api/transcriptions/"):
+            identifier = path.removeprefix(
+                "/api/transcriptions/").strip("/")
+            self._json(self.app.transcriptions.get(identifier))
         elif path == "/api/casebooks":
             self._json({"casebooks": self.app.casebooks.list()})
         elif path == "/api/campaigns":
@@ -612,29 +715,151 @@ class RouteDispatch:
         elif path == "/api/recordings/cancel":
             self._json(self.app.recordings.cancel(
                 text(body.get("recording_id"), "recording", 100, True)))
+        elif path == "/api/transcriptions/delete":
+            identifier = text(body.get("id"), "saved transcription", 100, True)
+            saved = self.app.transcriptions.get(identifier)
+            if saved.get("status") == "running":
+                self._json({
+                    "error": "Cancel or finish the transcription before "
+                             "deleting its saved source.",
+                }, 409)
+                return
+            self.app.transcriptions.delete(identifier)
+            self._json({"id": identifier, "deleted": True})
+        elif path.startswith("/api/transcriptions/") and path.endswith("/resume"):
+            identifier = path.removeprefix(
+                "/api/transcriptions/").removesuffix("/resume").strip("/")
+            if body.get("consent") is not True:
+                raise ValueError(
+                    "Confirm permission to continue this saved recording.")
+            saved = self.app.transcriptions.get(identifier)
+            backends = speech.capabilities().get("backends", [])
+            compatibility = self.app.transcriptions.compatibility(
+                identifier, backends)
+            if not compatibility["compatible"]:
+                self._json({
+                    "error": "This saved transcription cannot resume.",
+                    "issues": compatibility["issues"],
+                }, 409)
+                return
+            if not compatibility["resumable"]:
+                self._json({
+                    "error": "This saved transcription is already complete, "
+                             "currently running, or not resumable with the "
+                             "installed native backend.",
+                }, 409)
+                return
+            self.app.transcriptions.begin_resume(identifier)
+            source = self.app.transcriptions.source_path(identifier)
+            prior = list(saved.get("segments") or ())
+            resume_after = float(compatibility["resume_after_s"])
+
+            def operation(progress):
+                tracker = project_progress(
+                    self.app.transcriptions, identifier, progress)
+                try:
+                    result = speech.transcribe(
+                        source,
+                        model=saved["request"]["model"],
+                        consent=True,
+                        allow_download=False,
+                        progress=tracker,
+                        language=saved["request"]["language"],
+                        split_channels=saved["request"]["split_channels"],
+                        backend=saved["request"]["backend"],
+                        resume_after_s=resume_after,
+                    )
+                except Cancelled:
+                    self.app.transcriptions.finish(
+                        identifier, status="cancelled")
+                    raise
+                except Exception as error:
+                    self.app.transcriptions.finish(
+                        identifier, status="failed", error=str(error))
+                    raise
+                merged = combine_resume(prior, result, resume_after)
+                self.app.transcriptions.finish(
+                    identifier, result=merged, status="done")
+                return merged
+
+            try:
+                job = self.app.jobs.submit(
+                    operation,
+                    label=f"Resume {saved.get('title', 'recording')}"[:200])
+            except Exception as error:
+                self.app.transcriptions.finish(
+                    identifier, status="failed", error=str(error))
+                raise
+            self._json({"id": job, "project": identifier}, 202)
         elif path == "/api/transcribe":
             identifier = body.get("recording_id")
             if identifier is not None:
                 identifier = text(identifier, "recording", 100, True)
                 source = self.app.recordings.path(identifier)
+                saved = None
+                project_source = source
+                if body.get("save") is True:
+                    if body.get("consent") is not True:
+                        raise ValueError(
+                            "Confirm permission before saving a recording.")
+                    backends = speech.capabilities().get("backends", [])
+                    backend_id = str(body.get("backend") or "faster-whisper")
+                    entry = next(
+                        (item for item in backends
+                         if item.get("id") == backend_id), {})
+                    saved = self.app.transcriptions.create(
+                        source,
+                        filename=body.get("filename") or source.name,
+                        backend=backend_id,
+                        model=str(body.get("model", "base")),
+                        language=str(body.get("language", "auto")),
+                        split_channels=body.get("split_channels") is True,
+                        runtime_identity=str(
+                            entry.get("runtime_identity") or ""),
+                        manifest_identity=str(
+                            entry.get("manifest_identity") or ""),
+                    )
+                    project_source = self.app.transcriptions.source_path(
+                        saved["id"])
 
                 def operation(progress):
+                    tracker = (
+                        project_progress(
+                            self.app.transcriptions, saved["id"], progress)
+                        if saved is not None else progress)
                     try:
-                        return speech.transcribe(
-                            source,
+                        result = speech.transcribe(
+                            project_source,
                             model=body.get("model", "base"),
                             consent=body.get("consent") is True,
                             allow_download=body.get("allow_download", False),
-                            progress=progress,
+                            progress=tracker,
                             language=body.get("language", "auto"),
                             split_channels=body.get("split_channels", False),
                             backend=body.get("backend"),
                         )
+                    except Cancelled:
+                        if saved is not None:
+                            self.app.transcriptions.finish(
+                                saved["id"], status="cancelled")
+                        raise
+                    except Exception as error:
+                        if saved is not None:
+                            self.app.transcriptions.finish(
+                                saved["id"], status="failed",
+                                error=str(error))
+                        raise
+                    else:
+                        if saved is not None:
+                            self.app.transcriptions.finish(
+                                saved["id"], result=result, status="done")
+                        return result
                     finally:
                         self.app.recordings.release(identifier)
 
                 self._json(
-                    {"id": self.app.jobs.submit(operation)}, 202)
+                    {"id": self.app.jobs.submit(operation),
+                     **({"project": saved["id"]} if saved else {})}, 202)
             else:
                 self._json(
                     {

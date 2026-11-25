@@ -85,7 +85,7 @@ def _channel_inputs(path: Path):
 def transcribe(path: Path, model: str = "base", consent: bool = False,
                allow_download: bool = False, progress=lambda message: None,
                *, language: str = "auto", split_channels: bool = False,
-               backend: str | None = None) -> dict:
+               backend: str | None = None, resume_after_s: float = 0.0) -> dict:
     global _CACHE
     if consent is not True:
         raise ValueError("Confirm you have permission to process this recording before transcribing.")
@@ -97,10 +97,21 @@ def transcribe(path: Path, model: str = "base", consent: bool = False,
     if backend in {"erais-native", "erais-neuroforge"}:
         from .speech_backends import TranscriptionRequest, get
 
+        if (
+            isinstance(resume_after_s, bool)
+            or not isinstance(resume_after_s, (int, float))
+            or not 0.0 <= float(resume_after_s) <= 4 * 3600
+        ):
+            raise ValueError("A resume position must be within four hours.")
+        if float(resume_after_s) > 0 and backend != "erais-native":
+            raise ValueError(
+                "Only the installed ERAIS native backend can resume a "
+                "committed meeting position.")
         return get(backend).transcribe(TranscriptionRequest(
             source=Path(path), model=model, language=language,
             split_channels=split_channels, allow_download=allow_download,
-            consent=consent, backend=backend), progress)
+            consent=consent, backend=backend,
+            resume_after_s=float(resume_after_s)), progress)
     if not isinstance(model, str) or model not in MODEL_NAMES:
         raise ValueError("Choose tiny, base or small, optionally with .en for English-only recordings.")
     if not isinstance(language, str) or (language != "auto" and not re.fullmatch("[a-z]{2,3}", language)):
