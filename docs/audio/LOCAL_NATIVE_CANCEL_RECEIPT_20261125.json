@@ -1,0 +1,18 @@
+{
+  "recording": "ES2003a_10min.wav",
+  "upload_mb": 18.31,
+  "model": "zipformer-gigaspeech-fp32",
+  "backend": "erais-native",
+  "job_id": "7ab10da539534f63b7e67e36c3bdcc3a",
+  "first_segment_s": 3.69,
+  "cancel_requested_at_segment": 5,
+  "status": "cancelled",
+  "elapsed_s": 6.72,
+  "event_count": 6,
+  "segment_events": 5,
+  "session_events": 1,
+  "final_message": "Cancelled; the meeting session was closed and the partial transcript keeps 5 segments.",
+  "received_s": 57.04,
+  "processed_s": 57.04,
+  "replay_verified": true
+}
