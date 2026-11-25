@@ -15,7 +15,7 @@ public release still needs distribution rights.
 | 07 stable source-time mapping | absolute-clock tests; 603 segments on 104 min via the application route | yes | no | no |
 | 08 incremental transcript | 604 events on 104 min through `/api/jobs/<id>?after=`; cursor tests | yes | no | no |
 | 09 cancellation/cleanup | 13 retained segments, 0 processes on 104 min; 5 retained on 10 min | yes | no | no |
-| 10 saved-project restoration | not implemented for transcription jobs | no | no | no |
+| 10 saved-project restoration | saved source + cursor + events; real process-restart resume after 4 passages; 6 tests | yes (Linux) | no | no |
 | 11 traceable correction | JSON revisions, corrections with original/reason; tests | yes | no | no |
 | 12 anonymous speaker review | 74/101 confident labels, 49/51 pairs (96.1%) on four AMI excerpts; reversible UI | experimental | no (four-meeting cohort) | no |
 | 13 consistent exports | minutes/claims share one record; SRT/VTT/TXT projections tested | yes | no | no |

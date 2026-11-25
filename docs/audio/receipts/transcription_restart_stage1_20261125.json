@@ -1,0 +1,15 @@
+{
+  "cursor_before": 4,
+  "job_status": "cancelled",
+  "model": "zipformer-gigaspeech-fp32",
+  "next_cursor": 5,
+  "project": "4274e833cf2f4a83ac4ba595b27957da",
+  "project_status": "cancelled",
+  "recording": "restart_60s.wav",
+  "resume_after_s": 9.74,
+  "runtime_identity": "erais-native-zipformer-gigaspeech",
+  "segments_after_cancel": 4,
+  "segments_before": 3,
+  "source_sha256": "390756292c1b641ee14378abf009f28bd39c8150780fbf6962797461eed69f35",
+  "workspace": "/home/lloyd/restart-e2e-ws"
+}
