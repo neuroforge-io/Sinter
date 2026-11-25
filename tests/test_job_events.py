@@ -110,3 +110,49 @@ def test_cancellation_keeps_partial_segments_and_reports_cleanup():
         assert any(event["event"] == "segment" for event in events)
     finally:
         jobs.close()
+
+
+def test_event_bound_fails_closed_and_keeps_committed_events(monkeypatch):
+    import sinter.jobs as jobs_module
+
+    monkeypatch.setattr(jobs_module, "MAX_JOB_EVENTS", 3)
+
+    def operation(progress):
+        for index in range(5):
+            progress({
+                "event": "segments",
+                "segments": [{"start": float(index), "end": float(index + 1),
+                              "text": f"words {index}"}],
+            })
+        return {"segments": []}
+
+    jobs = Jobs()
+    try:
+        identifier = jobs.submit(operation)
+        result = wait_job(jobs, identifier)
+        assert result["status"] == "failed"
+        assert "more events" in result["error"]
+        page = jobs.get(identifier, after=0)
+        assert len(page["events"]) == 3
+        assert [event["sequence"] for event in page["events"]] == [1, 2, 3]
+        assert [event["text"] for event in page["events"]] == [
+            "words 0", "words 1", "words 2"]
+    finally:
+        jobs.close()
+
+
+def test_cancelling_after_completion_preserves_the_result():
+    jobs = Jobs()
+    try:
+        identifier = jobs.submit(
+            lambda progress: {"segments": [{"start": 0.0, "end": 1.0,
+                                            "text": "complete"}]})
+        finished = wait_job(jobs, identifier)
+        assert finished["status"] == "done"
+        jobs.cancel(identifier)
+        after = jobs.get(identifier)
+        assert after["status"] == "done"
+        assert after["result"]["segments"][0]["text"] == "complete"
+        assert after["cancel_requested"] is False
+    finally:
+        jobs.close()
