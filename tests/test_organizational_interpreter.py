@@ -128,3 +128,39 @@ def test_projection_drives_sinter_motion_composition():
     assert motion["responsibility_ids"]
     assert any(claim["claim_type"] == "motion_amendment"
                for claim in result["claims"])
+
+
+def test_conditional_and_reported_acceptance_boundaries():
+    # The composition layer must preserve conditional/reported status.
+    def interpreter(passage):
+        if passage.passage_id == "T1":
+            return [{"event_type": "motion", "actor": "Alex",
+                     "object": "equipment",
+                     "amount": {"raw": "$690", "value": 690.0,
+                                "currency": "USD"},
+                     "evidence": passage.text}]
+        if passage.passage_id == "T2":
+            return [{"event_type": "acceptance", "actor": "Sam",
+                     "acceptance_status": "conditional_stated_agreement",
+                     "condition": "the finance committee approves it",
+                     "evidence": passage.text}]
+        if passage.passage_id == "T3":
+            return [{"event_type": "motion", "actor": "Chair",
+                     "outcome": "reported_carried",
+                     "assertion_status": "reported",
+                     "evidence": passage.text}]
+        return []
+
+    result = analyze([
+        Passage("T1", "Alex", "proposal"),
+        Passage("T2", "Sam", "conditional"),
+        Passage("T3", "Chair", "reported"),
+    ], interpreter=interpreter)
+    conditional = next(
+        motion for motion in result["motions"]
+        if motion.get("acceptance") == "conditional_stated_agreement")
+    assert conditional["acceptance_condition"]
+    reported = next(
+        motion for motion in result["motions"]
+        if motion.get("acceptance") == "reported_outcome")
+    assert reported["assertion_status"] == "reported"

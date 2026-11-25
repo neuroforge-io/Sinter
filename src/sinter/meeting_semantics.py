@@ -254,8 +254,16 @@ def compose(passages: Iterable[Passage],
                 event["amendments"] = []
                 event["acceptance"] = None
                 event["responsibility_ids"] = []
-                if event.get("outcome") in {"carried", "approved", "accepted"}:
-                    event["acceptance"] = "stated_outcome"
+                outcome = str(event.get("outcome") or "")
+                if outcome.startswith("reported_"):
+                    outcome = outcome[len("reported_"):]
+                if outcome in {"carried", "approved", "accepted"}:
+                    event["acceptance"] = (
+                        "reported_outcome"
+                        if event.get("assertion_status") == "reported"
+                        or str(event.get("outcome") or "").startswith(
+                            "reported_")
+                        else "stated_outcome")
                 motions.append(event)
                 active = event
             elif kind == "amendment" and active is not None:
@@ -271,8 +279,11 @@ def compose(passages: Iterable[Passage],
             elif kind == "acceptance" and active is not None:
                 event["motion_id"] = active["event_id"]
                 event["related_event_ids"] = [active["event_id"]]
+                status = event.get("acceptance_status") or "stated_agreement"
                 if active.get("acceptance") is None:
-                    active["acceptance"] = "stated_agreement"
+                    active["acceptance"] = status
+                if status == "conditional_stated_agreement":
+                    active["acceptance_condition"] = event.get("condition")
                 active["acceptance_event_id"] = event["event_id"]
                 active["related_event_ids"].append(event["event_id"])
             elif kind == "responsibility":
