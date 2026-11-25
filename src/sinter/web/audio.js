@@ -14,6 +14,7 @@ export function backendChoices(status) {
     .map(item => ({
       id: String(item.id), label: BACKEND_LABELS[item.id] || String(item.id),
       models: Array.isArray(item.models) ? item.models.filter(model => typeof model === 'string') : [],
+      modelLabels: item.model_labels && typeof item.model_labels === 'object' ? item.model_labels : {},
       network: item.network_required === true,
     }));
 }
@@ -48,7 +49,8 @@ export function audioForm(onTranscript, setBusy, isBusy) {
     const choice = selectedChoice();
     transmit.wrap.hidden = !requiresTransmissionConsent(backend.input.value);
     model.input.replaceChildren();
-    for (const name of choice?.models || []) model.input.append(h('option', {value: name}, name));
+    for (const name of choice?.models || [])
+      model.input.append(h('option', {value: name}, choice?.modelLabels?.[name] || name));
     model.input.value = choice?.models?.[0] || '';
     channels.input.disabled = choice?.network === true;
   }

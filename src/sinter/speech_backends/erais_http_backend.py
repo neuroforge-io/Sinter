@@ -111,13 +111,32 @@ def capabilities() -> BackendCapabilities:
         value.get("meeting_stream"), dict) else {}
     identity = meeting.get("speaker_identity") if isinstance(
         meeting.get("speaker_identity"), dict) else {}
-    models = tuple(
-        item for item in (model.get("id"),) if isinstance(item, str) and item)
+    advertised = value.get("models")
+    if isinstance(advertised, list):
+        models = tuple(
+            item for item in advertised if isinstance(item, str) and item)
+    else:
+        models = tuple()
+    if not models:
+        models = tuple(
+            item for item in (model.get("id"),) if isinstance(item, str) and item)
+    labels: list[tuple[str, str]] = []
+    profiles = value.get("profiles")
+    if isinstance(profiles, list):
+        for profile in profiles:
+            if not isinstance(profile, dict):
+                continue
+            identifier = profile.get("id")
+            label = profile.get("label")
+            if (isinstance(identifier, str) and identifier
+                    and isinstance(label, str) and label.strip()):
+                labels.append((identifier, label.strip()))
     return BackendCapabilities(
         backend_id="erais-neuroforge",
         installed=value.get("status") == "ready",
         local=False,
         models=models,
+        model_labels=tuple(labels),
         supported_languages=(),
         word_timing="word_estimated" if meeting else "unavailable",
         channel_separation=False,
@@ -226,7 +245,8 @@ def transcribe(request: TranscriptionRequest, progress=lambda _message: None) ->
         raise SpeechBackendError("The requested model is not provided by the ERAIS service.")
     progress("Creating a local ERAIS meeting session")
     created = _request(
-        "POST", MEETINGS, body=b'{"consent":true}',
+        "POST", MEETINGS,
+        body=json.dumps({"consent": True, "model": request.model}).encode(),
         content_type="application/json")
     session_id = created.get("session_id")
     if not isinstance(session_id, str) or not session_id:
