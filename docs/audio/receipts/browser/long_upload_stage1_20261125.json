@@ -1,0 +1,27 @@
+{
+  "attempt": 1,
+  "body_excerpt": "t and Markdown are supported. Meeting imports also accept JSON, VTT and SRT. Imports remain local unless you enable excerpt ranking.\nConfirm who is speaking\nStart with an audio recording (optional)\nLocal backends process on this computer. A configured ERAIS service receives the recording at its explicit endpoint. Model downloads require permission. Recognition can omit or invent words; review the original recording.\nCheck transcription setup\nInstalled local or configured speech backends are ready. The transcript reports which one ran.\nLocal transcription settings\nMeeting recording\nWAV, MP3, M4A, OGG, FLAC, WebM or MP4. Large files are admitted in 1 MB chunks up to 2 GB.\nRecognition backend\nERAIS native \u2014 this computer\nERAIS configured service\nThe actual backend is reported with the transcript.\nRecognition model\nzipformer-gigaspeech-fp32\nModels are populated from the selected installed backend.\nRecording language\nEnglish\nDetect automatically\nFrench\nGerman\nSpanish\nItalian\nPortuguese\nChinese\nJapanese\nArabic\nHindi\nChoose the known language to avoid unnecessary guessing.\nThis recording has two isolated microphone tracks. Transcribe each channel separately.\nLeave channel separation off for a room microphone or ordinary stereo mix. A track can still contain more than one voice.\nI have permission to process this recording and understand it may contain private information.\nAllow a speech model download if it is not already on this computer.\nSave this recording and transcript on this computer for later review.\nTranscribe with the selected backend\nCancelled; the meeting session was closed and the partial transcript keeps 14 segments.\nReview and prepare\nOn this computer \u00b7 No external requests\nPrepare my draft\nBuilt for useful work. Sources stay visible. You make the final decision.",
+  "bytes": 200554920,
+  "cancel_state": [
+    true,
+    true
+  ],
+  "cursor": 16,
+  "listed_segments": 15,
+  "listing_during_upload": {
+    "body": {
+      "transcriptions": []
+    },
+    "status": 200
+  },
+  "model": "zipformer-gigaspeech-fp32",
+  "processed_before_cancel_s": 317.35,
+  "progress_text": "n this computer for later review.\nTranscribe with the selected backend\nCancel transcription\nAdvertising 86% of the recording to the local workbench...\nReview and prepare\nOn this computer \u00b7 No external requests\nPrepare my draft\nBuilt for useful work. Sources stay visible. You make the final decision.",
+  "project": "b273fb4cfe734b93a3ed92d78f72682f",
+  "project_status": "cancelled",
+  "recording": "ami_six_meetings.wav",
+  "runtime_identity": "erais-native-zipformer-gigaspeech",
+  "segments_before_cancel": 12,
+  "source_bytes": 200554920,
+  "upload_and_start_s": 142.58
+}
