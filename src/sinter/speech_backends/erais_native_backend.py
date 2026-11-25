@@ -135,6 +135,7 @@ def capabilities() -> BackendCapabilities:
 
 def _request_payload(
     request: TranscriptionRequest, digest: str, *, meeting: bool,
+    anonymous_speakers: bool = False,
 ) -> dict:
     maximum = (
         MAX_MEETING_SECONDS if meeting else 30)
@@ -153,6 +154,7 @@ def _request_payload(
         "retention_policy": request.retention_policy,
         "processing": "meeting" if meeting else "utterance",
         "stream": meeting,
+        "anonymous_speakers": anonymous_speakers,
         "resource_envelope": {
             "maximum_input_duration_seconds": maximum,
         },
@@ -225,8 +227,11 @@ def transcribe(
         for block in iter(lambda: recording.read(1024 * 1024), b""):
             digest.update(block)
     meeting = value.get("meeting_stream") is True
+    anonymous_speakers = (
+        meeting and value.get("speaker_diarization") is True)
     payload = _request_payload(
-        request, digest.hexdigest(), meeting=meeting)
+        request, digest.hexdigest(), meeting=meeting,
+        anonymous_speakers=anonymous_speakers)
     progress(
         "Starting the verified local ERAIS meeting worker"
         if meeting else "Starting the verified local ERAIS audio worker")
