@@ -47,6 +47,26 @@ The receipt records the Sinter revision, comprehension service revision,
 episode identity, state digest, page controls, transfer answers, capability
 identity and separate process IDs.
 
+## Literal Sinter browser check
+
+Firefox 158.0 loaded `#comprehension`, clicked **Create episode**, **Teach and
+inspect**, and **Transfer capability**. The Sinter page displayed the acquired
+capability and the inventory answer:
+
+```text
+page                 Comprehension lab - Sinter
+capability           capability:sha256:585ac5ac...e9beb8574
+application_context  inventory
+answer               32
+```
+
+Screenshot and browser receipt:
+
+```text
+docs/audio/receipts/sinter_comprehension_browser_20261125.png
+docs/audio/receipts/sinter_comprehension_browser_20261125.json
+```
+
 ## Verification
 
 ```text
