@@ -29,6 +29,30 @@ export function requiresTransmissionConsent(backendId) {
   return backendId === 'erais-neuroforge';
 }
 
+async function uploadRecording(file, onProgress) {
+  const created = await request('/api/recordings', {data: {
+    filename: file.name, expected_size: file.size}});
+  const identifier = created.recording_id;
+  try {
+    const chunkSize = 1024 * 1024;
+    let offset = 0;
+    while (offset < file.size) {
+      const bytes = new Uint8Array(await file.slice(offset, offset + chunkSize).arrayBuffer());
+      let binary = '';
+      for (let index = 0; index < bytes.length; index += 32768)
+        binary += String.fromCharCode.apply(null, bytes.subarray(index, index + 32768));
+      await request('/api/recordings/chunk', {data: {
+        recording_id: identifier, offset, data: btoa(binary)}});
+      offset += bytes.length;
+      onProgress(offset / file.size);
+    }
+    return await request('/api/recordings/finish', {data: {recording_id: identifier}});
+  } catch (error) {
+    await request('/api/recordings/cancel', {data: {recording_id: identifier}}).catch(() => {});
+    throw error;
+  }
+}
+
 export function audioForm(onTranscript, setBusy, isBusy) {
   const file = field('Meeting recording', 'file', '', 'WAV, MP3, M4A, OGG, FLAC, WebM or MP4. Up to 25 MB; the CLI accepts up to 500 MB.', {accept: '.wav,.mp3,.m4a,.ogg,.flac,.webm,.mp4'});
   const backend = selectField('Recognition backend', [], '', 'The actual backend is reported with the transcript.');
@@ -83,15 +107,15 @@ export function audioForm(onTranscript, setBusy, isBusy) {
     if (objectURL) URL.revokeObjectURL(objectURL); objectURL = null;
     reviewUI?.dispose(); review.replaceChildren(); reviewUI = null;
     const chosen = file.input.files[0];
-    if (!chosen || chosen.size > 25 * 1024 * 1024) return;
+    if (!chosen || !chosen.size) return;
     objectURL = URL.createObjectURL(chosen); player.src = objectURL; player.hidden = false;
   });
   backend.input.addEventListener('change', syncBackendControls);
   const start = button('Transcribe with the selected backend', async () => {
     if (isBusy()) return;
     const chosen = file.input.files[0];
-    if (!chosen || !chosen.size || chosen.size > 25 * 1024 * 1024 || !permission.input.checked) {
-      message.replaceChildren(notice('Choose a non-empty recording no larger than 25 MB and confirm permission.', 'error')); return;
+    if (!chosen || !chosen.size || !permission.input.checked) {
+      message.replaceChildren(notice('Choose a non-empty recording and confirm permission.', 'error')); return;
     }
     const choice = selectedChoice();
     if (!choice) { message.replaceChildren(notice('Choose an installed recognition backend.', 'error')); return; }
@@ -105,14 +129,11 @@ export function audioForm(onTranscript, setBusy, isBusy) {
     try {
       const status = await request('/api/speech');
       if (!choices.length) throw new Error('Speech recognition is not installed in this Sinter environment. Run the setup helper above, then restart.');
-      message.textContent = 'Reading the selected file into your local workbench...';
-      const encoded = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).split(',')[1]);
-        reader.onerror = () => reject(new Error('The recording could not be read.'));
-        reader.readAsDataURL(chosen);
+      message.textContent = 'Admitting the recording to your local workbench...';
+      const recording = await uploadRecording(chosen, fraction => {
+        message.textContent = `Advertising ${Math.round(fraction * 100)}% of the recording to the local workbench...`;
       });
-      const job = await request('/api/transcribe', {data: {filename: chosen.name, audio: encoded, consent: true,
+      const job = await request('/api/transcribe', {data: {recording_id: recording.recording_id, consent: true,
         allow_download: downloads.input.checked, model: model.input.value, language: language.input.value,
         split_channels: channels.input.checked, backend: backend.input.value}});
       jobId = job.id; cancel.disabled = false;

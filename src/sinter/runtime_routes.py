@@ -598,15 +598,52 @@ class RouteDispatch:
                     "segments": len(segments),
                 }
             )
-        elif path == "/api/transcribe":
+        elif path == "/api/recordings":
             self._json(
-                {
-                    "id": self.app.jobs.submit(
-                        lambda progress: speech.transcribe_upload(body, progress)
-                    )
-                },
-                202,
-            )
+                self.app.recordings.create(
+                    body.get("filename"), body.get("expected_size")), 201)
+        elif path == "/api/recordings/chunk":
+            self._json(self.app.recordings.append(
+                text(body.get("recording_id"), "recording", 100, True),
+                body.get("offset"), body.get("data")))
+        elif path == "/api/recordings/finish":
+            self._json(self.app.recordings.finish(
+                text(body.get("recording_id"), "recording", 100, True)))
+        elif path == "/api/recordings/cancel":
+            self._json(self.app.recordings.cancel(
+                text(body.get("recording_id"), "recording", 100, True)))
+        elif path == "/api/transcribe":
+            identifier = body.get("recording_id")
+            if identifier is not None:
+                identifier = text(identifier, "recording", 100, True)
+                source = self.app.recordings.path(identifier)
+
+                def operation(progress):
+                    try:
+                        return speech.transcribe(
+                            source,
+                            model=body.get("model", "base"),
+                            consent=body.get("consent") is True,
+                            allow_download=body.get("allow_download", False),
+                            progress=progress,
+                            language=body.get("language", "auto"),
+                            split_channels=body.get("split_channels", False),
+                            backend=body.get("backend"),
+                        )
+                    finally:
+                        self.app.recordings.release(identifier)
+
+                self._json(
+                    {"id": self.app.jobs.submit(operation)}, 202)
+            else:
+                self._json(
+                    {
+                        "id": self.app.jobs.submit(
+                            lambda progress: speech.transcribe_upload(body, progress)
+                        )
+                    },
+                    202,
+                )
         else:
             raise KeyError("Unknown route")
 
