@@ -43,6 +43,26 @@ message             Cancelled; the meeting session was closed and the
 The ERAIS meeting session was cancelled rather than abandoned; the Sinter job
 kept the segments it had already committed.
 
+## Speaker clustering on the long recording
+
+With `ERAIS_SPEAKER_CLUSTERING=1`, the same ten-minute recording finishes with
+anonymous passage labels:
+
+```text
+segments                 46
+anonymous cluster        36
+ambiguous                 8
+insufficient evidence     2
+clusters shown            5 (Speaker A–E)
+elapsed                  118.45 s (includes clustering)
+events                   93 (46 provisional + 46 revised + session)
+```
+
+Every passage is flagged for speaker review. The table cannot be treated as
+four-or-five known participants: one speaker can be split across clusters, and
+the review step must merge or rename them by listening. The clustering is
+experimental and off by default outside this development service.
+
 ## What changed
 
 - `sinter.jobs` stores incremental events with monotonic sequence numbers,
@@ -61,6 +81,9 @@ kept the segments it had already committed.
   `done` with an explicit note rather than losing completed work.
 - The web helper reports the job's cancellation message, so a cancelled long
   recording explains that partial segments were retained.
+- Finish-time speaker revisions are applied by sequence and revision number, and
+  the review view can rename a whole speaker group while preserving every
+  original label in the JSON transcript.
 
 ## Qualification harness
 
@@ -84,7 +107,9 @@ python3 tests/qualify_speech_long_recording.py \
 tests/test_job_events.py                 3 passed
 tests/test_speech_job_lifecycle.py       2 passed
 tests/test_speech.py                     15 passed (with related speech suites)
+tests/test_speech_speaker_revision.py    1 passed
 tests/test_runtime.py                    job, cursor and cancellation regressions pass
+tests/transcription_speaker_groups.mjs   2 passed
 ```
 
 ## Limits
@@ -94,7 +119,8 @@ tests/test_runtime.py                    job, cursor and cancellation regression
 - The browser upload route admits 25 MB; longer recordings still need the CLI
   or a future local-file route. The portable native worker remains short-utterance
   only and is not part of this result.
-- Segments still carry no reliable anonymous speaker clustering. Speaker work is
-  the next increment.
+- Speaker clustering is experimental: 36/46 passages labelled on this recording,
+  five clusters for four participants, and one measured AMI meeting merged two
+  voices under one label. Review must confirm or merge groups.
 - No claim of product readiness, independent assessment or community
   distribution rights.
