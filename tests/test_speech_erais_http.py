@@ -13,6 +13,7 @@ from sinter import speech
 from sinter.speech_backends import erais_http_backend
 
 TOKEN = "sinter-meeting-token-0123456789"
+CREATED: list[dict] = []
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -35,6 +36,11 @@ class _Handler(BaseHTTPRequestHandler):
                 "status": "ready",
                 "backend": {"id": "erais-native-zipformer-large"},
                 "model": {"id": "test-model"},
+                "models": ["test-model", "meeting-model"],
+                "profiles": [
+                    {"id": "test-model", "label": "Clean speech"},
+                    {"id": "meeting-model", "label": "Noisy meeting candidate"},
+                ],
                 "manifest_sha256": "a" * 64,
                 "meeting_stream": {
                     "contract": "erais.audio.meeting-stream.v1",
@@ -47,6 +53,8 @@ class _Handler(BaseHTTPRequestHandler):
         if self.headers.get("Authorization") != "Bearer " + TOKEN:
             return self._send({"error": "unauthorized"}, 401)
         if self.path == "/api/erais-speech/v1/meetings":
+            length = int(self.headers.get("Content-Length", "0"))
+            CREATED.append(json.loads(self.rfile.read(length) or b"{}"))
             return self._send({"session_id": "session-1"}, 201)
         if self.path.endswith("/finish"):
             return self._send({
@@ -87,6 +95,7 @@ def _wav(path):
 
 
 def test_meeting_http_backend_full_path(tmp_path, monkeypatch):
+    CREATED.clear()
     server, thread = _server()
     try:
         monkeypatch.setenv(
@@ -112,6 +121,12 @@ def test_meeting_http_backend_full_path(tmp_path, monkeypatch):
             if item["id"] == "erais-neuroforge")
         assert native["installed"] is True
         assert native["meeting_stream"] is True
+        assert native["models"] == ["test-model", "meeting-model"]
+        assert native["model_labels"] == {
+            "test-model": "Clean speech",
+            "meeting-model": "Noisy meeting candidate",
+        }
+        assert CREATED == [{"consent": True, "model": "test-model"}]
     finally:
         server.shutdown()
         server.server_close()
@@ -132,3 +147,28 @@ def test_missing_meeting_service_fails_closed(tmp_path, monkeypatch):
         speech.transcribe(
             path, model="test-model", consent=True,
             backend="erais-neuroforge")
+
+
+def test_requested_profile_is_sent_and_unknown_profile_is_refused(tmp_path, monkeypatch):
+    CREATED.clear()
+    server, thread = _server()
+    try:
+        monkeypatch.setenv(
+            erais_http_backend.URL_ENV,
+            f"http://127.0.0.1:{server.server_port}")
+        monkeypatch.setenv(erais_http_backend.TOKEN_ENV, TOKEN)
+        path = tmp_path / "meeting.wav"
+        _wav(path)
+        result = speech.transcribe(
+            path, model="meeting-model", consent=True,
+            backend="erais-neuroforge")
+        assert result["model"] == "meeting-model"
+        assert CREATED == [{"consent": True, "model": "meeting-model"}]
+        with pytest.raises(ValueError, match="not provided"):
+            speech.transcribe(
+                path, model="absent-model", consent=True,
+                backend="erais-neuroforge")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(2)

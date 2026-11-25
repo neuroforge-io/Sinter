@@ -19,6 +19,7 @@ class BackendCapabilities:
     installed: bool
     local: bool
     models: tuple[str, ...] = ()
+    model_labels: tuple[tuple[str, str], ...] = ()
     supported_languages: tuple[str, ...] = ()
     word_timing: str = "unavailable"
     channel_separation: bool = False
@@ -35,6 +36,7 @@ class BackendCapabilities:
             "installed": self.installed,
             "local": self.local,
             "models": list(self.models),
+            "model_labels": dict(self.model_labels),
             "supported_languages": list(self.supported_languages),
             "word_timing": self.word_timing,
             "channel_separation": self.channel_separation,
