@@ -93,6 +93,16 @@ tests/test_sinter_longform.py          34 passed
   resume skips committed regions and rejoins the transcript exactly
 ```
 
+## Literal browser witness
+
+A separate witness used Firefox 158.0 and the real Sinter UI over an SSH
+tunnel: 191 MB uploaded through the file input in 142.6 s, 12 passages
+committed, the project cancelled with 15 passages retained, Sinter restarted,
+the partial project reopened in a new browser session, and resume completed at
+attempt 2 with **603 passages** (104:27). This exposed and fixed a missing
+`timestamp` import in the saved-project panel. See
+`BROWSER_LONG_WITNESS_20261125.md`.
+
 ## Limits
 
 - Resume re-runs VAD and speaker clustering over the whole recording; only

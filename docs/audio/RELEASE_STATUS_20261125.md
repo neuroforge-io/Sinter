@@ -11,11 +11,11 @@ public release still needs distribution rights.
 | 03 local ERAIS installation | installer tests pass; desktop install | yes (Linux) | no | no |
 | 04 model/executable integrity | manifest + model/tree/speaker SHA-256; `--verify` passes on the installed desktop runtime; 11 installer tests | yes | no signature | no |
 | 05 supported recording formats | MP3/M4A/MP4/FLAC/OGG/WebM/AAC/WMA and non-16k WAV decode tests; 30 s stereo MP3 run | yes | no | no |
-| 06 long admission | 4 chunk tests + **191 MB end-to-end HTTP admission (4.38 s, SHA match, cleaned up)**; literal browser click-through still absent | yes | no | no |
+| 06 long admission | 4 chunk tests + 191 MB HTTP admission + **literal Firefox 191 MB upload (142.6 s including tunnel)**; SHA matched | yes | no | no |
 | 07 stable source-time mapping | absolute-clock tests; 603 segments on 104 min via the application route | yes | no | no |
 | 08 incremental transcript | 604 events on 104 min through `/api/jobs/<id>?after=`; cursor tests | yes | no | no |
 | 09 cancellation/cleanup | 13 retained segments, 0 processes on 104 min; 5 retained on 10 min | yes | no | no |
-| 10 saved-project restoration | saved source + cursor + events; real process-restart resume after 4 passages; 7 tests | yes (Linux) | no | no |
+| 10 saved-project restoration | saved source + cursor + events; literal browser restart/resume to 603 passages; 7 tests | yes (Linux) | no | no |
 | 11 traceable correction | JSON revisions, corrections with original/reason; tests | yes | no | no |
 | 12 anonymous speaker review | 74/101 confident labels, 49/51 pairs (96.1%) on four AMI excerpts; reversible UI | experimental | no (four-meeting cohort) | no |
 | 13 consistent exports | minutes/claims share one record; SRT/VTT/TXT projections tested | yes | no | no |
@@ -33,6 +33,7 @@ public release still needs distribution rights.
 | 10 min AMI | local native | 26.89 s | 22× | not recorded | 58 segments, 28.59% WER, cancellation |
 | 21.2 min AMI | local native | 87.14 s | 14.6× | 1.10 GB | 29.24% WER |
 | 84.9 min repeated AMI | local native | 226.39 s | 22.5× | 1.94 GB | 592 segments, 13 clusters for 5 speakers |
+| 104.5 min six AMI | browser UI + local native | 142.6 s upload + 214.7 s resume | — | — | saved project resumed to **603 segments**, attempt 2 |
 | 104.5 min six AMI | local native | 521.85 s | 12.0× | 2.49 GB | 603 segments, before memory fix |
 | 104.5 min six AMI | local native | 404.80 s | 15.5× | 1.95 GB | bounded VAD, full PCM |
 | 104.5 min six AMI | local native | **402.14 s** | **15.6×** | **1.82 GB** | bounded source + clustering, 143/603 flagged |
