@@ -195,7 +195,7 @@ export function audioForm(onTranscript, setBusy, isBusy) {
             } catch (error) { message.replaceChildren(notice(error.message, 'error')); }
             finally { setBusy(false); controls.disabled = false; cancel.disabled = true; jobId = null; }
           }, 'quiet');
-          resume.disabled = !['interrupted', 'cancelled', 'failed'].includes(item.status);
+          resume.disabled = item.resumable === false || !['interrupted', 'cancelled', 'failed'].includes(item.status);
           return h('article', {class: 'transcript-passage'},
             h('strong', {}, item.title),
             h('p', {class: 'fine'}, `${item.status} · ${item.segment_count || 0} passages · ${timestamp(item.duration)} · ${item.model || 'model not recorded'} · attempt ${item.attempt || 1}`),
