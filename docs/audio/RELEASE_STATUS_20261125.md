@@ -34,7 +34,8 @@ public release still needs distribution rights.
 | 21.2 min AMI | local native | 87.14 s | 14.6× | 1.10 GB | 29.24% WER |
 | 84.9 min repeated AMI | local native | 226.39 s | 22.5× | 1.94 GB | 592 segments, 13 clusters for 5 speakers |
 | 104.5 min six AMI | local native | 521.85 s | 12.0× | 2.49 GB | 603 segments, before memory fix |
-| 104.5 min six AMI | local native | 404.80 s | **15.5×** | **1.95 GB** | 603 segments, 143/603 flagged |
+| 104.5 min six AMI | local native | 404.80 s | 15.5× | 1.95 GB | bounded VAD, full PCM |
+| 104.5 min six AMI | local native | **402.14 s** | **15.6×** | **1.82 GB** | bounded source + clustering, 143/603 flagged |
 
 The 104.5-minute file concatenates six meetings; it is not one continuous
 source recording. Throughput on a lower-powered laptop is unmeasured.
