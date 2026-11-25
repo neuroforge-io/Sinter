@@ -1,0 +1,10 @@
+{
+  "public_key": "zmXeK2oZ0ZxtPaw4tAJfpmNqDhGPgyYHzExejt8_fIw",
+  "root_id": "erais-ed25519:714f6d3c052ce1589cc576a71f36d51632ca02f13afbc8363871a8f6aa1e766d",
+  "schema": "erais.evidence.trust-root.v1",
+  "status": "active",
+  "usage": [
+    "evidence",
+    "manifest"
+  ]
+}
