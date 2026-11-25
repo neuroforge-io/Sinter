@@ -54,8 +54,17 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send({"error": "unauthorized"}, 401)
         if self.path == "/api/erais-speech/v1/meetings":
             length = int(self.headers.get("Content-Length", "0"))
-            CREATED.append(json.loads(self.rfile.read(length) or b"{}"))
-            return self._send({"session_id": "session-1"}, 201)
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            CREATED.append(payload)
+            return self._send({
+                "session_id": "session-1",
+                "model": payload.get("model", "test-model"),
+                "backend_id": (
+                    "erais-native-zipformer-gigaspeech"
+                    if payload.get("model") == "meeting-model"
+                    else "erais-native-zipformer-large"),
+                "manifest_sha256": "b" * 64,
+            }, 201)
         if self.path.endswith("/finish"):
             return self._send({
                 "status": "complete",
@@ -163,6 +172,8 @@ def test_requested_profile_is_sent_and_unknown_profile_is_refused(tmp_path, monk
             path, model="meeting-model", consent=True,
             backend="erais-neuroforge")
         assert result["model"] == "meeting-model"
+        assert result["runtime_identity"] == "erais-native-zipformer-gigaspeech"
+        assert result["engine_version"] == "b" * 12
         assert CREATED == [{"consent": True, "model": "meeting-model"}]
         with pytest.raises(ValueError, match="not provided"):
             speech.transcribe(
